@@ -18,10 +18,14 @@
 
 #include <cassert>
 #include <cmath>
+#include <filesystem>
 
 #include <QBitmap>
 #include <QMouseEvent>
 #include <QPainter>
+#include <QStandardPaths>
+
+#include <fmt/chrono.h>
 
 #include <vgc/core/assert.h>
 #include <vgc/core/os.h>
@@ -307,6 +311,15 @@ void OpenGLViewer::pointingDeviceMove(const PointingDeviceEvent& event)
         core::Vec2d viewCoords = event.pos();
         core::Vec2d worldCoords = camera_.viewMatrix().inverse() * viewCoords;
         continueCurve_(worldCoords, width_(event));
+
+        if (dumpStream_) {
+            vgc::core::write(dumpStream_, worldCoords);
+            dumpStream_ << ":";
+            vgc::core::write(dumpStream_, dumpTimer_.elapsed());
+            dumpStream_ << ":";
+            vgc::core::write(dumpStream_, event.timestamp());
+            dumpStream_ << std::endl;
+        }
     }
     else if (isPanning_) {
         core::Vec2d mousePos = event.pos();
@@ -358,6 +371,9 @@ void OpenGLViewer::pointingDeviceRelease(const PointingDeviceEvent&)
     isRotating_ = false;
     isPanning_ = false;
     isZooming_ = false;
+    if (dumpStream_) {
+        dumpStream_.close();
+    }
 }
 
 void OpenGLViewer::keyPressEvent(QKeyEvent* event)
@@ -690,6 +706,12 @@ void OpenGLViewer::startCurve_(const core::Vec2d& p, double width)
     path->setAttribute(POSITIONS, core::Vec2dArray());
     path->setAttribute(WIDTHS, core::DoubleArray());
     path->setAttribute(COLOR, currentColor_);
+
+    std::time_t t = std::time(nullptr);
+    std::filesystem::path filepath(fromQt(QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation)));
+    filepath = filepath / "VGC_Dumps" / vgc::core::format("stroke_{:%Y-%m-%d__%H-%M-%S}.txt", fmt::localtime(t));
+    dumpStream_.open(filepath);
+    dumpTimer_.restart();
 
     continueCurve_(p, width);
 }

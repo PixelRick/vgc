@@ -18,6 +18,7 @@
 #define VGC_WIDGETS_OPENGLVIEWER_H
 
 #include <vector>
+#include <fstream>
 
 #include <QOpenGLBuffer>
 #include <QOpenGLFunctions_3_2_Core>
@@ -28,6 +29,7 @@
 #include <vgc/core/array.h>
 #include <vgc/core/color.h>
 #include <vgc/core/performancelog.h>
+#include <vgc/core/stopwatch.h>
 #include <vgc/core/vec2d.h>
 #include <vgc/dom/document.h>
 #include <vgc/dom/element.h>
@@ -203,6 +205,10 @@ private:
     core::PerformanceLogTask renderTask_;
     core::PerformanceLogTask   updateTask_;
     core::PerformanceLogTask   drawTask_;
+
+    // Dumping
+    std::ofstream dumpStream_;
+    vgc::core::Stopwatch dumpTimer_;
 };
 
 } // namespace widgets
