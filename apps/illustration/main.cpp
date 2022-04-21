@@ -14,6 +14,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <QAbstractNativeEventFilter>
 #include <QApplication>
 #include <QDir>
 #include <QSettings>
@@ -29,6 +30,50 @@
 #include <vgc/widgets/stylesheets.h>
 
 namespace py = pybind11;
+
+class HDInputNativeEventFilter : public QAbstractNativeEventFilter {
+public:
+    bool nativeEventFilter(const QByteArray &eventType, void *message, long *) override {
+        if (eventType == "windows_generic_MSG") {
+            MSG *msg = reinterpret_cast<MSG*>(message);
+            if (msg->message == WM_INPUT)
+            {
+                UINT dwSize = 40;
+                static BYTE lpb[40];
+                if(!GetRawInputData((HRAWINPUT)msg->lParam, RID_INPUT,lpb, &dwSize, sizeof(RAWINPUTHEADER)))
+                    qDebug()<<"Error GetRawInputData";
+                else
+                {
+                    RAWINPUT* raw = (RAWINPUT*)lpb;
+                    if (raw->header.dwType == RIM_TYPEMOUSE)
+                    {
+                        int xPosRelative = raw->data.mouse.lLastX;
+                        int yPosRelative = raw->data.mouse.lLastY;
+
+                        QPoint winEventPosition(GET_X_LPARAM(msg.lParam), GET_Y_LPARAM(msg.lParam));
+                    }
+                }
+
+            }
+        }
+        return false;
+    }
+
+    //std::vector<> 
+};
+
+class HDInputEventFilter : public QObject {
+public:
+    bool eventFilter(QObject *obj, QEvent *event) override {
+        if (!recursing && event->type() == QEvent::MouseMove) {
+
+        }
+        return QObject::eventFilter(obj, event);
+    }
+
+    bool recursing = false;
+};
+
 
 int main(int argc, char* argv[])
 {
