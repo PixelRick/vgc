@@ -33,10 +33,18 @@ namespace py = pybind11;
 
 class HDInputNativeEventFilter : public QAbstractNativeEventFilter {
 public:
+    static constexpr bool usePointer = true;
+
+    HDInputNativeEventFilter() {
+        if (usePointer) {
+            EnableMouseInPointer(true);
+        }
+    }
+
     bool nativeEventFilter(const QByteArray &eventType, void *message, long *) override {
         if (eventType == "windows_generic_MSG") {
             MSG *msg = reinterpret_cast<MSG*>(message);
-            if (msg->message == WM_INPUT)
+            /*if (msg->message == WM_INPUT)
             {
                 UINT dwSize = 40;
                 static BYTE lpb[40];
@@ -54,25 +62,121 @@ public:
                     }
                 }
 
+            }*/
+            if (msg->message == WM_POINTERUPDATE) {
+                const uint32_t pointerId = GET_POINTERID_WPARAM(msg->wParam);
+
+                POINTER_INPUT_TYPE pointerType;
+                GetPointerType(pointerId, &pointerType);
+                if (pointerType == PT_MOUSE) {
+                    POINTER_INFO info;
+                    GetPointerInfo(pointerId, &info);
+                    OutputDebugString(vgc::core::format("Pointer Info: history count {}\n", (int)info.historyCount).c_str());
+                }
+
+            }
+            else if (msg->message == WM_MOUSEMOVE) {
+                if (usePointer || isSendingMM) {// || (GetAsyncKeyState(0x4A) & 0x8000)) {
+                    return false;
+                }
+
+                auto pt = MAKEPOINTS(msg->lParam);
+
+                // snippet from https://docs.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getmousemovepointsex
+                int nVirtualWidth = GetSystemMetrics(SM_CXVIRTUALSCREEN) ;
+                int nVirtualHeight = GetSystemMetrics(SM_CYVIRTUALSCREEN) ;
+                int nVirtualLeft = GetSystemMetrics(SM_XVIRTUALSCREEN) ;
+                int nVirtualTop = GetSystemMetrics(SM_YVIRTUALSCREEN) ;
+                int cpt = 0 ;
+                // position is in virtual desktop space
+                int mode = GMMP_USE_DISPLAY_POINTS;
+                // position is weird..
+                //int mode = GMMP_USE_HIGH_RESOLUTION_POINTS;
+
+                MOUSEMOVEPOINT mp_in ;
+                MOUSEMOVEPOINT mp_out[64] ;
+
+                POINT pos;
+                GetCursorPos(&pos);
+
+                ZeroMemory(&mp_in, sizeof(mp_in)) ;
+                //mp_in.x = pt.x & 0x0000FFFF ; // Ensure that this number will pass through.
+                //mp_in.y = pt.y & 0x0000FFFF ;
+                mp_in.x = pos.x & 0x0000FFFF ;
+                mp_in.y = pos.y & 0x0000FFFF ;
+
+                //mp_in.time = msg->time;
+
+                cpt = GetMouseMovePointsEx(sizeof(mp_in), &mp_in, mp_out, 64, mode) ;
+                if (cpt < 0) {
+                    DWORD errorMessageID = ::GetLastError();
+                    OutputDebugString(vgc::core::format("GetMouseMovePointsEx: failed, err is {}\n", (int)errorMessageID).c_str());
+                    return false;
+                }
+                //OutputDebugString(vgc::core::format("GetMouseMovePointsEx: ok, count is {}, MM time is {}\n", cpt, msg->time).c_str());
+
+                DWORD mostRecentValidTime = lastMMTime;
+                isSendingMM = true;
+                for (int j = 0; j < cpt; j++) {
+                    int i = cpt - 1 - j; // go the other way..
+
+                    // XXX do something when time == lastTime
+                    //  for instance find last that match in position
+                    // XXX support time overflow
+                    if (mp_out[i].time <= lastMMTime) {
+                        //OutputDebugString(vgc::core::format("GetMouseMovePointsEx: skipping old point at index {} (timestamp:{})\n", i, mp_out[i].time).c_str());
+                        continue;
+                    }
+
+                    switch(mode) {
+                    case GMMP_USE_DISPLAY_POINTS:
+                        if (mp_out[i].x > 32767)
+                            mp_out[i].x -= 65536;
+                        if (mp_out[i].y > 32767)
+                            mp_out[i].y -= 65536;
+                        break ;
+                    case GMMP_USE_HIGH_RESOLUTION_POINTS:
+                        mp_out[i].x = ((mp_out[i].x * (nVirtualWidth - 1)) - (nVirtualLeft * 65536)) / nVirtualWidth;
+                        mp_out[i].y = ((mp_out[i].y * (nVirtualHeight - 1)) - (nVirtualTop * 65536)) / nVirtualHeight;
+                        break ;
+                    }
+
+                    int x = mp_out[i].x;
+                    int y = mp_out[i].y;
+
+                    if ((x < 0 || x > 0x0000FFFF) || (y < 0 || y > 0x0000FFFF)) {
+                        //OutputDebugString(vgc::core::format("GetMouseMovePointsEx: invalid point at index {}, (x:{}, y:{})\n", i, x, y).c_str());
+                        continue;
+                    }
+
+                    mostRecentValidTime = mp_out[i].time;
+                    //OutputDebugString(vgc::core::format("GetMouseMovePointsEx: sending historical point (index:{}, timestamp:{})\n", i, mp_out[i].time).c_str());
+                    auto lParam = MAKELPARAM(x, y);
+                    SendMessage(msg->hwnd, WM_MOUSEMOVE, msg->wParam, lParam);
+                }
+                isSendingMM = false;
+                lastMMTime = mostRecentValidTime;
+                return true;
             }
         }
         return false;
     }
 
-    //std::vector<> 
+    DWORD lastMMTime = 0;
+    bool isSendingMM = false;
 };
-
-class HDInputEventFilter : public QObject {
-public:
-    bool eventFilter(QObject *obj, QEvent *event) override {
-        if (!recursing && event->type() == QEvent::MouseMove) {
-
-        }
-        return QObject::eventFilter(obj, event);
-    }
-
-    bool recursing = false;
-};
+//
+//class HDInputEventFilter : public QObject {
+//public:
+//    bool eventFilter(QObject *obj, QEvent *event) override {
+//        if (!recursing && event->type() == QEvent::MouseMove) {
+//
+//        }
+//        return QObject::eventFilter(obj, event);
+//    }
+//
+//    bool recursing = false;
+//};
 
 
 int main(int argc, char* argv[])
@@ -95,6 +199,9 @@ int main(int argc, char* argv[])
     // XXX We should create a vgc::???::Application class for code sharing
     // between the different VGC apps.
     QApplication application(argc, argv);
+
+    HDInputNativeEventFilter filter;
+    application.installNativeEventFilter(&filter);
 
     // Set runtime paths from vgc.conf, an optional configuration file to be
     // placed in the same folder as the executable.

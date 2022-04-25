@@ -716,24 +716,19 @@ void OpenGLViewer::startCurve_(const core::Vec2d& p, double width)
     dumpStream_.open(filepath);
     dumpTimer_.restart();
 
-    static bool _ = []() -> bool {
-
-        return {};
-    }();
-
-    static int countup = 0;
-    if (countup++ == 5) {
-        // test disable compression
-        auto hMod = LoadLibraryA("qwindowsd.");
-        if (hMod) {
-            char* base = reinterpret_cast<char*>(hMod);
-            char* compressMouseMove = base + 0x00058850;
-            DWORD oldProt{};
-            VirtualProtect(compressMouseMove, 1, PAGE_EXECUTE_READWRITE, &oldProt);
-            *compressMouseMove = 0xC3; // RET
-            VirtualProtect(compressMouseMove, 1, oldProt, &oldProt);
-        }
-    }
+    //static int countup = 0;
+    //if (countup++ == 5) {
+    //    // test disable compression
+    //    auto hMod = LoadLibraryA("qwindowsd.");
+    //    if (hMod) {
+    //        char* base = reinterpret_cast<char*>(hMod);
+    //        char* compressMouseMove = base + 0x00058850;
+    //        DWORD oldProt{};
+    //        VirtualProtect(compressMouseMove, 1, PAGE_EXECUTE_READWRITE, &oldProt);
+    //        *compressMouseMove = 0xC3; // RET
+    //        VirtualProtect(compressMouseMove, 1, oldProt, &oldProt);
+    //    }
+    //}
 
     continueCurve_(p, width);
 }
