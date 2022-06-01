@@ -32,7 +32,7 @@ namespace py = pybind11;
 
 int main(int argc, char* argv[])
 {
-#ifdef VGC_DEBUG
+//#ifdef VGC_DEBUG
 #ifdef VGC_CORE_COMPILER_MSVC
     ::AllocConsole();
     ::SetConsoleCtrlHandler(nullptr, true);
@@ -45,7 +45,7 @@ int main(int argc, char* argv[])
     FILE* stream;
     freopen_s(&stream, "CONOUT$", "a+", stdout);
 #endif
-#endif
+//#endif
 
     // Conversion between QString and std::string.
     using vgc::widgets::fromQt;

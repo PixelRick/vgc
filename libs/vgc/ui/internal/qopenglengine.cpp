@@ -326,7 +326,7 @@ void QOpenglEngine::releasePaintShader()
 
 void QOpenglEngine::present()
 {
-    ctx_->swapBuffers(current_);
+    //ctx_->swapBuffers(current_);
 }
 
 void QOpenglEngine::initContext(QSurface* qw)
@@ -338,14 +338,14 @@ void QOpenglEngine::initContext(QSurface* qw)
         throw core::LogicError("already initialized.");
     }
 
-    QSurfaceFormat format;
+    /*QSurfaceFormat format;
     format.setDepthBufferSize(24);
     format.setStencilBufferSize(8);
     format.setVersion(3, 2);
     format.setProfile(QSurfaceFormat::CoreProfile);
     format.setSamples(8);
     format.setSwapInterval(0);
-    ctx_->setFormat(format);
+    ctx_->setFormat(format);*/
     ctx_->create();
 
     ctx_->makeCurrent(qw);

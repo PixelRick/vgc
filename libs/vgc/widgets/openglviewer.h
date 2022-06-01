@@ -85,6 +85,10 @@ Q_SIGNALS:
     ///
     void renderCompleted();
 
+private Q_SLOTS:
+    void aboutToCompose_();
+    void frameSwapped_();
+
 private:
     void mousePressEvent(QMouseEvent* event) override;
     void mouseMoveEvent(QMouseEvent* event) override;
@@ -111,6 +115,7 @@ private:
 private:
     // Camera (provides view matrix + projection matrix)
     geometry::Camera2d camera_;
+    core::Stopwatch sw_;
 
     // Scene
     dom::Document* document_;

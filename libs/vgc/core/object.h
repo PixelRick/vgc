@@ -720,6 +720,10 @@ public:
         return internal::SignalHub::numOutboundConnections(this);
     }
 
+    virtual void repr(std::string& out) const {
+        out += format("<repr not implemented for {}>", typeid(*this).name());
+    }
+
     /// This signal is emitted by this `object` just before it is destroyed.
     /// The object is still alive, its children have not yet been recursively
     /// destroyed, and none of the signals and slots have been automatically

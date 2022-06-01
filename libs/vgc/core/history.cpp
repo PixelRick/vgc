@@ -258,6 +258,7 @@ bool History::closeUndoGroup_(UndoGroup* node)
         prune_();
     }
 
+    //dumpObjectTree();
     return true;
 }
 

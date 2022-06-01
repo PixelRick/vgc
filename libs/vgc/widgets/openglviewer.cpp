@@ -123,13 +123,14 @@ void OpenGLViewer::init()
     // setSamples(1) instead does NOT disable MSAA, but surprisingly gives the
     // same result as setSamples(2).
 
-    QSurfaceFormat format;
+    QSurfaceFormat format = QSurfaceFormat::defaultFormat();
     format.setDepthBufferSize(24);
     format.setStencilBufferSize(8);
     format.setVersion(3, 2);
     format.setProfile(QSurfaceFormat::CoreProfile);
-    format.setSamples(8);
+    format.setSamples(4);
     format.setSwapInterval(0);
+    format.setSwapBehavior(QSurfaceFormat::DoubleBuffer);
     QSurfaceFormat::setDefaultFormat(format);
 }
 
@@ -154,6 +155,12 @@ OpenGLViewer::OpenGLViewer(dom::Document* document, QWidget* parent) :
     // therefore use a cross cursor. In the future, each tool should specify
     // which cursor should be drawn in the viewer.
     setCursor(crossCursor());
+
+    setAttribute(Qt::WA_AlwaysStackOnTop);
+    //setAttribute(Qt::WA_PaintOnScreen);
+
+    connect(this, &OpenGLViewer::aboutToCompose, this, &OpenGLViewer::aboutToCompose_);
+    connect(this, &OpenGLViewer::frameSwapped, this, &OpenGLViewer::frameSwapped_);
 
     documentChangedConnectionHandle_ = document_->changed().connect(
         [this](const dom::Diff& diff) {
@@ -207,14 +214,26 @@ void OpenGLViewer::stopLoggingUnder(core::PerformanceLog* parent)
     drawTask_.stopLoggingUnder(renderLog.get());
 }
 
+void OpenGLViewer::aboutToCompose_()
+{
+    std::cout << "aboutToCompose  " << sw_.elapsed() * 1000.0 << std::endl;
+}
+
+void OpenGLViewer::frameSwapped_()
+{
+    std::cout << "frameSwapped    " << sw_.elapsed() * 1000.0 << std::endl;
+}
+
 void OpenGLViewer::mousePressEvent(QMouseEvent* event)
 {
     if (mousePressed_ || tabletPressed_) {
         return;
     }
+    //core::Stopwatch sw {};
     mousePressed_ = true;
     pointingDeviceButtonAtPress_ = event->button();
     pointingDevicePress(PointingDeviceEvent(event));
+    //std::cout << "mousePressEvent:" << sw.elapsed() << std::endl;
 }
 
 void OpenGLViewer::mouseMoveEvent(QMouseEvent* event)
@@ -222,7 +241,9 @@ void OpenGLViewer::mouseMoveEvent(QMouseEvent* event)
     if (!mousePressed_) {
         return;
     }
+    //core::Stopwatch sw {};
     pointingDeviceMove(PointingDeviceEvent(event));
+    //std::cout << "mouseMoveEvent:" << sw.elapsed() << std::endl;
 }
 
 void OpenGLViewer::mouseReleaseEvent(QMouseEvent* event)
@@ -453,6 +474,11 @@ void OpenGLViewer::resizeGL(int w, int h)
 
 void OpenGLViewer::paintGL()
 {
+    //auto ctxFormat = context()->format();
+    //std::cout << "context()->format():" << std::endl;
+    //std::cout << "  swapInterval:" << ctxFormat.swapInterval() << std::endl;
+    //std::cout << "  swapBehavior:" << ctxFormat.swapBehavior() << std::endl;
+
     // Measure rendering time
     renderTask_.start();
 
@@ -507,6 +533,9 @@ void OpenGLViewer::paintGL()
     renderTask_.stop();
 
     // Inform that the render is completed
+
+    std::cout << "renderCompleted " << std::endl;
+    sw_.restart();
     Q_EMIT renderCompleted();
 }
 
@@ -804,31 +833,47 @@ void OpenGLViewer::startCurve_(const geometry::Vec2d& p, double width)
 {
     // XXX CLEAN
     static core::StringId Draw_Curve("Draw Curve");
-    drawCurveUndoGroup_ = document()->history()->createUndoGroup(Draw_Curve);
 
+    core::Stopwatch sw {};
+
+    //sw.restart();
+    drawCurveUndoGroup_ = document()->history()->createUndoGroup(Draw_Curve);
+    //std::cout << "createUndoGroup:" << sw.elapsed() << std::endl;
+
+    //sw.restart();
     drawCurveUndoGroup_->undone().connect(
         [this](core::UndoGroup*, bool /*isAbort*/) {
             // isAbort should be true since we have no sub-group
             isSketching_ = false;
             drawCurveUndoGroup_ = nullptr;
         });
+    //std::cout << "drawCurveUndoGroup_->undone().connect):" << sw.elapsed() << std::endl;
 
+    //sw.restart();
     dom::Element* root = document_->rootElement();
     dom::Element* path = dom::Element::create(root, PATH);
+    //std::cout << "dom::Element::create:" << sw.elapsed() << std::endl;
 
+    //sw.restart();
     path->setAttribute(POSITIONS, geometry::Vec2dArray());
     path->setAttribute(WIDTHS, core::DoubleArray());
     path->setAttribute(COLOR, currentColor_);
+    //std::cout << "path->setAttribute() (x3):" << sw.elapsed() << std::endl;
 
+    //sw.restart();
     continueCurve_(p, width);
+    //std::cout << "continueCurve_():" << sw.elapsed() << std::endl;
 }
 
 void OpenGLViewer::continueCurve_(const geometry::Vec2d& p, double width)
 {
     // XXX CLEAN
+    core::Stopwatch sw {};
 
+    //sw.restart();
     dom::Element* root = document_->rootElement();
     dom::Element* path = root->lastChildElement();
+    //std::cout << "path from document:" << sw.elapsed() << std::endl;
 
     if (path) {
         // Should I make this more efficient? If so, we have a few choices:
@@ -839,16 +884,21 @@ void OpenGLViewer::continueCurve_(const geometry::Vec2d& p, double width)
         // freely mutate the value and trusteing them in sending a changed
         // signal themselves.
 
+        //sw.restart();
         geometry::Vec2dArray positions = path->getAttribute(POSITIONS).getVec2dArray();
         core::DoubleArray widths = path->getAttribute(WIDTHS).getDoubleArray();
-
         positions.append(p);
         widths.append(width);
+        //std::cout << "compute new positions + widths:" << sw.elapsed() << std::endl;
 
+        //sw.restart();
         path->setAttribute(POSITIONS, std::move(positions));
         path->setAttribute(WIDTHS, std::move(widths));
+        //std::cout << "path->setAttribute() (x2):" << sw.elapsed() << std::endl;
 
+        //sw.restart();
         document()->emitPendingDiff();
+        //std::cout << "document()->emitPendingDiff():" << sw.elapsed() << std::endl;
     }
 }
 
