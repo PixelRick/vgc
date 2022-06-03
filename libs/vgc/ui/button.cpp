@@ -60,7 +60,7 @@ void Button::onResize()
 
 void Button::onPaintCreate(graphics::Engine* engine)
 {
-    triangles_ = engine->createTriangles();
+    triangles_ = engine->createPrimitivesBuffer(graphics::PrimitiveType::TriangleList);
 }
 
 void Button::onPaintDraw(graphics::Engine*)

@@ -63,14 +63,14 @@ void Label::setText(const std::string& text)
 
 void Label::onPaintCreate(graphics::Engine* engine)
 {
-    triangles_ = engine->createTriangles();
+    triangles_ = engine->createPrimitivesBuffer(graphics::PrimitiveType::TriangleList);
 }
 
 void Label::onPaintDraw(graphics::Engine*)
 {
     if (reload_) {
         reload_ = false;
-        core::FloatArray a;        
+        core::FloatArray a;
         core::Color textColor = internal::getColor(this, strings::text_color);
         graphics::TextProperties textProperties(
                     graphics::TextHorizontalAlign::Center,

@@ -14,8 +14,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <QAbstractNativeEventFilter>
 #include <QApplication>
 #include <QDir>
+#include <QMetaEnum>
 #include <QSettings>
 #include <QTimer>
 
@@ -29,6 +31,39 @@
 #include <vgc/widgets/stylesheets.h>
 
 namespace py = pybind11;
+
+vgc::core::Stopwatch sw;
+
+class TestNativeEventFilter : public QAbstractNativeEventFilter {
+public:
+    bool nativeEventFilter(const QByteArray &eventType, void *message, long *) override {
+
+        if (eventType == "windows_generic_MSG") {
+            MSG *msg = reinterpret_cast<MSG*>(message);
+            /*std::cout << sw.elapsed() << " windows:"
+                << std::hex << msg->message << std::endl;*/
+        }
+        else {
+            std::cout << sw.elapsed() << " native:"
+                << eventType.data() << std::endl;
+        }
+        return false;
+    }
+
+    //std::vector<>
+};
+
+class TestEventFilter : public QObject {
+public:
+    bool eventFilter(QObject *obj, QEvent *e) override {
+        std::cout << sw.elapsed() << " internal:"
+            << QMetaEnum::fromType<QEvent::Type>().valueToKey(e->type()) << std::endl;
+
+        return QObject::eventFilter(obj, e);
+    }
+};
+
+
 
 int main(int argc, char* argv[])
 {
@@ -65,6 +100,12 @@ int main(int argc, char* argv[])
     // XXX We should create a vgc::???::Application class for code sharing
     // between the different VGC apps.
     QApplication application(argc, argv);
+
+    //TestNativeEventFilter filter;
+    //application.installNativeEventFilter(&filter);
+    //
+    //TestEventFilter filter2;
+    //application.installEventFilter(&filter2);
 
     // Set runtime paths from vgc.conf, an optional configuration file to be
     // placed in the same folder as the executable.

@@ -119,7 +119,7 @@ void ColorPalette::setSelectedColor(const core::Color& color)
 
 void ColorPalette::onPaintCreate(graphics::Engine* engine)
 {
-    triangles_ = engine->createTriangles();
+    triangles_ = engine->createPrimitivesBuffer(graphics::PrimitiveType::TriangleList);
 }
 
 namespace {
@@ -221,7 +221,7 @@ void ColorPalette::onPaintDraw(graphics::Engine* engine)
         // color if selected color isn't an exact index.
         if (isSelectedColorExact_) {
             Int i = selectedLightnessIndex_;
-            Int j = selectedSaturationIndex_;            
+            Int j = selectedSaturationIndex_;
             float x1 = std::round(x0 + startOffset + i*dx);
             float x2 = std::round(x0 + startOffset + (i+1)*dx) - cellOffset;
             float y1 = y0 + startOffset + j*dy;

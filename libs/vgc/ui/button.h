@@ -73,7 +73,7 @@ protected:
 
 private:
     std::string text_;
-    graphics::TrianglesBufferPtr triangles_;
+    graphics::PrimitivesBufferPtr triangles_;
     bool reload_;
     bool isHovered_;
 };

@@ -85,7 +85,7 @@ private:
     graphics::ShapedText shapedText_;
     graphics::TextCursor textCursor_;
     float scrollLeft_ = 0.0f;
-    graphics::TrianglesBufferPtr triangles_;
+    graphics::PrimitivesBufferPtr triangles_;
     bool reload_;
     bool isHovered_;
     bool isMousePressed_;

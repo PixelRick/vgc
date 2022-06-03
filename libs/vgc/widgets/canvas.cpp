@@ -1,4 +1,4 @@
-// Copyright 2021 The VGC Developers
+// Copyright 2022 The VGC Developers
 // See the COPYRIGHT file at the top-level directory of this distribution
 // and at https://github.com/vgc/vgc/blob/master/COPYRIGHT
 //
@@ -14,7 +14,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <vgc/widgets/openglviewer.h>
+#include <vgc/widgets/canvas.h>
 
 #include <cassert>
 #include <cmath>
@@ -34,9 +34,7 @@
 #include <vgc/geometry/curve.h>
 #include <vgc/widgets/qtutil.h>
 
-namespace vgc {
-namespace widgets {
-
+namespace vgc::widgets {
 
 namespace {
 
@@ -48,17 +46,17 @@ QString shaderPath_(const std::string& name) {
 
 QMatrix4x4 toQtMatrix(const geometry::Mat4d& m) {
     return QMatrix4x4(
-               static_cast<float>(m(0,0)), static_cast<float>(m(0,1)), static_cast<float>(m(0,2)), static_cast<float>(m(0,3)),
-               static_cast<float>(m(1,0)), static_cast<float>(m(1,1)), static_cast<float>(m(1,2)), static_cast<float>(m(1,3)),
-               static_cast<float>(m(2,0)), static_cast<float>(m(2,1)), static_cast<float>(m(2,2)), static_cast<float>(m(2,3)),
-               static_cast<float>(m(3,0)), static_cast<float>(m(3,1)), static_cast<float>(m(3,2)), static_cast<float>(m(3,3)));
+        static_cast<float>(m(0,0)), static_cast<float>(m(0,1)), static_cast<float>(m(0,2)), static_cast<float>(m(0,3)),
+        static_cast<float>(m(1,0)), static_cast<float>(m(1,1)), static_cast<float>(m(1,2)), static_cast<float>(m(1,3)),
+        static_cast<float>(m(2,0)), static_cast<float>(m(2,1)), static_cast<float>(m(2,2)), static_cast<float>(m(2,3)),
+        static_cast<float>(m(3,0)), static_cast<float>(m(3,1)), static_cast<float>(m(3,2)), static_cast<float>(m(3,3)));
 }
 
 double width_(const PointingDeviceEvent& event) {
     const double defaultWidth = 6.0;
     return event.hasPressure() ?
-               2 * event.pressure() * defaultWidth :
-               defaultWidth;
+        2 * event.pressure() * defaultWidth :
+        defaultWidth;
 }
 
 core::StringId PATH("path");
@@ -76,7 +74,6 @@ void drawCrossCursor(QPainter& painter) {
 }
 
 QCursor crossCursor() {
-
     // Draw bitmap
     QBitmap bitmap(32, 32);
     QPainter bitmapPainter(&bitmap);
@@ -100,45 +97,8 @@ QCursor crossCursor() {
 
 } // namespace
 
-void OpenGLViewer::init()
-{
-    // Note:
-    //
-    // Performance seems to be significantly impacted by multisample
-    // antialiasing (MSAA), which is controlled by format.setSamples(n).
-    //
-    // Ideally, we may want to implement antialiasing either via FXAA/MLAA
-    // (i.e. as a post-processing step), or since we are 2D, by generating
-    // special thin "blurry" geometry at the boundary of objects, which may
-    // provide better performance.
-    //
-    // In the meantime, since none of the above is currently implemented, we do
-    // use MSAA which is trivial to enable/implement. Not using antialiasing at
-    // all (or with too few samples like 2 or 4) makes the lines quite ugly,
-    // but more importantly, makes the text almost unreadable (since it's
-    // currently rendered as triangles rather than textured quads or distance
-    // fields). Using setSamples(8) seems like a good trade-off for now.
-    //
-    // Note that to disable MSAA, you need to call setSamples(0). Calling
-    // setSamples(1) instead does NOT disable MSAA, but surprisingly gives the
-    // same result as setSamples(2).
-
-    QSurfaceFormat format = QSurfaceFormat::defaultFormat();
-    format.setDepthBufferSize(24);
-    format.setStencilBufferSize(8);
-    format.setVersion(3, 2);
-    format.setProfile(QSurfaceFormat::CoreProfile);
-    format.setSamples(4);
-    format.setSwapInterval(0);
-    format.setSwapBehavior(QSurfaceFormat::DoubleBuffer);
-    QSurfaceFormat::setDefaultFormat(format);
-}
-
-OpenGLViewer::OpenGLViewer(dom::Document* document, QWidget* parent) :
-    QOpenGLWidget(parent),
-    document_(document),
-    mousePressed_(false),
-    tabletPressed_(false),
+Canvas::Canvas(dom::Document* document)
+    : document_(document),
     polygonMode_(2),
     showControlPoints_(false),
     requestedTesselationMode_(2),
@@ -149,18 +109,18 @@ OpenGLViewer::OpenGLViewer(dom::Document* document, QWidget* parent) :
 {
     // Set ClickFocus policy to be able to accept keyboard events (default
     // policy is NoFocus).
-    setFocusPolicy(Qt::ClickFocus);
+    //setFocusPolicy(Qt::ClickFocus);
 
     // Set cursor. For now we assume that we are in a drawing tool, and
     // therefore use a cross cursor. In the future, each tool should specify
     // which cursor should be drawn in the viewer.
-    setCursor(crossCursor());
+    //setCursor(crossCursor());
 
-    setAttribute(Qt::WA_AlwaysStackOnTop);
+    //setAttribute(Qt::WA_AlwaysStackOnTop);
     //setAttribute(Qt::WA_PaintOnScreen);
 
-    connect(this, &OpenGLViewer::aboutToCompose, this, &OpenGLViewer::aboutToCompose_);
-    connect(this, &OpenGLViewer::frameSwapped, this, &OpenGLViewer::frameSwapped_);
+    //connect(this, &Canvas::aboutToCompose, this, &Canvas::aboutToCompose_);
+    //connect(this, &Canvas::frameSwapped, this, &Canvas::frameSwapped_);
 
     documentChangedConnectionHandle_ = document_->changed().connect(
         [this](const dom::Diff& diff) {
@@ -168,11 +128,9 @@ OpenGLViewer::OpenGLViewer(dom::Document* document, QWidget* parent) :
         });
 }
 
-void OpenGLViewer::setDocument(dom::Document* document)
+void Canvas::setDocument(dom::Document* document)
 {
-    makeCurrent();
-    cleanupGL();
-    doneCurrent();
+    cleanupGraphics();
 
     if (documentChangedConnectionHandle_) {
         document_->disconnect(documentChangedConnectionHandle_);
@@ -184,47 +142,46 @@ void OpenGLViewer::setDocument(dom::Document* document)
             this->onDocumentChanged_(diff);
         });
 
-    update();
+    repaint(); // XXX rename requestRepaint
 }
 
-OpenGLViewer::~OpenGLViewer()
+void Canvas::onDestroyed()
 {
+    Widget::onDestroyed();
     // Make OpenGL context current and call cleanupGL()
-    makeCurrent();
-    cleanupGL();
-    doneCurrent();
+    //cleanupGraphics();
 }
 
-QSize OpenGLViewer::minimumSizeHint() const
-{
-    return QSize(160, 120);
-}
+//QSize Canvas::minimumSizeHint() const
+//{
+//    return QSize(160, 120);
+//}
 
-void OpenGLViewer::startLoggingUnder(core::PerformanceLog* parent)
+void Canvas::startLoggingUnder(core::PerformanceLog* parent)
 {
     core::PerformanceLog* renderLog = renderTask_.startLoggingUnder(parent);
     updateTask_.startLoggingUnder(renderLog);
     drawTask_.startLoggingUnder(renderLog);
 }
 
-void OpenGLViewer::stopLoggingUnder(core::PerformanceLog* parent)
+void Canvas::stopLoggingUnder(core::PerformanceLog* parent)
 {
     core::PerformanceLogPtr renderLog = renderTask_.stopLoggingUnder(parent);
     updateTask_.stopLoggingUnder(renderLog.get());
     drawTask_.stopLoggingUnder(renderLog.get());
 }
 
-void OpenGLViewer::aboutToCompose_()
-{
-    std::cout << "aboutToCompose  " << sw_.elapsed() * 1000.0 << std::endl;
-}
+//void Canvas::aboutToCompose_()
+//{
+//    std::cout << "aboutToCompose  " << sw_.elapsed() * 1000.0 << std::endl;
+//}
+//
+//void Canvas::frameSwapped_()
+//{
+//    std::cout << "frameSwapped    " << sw_.elapsed() * 1000.0 << std::endl;
+//}
 
-void OpenGLViewer::frameSwapped_()
-{
-    std::cout << "frameSwapped    " << sw_.elapsed() * 1000.0 << std::endl;
-}
-
-void OpenGLViewer::mousePressEvent(QMouseEvent* event)
+bool Canvas::onMousePress(ui::MouseEvent* event)
 {
     if (mousePressed_ || tabletPressed_) {
         return;
@@ -236,7 +193,7 @@ void OpenGLViewer::mousePressEvent(QMouseEvent* event)
     //std::cout << "mousePressEvent:" << sw.elapsed() << std::endl;
 }
 
-void OpenGLViewer::mouseMoveEvent(QMouseEvent* event)
+bool Canvas::onMouseMove(ui::MouseEvent* event)
 {
     if (!mousePressed_) {
         return;
@@ -246,7 +203,7 @@ void OpenGLViewer::mouseMoveEvent(QMouseEvent* event)
     //std::cout << "mouseMoveEvent:" << sw.elapsed() << std::endl;
 }
 
-void OpenGLViewer::mouseReleaseEvent(QMouseEvent* event)
+bool Canvas::onMouseRelease(ui::MouseEvent* event)
 {
     if (!mousePressed_ || pointingDeviceButtonAtPress_ != event->button()) {
         return;
@@ -255,7 +212,7 @@ void OpenGLViewer::mouseReleaseEvent(QMouseEvent* event)
     mousePressed_ = false;
 }
 
-void OpenGLViewer::tabletEvent(QTabletEvent* event)
+void Canvas::tabletEvent(QTabletEvent* event)
 {
     switch(event->type()) {
     case QEvent::TabletPress:
@@ -288,7 +245,7 @@ void OpenGLViewer::tabletEvent(QTabletEvent* event)
     }
 }
 
-void OpenGLViewer::pointingDevicePress(const PointingDeviceEvent& event)
+void Canvas::pointingDevicePress(const PointingDeviceEvent& event)
 {
     if (isSketching_ || isPanning_ || isRotating_ || isZooming_) {
         return;
@@ -305,21 +262,21 @@ void OpenGLViewer::pointingDevicePress(const PointingDeviceEvent& event)
         startCurve_(worldCoords, width_(event));
     }
     else if (event.modifiers() == Qt::AltModifier &&
-             event.button() == Qt::LeftButton)
+        event.button() == Qt::LeftButton)
     {
         isRotating_ = true;
         pointingDevicePosAtPress_ = event.pos();
         cameraAtPress_ = camera_;
     }
     else if (event.modifiers() == Qt::AltModifier &&
-             event.button() == Qt::MiddleButton)
+        event.button() == Qt::MiddleButton)
     {
         isPanning_ = true;
         pointingDevicePosAtPress_ = event.pos();
         cameraAtPress_ = camera_;
     }
     else if (event.modifiers() == Qt::AltModifier &&
-             event.button() == Qt::RightButton)
+        event.button() == Qt::RightButton)
     {
         isZooming_ = true;
         pointingDevicePosAtPress_ = event.pos();
@@ -327,7 +284,7 @@ void OpenGLViewer::pointingDevicePress(const PointingDeviceEvent& event)
     }
 }
 
-void OpenGLViewer::pointingDeviceMove(const PointingDeviceEvent& event)
+void Canvas::pointingDeviceMove(const PointingDeviceEvent& event)
 {
     // Note: event.button() is always NoButton for move events. This is why
     // we use the variable isPanning_ and isSketching_ to remember the current
@@ -385,7 +342,7 @@ void OpenGLViewer::pointingDeviceMove(const PointingDeviceEvent& event)
     }
 }
 
-void OpenGLViewer::pointingDeviceRelease(const PointingDeviceEvent&)
+void Canvas::pointingDeviceRelease(const PointingDeviceEvent&)
 {
     isSketching_ = false;
     isRotating_ = false;
@@ -398,7 +355,7 @@ void OpenGLViewer::pointingDeviceRelease(const PointingDeviceEvent&)
     }
 }
 
-void OpenGLViewer::keyPressEvent(QKeyEvent* event)
+void Canvas::keyPressEvent(QKeyEvent* event)
 {
     switch (event->key()) {
     case Qt::Key_N:
@@ -437,16 +394,7 @@ void OpenGLViewer::keyPressEvent(QKeyEvent* event)
     // not handled here, including modifiers.
 }
 
-OpenGLViewer::OpenGLFunctions* OpenGLViewer::openGLFunctions() const
-{
-#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
-    return context()->versionFunctions<QOpenGLFunctions_3_2_Core>();
-#else
-    return QOpenGLVersionFunctionsFactory::get<QOpenGLFunctions_3_2_Core>(context());
-#endif
-}
-
-void OpenGLViewer::initializeGL()
+void Canvas::initializeGraphics()
 {
     OpenGLFunctions* f = openGLFunctions();
 
@@ -467,12 +415,12 @@ void OpenGLViewer::initializeGL()
     f->glClearColor(1, 1, 1, 1);
 }
 
-void OpenGLViewer::resizeGL(int w, int h)
+void Canvas::resizeGraphics(int w, int h)
 {
     camera_.setViewportSize(w, h);
 }
 
-void OpenGLViewer::paintGL()
+void Canvas::paintGraphics()
 {
     //auto ctxFormat = context()->format();
     //std::cout << "context()->format():" << std::endl;
@@ -506,11 +454,11 @@ void OpenGLViewer::paintGL()
         f->glPolygonMode(GL_FRONT_AND_BACK, (polygonMode_ == 1) ? GL_LINE : GL_FILL);
         for (CurveGLResources& r : curveGLResources_) {
             shaderProgram_.setUniformValue(
-                        colorLoc_,
-                        static_cast<float>(r.trianglesColor.r()),
-                        static_cast<float>(r.trianglesColor.g()),
-                        static_cast<float>(r.trianglesColor.b()),
-                        static_cast<float>(r.trianglesColor.a()));
+                colorLoc_,
+                static_cast<float>(r.trianglesColor.r()),
+                static_cast<float>(r.trianglesColor.g()),
+                static_cast<float>(r.trianglesColor.b()),
+                static_cast<float>(r.trianglesColor.a()));
             r.vaoTriangles->bind();
             f->glDrawArrays(GL_TRIANGLE_STRIP, 0, r.numVerticesTriangles);
             r.vaoTriangles->release();
@@ -542,7 +490,7 @@ void OpenGLViewer::paintGL()
     Q_EMIT renderCompleted();
 }
 
-void OpenGLViewer::cleanupGL()
+void Canvas::cleanupGL()
 {
     for (CurveGLResources& r : curveGLResources_) {
         destroyCurveGLResources_(r);
@@ -551,7 +499,7 @@ void OpenGLViewer::cleanupGL()
     curveGLResourcesMap_.clear();
 }
 
-void OpenGLViewer::onDocumentChanged_(const dom::Diff& diff)
+void Canvas::onDocumentChanged_(const dom::Diff& diff)
 {
     for (dom::Node* node : diff.removedNodes()) {
         dom::Element* e = dom::Element::cast(node);
@@ -639,7 +587,7 @@ void OpenGLViewer::onDocumentChanged_(const dom::Diff& diff)
     update();
 }
 
-void OpenGLViewer::updateGLResources_()
+void Canvas::updateGLResources_()
 {
     updateTask_.start();
 
@@ -665,14 +613,14 @@ void OpenGLViewer::updateGLResources_()
     updateTask_.stop();
 }
 
-OpenGLViewer::CurveGLResourcesIterator OpenGLViewer::appendCurveGLResources_(dom::Element* element)
+Canvas::CurveGLResourcesIterator Canvas::appendCurveGLResources_(dom::Element* element)
 {
     auto it = curveGLResources_.emplace(curveGLResources_.end(), CurveGLResources(element));
     curveGLResourcesMap_.emplace(element, it);
     return it;
 }
 
-void OpenGLViewer::updateCurveGLResources_(CurveGLResources& r)
+void Canvas::updateCurveGLResources_(CurveGLResources& r)
 {
     if (!r.inited_) {
         OpenGLFunctions* f = openGLFunctions();
@@ -803,7 +751,7 @@ void OpenGLViewer::updateCurveGLResources_(CurveGLResources& r)
     geometry::Vec2fArray glVerticesTriangles;
     for(const geometry::Vec2d& v: triangulation) {
         glVerticesTriangles.append(geometry::Vec2f(static_cast<float>(v[0]),
-                                               static_cast<float>(v[1])));
+            static_cast<float>(v[1])));
     }
     r.vboTriangles.bind();
     int count = core::int_cast<int>(r.numVerticesTriangles) * static_cast<int>(sizeof(geometry::Vec2f));
@@ -821,7 +769,7 @@ void OpenGLViewer::updateCurveGLResources_(CurveGLResources& r)
     r.trianglesColor = color;
 }
 
-void OpenGLViewer::destroyCurveGLResources_(CurveGLResources& r)
+void Canvas::destroyCurveGLResources_(CurveGLResources& r)
 {
     r.vaoTriangles->destroy();
     delete r.vaoTriangles;
@@ -832,7 +780,7 @@ void OpenGLViewer::destroyCurveGLResources_(CurveGLResources& r)
     r.vboControlPoints.destroy();
 }
 
-void OpenGLViewer::startCurve_(const geometry::Vec2d& p, double width)
+void Canvas::startCurve_(const geometry::Vec2d& p, double width)
 {
     // XXX CLEAN
     static core::StringId Draw_Curve("Draw Curve");
@@ -868,7 +816,7 @@ void OpenGLViewer::startCurve_(const geometry::Vec2d& p, double width)
     //std::cout << "continueCurve_():" << sw.elapsed() << std::endl;
 }
 
-void OpenGLViewer::continueCurve_(const geometry::Vec2d& p, double width)
+void Canvas::continueCurve_(const geometry::Vec2d& p, double width)
 {
     // XXX CLEAN
     core::Stopwatch sw {};
@@ -906,5 +854,4 @@ void OpenGLViewer::continueCurve_(const geometry::Vec2d& p, double width)
 }
 
 
-} // namespace widgets
-} // namespace vgc
+} // namespace vgc::widgets

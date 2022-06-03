@@ -20,28 +20,7 @@ namespace vgc {
 namespace graphics {
 
 Resource::Resource(Engine* engine) :
-    engine_(engine),
-    engineConnectionHandle_(
-        engine->aboutToBeDestroyed().connect(
-            [this](){ onEngineDestroyed(); })
-    ) {}
-
-
-Resource::~Resource()
-{
-    if (engineConnectionHandle_) {
-        engine_->disconnect(engineConnectionHandle_);
-        engineConnectionHandle_ = core::ConnectionHandle::invalid;
-        engine_ = nullptr;
-    }
-}
-
-void Resource::onEngineDestroyed()
-{
-    release();
-    engineConnectionHandle_ = core::ConnectionHandle::invalid;
-    engine_ = nullptr;
-}
+    engine_(engine) {}
 
 Engine::Engine() :
     Object() {}
