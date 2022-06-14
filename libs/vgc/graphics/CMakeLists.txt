@@ -11,13 +11,18 @@ vgc_add_library(graphics
 
     HEADER_FILES
         api.h
+        buffers.h
+        detail/commands.h
         engine.h
+        enums.h
         exceptions.h
         font.h
         idgenerator.h
         logcategories.h
+        resource.h
         richtext.h
         strings.h
+        targets.h
         text.h
 
     CPP_FILES

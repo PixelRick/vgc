@@ -68,7 +68,7 @@ public:
 
 private:
     std::string text_;
-    graphics::TrianglesBufferPtr triangles_;
+    graphics::PrimitiveBufferPtr triangles_;
     bool reload_;
 };
 

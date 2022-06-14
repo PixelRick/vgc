@@ -106,25 +106,38 @@ protected:
     void onDestroyed() override;
 
 public:
-    using OpenGLFunctions = QOpenGLFunctions_3_2_Core;
-
     /// Creates a new OpenglEngine.
     ///
     static QOpenglEnginePtr create();
     static QOpenglEnginePtr create(QOpenGLContext* ctx);
 
     // Implementation of graphics::Engine API
+
+    graphics::PrimitiveBufferPtr createPrimitivesBuffer(graphics::PrimitiveType type) override;
+
+    // not part of the common interface
+
+    void initContext(QSurface* qw);
+    void setupContext();
+
+public:
+    // RENDER THREAD
+
+    using OpenGLFunctions = QOpenGLFunctions_3_2_Core;
+
+    // Implementation of graphics::Engine API
+
     void clear(const core::Color& color) override;
+
     geometry::Mat4f projectionMatrix() override;
     void setProjectionMatrix(const geometry::Mat4f& m) override;
     void pushProjectionMatrix() override;
     void popProjectionMatrix() override;
+
     geometry::Mat4f viewMatrix() override;
     void setViewMatrix(const geometry::Mat4f& m) override;
     void pushViewMatrix() override;
     void popViewMatrix() override;
-
-    graphics::TrianglesBufferPtr createTriangles() override;
 
     void bindPaintShader();
     void releasePaintShader();
@@ -137,9 +150,9 @@ public:
         return api_;
     }
 
-    void initContext(QSurface* qw);
-    void setupContext();
     void setViewport(Int x, Int y, Int width, Int height);
+
+
     void setTarget(QSurface* qw);
 
 private:

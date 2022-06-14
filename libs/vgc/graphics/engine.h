@@ -17,77 +17,29 @@
 #ifndef VGC_GRAPHICS_ENGINE_H
 #define VGC_GRAPHICS_ENGINE_H
 
+#include <condition_variable>
+#include <list>
 #include <memory>
+#include <mutex>
+#include <thread>
+#include <unordered_set>
 
+#include <vgc/core/assert.h>
 #include <vgc/core/color.h>
+#include <vgc/core/enum.h>
 #include <vgc/core/innercore.h>
+#include <vgc/core/templateutil.h>
 #include <vgc/geometry/mat4f.h>
 #include <vgc/graphics/api.h>
+#include <vgc/graphics/buffers.h>
+#include <vgc/graphics/detail/commands.h>
+#include <vgc/graphics/enums.h>
+#include <vgc/graphics/resource.h>
+#include <vgc/graphics/targets.h>
 
 namespace vgc::graphics {
 
 VGC_DECLARE_OBJECT(Engine);
-
-using ResourcePtr = std::shared_ptr<class Resource>;
-class VGC_GRAPHICS_API Resource : public std::enable_shared_from_this<Resource> {
-protected:
-    explicit Resource(Engine* engine);
-
-public:
-    virtual ~Resource();
-
-    Resource(const Resource&) = delete;
-    Resource& operator=(const Resource&) = delete;
-
-    Engine* engine() const {
-        return engine_;
-    }
-
-private:
-    void onEngineDestroyed();
-    virtual void release() = 0;
-
-    Engine* engine_;
-    core::ConnectionHandle engineConnectionHandle_;
-};
-
-using TrianglesBufferPtr = std::shared_ptr<class TrianglesBuffer>;
-class VGC_GRAPHICS_API TrianglesBuffer : public Resource {
-public:
-    using Resource::Resource;
-
-    /// Loads the given triangles data. Unless this engine is a software
-    /// renderer, this typically sends the data from RAM to the GPU. This
-    /// operation is often expensive, and therefore the number of calls to this
-    /// function should be minimized. It is preferable to call it once with a
-    /// lot of data, than call it several times by chunking the data.
-    ///
-    /// The given data must be in the following format:
-    ///
-    /// ```
-    /// [x1, y1, r1, g1, b1,     // First vertex of first triangle
-    ///  x2, y2, r2, g2, b2,     // Second vertex of first triangle
-    ///  x3, y3, r3, g3, b3,     // Third vertex of first triangle
-    ///
-    ///  x4, y4, r4, g4, b4,     // First vertex of second triangle
-    ///  x5, y5, r5, g5, b5,     // Second vertex of second triangle
-    ///  x6, y6, r6, g6, b6,     // Third vertex of second triangle
-    ///
-    ///  ...]
-    /// ```
-    ///
-    // Note: the above format is sub-optimal for the common case where we can
-    // share color data across some or all triangles, or share vertex positions
-    // across several triangles (via a separate 'indices' buffer), but it is
-    // generic and should be enough as first draft of the API.
-    //
-    virtual void load(const float* data, Int length) = 0;
-
-    /// Draws the given triangles.
-    ///
-    virtual void draw() = 0;
-};
-
 
 /// \class vgc::graphics::Engine
 /// \brief Abstract interface for graphics rendering.
@@ -109,6 +61,9 @@ private:
     VGC_OBJECT(Engine, core::Object)
     VGC_PRIVATIZE_OBJECT_TREE_MUTATORS
 
+    using Command = detail::Command;
+    using CommandUPtr = std::unique_ptr<Command>;
+
 protected:
     /// Constructs an Engine. This constructor is an implementation detail only
     /// available to derived classes.
@@ -116,50 +71,44 @@ protected:
     Engine();
 
 public:
-    /// Clears the whole render area with the given color.
-    ///
-    virtual void clear(const core::Color& color) = 0;
+    // MODEL THREAD functions
 
-    /// Returns the current projection matrix.
+    /// Submits the current command list for execution by the render thread.
+    /// Returns the index assigned to the submitted command list.
     ///
-    virtual geometry::Mat4f projectionMatrix() = 0;
+    /// If the current command list is empty, `flush()` does nothing and
+    /// returns the index of the previous list.
+    ///
+    UInt flush() {
+        return flushPendingCommandList_();
+    }
 
-    /// Sets the current projection matrix.
+    /// Submits the current command list if present then waits for all submitted
+    /// command lists to finish executing on the CPU.
     ///
-    virtual void setProjectionMatrix(const geometry::Mat4f& m) = 0;
+    void finish() {
+        UInt id = flushPendingCommandList_();
+        waitCommandListExecutionFinished_(id);
+    }
 
-    /// Adds a copy of the current projection matrix to the matrix stack.
-    ///
-    virtual void pushProjectionMatrix() = 0;
+    void present(SwapChainPtr swapChain, UInt32 syncInterval) {
+        // XXX command + finish if syncInterval > 0
+    }
 
-    /// Removes the current projection matrix from the matrix stack.
-    ///
-    /// The behavior is undefined if there is only one matrix in the stack
-    /// before calling this function.
-    ///
-    virtual void popProjectionMatrix() = 0;
+    void setOutputStage(RenderTargetViewPtr rtv = nullptr) {
+        // XXX command
+    }
 
-    /// Returns the current view matrix.
-    ///
-    virtual geometry::Mat4f viewMatrix() = 0;
+    void setViewport(Int x, Int y, Int width, Int height) {
+        // XXX command
+    }
 
-    /// Sets the current view matrix.
+    /// Creates a swap chain for the given window.
     ///
-    virtual void setViewMatrix(const geometry::Mat4f& m) = 0;
+    virtual SwapChainPtr createSwapChain(void* windowNativeHandle, UInt32 flags);
 
-    /// Adds a copy of the current view matrix to the matrix stack.
-    ///
-    virtual void pushViewMatrix() = 0;
-
-    /// Removes the current view matrix from the matrix stack.
-    ///
-    /// The behavior is undefined if there is only one matrix in the stack
-    /// before calling this function.
-    ///
-    virtual void popViewMatrix() = 0;
-
-    /// Creates a vertex buffer for storing triangles data, and returns the ID
-    /// of the buffer.
+    /// Creates a float buffer for storing primitives data, and returns a shared
+    /// pointer to the new resource.
     ///
     /// Once created, you can load triangles data using
     /// resource->load(...), and you can draw the loaded triangles
@@ -172,7 +121,133 @@ public:
     // specifying the vertex format (i.e., XYRGB, XYZRGBA, etc.), but for now
     // the format is fixed (XYRGB).
     //
-    virtual TrianglesBufferPtr createTriangles() = 0;
+    virtual PrimitiveBufferPtr createPrimitivesBuffer(PrimitiveType type) = 0;
+
+    /// Clears the whole render area with the given color.
+    ///
+    void clear(const core::Color& color) {
+        queueCommand_<detail::ClearCommand>(color);
+    }
+
+    /// Returns the current projection matrix (top-most on the stack).
+    ///
+    geometry::Mat4f projectionMatrix() const {
+        return projectionMatrixStack_.last();
+    }
+
+    /// Assigns `m` to the top-most matrix of the projection matrix stack.
+    /// `m` becomes the current projection matrix.
+    ///
+    void setProjectionMatrix(const geometry::Mat4f& m) {
+        queueCommand_<detail::SetProjectionMatrixCommand>(m);
+    }
+
+    /// Duplicates the top-most matrix on the projection matrix stack.
+    ///
+    void pushProjectionMatrix() {
+        projectionMatrixStack_.emplaceLast(projectionMatrixStack_.last());
+        setViewMatrix(projectionMatrixStack_.last());
+    }
+
+    /// Removes the top-most matrix of the projection matrix stack.
+    /// The new top-most matrix becomes the current projection matrix.
+    ///
+    /// The behavior is undefined if there is only one matrix in the stack
+    /// before calling this function.
+    ///
+    void popProjectionMatrix() {
+        projectionMatrixStack_.removeLast();
+        setViewMatrix(projectionMatrixStack_.last());
+    }
+
+    /// Returns the current view matrix (top-most on the stack).
+    ///
+    geometry::Mat4f viewMatrix() const {
+        return viewMatrixStack_.last();
+    }
+
+    /// Assigns `m` to the top-most matrix of the view matrix stack.
+    /// `m` becomes the current view matrix.
+    ///
+    void setViewMatrix(const geometry::Mat4f& m) {
+        queueCommand_<detail::SetViewMatrixCommand>(m);
+    }
+
+    /// Duplicates the top-most matrix on the view matrix stack.
+    ///
+    void pushViewMatrix() {
+        viewMatrixStack_.emplaceLast(viewMatrixStack_.last());
+        setViewMatrix(viewMatrixStack_.last());
+    }
+
+    /// Removes the top-most matrix of the view matrix stack.
+    /// The new top-most matrix becomes the current view matrix.
+    ///
+    /// The behavior is undefined if there is only one matrix in the stack
+    /// before calling this function.
+    ///
+    void popViewMatrix() {
+        viewMatrixStack_.removeLast();
+        setViewMatrix(viewMatrixStack_.last());
+    }
+
+    void bindPaintShader() {
+        // XXX command
+    }
+
+    void releasePaintShader() {
+        // XXX command
+    }
+
+    void drawPrimitives(const PrimitiveBufferPtr& buffer) {
+        // XXX command
+    }
+
+protected:
+    detail::ResourceList* resourceList_;
+    std::list<CommandUPtr> commandList_;
+
+    // RENDER THREAD functions
+
+    virtual void present_(const SwapChainPtr& swapChain, UInt32 syncInterval) = 0;
+    virtual void setOutputStage_(const RenderTargetViewPtr& rtv = nullptr) = 0;
+    virtual void setViewport_(Int x, Int y, Int width, Int height) = 0;
+    virtual void setProjectionMatrix_(const geometry::Mat4f& m) = 0;
+    virtual void setViewMatrix_(const geometry::Mat4f& m) = 0;
+    virtual void bindPaintShader_();
+    virtual void releasePaintShader_();
+    virtual void drawPrimitives_(const PrimitiveBufferPtr& buffer) = 0;
+
+    template<typename TCommand, typename... Args>
+    void queueCommand_(Args&&... args) {
+        commandList_.emplace_back(new TCommand(std::forward<Args>(args)...));
+    };
+
+private:
+    core::Array<geometry::Mat4f> projectionMatrixStack_;
+    core::Array<geometry::Mat4f> viewMatrixStack_;
+
+    std::thread renderThread_;
+
+    std::mutex mutex_;
+    std::condition_variable wakeRenderThreadConditionVariable_;
+    std::condition_variable renderThreadEventConditionVariable_;
+
+    core::Array<std::list<CommandUPtr>> commandQueue_;
+    UInt lastExecutedCommandListId_ = 0;
+    UInt lastSubmittedCommandListId_ = 0;
+
+    bool running_ = false;
+    bool stopRequested_ = false;
+
+    void renderThreadProc_();
+    void startRenderThread_();
+    void stopRenderThread_(); // blocking
+
+    UInt flushPendingCommandList_();
+
+    // returns false if execution was cancelled by a stop request.
+    void waitCommandListExecutionFinished_(UInt commandListId = 0);
 };
 
 } // namespace vgc::graphics

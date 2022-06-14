@@ -77,24 +77,21 @@ struct XYRGBVertex {
 
 } // namespace
 
-class QOpenglTrianglesBuffer;
-using QOpenglTrianglesBufferPtr = std::shared_ptr<QOpenglTrianglesBuffer>;
+class QOpenglPrimitiveBuffer;
+using QOpenglPrimitiveBufferPtr = std::shared_ptr<QOpenglPrimitiveBuffer>;
 
-class QOpenglTrianglesBuffer : public graphics::TrianglesBuffer {
+class QOpenglPrimitiveBuffer : public graphics::PrimitiveBuffer {
 private:
-    explicit QOpenglTrianglesBuffer(QOpenglEngine* engine);
+    explicit QOpenglPrimitiveBuffer(QOpenglEngine* engine, graphics::PrimitiveType type);
 
 public:
-    ~QOpenglTrianglesBuffer() {
+    ~QOpenglPrimitiveBuffer() {
         release_();
     }
 
-    [[nodiscard]] static QOpenglTrianglesBufferPtr create(QOpenglEngine* engine) {
-        return std::shared_ptr<QOpenglTrianglesBuffer>(new QOpenglTrianglesBuffer(engine));
+    [[nodiscard]] static QOpenglPrimitiveBufferPtr create(QOpenglEngine* engine, graphics::PrimitiveType type) {
+        return QOpenglPrimitiveBufferPtr(new QOpenglPrimitiveBuffer(engine, type));
     }
-
-    void load(const float* data, Int length) override;
-    void draw() override;
 
     void bind() {
         if (vao_) {
@@ -110,30 +107,52 @@ public:
         }
     }
 
-    QOpenglEngine* engine() const {
-        return static_cast<QOpenglEngine*>(TrianglesBuffer::engine());
-    }
+protected:
+    void release_() override;
+    void load_(const float* data, Int length) override;
+    void draw_(graphics::Engine* engine) override;
 
 private:
     QOpenGLBuffer vbo_;
     QOpenGLVertexArrayObject* vao_ = nullptr;
     Int numVertices_ = 0;
     Int allocSize_ = 0;
-
-    void release_();
-    void release() override;
+    GLenum mode_ = 0;
 };
 
-QOpenglTrianglesBuffer::QOpenglTrianglesBuffer(QOpenglEngine* engine) :
-    graphics::TrianglesBuffer(engine)
+QOpenglPrimitiveBuffer::QOpenglPrimitiveBuffer(QOpenglEngine* engine, graphics::PrimitiveType type) :
+    graphics::PrimitiveBuffer(engine, type)
 {
     // Create VBO/VAO for rendering triangles
     vbo_.create();
     vao_ = new QOpenGLVertexArrayObject();
     vao_->create();
+
+    /*
+    GL_POINTS         0x0000
+    GL_LINES          0x0001
+    GL_LINE_LOOP      0x0002
+    GL_LINE_STRIP     0x0003
+    GL_TRIANGLES      0x0004
+    GL_TRIANGLE_STRIP 0x0005
+    GL_TRIANGLE_FAN   0x0006
+    GL_QUADS          0x0007
+    GL_QUAD_STRIP     0x0008
+    GL_POLYGON        0x0009
+    */
+
+    switch (type) {
+    case graphics::PrimitiveType::LineList: mode_ = GL_LINES; break;
+    case graphics::PrimitiveType::LineStrip: mode_ = GL_LINE_STRIP; break;
+    case graphics::PrimitiveType::TriangleList: mode_ = GL_TRIANGLES; break;
+    case graphics::PrimitiveType::TriangleStrip: mode_ = GL_TRIANGLE_STRIP; break;
+    default:
+        mode_ = GL_POINTS;
+        break;
+    }
 }
 
-void QOpenglTrianglesBuffer::load(const float* data, Int length)
+void QOpenglPrimitiveBuffer::load(const float* data, Int length)
 {
     if (!vao_) return;
     if (length < 0) {
@@ -159,17 +178,17 @@ void QOpenglTrianglesBuffer::load(const float* data, Int length)
     vbo_.release();
 }
 
-void QOpenglTrianglesBuffer::draw()
+void QOpenglPrimitiveBuffer::draw()
 {
     if (!vao_) return;
     vao_->bind();
     auto api = engine()->api();
     api->glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-    api->glDrawArrays(GL_TRIANGLES, 0, numVertices_);
+    api->glDrawArrays(mode_, 0, numVertices_);
     vao_->release();
 }
 
-void QOpenglTrianglesBuffer::release_()
+void QOpenglPrimitiveBuffer::release_()
 {
     if (!vao_) return;
     vao_->destroy();
@@ -178,7 +197,7 @@ void QOpenglTrianglesBuffer::release_()
     vbo_.destroy();
 }
 
-void QOpenglTrianglesBuffer::release()
+void QOpenglPrimitiveBuffer::release()
 {
     release_();
 }
@@ -278,9 +297,9 @@ void QOpenglEngine::popViewMatrix()
     shaderProgram_.setUniformValue(viewLoc_, toQtMatrix(viewMatrices_.last()));
 }
 
-graphics::TrianglesBufferPtr QOpenglEngine::createTriangles()
+graphics::PrimitiveBufferPtr QOpenglEngine::createPrimitivesBuffer(graphics::PrimitiveType type)
 {
-    auto r = QOpenglTrianglesBuffer::create(this);
+    auto r = QOpenglPrimitiveBuffer::create(this);
     GLsizei stride = sizeof(XYRGBVertex);
     GLvoid* posPointer = reinterpret_cast<void*>(offsetof(XYRGBVertex, x));
     GLvoid* colPointer = reinterpret_cast<void*>(offsetof(XYRGBVertex, r));
@@ -395,4 +414,3 @@ void QOpenglEngine::setupContext() {
 }
 
 } // namespace vgc::ui::internal
-

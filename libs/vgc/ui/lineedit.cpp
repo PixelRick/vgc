@@ -93,7 +93,7 @@ void LineEdit::onResize()
 
 void LineEdit::onPaintCreate(graphics::Engine* engine)
 {
-    triangles_ = engine->createTriangles();
+    triangles_ = engine->createPrimitivesBuffer(graphics::PrimitiveType::TriangleList);
 }
 
 void LineEdit::onPaintDraw(graphics::Engine*)

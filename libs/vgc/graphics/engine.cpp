@@ -19,32 +19,87 @@
 namespace vgc {
 namespace graphics {
 
-Resource::Resource(Engine* engine) :
-    engine_(engine),
-    engineConnectionHandle_(
-        engine->aboutToBeDestroyed().connect(
-            [this](){ onEngineDestroyed(); })
-    ) {}
+Engine::Engine() :
+    Object() {}
 
+// XXX add try/catch ?
+void Engine::renderThreadProc_() {
+    std::unique_lock<std::mutex> lock(mutex_, std::defer_lock);
+    while (1) {
+        lock.lock();
 
-Resource::~Resource()
-{
-    if (engineConnectionHandle_) {
-        engine_->disconnect(engineConnectionHandle_);
-        engineConnectionHandle_ = core::ConnectionHandle::invalid;
-        engine_ = nullptr;
+        // wait for work or stop request
+        wakeRenderThreadConditionVariable_.wait(lock, [&]{ return !commandQueue_.isEmpty() || stopRequested_; });
+
+        // if requested, stop
+        if (stopRequested_) {
+            // cancel submitted lists
+            lastExecutedCommandListId_ = lastSubmittedCommandListId_;
+            lock.unlock();
+            renderThreadEventConditionVariable_.notify_all();
+            return;
+        }
+
+        // else commandQueue_ is not empty, so prepare some work
+        std::list<CommandUPtr> commandList = std::move(commandQueue_.first());
+        commandQueue_.removeFirst();
+
+        lock.unlock();
+
+        // execute commands
+        for (const CommandUPtr& command : commandList) {
+            command->execute(this);
+        }
+
+        lock.lock();
+        ++lastExecutedCommandListId_;
+        lock.unlock();
+
+        renderThreadEventConditionVariable_.notify_all();
     }
 }
 
-void Resource::onEngineDestroyed()
-{
-    release();
-    engineConnectionHandle_ = core::ConnectionHandle::invalid;
-    engine_ = nullptr;
+void Engine::startRenderThread_() {
+    if (!running_) {
+        renderThread_ = std::thread([=]{ this->renderThreadProc_(); });
+        running_ = true;
+    }
 }
 
-Engine::Engine() :
-    Object() {}
+void Engine::stopRenderThread_() {
+    if (running_) {
+        std::unique_lock<std::mutex> lock(mutex_);
+        stopRequested_ = true;
+        lock.unlock();
+        wakeRenderThreadConditionVariable_.notify_all();
+        VGC_CORE_ASSERT(renderThread_.joinable());
+        renderThread_.join();
+        stopRequested_ = false;
+        running_ = false;
+        return;
+    }
+}
+
+UInt Engine::flushPendingCommandList_() {
+    std::unique_lock<std::mutex> lock(mutex_);
+    bool notifyRenderThread = commandQueue_.isEmpty();
+    commandQueue_.emplaceLast(std::move(commandList_));
+    commandList_ = {};
+    ++lastSubmittedCommandListId_;
+    lock.unlock();
+    if (notifyRenderThread) {
+        wakeRenderThreadConditionVariable_.notify_all();
+    }
+}
+
+void Engine::waitCommandListExecutionFinished_(UInt commandListId) {
+    std::unique_lock<std::mutex> lock(mutex_);
+    if (commandListId == 0) {
+        commandListId = lastSubmittedCommandListId_;
+    }
+    renderThreadEventConditionVariable_.wait(lock, [&]{ return lastExecutedCommandListId_ == commandListId; });
+    lock.unlock();
+}
 
 } // namespace graphics
 } // namespace vgc

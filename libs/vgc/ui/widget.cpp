@@ -302,7 +302,7 @@ bool Widget::onMouseMove(MouseEvent* event)
         mouseEnteredChild_ = nullptr;
     }
 
-    return false;    
+    return false;
 
     // TODO: We could (should?) factorize the code:
     //
@@ -371,10 +371,11 @@ bool Widget::onMouseEnter()
 bool Widget::onMouseLeave()
 {
     if (mouseEnteredChild_) {
-        mouseEnteredChild_->onMouseLeave();
+        bool handled = mouseEnteredChild_->onMouseLeave();
         mouseEnteredChild_ = nullptr;
+        return handled;
     }
-    return true;
+    return false;
 }
 
 void Widget::setTreeActive(bool active)

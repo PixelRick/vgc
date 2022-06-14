@@ -85,7 +85,7 @@ protected:
 private:
     void updateBytePosition_(const geometry::Vec2f& mousePosition);
     graphics::RichTextPtr richText_;
-    graphics::TrianglesBufferPtr triangles_;
+    graphics::PrimitiveBufferPtr triangles_;
     bool reload_;
     bool isHovered_;
     ui::MouseButton mouseButton_; // == `None` if no mouse button pressed

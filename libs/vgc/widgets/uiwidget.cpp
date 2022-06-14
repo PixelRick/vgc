@@ -239,6 +239,7 @@ void UiWidget::paintGL()
     engine_->setViewMatrix(geometry::Mat4f::identity);
     widget_->paint(engine_.get());
     engine_->releasePaintShader();
+    // XXX opengl only.. we need to add a flush/finish to submit ?
 }
 
 void UiWidget::cleanupGL()
