@@ -123,13 +123,14 @@ void OpenGLViewer::init()
     // setSamples(1) instead does NOT disable MSAA, but surprisingly gives the
     // same result as setSamples(2).
 
-    QSurfaceFormat format;
+    QSurfaceFormat format = QSurfaceFormat::defaultFormat();
     format.setDepthBufferSize(24);
     format.setStencilBufferSize(8);
     format.setVersion(3, 2);
     format.setProfile(QSurfaceFormat::CoreProfile);
     format.setSamples(8);
     format.setSwapInterval(0);
+    format.setSwapBehavior(QSurfaceFormat::DoubleBuffer);
     QSurfaceFormat::setDefaultFormat(format);
 }
 
