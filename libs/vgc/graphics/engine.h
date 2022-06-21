@@ -18,6 +18,7 @@
 #define VGC_GRAPHICS_ENGINE_H
 
 #include <condition_variable>
+#include <functional>
 #include <list>
 #include <memory>
 #include <mutex>
@@ -91,42 +92,73 @@ public:
         waitCommandListExecutionFinished_(id);
     }
 
-    void present(SwapChainPtr swapChain, UInt32 syncInterval) {
-        // XXX command + finish if syncInterval > 0
+    /// Creates a swap chain for the given window.
+    ///
+    SwapChainPtr createSwapChain(const SwapChainDesc& desc, void* windowNativeHandle, WindowNativeHandleType handleType, UInt32 flags) {
+        return createSwapChain_(desc, windowNativeHandle, handleType, flags);
     }
 
-    void setOutputStage(RenderTargetViewPtr rtv = nullptr) {
-        // XXX command
+    RenderTargetViewPtr createRenderTargetView(const SwapChainPtr& swapChain) {
+        return constructRenderTargetView_(swapChain);
+    }
+
+    void present(SwapChainPtr swapChain, UInt32 syncInterval) {
+        bool shouldSync = syncInterval > 0;
+        if (shouldSync && shouldPresentWaitFromSyncedUserThread_()) {
+            // Preventing dead-locks
+            // See https://docs.microsoft.com/en-us/windows/win32/api/DXGI1_2/nf-dxgi1_2-idxgiswapchain1-present1#remarks
+            finish();
+            present_(swapChain, syncInterval);
+        }
+        else {
+            struct CommandParameters {
+                SwapChainPtr swapChain;
+                UInt32 syncInterval;
+            };
+            queueLambdaCommandWithParameters_<CommandParameters>(
+                "present",
+                [](Engine* engine, const CommandParameters& p) {
+                    engine->present_(p.swapChain, p.syncInterval);
+                },
+                swapChain, syncInterval);
+
+            if (shouldSync) {
+                finish();
+            }
+        }
+    }
+
+    // nullptr means default target (current window's framebuffer for OpenGL)
+    void setTarget(RenderTargetViewPtr rtv = nullptr) {
+        queueLambdaCommandWithParameters_<RenderTargetViewPtr>(
+            "setTarget",
+            [](Engine* engine, const RenderTargetViewPtr& view) {
+                engine->setTarget_(view);
+            },
+            rtv);
     }
 
     void setViewport(Int x, Int y, Int width, Int height) {
-        // XXX command
+        struct CommandParameters {
+            Int x, y, width, height;
+        };
+        queueLambdaCommandWithParameters_<CommandParameters>(
+            "setViewport",
+            [](Engine* engine, const CommandParameters& p) {
+                engine->setViewport_(p.x, p.y, p.width, p.height);
+            },
+            x, y, width, height);
     }
-
-    /// Creates a swap chain for the given window.
-    ///
-    virtual SwapChainPtr createSwapChain(void* windowNativeHandle, UInt32 flags);
-
-    /// Creates a float buffer for storing primitives data, and returns a shared
-    /// pointer to the new resource.
-    ///
-    /// Once created, you can load triangles data using
-    /// resource->load(...), and you can draw the loaded triangles
-    /// using resource->draw().
-    ///
-    /// When you don't need the buffer anymore (e.g., in the
-    /// vgc::ui::Widget::cleanup() function), you must reset the resource pointer.
-    ///
-    // Note: in the future, we may add overloads to this function to allow
-    // specifying the vertex format (i.e., XYRGB, XYZRGBA, etc.), but for now
-    // the format is fixed (XYRGB).
-    //
-    virtual PrimitiveBufferPtr createPrimitivesBuffer(PrimitiveType type) = 0;
 
     /// Clears the whole render area with the given color.
     ///
     void clear(const core::Color& color) {
-        queueCommand_<detail::ClearCommand>(color);
+        queueLambdaCommandWithParameters_<core::Color>(
+            "clear",
+            [](Engine* engine, const core::Color& c) {
+                engine->clear_(c);
+            },
+            color);
     }
 
     /// Returns the current projection matrix (top-most on the stack).
@@ -138,8 +170,14 @@ public:
     /// Assigns `m` to the top-most matrix of the projection matrix stack.
     /// `m` becomes the current projection matrix.
     ///
-    void setProjectionMatrix(const geometry::Mat4f& m) {
-        queueCommand_<detail::SetProjectionMatrixCommand>(m);
+    void setProjectionMatrix(const geometry::Mat4f& projectionMatrix) {
+        projectionMatrixStack_.last() = projectionMatrix;
+        queueLambdaCommandWithParameters_<geometry::Mat4f>(
+            "setProjectionMatrix",
+            [](Engine* engine, const geometry::Mat4f& m) {
+                engine->setProjectionMatrix_(m);
+            },
+            projectionMatrix);
     }
 
     /// Duplicates the top-most matrix on the projection matrix stack.
@@ -169,8 +207,14 @@ public:
     /// Assigns `m` to the top-most matrix of the view matrix stack.
     /// `m` becomes the current view matrix.
     ///
-    void setViewMatrix(const geometry::Mat4f& m) {
-        queueCommand_<detail::SetViewMatrixCommand>(m);
+    void setViewMatrix(const geometry::Mat4f& viewMatrix) {
+        viewMatrixStack_.last() = viewMatrix;
+        queueLambdaCommandWithParameters_<geometry::Mat4f>(
+            "setViewMatrix",
+            [](Engine* engine, const geometry::Mat4f& m) {
+                engine->setViewMatrix_(m);
+            },
+            viewMatrix);
     }
 
     /// Duplicates the top-most matrix on the view matrix stack.
@@ -192,36 +236,150 @@ public:
     }
 
     void bindPaintShader() {
-        // XXX command
+        queueLambdaCommand_(
+            "bindPaintShader",
+            [](Engine* engine) {
+                engine->bindPaintShader_();
+            });
     }
 
     void releasePaintShader() {
-        // XXX command
+        queueLambdaCommand_(
+            "releasePaintShader",
+            [](Engine* engine) {
+                engine->releasePaintShader_();
+            });
     }
 
-    void drawPrimitives(const PrimitiveBufferPtr& buffer) {
-        // XXX command
+    // XXX fix comment
+    /// Creates a resource for storing primitives data, and returns a shared
+    /// pointer to it.
+    ///
+    /// Once created, you can load triangles data using
+    /// resource->load(...), and you can draw the loaded triangles
+    /// using resource->draw().
+    ///
+    /// When you don't need the buffer anymore (e.g., in the
+    /// vgc::ui::Widget::cleanup() function), you must reset the resource pointer.
+    ///
+    // Note: in the future, we may add overloads to this function to allow
+    // specifying the vertex format (i.e., XYRGB, XYZRGBA, etc.), but for now
+    // the format is fixed (XYRGB).
+    //
+    template<typename DataGetter>
+    BufferPtr createPrimitiveBuffer(DataGetter&& initialDataGetter, Int initialLengthInBytes, bool dynamic) {
+        BufferPtr buffer = constructBuffer_(
+            dynamic ? Usage::Dynamic : Usage::Immutable,
+            BindFlags::VertexBuffer,
+            dynamic ? CpuAccessFlags::Write : CpuAccessFlags::None);
+
+        struct CommandParameters {
+            BufferPtr buffer;
+            std::decay_t<DataGetter> initialDataGetter;
+            Int initialLengthInBytes;
+        };
+        queueLambdaCommandWithParameters_<CommandParameters>(
+            "initPrimitiveBuffer",
+            [](Engine* engine, const CommandParameters& p) {
+                engine->initBuffer_(p.buffer, p.initialDataGetter(), p.initialLengthInBytes);
+                engine->initVertexBufferForPaintShader_(buf);
+            },
+            buffer, std::move(initialDataGetter), initialLengthInBytes);
+        return buffer;
+    }
+
+    BufferPtr createDynamicPrimitiveBuffer() {
+        BufferPtr buffer = constructBuffer_(
+            Usage::Dynamic,
+            BindFlags::VertexBuffer,
+            CpuAccessFlags::Write);
+
+        queueLambdaCommandWithParameters_<BufferPtr>(
+            "initPrimitiveBuffer",
+            [](Engine* engine, const BufferPtr& buf) {
+                engine->initBuffer_(buf, nullptr, 0);
+                engine->initVertexBufferForPaintShader_(buf);
+            },
+            buffer);
+        return buffer;
+    }
+
+    template<typename DataGetter>
+    void updateBufferData(const BufferPtr& buffer, DataGetter&& initialDataGetter, Int lengthInBytes) {
+        struct CommandParameters {
+            BufferPtr buffer;
+            std::decay_t<DataGetter> initialDataGetter;
+            Int lengthInBytes;
+        };
+        queueLambdaCommandWithParameters_<CommandParameters>(
+            "updateBufferData",
+            [](Engine* engine, const CommandParameters& p) {
+                engine->updateBufferData_(p.buffer, p.initialDataGetter(), p.lengthInBytes);
+            },
+            buffer, std::move(initialDataGetter), lengthInBytes);
+    }
+
+    void drawPrimitives(const BufferPtr& buffer, PrimitiveType type) {
+        struct CommandParameters {
+            BufferPtr buffer;
+            PrimitiveType type;
+        };
+        queueLambdaCommandWithParameters_<CommandParameters>(
+            "drawPrimitives",
+            [](Engine* engine, const CommandParameters& p) {
+                engine->drawPrimitives_(p.buffer, p.type);
+            },
+            buffer, type);
     }
 
 protected:
-    detail::ResourceList* resourceList_;
+    detail::ResourceList* resourceList_ = nullptr;
     std::list<CommandUPtr> commandList_;
+
+    // USER THREAD pimpl functions
+
+    virtual SwapChainPtr createSwapChain_(const SwapChainDesc& desc, void* windowNativeHandle, WindowNativeHandleType handleType, UInt32 flags) = 0;
+    virtual RenderTargetViewPtr constructRenderTargetView_(const SwapChainPtr& swapChain) = 0;
+    virtual BufferPtr constructBuffer_(Usage usage, BindFlags bindFlags, CpuAccessFlags cpuAccessFlags) = 0;
+
+    virtual bool shouldPresentWaitFromSyncedUserThread_() { return false; }
 
     // RENDER THREAD functions
 
     virtual void present_(const SwapChainPtr& swapChain, UInt32 syncInterval) = 0;
-    virtual void setOutputStage_(const RenderTargetViewPtr& rtv = nullptr) = 0;
+    virtual void setTarget_(const RenderTargetViewPtr& rtv = nullptr) = 0;
     virtual void setViewport_(Int x, Int y, Int width, Int height) = 0;
+    virtual void clear_(const core::Color& color) = 0;
     virtual void setProjectionMatrix_(const geometry::Mat4f& m) = 0;
     virtual void setViewMatrix_(const geometry::Mat4f& m) = 0;
-    virtual void bindPaintShader_();
-    virtual void releasePaintShader_();
-    virtual void drawPrimitives_(const PrimitiveBufferPtr& buffer) = 0;
+    virtual void bindPaintShader_() = 0;
+    virtual void releasePaintShader_() = 0;
+    virtual void initBuffer_(const BufferPtr& buffer, const float* data, Int initialLengthInBytes) = 0;
+    virtual void updateBufferData_(const BufferPtr& buffer, const float* data, Int lengthInBytes) = 0;
+    virtual void initVertexBufferForPaintShader_(const BufferPtr& buffer) = 0;
+    virtual void drawPrimitives_(const BufferPtr& buffer, PrimitiveType type) = 0;
+
+    // QUEUING
 
     template<typename TCommand, typename... Args>
     void queueCommand_(Args&&... args) {
-        commandList_.emplace_back(new TCommand(std::forward<Args>(args)...));
+        commandList_.emplace_back(
+            new TCommand(std::forward<Args>(args)...));
     };
+
+    template<typename Lambda>
+    void queueLambdaCommand_(std::string_view name, Lambda&& lambda) {
+        commandList_.emplace_back(
+            new detail::LambdaCommand(name, std::forward<Lambda>(lambda)));
+    };
+
+    template<typename Data, typename Lambda, typename... Args>
+    void queueLambdaCommandWithParameters_(std::string_view name, Lambda&& lambda, Args&&... args) {
+        commandList_.emplace_back(
+            new detail::LambdaCommandWithParameters<Data, std::decay_t<Lambda>>(name, std::forward<Lambda>(lambda), std::forward<Args>(args)...));
+    };
+
+    void flushResourcesPendingForRelease_();
 
 private:
     core::Array<geometry::Mat4f> projectionMatrixStack_;

@@ -17,6 +17,8 @@
 #ifndef VGC_UI_QOPENGLENGINE_H
 #define VGC_UI_QOPENGLENGINE_H
 
+#include <memory>
+
 #include <QOpenGLBuffer>
 #include <QOpenGLContext>
 #include <QOpenGLFunctions_3_2_Core>
@@ -106,64 +108,56 @@ protected:
     void onDestroyed() override;
 
 public:
+    using OpenGLFunctions = QOpenGLFunctions_3_2_Core;
+
     /// Creates a new OpenglEngine.
     ///
     static QOpenglEnginePtr create();
     static QOpenglEnginePtr create(QOpenGLContext* ctx);
 
-    // Implementation of graphics::Engine API
-
-    graphics::PrimitiveBufferPtr createPrimitivesBuffer(graphics::PrimitiveType type) override;
-
     // not part of the common interface
 
-    void initContext(QSurface* qw);
+    void makeCurrent(QSurface* qs);
     void setupContext();
-
-public:
-    // RENDER THREAD
-
-    using OpenGLFunctions = QOpenGLFunctions_3_2_Core;
-
-    // Implementation of graphics::Engine API
-
-    void clear(const core::Color& color) override;
-
-    geometry::Mat4f projectionMatrix() override;
-    void setProjectionMatrix(const geometry::Mat4f& m) override;
-    void pushProjectionMatrix() override;
-    void popProjectionMatrix() override;
-
-    geometry::Mat4f viewMatrix() override;
-    void setViewMatrix(const geometry::Mat4f& m) override;
-    void pushViewMatrix() override;
-    void popViewMatrix() override;
-
-    void bindPaintShader();
-    void releasePaintShader();
-
-    void present();
-
-    // not part of the common interface
+    graphics::RenderTargetViewPtr getDefaultTarget();
 
     OpenGLFunctions* api() const {
         return api_;
     }
 
-    void setViewport(Int x, Int y, Int width, Int height);
+public:
+    // Implementation of graphics::Engine API
 
+    // USER THREAD pimpl functions
 
-    void setTarget(QSurface* qw);
+    graphics::SwapChainPtr createSwapChain_(const graphics::SwapChainDesc& desc, void* windowNativeHandle, graphics::WindowNativeHandleType handleType, UInt32 flags) override;
+    graphics::RenderTargetViewPtr constructRenderTargetView_(const graphics::SwapChainPtr& swapChain) override;
+    graphics::BufferPtr constructBuffer_(graphics::Usage usage, graphics::BindFlags bindFlags, graphics::CpuAccessFlags cpuAccessFlags) override;
+
+    // RENDER THREAD functions
+
+    void present_(const graphics::SwapChainPtr& swapChain, UInt32 syncInterval) override;
+    void setTarget_(const graphics::RenderTargetViewPtr& rtv = nullptr) override;
+    void setViewport_(Int x, Int y, Int width, Int height) override;
+    void clear_(const core::Color& color) override;
+    void setProjectionMatrix_(const geometry::Mat4f& m) override;
+    void setViewMatrix_(const geometry::Mat4f& m) override;
+    void bindPaintShader_() override;
+    void releasePaintShader_() override;
+    void initBuffer_(const graphics::BufferPtr& buffer, const float* data, Int initialLengthInBytes) override;
+    void updateBufferData_(const graphics::BufferPtr& buffer, const float* data, Int lengthInBytes) override;
+    void initVertexBufferForPaintShader_(const graphics::BufferPtr& buffer) override;
+    void drawPrimitives_(const graphics::BufferPtr& buffer, graphics::PrimitiveType type) override;
 
 private:
     QOpenGLContext* ctx_ = nullptr;
     bool isExternalCtx_ = false;
     QOpenGLFunctions_3_2_Core* api_ = nullptr;
 
-    QSurface* current_ = nullptr;
+    QSurface* surface_ = nullptr;
 
     // Shader
-    QOpenGLShaderProgram shaderProgram_;
+    std::unique_ptr<QOpenGLShaderProgram> paintShaderProgram_;
     int posLoc_ = -1;
     int colLoc_ = -1;
     int projLoc_ = -1;

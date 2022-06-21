@@ -18,9 +18,13 @@
 #define VGC_GRAPHICS_COMMANDS_H
 
 #include <any>
+#include <string_view>
+#include <type_traits>
+#include <utility>
 
 #include <vgc/core/array.h>
 #include <vgc/core/arithmetic.h>
+#include <vgc/core/object.h>
 #include <vgc/geometry/mat4f.h>
 #include <vgc/graphics/api.h>
 #include <vgc/graphics/buffers.h>
@@ -34,96 +38,75 @@ VGC_DECLARE_OBJECT(Engine);
 
 namespace vgc::graphics::detail {
 
-// XXX use the polymorphism of lambdas instead of creating a structure for each command as below
-class VGC_GRAPHICS_API Command2 {
-    std::function<void(Engine*)> fn_;
-    // XXX add name
-};
-
 // Abstract render command.
 //
 class VGC_GRAPHICS_API Command {
 protected:
-    Command() = default;
+    explicit Command(std::string_view name)
+        : name_(name) {}
 
 public:
     virtual ~Command() = default;
 
-    virtual bool execute(Engine* engine) = 0;
-};
+    virtual void execute(Engine* engine) = 0;
 
-class VGC_GRAPHICS_API WriteBufferCommand : public Command {
-public:
-    WriteBufferCommand(const BufferPtr& buffer, const float* data, Int length)
-        : WriteBufferCommand(buffer, data, length, std::any(0)) {}
+    virtual std::string repr()  {
+        return std::string(name());
+    }
 
-    WriteBufferCommand(BufferPtr buffer, const float* data, Int length, std::any&& dataOwner)
-        : buffer_(buffer)
-        , data_(data)
-        , length_(length)
-        , dataOwner_(std::move(dataOwner)) {}
-
-    bool execute(Engine* engine) override;
+    std::string_view name() const {
+        return name_;
+    }
 
 private:
-    BufferPtr buffer_;
-    const float* data_;
-    Int length_;
-    std::any dataOwner_;
+    std::string_view name_;
 };
 
-class VGC_GRAPHICS_API ClearCommand : public Command {
+template<typename Lambda>
+class LambdaCommand : public Command, private Lambda {
 public:
-    explicit ClearCommand(const core::Color& color)
-        : color_(color) {}
+    LambdaCommand(std::string_view name, Lambda&& lambda)
+        : Command(name)
+        , Lambda(std::move(lambda)) {}
 
-    bool execute(Engine* engine) override;
+    LambdaCommand(std::string_view, const Lambda&) = delete;
+
+    void execute(Engine* engine) override {
+        Lambda::operator()(engine);
+    }
+};
+
+template<typename U, typename Lambda>
+LambdaCommand(U, Lambda) -> LambdaCommand<std::decay_t<Lambda>>;
+
+template<typename Data, typename Lambda>
+class LambdaCommandWithParameters : public Command, private Lambda {
+public:
+    template<typename... Args>
+    LambdaCommandWithParameters(std::string_view name, Lambda&& lambda, Args&&... args)
+        : Command(name)
+        , Lambda(std::move(lambda))
+        , data_{std::forward<Args>(args)...} {}
+
+    template<typename... Args>
+    LambdaCommandWithParameters(std::string_view, const Lambda&, Args&&...) = delete;
+
+    void execute(Engine* engine) {
+        Lambda::operator()(engine, data_);
+    }
+
+    const Data& data() const {
+        return data_;
+    }
+
+    // XXX add special repr if data has stream op
 
 private:
-    core::Color color_;
+    Data data_;
 };
 
-class VGC_GRAPHICS_API PresentCommand : public Command {
-public:
-    PresentCommand(const SwapChainPtr& swapChain, UInt32 syncInterval)
-        : swapChain_(swapChain)
-        , syncInterval_(syncInterval) {}
-
-    bool execute(Engine* engine) override;
-
-private:
-    SwapChainPtr swapChain_;
-    UInt32 syncInterval_;
-};
-
-class VGC_GRAPHICS_API SetProjectionMatrixCommand : public Command {
-public:
-    explicit SetProjectionMatrixCommand(const geometry::Mat4f& m)
-        : m_(m) {}
-
-    bool execute(Engine* engine) override;
-
-private:
-    geometry::Mat4f m_;
-};
-
-class VGC_GRAPHICS_API SetViewMatrixCommand : public Command {
-public:
-    explicit SetViewMatrixCommand(const geometry::Mat4f& m)
-        : m_(m) {}
-
-    bool execute(Engine* engine) override;
-
-private:
-    geometry::Mat4f m_;
-};
-
-
-//class VGC_GRAPHICS_API DrawPrimitivesCommand : public Command {
-//public:
-//    DrawPrimitivesCommand() = default;
-//    bool execute(Engine* engine) override;
-//};
+template<typename U, typename Lambda, typename Data>
+LambdaCommandWithParameters(U, Lambda, Data) -> LambdaCommandWithParameters<std::decay_t<Data>, std::decay_t<Lambda>>;
 
 } // namespace vgc::graphics::detail
 

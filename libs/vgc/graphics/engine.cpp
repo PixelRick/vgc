@@ -19,8 +19,10 @@
 namespace vgc {
 namespace graphics {
 
-Engine::Engine() :
-    Object() {}
+Engine::Engine()
+    : Object()
+    , resourceList_(new detail::ResourceList())
+{}
 
 // XXX add try/catch ?
 void Engine::renderThreadProc_() {
@@ -52,10 +54,19 @@ void Engine::renderThreadProc_() {
         }
 
         lock.lock();
+
         ++lastExecutedCommandListId_;
+        core::Array<Resource*> resourcesToRelease = std::move(resourceList_->resourcesToRelease_);
+        resourceList_->resourcesToRelease_.clear();
+
         lock.unlock();
 
         renderThreadEventConditionVariable_.notify_all();
+
+        for (Resource* r : resourcesToRelease) {
+            r->release_(this);
+            delete r;
+        }
     }
 }
 
@@ -84,12 +95,17 @@ UInt Engine::flushPendingCommandList_() {
     std::unique_lock<std::mutex> lock(mutex_);
     bool notifyRenderThread = commandQueue_.isEmpty();
     commandQueue_.emplaceLast(std::move(commandList_));
-    commandList_ = {};
-    ++lastSubmittedCommandListId_;
+    commandList_.clear();
+    resourceList_->resourcesToRelease_.extend(
+        resourceList_->resourcesPendingForRelease_.begin(),
+        resourceList_->resourcesPendingForRelease_.end());
+    resourceList_->resourcesPendingForRelease_.clear();
+    UInt id = ++lastSubmittedCommandListId_;
     lock.unlock();
     if (notifyRenderThread) {
         wakeRenderThreadConditionVariable_.notify_all();
     }
+    return id;
 }
 
 void Engine::waitCommandListExecutionFinished_(UInt commandListId) {

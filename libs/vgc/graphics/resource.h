@@ -21,6 +21,7 @@
 
 #include <vgc/core/array.h>
 #include <vgc/core/arithmetic.h>
+#include <vgc/core/object.h>
 #include <vgc/graphics/api.h>
 
 namespace vgc::graphics {
@@ -79,7 +80,7 @@ private:
     friend class ResourcePtr;
 
     // called by the engine and in its context
-    virtual void release_() = 0;
+    virtual void release_(Engine*) = 0;
 
     void incRefOrInit_() {
         if (refCount_ == core::Int64Max) {
@@ -123,6 +124,9 @@ private:
 template<typename T>
 class ResourcePtr {
 public:
+    template<typename U>
+    friend class ResourcePtr;
+
     static_assert(std::is_base_of_v<Resource, T>);
 
     constexpr ResourcePtr() noexcept
@@ -132,49 +136,68 @@ public:
         : p_(nullptr) {}
 
     explicit ResourcePtr(T* p)
-        : p_(p) {
-        p_->incRefOrInit_();
+        : p_(p)
+    {
+        if (p_) {
+            p_->incRefOrInit_();
+        }
     }
 
     ~ResourcePtr() {
+        reset();
+    }
+
+    template<typename U>
+    ResourcePtr(const ResourcePtr<U>& other)
+        : p_(other.p_)
+    {
+        if (p_) {
+            p_->incRef_();
+        }
+    }
+
+    template<typename U>
+    ResourcePtr(ResourcePtr<U>&& other)
+        : p_(other.p_)
+    {
+        other.p_ = nullptr;
+    }
+
+    template<typename U>
+    ResourcePtr& operator=(const ResourcePtr<U>& other) {
+        if (this == &other) {
+            return *this;
+        }
+        if (p_) {
+            p_->decRef_();
+        }
+        p_ = other.p_;
+        if (p_) {
+            p_->incRef_();
+        }
+        return *this;
+    }
+
+    template<typename U>
+    ResourcePtr& operator=(ResourcePtr<U>&& other) {
+        if (this == &other) {
+            return *this;
+        }
+        if (p_) {
+            p_->decRef_();
+        }
+        p_ = other.p_;
+        other.p_ = nullptr;
+        return *this;
+    }
+
+    void reset() {
         if (p_) {
             p_->decRef_();
 #ifdef VGC_DEBUG
             p_ = nullptr;
 #endif
         }
-    }
-
-    ResourcePtr(const ResourcePtr& other)
-        : p_(other.p_) {
-        p_->incRef_();
-    }
-
-    ResourcePtr(ResourcePtr&& other)
-        : p_(other.p_) {
-        other.p_ = nullptr;
-    }
-
-    ResourcePtr& operator=(const ResourcePtr& other) {
-        if (this == &other) {
-            return *this;
-        }
-        if (p_) {
-            p_->decRef_();
-        }
-        p_ = other.p_;
-        p_->incRef_();
-    }
-
-    ResourcePtr operator=(ResourcePtr&& other) {
-        if (this == &other) {
-            return *this;
-        }
-        if (p_) {
-            p_->decRef_();
-        }
-        p_ = other.p_;
-        other.p_ = nullptr;
     }
 
     T* get() const {

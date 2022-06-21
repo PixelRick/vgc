@@ -32,7 +32,7 @@ VGC_DECLARE_OBJECT(Engine);
 enum class WindowNativeHandleType : uint8_t {
     None = 0,
     Win32,
-    QOpenGLSurface,
+    QOpenGLWindow,
 };
 
 class VGC_GRAPHICS_API SwapChainDesc {
@@ -129,6 +129,9 @@ private:
 ///
 class VGC_GRAPHICS_API RenderTargetView : public Resource {
 protected:
+    RenderTargetView(ResourceList* owningList)
+        : Resource(owningList) {}
+
     using Resource::Resource;
 };
 using RenderTargetViewPtr = ResourcePtr<RenderTargetView>;
@@ -139,6 +142,9 @@ using RenderTargetViewPtr = ResourcePtr<RenderTargetView>;
 class VGC_GRAPHICS_API SwapChain : public Resource {
 protected:
     using Resource::Resource;
+
+    SwapChain(ResourceList* owningList, const SwapChainDesc& desc)
+        : Resource(owningList), desc_(desc) {}
 
 public:
     const SwapChainDesc& desc() const {

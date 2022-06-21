@@ -24,9 +24,26 @@
 
 namespace vgc::graphics {
 
-namespace detail {
+//class BufferDataSpan {
+//    BufferDataSpan(const float* data, Int length)
+//        : data_(data), length_(length) {}
+//
+//    const float* data() const {
+//        return data_;
+//    }
+//
+//    Int length() const {
+//        return length_;
+//    }
+//
+//private:
+//    const float* data_;
+//    Int length_;
+//};
 
-// XXX put it out of detail when it is ready to be used publicly
+/// \class vgc::graphics::PrimitivesBuffer
+/// \brief Abstract primitive data buffer.
+///
 class VGC_GRAPHICS_API Buffer : public Resource {
 protected:
     Buffer(
@@ -66,55 +83,6 @@ private:
     CpuAccessFlags cpuAccessFlags_;
 };
 using BufferPtr = ResourcePtr<Buffer>;
-
-// XXX put it out of detail when it is ready to be used publicly
-class VGC_GRAPHICS_API VertexBuffer : public Buffer {
-protected:
-    VertexBuffer(
-        ResourceList* owningList,
-        Int length,
-        Usage usage,
-        CpuAccessFlags cpuAccessFlags)
-        : Buffer(
-            owningList,
-            length,
-            usage,
-            BindFlags::VertexBuffer,
-            cpuAccessFlags)
-    {
-        // XXX check arguments are compatible
-    }
-};
-using VertexBufferPtr = ResourcePtr<VertexBuffer>;
-
-} // namespace detail
-
-/// \class vgc::graphics::PrimitivesBuffer
-/// \brief Abstract primitive data buffer.
-///
-class VGC_GRAPHICS_API PrimitiveBuffer : public detail::VertexBuffer {
-protected:
-    PrimitiveBuffer(
-        ResourceList* owningList,
-        PrimitiveType type,
-        Int lengthInBytes,
-        bool dynamic)
-        : detail::VertexBuffer(
-            owningList,
-            lengthInBytes,
-            dynamic ? Usage::Dynamic : Usage::Immutable,
-            dynamic ? CpuAccessFlags::Write : CpuAccessFlags::None)
-        , type_(type) {}
-
-public:
-    PrimitiveType type() const {
-        return type_;
-    }
-
-private:
-    PrimitiveType type_;
-};
-using PrimitiveBufferPtr = ResourcePtr<PrimitiveBuffer>;
 
 } // namespace vgc::graphics
 

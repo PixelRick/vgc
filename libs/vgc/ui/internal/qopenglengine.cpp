@@ -19,6 +19,7 @@
 #if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
 #include <QOpenGLVersionFunctionsFactory>
 #endif
+#include <QWindow>
 
 #include <vgc/core/exceptions.h>
 #include <vgc/core/paths.h>
@@ -77,20 +78,18 @@ struct XYRGBVertex {
 
 } // namespace
 
-class QOpenglPrimitiveBuffer;
-using QOpenglPrimitiveBufferPtr = std::shared_ptr<QOpenglPrimitiveBuffer>;
+namespace {
 
-class QOpenglPrimitiveBuffer : public graphics::PrimitiveBuffer {
-private:
-    explicit QOpenglPrimitiveBuffer(QOpenglEngine* engine, graphics::PrimitiveType type);
-
+class QOpenglBuffer : public graphics::Buffer {
 public:
-    ~QOpenglPrimitiveBuffer() {
-        release_();
-    }
+    using Buffer::Buffer;
 
-    [[nodiscard]] static QOpenglPrimitiveBufferPtr create(QOpenglEngine* engine, graphics::PrimitiveType type) {
-        return QOpenglPrimitiveBufferPtr(new QOpenglPrimitiveBuffer(engine, type));
+    void init() {
+        if (!vao_) {
+            vbo_.create();
+            vao_ = new QOpenGLVertexArrayObject();
+            vao_->create();
+        }
     }
 
     void bind() {
@@ -107,100 +106,93 @@ public:
         }
     }
 
+    void load(const float* data, Int length) {
+        if (!vao_) return;
+        if (length < 0) {
+            throw core::NegativeIntegerError(core::format(
+                "Negative length ({}) provided to loadTriangles()", length));
+        }
+        numVertices_ = length / 5;
+        Int dataSize = numVertices_ * sizeof(XYRGBVertex);
+        static_assert(sizeof(XYRGBVertex) == 5 * sizeof(float));
+
+        vbo_.bind();
+        if (dataSize > allocSize_) {
+            vbo_.allocate(data, dataSize);
+            allocSize_ = dataSize;
+        }
+        else if (dataSize * 2 < allocSize_) {
+            vbo_.allocate(data, dataSize);
+            allocSize_ = dataSize;
+        }
+        else {
+            vbo_.write(0, data, dataSize);
+        }
+        vbo_.release();
+    }
+
+    void draw(QOpenglEngine* engine, GLenum mode) {
+        if (!vao_) return;
+        vao_->bind();
+        auto api = engine->api();
+        api->glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+        api->glDrawArrays(mode, 0, numVertices_);
+        vao_->release();
+    }
+
 protected:
-    void release_() override;
-    void load_(const float* data, Int length) override;
-    void draw_(graphics::Engine* engine) override;
+    void release_(graphics::Engine* engine) override {
+        if (!vao_) return;
+        vao_->destroy();
+        delete vao_;
+        vao_ = nullptr;
+        vbo_.destroy();
+    }
 
 private:
     QOpenGLBuffer vbo_;
     QOpenGLVertexArrayObject* vao_ = nullptr;
     Int numVertices_ = 0;
     Int allocSize_ = 0;
-    GLenum mode_ = 0;
 };
 
-QOpenglPrimitiveBuffer::QOpenglPrimitiveBuffer(QOpenglEngine* engine, graphics::PrimitiveType type) :
-    graphics::PrimitiveBuffer(engine, type)
-{
-    // Create VBO/VAO for rendering triangles
-    vbo_.create();
-    vao_ = new QOpenGLVertexArrayObject();
-    vao_->create();
+class QOpenglSwapChain : public graphics::SwapChain {
+public:
+    QOpenglSwapChain(ResourceList* owningList, const graphics::SwapChainDesc& desc, QSurface* surface)
+        : SwapChain(owningList, desc), surface_(surface) {}
 
-    /*
-    GL_POINTS         0x0000
-    GL_LINES          0x0001
-    GL_LINE_LOOP      0x0002
-    GL_LINE_STRIP     0x0003
-    GL_TRIANGLES      0x0004
-    GL_TRIANGLE_STRIP 0x0005
-    GL_TRIANGLE_FAN   0x0006
-    GL_QUADS          0x0007
-    GL_QUAD_STRIP     0x0008
-    GL_POLYGON        0x0009
-    */
-
-    switch (type) {
-    case graphics::PrimitiveType::LineList: mode_ = GL_LINES; break;
-    case graphics::PrimitiveType::LineStrip: mode_ = GL_LINE_STRIP; break;
-    case graphics::PrimitiveType::TriangleList: mode_ = GL_TRIANGLES; break;
-    case graphics::PrimitiveType::TriangleStrip: mode_ = GL_TRIANGLE_STRIP; break;
-    default:
-        mode_ = GL_POINTS;
-        break;
+    QSurface* surface() const {
+        return surface_;
     }
-}
 
-void QOpenglPrimitiveBuffer::load(const float* data, Int length)
-{
-    if (!vao_) return;
-    if (length < 0) {
-        throw core::NegativeIntegerError(core::format(
-            "Negative length ({}) provided to loadTriangles()", length));
+protected:
+    void release_(graphics::Engine* engine) override {
+        // no-op..
     }
-    numVertices_ = length / 5;
-    Int dataSize = numVertices_ * sizeof(XYRGBVertex);
-    static_assert(sizeof(XYRGBVertex) == 5 * sizeof(float));
 
-    vbo_.bind();
-    if (dataSize > allocSize_) {
-        vbo_.allocate(data, dataSize);
-        allocSize_ = dataSize;
+private:
+    QSurface* surface_;
+};
+
+class QOpenglRenderTargetView : public graphics::RenderTargetView {
+public:
+    QOpenglRenderTargetView(ResourceList* owningList, QSurface* surface)
+        : RenderTargetView(owningList), surface_(surface) {}
+
+    QSurface* surface() const {
+        return surface_;
     }
-    else if (dataSize * 2 < allocSize_) {
-        vbo_.allocate(data, dataSize);
-        allocSize_ = dataSize;
+
+protected:
+    void release_(graphics::Engine* engine) override {
+        // no-op..
     }
-    else {
-        vbo_.write(0, data, dataSize);
-    }
-    vbo_.release();
-}
 
-void QOpenglPrimitiveBuffer::draw()
-{
-    if (!vao_) return;
-    vao_->bind();
-    auto api = engine()->api();
-    api->glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-    api->glDrawArrays(mode_, 0, numVertices_);
-    vao_->release();
-}
+private:
+    QSurface* surface_;
+};
 
-void QOpenglPrimitiveBuffer::release_()
-{
-    if (!vao_) return;
-    vao_->destroy();
-    delete vao_;
-    vao_ = nullptr;
-    vbo_.destroy();
-}
-
-void QOpenglPrimitiveBuffer::release()
-{
-    release_();
-}
+} // namespace
 
 QOpenglEngine::QOpenglEngine() :
     QOpenglEngine(new QOpenGLContext(), false)
@@ -235,120 +227,7 @@ QOpenglEnginePtr QOpenglEngine::create(QOpenGLContext* ctx)
     return QOpenglEnginePtr(new QOpenglEngine(ctx));
 }
 
-void QOpenglEngine::clear(const core::Color& color)
-{
-    api_->glClearColor(
-        static_cast<float>(color.r()),
-        static_cast<float>(color.g()),
-        static_cast<float>(color.b()),
-        static_cast<float>(color.a()));
-    api_->glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-}
-
-geometry::Mat4f QOpenglEngine::projectionMatrix()
-{
-    return projectionMatrices_.last();
-}
-
-void QOpenglEngine::setProjectionMatrix(const geometry::Mat4f& m)
-{
-    projectionMatrices_.last() = m;
-    shaderProgram_.setUniformValue(projLoc_, toQtMatrix(m));
-}
-
-void QOpenglEngine::pushProjectionMatrix()
-{
-    // Note: we need a temporary copy by value, since the address
-    // of the current projection matrix might change during "append" in
-    // case of memory re-allocation.
-    geometry::Mat4f m = projectionMatrix();
-    projectionMatrices_.append(m);
-}
-
-void QOpenglEngine::popProjectionMatrix()
-{
-    projectionMatrices_.removeLast();
-    shaderProgram_.setUniformValue(projLoc_, toQtMatrix(projectionMatrices_.last()));
-}
-
-geometry::Mat4f QOpenglEngine::viewMatrix()
-{
-    return viewMatrices_.last();
-}
-
-void QOpenglEngine::setViewMatrix(const geometry::Mat4f& m)
-{
-    viewMatrices_.last() = m;
-    shaderProgram_.setUniformValue(viewLoc_, toQtMatrix(m));
-}
-
-void QOpenglEngine::pushViewMatrix()
-{
-    // Note: we need a temporary copy by value, since the address
-    // of the current view matrix might change during "append" in
-    // case of memory re-allocation.
-    geometry::Mat4f m = viewMatrix();
-    viewMatrices_.append(m);
-}
-
-void QOpenglEngine::popViewMatrix()
-{
-    viewMatrices_.removeLast();
-    shaderProgram_.setUniformValue(viewLoc_, toQtMatrix(viewMatrices_.last()));
-}
-
-graphics::PrimitiveBufferPtr QOpenglEngine::createPrimitivesBuffer(graphics::PrimitiveType type)
-{
-    auto r = QOpenglPrimitiveBuffer::create(this);
-    GLsizei stride = sizeof(XYRGBVertex);
-    GLvoid* posPointer = reinterpret_cast<void*>(offsetof(XYRGBVertex, x));
-    GLvoid* colPointer = reinterpret_cast<void*>(offsetof(XYRGBVertex, r));
-    GLboolean normalized = GL_FALSE;
-    r->bind();
-    api_->glEnableVertexAttribArray(posLoc_);
-    api_->glEnableVertexAttribArray(colLoc_);
-    api_->glVertexAttribPointer(posLoc_, 2, GL_FLOAT, normalized, stride, posPointer);
-    api_->glVertexAttribPointer(colLoc_, 3, GL_FLOAT, normalized, stride, colPointer);
-    r->unbind();
-    return r;
-}
-
-void QOpenglEngine::setTarget(QSurface* qw)
-{
-    if (!api_) {
-        initContext(qw);
-    }
-    current_ = qw;
-    ctx_->makeCurrent(qw);
-
-#ifdef VGC_QOPENGL_EXPERIMENT
-    auto fmt = ctx_->format();
-    OutputDebugString(core::format("Ctx swap behavior: {}\n", (int)fmt.swapBehavior()).c_str());
-    OutputDebugString(core::format("Ctx swap interval: {}\n", fmt.swapInterval()).c_str());
-#endif
-}
-
-void QOpenglEngine::setViewport(Int x, Int y, Int width, Int height)
-{
-    api_->glViewport(x, y, width, height);
-}
-
-void QOpenglEngine::bindPaintShader()
-{
-    shaderProgram_.bind();
-}
-
-void QOpenglEngine::releasePaintShader()
-{
-    shaderProgram_.release();
-}
-
-void QOpenglEngine::present()
-{
-    ctx_->swapBuffers(current_);
-}
-
-void QOpenglEngine::initContext(QSurface* qw)
+void QOpenglEngine::makeCurrent()
 {
     if (ctx_ == nullptr) {
         throw core::LogicError("ctx_ is null.");
@@ -366,13 +245,12 @@ void QOpenglEngine::initContext(QSurface* qw)
     format.setSwapInterval(0);
     ctx_->setFormat(format);
     ctx_->create();
-
-    ctx_->makeCurrent(qw);
-
-    setupContext();
 }
 
-void QOpenglEngine::setupContext() {
+void QOpenglEngine::setupContext()
+{
+    ctx_->makeCurrent(qw);
+
     // Initialize shader program
     shaderProgram_.addShaderFromSourceFile(QOpenGLShader::Vertex, shaderPath_("iv4pos_iv4col_um4proj_um4view_ov4fcol.v.glsl"));
     shaderProgram_.addShaderFromSourceFile(QOpenGLShader::Fragment, shaderPath_("iv4fcol.f.glsl"));
@@ -412,5 +290,168 @@ void QOpenglEngine::setupContext() {
 
     widget_->onPaintCreate(engine_.get());*/
 }
+
+
+graphics::RenderTargetViewPtr QOpenglEngine::getDefaultTarget(QSurface* surface)
+{
+
+
+}
+
+
+// USER THREAD pimpl functions
+
+graphics::SwapChainPtr QOpenglEngine::createSwapChain_(const graphics::SwapChainDesc& desc, void* windowNativeHandle, graphics::WindowNativeHandleType handleType, UInt32 flags)
+{
+    if (ctx_ == nullptr) {
+        throw core::LogicError("ctx_ is null.");
+    }
+
+    if (handleType != graphics::WindowNativeHandleType::QOpenGLWindow) {
+        return nullptr;
+    }
+
+    QSurfaceFormat format;
+    format.setDepthBufferSize(24);
+    format.setStencilBufferSize(8);
+    format.setVersion(3, 2);
+    format.setProfile(QSurfaceFormat::CoreProfile);
+    format.setSamples(desc.sampleCount());
+    format.setSwapInterval(0);
+
+    QWindow* wnd = static_cast<QWindow*>(windowNativeHandle);
+    wnd->setFormat(format);
+
+    ctx_->setFormat(format);
+    ctx_->create();
+
+    return new QOpenglSwapChain(resourceList_, desc, wnd);
+}
+
+graphics::RenderTargetViewPtr QOpenglEngine::constructRenderTargetView_(const graphics::SwapChainPtr& swapChain)
+{
+
+
+}
+
+graphics::BufferPtr QOpenglEngine::constructBuffer_(graphics::Usage usage, graphics::BindFlags bindFlags, graphics::CpuAccessFlags cpuAccessFlags)
+{
+
+
+}
+
+// RENDER THREAD functions
+
+void QOpenglEngine::present_(const graphics::SwapChainPtr& swapChain, UInt32 /*syncInterval*/)
+{
+    // XXX check valid
+    auto oglChain = static_cast<QOpenglSwapChain*>(swapChain.get());
+    ctx_->swapBuffers(oglChain->surface());
+}
+
+void QOpenglEngine::setTarget_(const graphics::RenderTargetViewPtr& rtv = nullptr)
+{
+    if (!api_) {
+        initContext();
+    }
+    auto oglRTV = static_cast<QOpenglRenderTargetView*>(rtv.get());
+    ctx_->makeCurrent(oglRTV->surface());
+
+#ifdef VGC_QOPENGL_EXPERIMENT
+    auto fmt = ctx_->format();
+    OutputDebugString(core::format("Ctx swap behavior: {}\n", (int)fmt.swapBehavior()).c_str());
+    OutputDebugString(core::format("Ctx swap interval: {}\n", fmt.swapInterval()).c_str());
+#endif
+}
+
+void QOpenglEngine::setViewport_(Int x, Int y, Int width, Int height)
+{
+    api_->glViewport(x, y, width, height);
+}
+
+void QOpenglEngine::clear_(const core::Color& color)
+{
+    api_->glClearColor(
+        static_cast<float>(color.r()),
+        static_cast<float>(color.g()),
+        static_cast<float>(color.b()),
+        static_cast<float>(color.a()));
+    api_->glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+}
+
+void QOpenglEngine::setProjectionMatrix_(const geometry::Mat4f& m)
+{
+    paintShaderProgram_->setUniformValue(projLoc_, toQtMatrix(m));
+}
+
+void QOpenglEngine::setViewMatrix_(const geometry::Mat4f& m)
+{
+    paintShaderProgram_->setUniformValue(viewLoc_, toQtMatrix(m));
+}
+
+void QOpenglEngine::bindPaintShader_()
+{
+    paintShaderProgram_->bind();
+}
+
+void QOpenglEngine::releasePaintShader_()
+{
+    paintShaderProgram_->release();
+}
+
+void QOpenglEngine::initBuffer_(const graphics::BufferPtr& buffer, const float* data, Int initialLengthInBytes)
+{
+
+
+}
+
+void QOpenglEngine::updateBufferData_(const graphics::BufferPtr& buffer, const float* data, Int lengthInBytes)
+{
+
+
+}
+
+void QOpenglEngine::initVertexBufferForPaintShader_(const graphics::BufferPtr& buffer)
+{
+    auto r = QOpenglPrimitiveBuffer::create(this);
+    GLsizei stride = sizeof(XYRGBVertex);
+    GLvoid* posPointer = reinterpret_cast<void*>(offsetof(XYRGBVertex, x));
+    GLvoid* colPointer = reinterpret_cast<void*>(offsetof(XYRGBVertex, r));
+    GLboolean normalized = GL_FALSE;
+    r->bind();
+    api_->glEnableVertexAttribArray(posLoc_);
+    api_->glEnableVertexAttribArray(colLoc_);
+    api_->glVertexAttribPointer(posLoc_, 2, GL_FLOAT, normalized, stride, posPointer);
+    api_->glVertexAttribPointer(colLoc_, 3, GL_FLOAT, normalized, stride, colPointer);
+    r->unbind();
+    return r;
+
+}
+
+void QOpenglEngine::drawPrimitives_(const graphics::BufferPtr& buffer, graphics::PrimitiveType type)
+{
+    GLenum mode = 0;
+    switch (type) {
+    case graphics::PrimitiveType::LineList: mode = GL_LINES; break;
+    case graphics::PrimitiveType::LineStrip: mode = GL_LINE_STRIP; break;
+    case graphics::PrimitiveType::TriangleList: mode = GL_TRIANGLES; break;
+    case graphics::PrimitiveType::TriangleStrip: mode = GL_TRIANGLE_STRIP; break;
+    default:
+        mode = GL_POINTS;
+        break;
+    }
+    auto oglBuffer = static_cast<QOpenglBuffer*>(buffer.get());
+    oglBuffer->draw(this, mode);
+}
+
+graphics::PrimitiveBufferPtr QOpenglEngine::createPrimitivesBuffer(graphics::PrimitiveType type)
+{
+    
+}
+
+
+
+
+
 
 } // namespace vgc::ui::internal
