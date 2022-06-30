@@ -16,21 +16,23 @@
 
 #include <vgc/ui/window.h>
 
+#include <QCoreApplication>
 #include <QInputMethodEvent>
 #include <QMouseEvent>
 #include <QOpenGLFunctions>
 
 #include <vgc/core/paths.h>
 #include <vgc/geometry/camera2d.h>
-#include <vgc/ui/widget.h>
 #include <vgc/widgets/qtutil.h>
+#include <vgc/graphics/d3d11/d3d11engine.h>
+#include <vgc/ui/widget.h>
+#include <vgc/ui/internal/qopenglengine.h>
 
 namespace vgc::ui {
 
 Window::Window(ui::WidgetPtr widget) :
     QWindow(),
     widget_(widget),
-    engine_(internal::QOpenglEngine::create()),
     proj_(geometry::Mat4f::identity),
     clearColor_(0.337f, 0.345f, 0.353f, 1.f)
 {
@@ -42,17 +44,21 @@ Window::Window(ui::WidgetPtr widget) :
     widget_->repaintRequested().connect(onRepaintRequested());
     //widget_->focusRequested().connect([this](){ this->onFocusRequested(); });
 
-    // useful ?
-    QSurfaceFormat format;
-    format.setDepthBufferSize(24);
-    format.setStencilBufferSize(8);
-    format.setVersion(3, 2);
-    format.setProfile(QSurfaceFormat::CoreProfile);
-    format.setSamples(8);
-    format.setSwapInterval(0);
-    setFormat(format);
+    graphics::SwapChainDesc scd = {};
+    scd.setBufferCount(2);
+    scd.setSampleCount(8);
 
+#if defined(VGC_CORE_COMPILER_MSVC) and 1
     QWindow::create();
+    engine_ = graphics::D3d11Engine::create();
+    scd.setWindowNativeHandle((HWND)QWindow::winId(), graphics::WindowNativeHandleType::Win32);
+#else
+    engine_ = internal::QOpenglEngine::create();
+    scd.setWindowNativeHandle(static_cast<QWindow*>(this), graphics::WindowNativeHandleType::QOpenGLWindow);
+#endif
+
+    swapChain_ = engine_->createSwapChain(scd);
+    engine_->start();
 
     // Handle dead keys and complex input methods.
     //
@@ -71,11 +77,8 @@ Window::Window(ui::WidgetPtr widget) :
 
 void Window::onDestroyed()
 {
-    if (engine_) {
-        // Resources are going to be released so we setup the correct context.
-        engine_->setTarget(this);
-        engine_ = nullptr;
-    }
+    // Destroying the engine will stop it.
+    engine_ = nullptr;
 }
 
 WindowPtr Window::create(ui::WidgetPtr widget)
@@ -176,6 +179,11 @@ void Window::resizeEvent(QResizeEvent*)
     // Should we issue a warning in these cases?
     widget_->setGeometry(0, 0, static_cast<float>(width()), static_cast<float>(height()));
 
+    if (engine_) {
+        engine_->resizeSwapChain(swapChain_.get(), width(), height());
+        paint(true);
+    }
+
     // Ask for redraw. This often improves how smooth resizing the window looks like,
     // since Qt doesn't always immediately post an update during resize.
     requestUpdate();
@@ -234,7 +242,7 @@ void Window::keyReleaseEvent(QKeyEvent* event)
 //    }
 //}
 
-void Window::paint() {
+void Window::paint(bool sync) {
     if (!isExposed()) {
         return;
     }
@@ -243,7 +251,14 @@ void Window::paint() {
         throw LogicError("engine_ is null.");
     }
 
-    engine_->setTarget(this);
+    if (swapChain_->pendingPresentCount() > 0 && !sync) {
+        // race condition possible but unlikely here.
+        updateDeferred_ = true;
+        return;
+    }
+    updateDeferred_ = false;
+
+    engine_->bindSwapChain(swapChain_);
     engine_->setViewport(0, 0, width(), height());
     engine_->clear(clearColor_);
 
@@ -262,7 +277,11 @@ void Window::paint() {
     frameIdx++;
 #endif
 
-    engine_->present();
+    engine_->present(sync ? 1 : 0, [=](UInt64) {
+            if (updateDeferred_) {
+                QCoreApplication::postEvent(this, new QEvent(QEvent::UpdateRequest), 0);
+            }
+        });
 }
 
 bool Window::event(QEvent* e)
@@ -302,7 +321,6 @@ void Window::onActiveChanged_()
 void Window::onRepaintRequested_()
 {
     if (engine_) {
-        engine_->setTarget(this);
         requestUpdate();
     }
 }

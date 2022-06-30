@@ -22,7 +22,10 @@ namespace graphics {
 Engine::Engine()
     : Object()
     , resourceList_(new detail::ResourceList())
-{}
+{
+    projectionMatrixStack_.emplaceLast(geometry::Mat4f::identity);
+    viewMatrixStack_.emplaceLast(geometry::Mat4f::identity);
+}
 
 // XXX add try/catch ?
 void Engine::renderThreadProc_() {
@@ -36,34 +39,48 @@ void Engine::renderThreadProc_() {
         // if requested, stop
         if (stopRequested_) {
             // cancel submitted lists
+            for (const CommandList& l : commandQueue_) {
+                for (Resource* resource : l.garbagedResources) {
+                    resource->release_(this);
+                }
+            }
+            commandQueue_.clear();
             lastExecutedCommandListId_ = lastSubmittedCommandListId_;
+            // release all resources..
+            for (Resource* r : resourceList_->danglingResources_) {
+                r->release_(this);
+                delete r;
+            }
+            for (Resource* r : resourceList_->resources_) {
+                r->release_(this);
+                r->owningList_ = nullptr;
+            }
+            resourceList_->resources_.clear();
+            resourceList_->danglingResources_.clear();
+            // notify
             lock.unlock();
             renderThreadEventConditionVariable_.notify_all();
             return;
         }
 
         // else commandQueue_ is not empty, so prepare some work
-        std::list<CommandUPtr> commandList = std::move(commandQueue_.first());
+        CommandList commandList = std::move(commandQueue_.first());
         commandQueue_.removeFirst();
 
         lock.unlock();
 
         // execute commands
-        for (const CommandUPtr& command : commandList) {
+        for (const CommandUPtr& command : commandList.commands) {
             command->execute(this);
         }
 
-        lock.lock();
-
+        // atomic
         ++lastExecutedCommandListId_;
-        core::Array<Resource*> resourcesToRelease = std::move(resourceList_->resourcesToRelease_);
-        resourceList_->resourcesToRelease_.clear();
-
-        lock.unlock();
 
         renderThreadEventConditionVariable_.notify_all();
 
-        for (Resource* r : resourcesToRelease) {
+        // release garbaged resources
+        for (Resource* r : commandList.garbagedResources) {
             r->release_(this);
             delete r;
         }
@@ -71,6 +88,9 @@ void Engine::renderThreadProc_() {
 }
 
 void Engine::startRenderThread_() {
+    if (stopRequested_) {
+        throw core::LogicError("Engine: restarts are not supported.");
+    }
     if (!running_) {
         renderThread_ = std::thread([=]{ this->renderThreadProc_(); });
         running_ = true;
@@ -78,6 +98,8 @@ void Engine::startRenderThread_() {
 }
 
 void Engine::stopRenderThread_() {
+    pendingCommands_.clear();
+    lastBoundSwapChain_.reset();
     if (running_) {
         std::unique_lock<std::mutex> lock(mutex_);
         stopRequested_ = true;
@@ -85,21 +107,17 @@ void Engine::stopRenderThread_() {
         wakeRenderThreadConditionVariable_.notify_all();
         VGC_CORE_ASSERT(renderThread_.joinable());
         renderThread_.join();
-        stopRequested_ = false;
         running_ = false;
         return;
     }
 }
 
-UInt Engine::flushPendingCommandList_() {
+UInt Engine::submitPendingCommandList_() {
     std::unique_lock<std::mutex> lock(mutex_);
     bool notifyRenderThread = commandQueue_.isEmpty();
-    commandQueue_.emplaceLast(std::move(commandList_));
-    commandList_.clear();
-    resourceList_->resourcesToRelease_.extend(
-        resourceList_->resourcesPendingForRelease_.begin(),
-        resourceList_->resourcesPendingForRelease_.end());
-    resourceList_->resourcesPendingForRelease_.clear();
+    commandQueue_.emplaceLast(std::move(pendingCommands_), std::move(resourceList_->danglingResources_));
+    pendingCommands_.clear();
+    resourceList_->danglingResources_.clear();
     UInt id = ++lastSubmittedCommandListId_;
     lock.unlock();
     if (notifyRenderThread) {
@@ -108,7 +126,7 @@ UInt Engine::flushPendingCommandList_() {
     return id;
 }
 
-void Engine::waitCommandListExecutionFinished_(UInt commandListId) {
+void Engine::waitCommandListTranslationFinished_(UInt commandListId) {
     std::unique_lock<std::mutex> lock(mutex_);
     if (commandListId == 0) {
         commandListId = lastSubmittedCommandListId_;

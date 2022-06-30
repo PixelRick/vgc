@@ -20,7 +20,7 @@
 #include <QWindow>
 
 #include <vgc/core/array.h>
-#include <vgc/ui/internal/qopenglengine.h>
+#include <vgc/graphics/engine.h>
 #include <vgc/ui/widget.h>
 
 namespace vgc::ui {
@@ -34,11 +34,11 @@ class VGC_UI_API Window : public core::Object, public QWindow {
     VGC_OBJECT(Window, core::Object)
 
 protected:
-    /// Constructs a UiWidget wrapping the given vgc::ui::Widget.
+    /// Constructs a Window containing the given vgc::ui::Widget.
     ///
     Window(ui::WidgetPtr widget);
 
-    /// Destructs the UiWidget.
+    /// Destructs the Window.
     ///
     void onDestroyed() override;
 
@@ -74,10 +74,13 @@ protected:
 
 private:
     ui::WidgetPtr widget_;
-    // graphics::EnginePtr engine_;
-    ui::internal::QOpenglEnginePtr engine_;
+    graphics::EnginePtr engine_;
+    graphics::SwapChainPtr swapChain_;
+
     geometry::Mat4f proj_;
     core::Color clearColor_;
+
+    bool updateDeferred_ = false;
 
     void onActiveChanged_();
     void onRepaintRequested_();
@@ -88,7 +91,7 @@ private:
     // TO FACTOR OUT
     ////////////////////////////
 
-    virtual void paint();
+    virtual void paint(bool sync = false);
     virtual void cleanup();
 
 };

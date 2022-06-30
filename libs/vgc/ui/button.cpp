@@ -59,7 +59,7 @@ void Button::onResize()
 
 void Button::onPaintCreate(graphics::Engine* engine)
 {
-    triangles_ = engine->createDynamicPrimitiveBuffer(graphics::PrimitiveType::TriangleList);
+    triangles_ = engine->createDynamicPrimitiveBuffer();
 }
 
 void Button::onPaintDraw(graphics::Engine* engine)
@@ -79,9 +79,9 @@ void Button::onPaintDraw(graphics::Engine* engine)
         bool hinting = style(strings::pixel_hinting) == strings::normal;
         internal::insertRect(*a, backgroundColor, 0, 0, width(), height(), borderRadius);
         internal::insertText(*a, textColor, 0, 0, width(), height(), 0, 0, 0, 0, text_, textProperties, textCursor, hinting);
-        engine->updateBufferData(triangles_, [a = std::move(a)](){ return a.get()->data(); }, a->length());
+        engine->updateBufferData(triangles_.get(), [a = std::move(a)](){ return a.get()->data(); }, a->length() * 4);
     }
-    engine->drawPrimitives(triangles_);
+    engine->drawPrimitives(triangles_.get(), graphics::PrimitiveType::TriangleList);
 }
 
 void Button::onPaintDestroy(graphics::Engine*)

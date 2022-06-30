@@ -12,6 +12,7 @@ vgc_add_library(graphics
     HEADER_FILES
         api.h
         buffers.h
+        d3d11/d3d11engine.h
         detail/commands.h
         engine.h
         enums.h
@@ -26,6 +27,7 @@ vgc_add_library(graphics
         text.h
 
     CPP_FILES
+        d3d11/d3d11engine.cpp
         engine.cpp
         exceptions.cpp
         font.cpp

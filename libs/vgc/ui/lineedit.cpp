@@ -93,7 +93,7 @@ void LineEdit::onResize()
 
 void LineEdit::onPaintCreate(graphics::Engine* engine)
 {
-    triangles_ = engine->createDynamicPrimitiveBuffer(graphics::PrimitiveType::TriangleList);
+    triangles_ = engine->createDynamicPrimitiveBuffer();
 }
 
 void LineEdit::onPaintDraw(graphics::Engine* engine)
@@ -118,9 +118,9 @@ void LineEdit::onPaintDraw(graphics::Engine* engine)
         richText_->fill(a);
 
         // Load triangles data
-        engine->updateBufferData(triangles_, [a = std::move(a)](){ return a.get()->data(); }, a->length());
+        engine->updateBufferData(triangles_.get(), [a = std::move(a)](){ return a.get()->data(); }, a->length() * 4);
     }
-    engine->drawPrimitives(triangles_);
+    engine->drawPrimitives(triangles_.get(), graphics::PrimitiveType::TriangleList);
 }
 
 void LineEdit::onPaintDestroy(graphics::Engine*)

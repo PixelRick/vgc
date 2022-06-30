@@ -34,7 +34,7 @@ enum class BindFlags : UInt16 {
     DepthStencil = 0x40,
     UnorderedAccess = 0x80,
     DecoderOutput = 0x200,
-    DecoderInput = 0x400
+    EncoderInput = 0x400
 };
 VGC_DEFINE_SCOPED_ENUM_FLAGS_OPERATORS(BindFlags)
 
@@ -76,11 +76,14 @@ enum class PrimitiveType : UInt8 {
 };
 
 enum class SwapChainTargetFormat : UInt8 {
-    R32G32B32A32_FLOAT,
-    R32G32B32A32_UINT,
-    R32G32B32_FLOAT,
-    R32G32B32_UINT
+    R8G8B8A8_UNORM,
+    B8G8R8A8_SRGB,
 };
+
+enum class PresentFlags : UInt32 {
+    None = 0,
+};
+VGC_DEFINE_SCOPED_ENUM_FLAGS_OPERATORS(PresentFlags)
 
 } // namespace vgc::graphics
 

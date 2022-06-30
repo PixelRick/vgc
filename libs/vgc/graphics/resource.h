@@ -17,12 +17,16 @@
 #ifndef VGC_GRAPHICS_RESOURCE_H
 #define VGC_GRAPHICS_RESOURCE_H
 
+#include <atomic>
+#include <mutex>
 #include <unordered_set>
+#include <utility>
 
 #include <vgc/core/array.h>
 #include <vgc/core/arithmetic.h>
 #include <vgc/core/object.h>
 #include <vgc/graphics/api.h>
+#include <vgc/graphics/logcategories.h>
 
 namespace vgc::graphics {
 
@@ -32,7 +36,9 @@ class Resource;
 
 namespace detail {
 
-// Used to collect resources so that the owning engine can release them when it can.
+// Used to list all resources so that when the engine is stopped we can release
+// them all. It is important if the engine is a temporary wrapper (e.g. around
+// Qt OpenGL), better not leak resources.
 //
 class VGC_GRAPHICS_API ResourceList {
 protected:
@@ -41,14 +47,14 @@ protected:
 
     ResourceList() = default;
 
-    // XXX assert lists are empty to prevent leaks
-    virtual ~ResourceList() = default;
+    ~ResourceList();
 
-    // XXX add thread safety for deferred contexts creating resources..
+    std::unordered_set<Resource*> resources_;
 
-    std::unordered_set<Resource*> resources_; // user thread
-    core::Array<Resource*> resourcesPendingForRelease_; // user thread
-    core::Array<Resource*> resourcesToRelease_; // engine thread (rendering)
+    // Resources must be kept alive until all commands using them are executed.
+    // The engine is responsible for properly scheduling the release of these resources.
+    //
+    core::Array<Resource*> danglingResources_;
 };
 
 } // namespace detail
@@ -60,8 +66,12 @@ class VGC_GRAPHICS_API Resource {
 protected:
     using ResourceList = detail::ResourceList;
 
+    // should be called in the user thread, not the rendering thread.
     explicit Resource(ResourceList* owningList)
-        : owningList_(owningList) {}
+        : owningList_(owningList)
+    {
+        owningList_->resources_.insert(this);
+    }
 
 public:
     virtual ~Resource() {}
@@ -69,44 +79,50 @@ public:
     Resource(const Resource&) = delete;
     Resource& operator=(const Resource&) = delete;
 
-    bool isValid() const {
-        return owningList_ != nullptr;
-    }
-
-private:
+protected:
+    friend detail::ResourceList;
     friend class Engine;
 
     template<typename T>
     friend class ResourcePtr;
 
-    // called by the engine and in its context
+    // Called in the rendering thread.
+    // Override this to release the actual resource.
+    //
     virtual void release_(Engine*) = 0;
 
-    void incRefOrInit_() {
-        if (refCount_ == core::Int64Max) {
-            owningList_->resources_.insert(this);
+    // Called in the user thread (by decRef_).
+    // Override this to reset all inner ResourcePtr.
+    // This is required because decRef_ is not thread safe, it keeps other
+    // things simpler.
+    virtual void clearSubResources_() {}
+
+private:
+    void initRef_() {
+        int64_t noCount = core::Int64Max;
+        if (refCount_ == noCount) {
             refCount_ = 1;
         }
         else {
-            incRef_();
+            throw core::LogicError("ResourcePtr: reference count already initialized.");
         }
     }
 
     void incRef_() {
+        int64_t newCount = ++refCount_;
 #ifdef VGC_DEBUG
-        if (refCount_ < 1) {
-
-            throw core::LogicError("ResourcePtr: trying to take shared ownership of an already garbaged resource!");
+        if (newCount <= 1) {
+            throw core::LogicError("ResourcePtr: trying to take shared ownership of an already garbaged resource.");
         }
 #endif
-        ++refCount_;
     }
 
     void decRef_() {
         if (--refCount_ == 0) {
             if (owningList_) {
-                owningList_->resourcesPendingForRelease_.append(this);
                 owningList_->resources_.erase(this);
+                owningList_->danglingResources_.append(this);
+                clearSubResources_();
             }
             else {
                 delete this;
@@ -115,11 +131,31 @@ private:
     }
 
     ResourceList* owningList_;
-    Int64 refCount_ = 0;
+    Int64 refCount_ = core::Int64Max;
 };
 
+namespace detail {
+
+inline ResourceList::~ResourceList() {
+    if (!resources_.empty() || !danglingResources_.isEmpty()) {
+        VGC_ERROR(LogVgcGraphics, "Some resources were not released yet.");
+        for (Resource* res : resources_) {
+            res->owningList_ = nullptr;
+        }
+        for (Resource* res : danglingResources_) {
+            res->owningList_ = nullptr;
+            delete res;
+        }
+    }
+}
+
+} // namespace detail
+
 /// \class vgc::graphics::ResourcePtr<T>
-/// \brief Reference-counting pointer to a graphics `Resource`.
+/// \brief Shared pointer to a graphics `Resource`.
+///
+/// When the reference count reaches zero, the resource gets queued for release
+/// and destruction in the rendering thread by the Engine that created it.
 ///
 template<typename T>
 class ResourcePtr {
@@ -139,13 +175,14 @@ public:
         : p_(p)
     {
         if (p_) {
-            p_->incRefOrInit_();
+            p_->initRef_();
         }
     }
 
     ~ResourcePtr() {
         reset();
     }
+
 
     template<typename U>
     ResourcePtr(const ResourcePtr<U>& other)
@@ -163,31 +200,47 @@ public:
         other.p_ = nullptr;
     }
 
+    ResourcePtr(const ResourcePtr& other)
+        : p_(other.p_)
+    {
+        if (p_) {
+            p_->incRef_();
+        }
+    }
+
+    ResourcePtr(ResourcePtr&& other)
+        : p_(other.p_)
+    {
+        other.p_ = nullptr;
+    }
+
     template<typename U>
     ResourcePtr& operator=(const ResourcePtr<U>& other) {
-        if (this == &other) {
+        if (p_ == other.p_) {
             return *this;
+        }
+        if (other.p_) {
+            other.p_->incRef_();
         }
         if (p_) {
             p_->decRef_();
         }
         p_ = other.p_;
-        if (p_) {
-            p_->incRef_();
-        }
         return *this;
     }
 
     template<typename U>
     ResourcePtr& operator=(ResourcePtr<U>&& other) {
-        if (this == &other) {
-            return *this;
-        }
-        if (p_) {
-            p_->decRef_();
-        }
-        p_ = other.p_;
-        other.p_ = nullptr;
+        std::swap(p_, other.p_);
+        return *this;
+    }
+
+    ResourcePtr& operator=(const ResourcePtr& other) {
+        return operator=<T>(other);
+    }
+
+    ResourcePtr& operator=(ResourcePtr&& other) {
+        std::swap(p_, other.p_);
         return *this;
     }
 
@@ -198,6 +251,16 @@ public:
             p_ = nullptr;
 #endif
         }
+    }
+
+    void reset(T* p) {
+        if (p) {
+            p->initRef_();
+        }
+        if (p_) {
+            p_->decRef_();
+        }
+        p_ = p;
     }
 
     T* get() const {

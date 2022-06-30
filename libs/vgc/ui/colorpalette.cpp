@@ -119,7 +119,7 @@ void ColorPalette::setSelectedColor(const core::Color& color)
 
 void ColorPalette::onPaintCreate(graphics::Engine* engine)
 {
-    triangles_ = engine->createDynamicPrimitiveBuffer(graphics::PrimitiveType::TriangleList);
+    triangles_ = engine->createDynamicPrimitiveBuffer();
 }
 
 namespace {
@@ -323,10 +323,10 @@ void ColorPalette::onPaintDraw(graphics::Engine* engine)
         }
 
         // Load triangles
-        engine->updateBufferData(triangles_, [a = std::move(a)](){ return a.get()->data(); }, a->length());
+        engine->updateBufferData(triangles_.get(), [a = std::move(a)](){ return a.get()->data(); }, a->length() * 4);
     }
     engine->clear(core::Color(0.337, 0.345, 0.353));
-    engine->drawPrimitives(triangles_);
+    engine->drawPrimitives(triangles_.get(), graphics::PrimitiveType::TriangleList);
 }
 
 void ColorPalette::onPaintDestroy(graphics::Engine*)

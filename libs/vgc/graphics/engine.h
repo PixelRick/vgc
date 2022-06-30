@@ -17,6 +17,7 @@
 #ifndef VGC_GRAPHICS_ENGINE_H
 #define VGC_GRAPHICS_ENGINE_H
 
+#include <atomic>
 #include <condition_variable>
 #include <functional>
 #include <list>
@@ -35,12 +36,15 @@
 #include <vgc/graphics/buffers.h>
 #include <vgc/graphics/detail/commands.h>
 #include <vgc/graphics/enums.h>
+#include <vgc/graphics/logcategories.h>
 #include <vgc/graphics/resource.h>
 #include <vgc/graphics/targets.h>
 
 namespace vgc::graphics {
 
 VGC_DECLARE_OBJECT(Engine);
+
+// XXX add something to limit the number of pending frames for each swapchain..
 
 /// \class vgc::graphics::Engine
 /// \brief Abstract interface for graphics rendering.
@@ -71,7 +75,16 @@ protected:
     ///
     Engine();
 
+    void onDestroyed() override {
+        stopRenderThread_();
+    }
+
 public:
+
+    void start() {
+        startRenderThread_();
+    }
+
     // MODEL THREAD functions
 
     /// Submits the current command list for execution by the render thread.
@@ -81,61 +94,106 @@ public:
     /// returns the index of the previous list.
     ///
     UInt flush() {
-        return flushPendingCommandList_();
+        return submitPendingCommandList_();
     }
 
     /// Submits the current command list if present then waits for all submitted
-    /// command lists to finish executing on the CPU.
+    /// command lists to finish being translated to GPU commands.
     ///
     void finish() {
-        UInt id = flushPendingCommandList_();
-        waitCommandListExecutionFinished_(id);
+        UInt id = submitPendingCommandList_();
+        waitCommandListTranslationFinished_(id);
     }
 
     /// Creates a swap chain for the given window.
     ///
-    SwapChainPtr createSwapChain(const SwapChainDesc& desc, void* windowNativeHandle, WindowNativeHandleType handleType, UInt32 flags) {
-        return createSwapChain_(desc, windowNativeHandle, handleType, flags);
+    SwapChainPtr createSwapChain(const SwapChainDesc& desc) {
+        return SwapChainPtr(createSwapChain_(desc));
     }
 
-    RenderTargetViewPtr createRenderTargetView(const SwapChainPtr& swapChain) {
-        return constructRenderTargetView_(swapChain);
+    void resizeSwapChain(SwapChain* swapChain, UInt32 width, UInt32 height) {
+        if (swapChain->owningList_ != resourceList_) {
+            // XXX error, using a resource from another engine..
+            return;
+        }
+        finish();
+        resizeSwapChain_(swapChain, width, height);
     }
 
-    void present(SwapChainPtr swapChain, UInt32 syncInterval) {
+    void bindSwapChain(const SwapChainPtr& swapChain) {
+        if (swapChain->owningList_ != resourceList_) {
+            // XXX error, using a resource from another engine..
+            return;
+        }
+        lastBoundSwapChain_ = swapChain;
+        queueLambdaCommandWithParameters_<SwapChain*>(
+            "bindSwapChain",
+            [](Engine* engine, SwapChain* swapChain) {
+                engine->bindSwapChain_(swapChain);
+            },
+            swapChain.get());
+    }
+
+    // presentedCallback is called from an unspecified thread.
+    void present(
+        UInt32 syncInterval,
+        std::function<void(UInt64 /*timestamp*/)>&& presentedCallback,
+        PresentFlags flags = PresentFlags::None)
+    {
+        ++lastBoundSwapChain_->pendingPresentCount_;
         bool shouldSync = syncInterval > 0;
         if (shouldSync && shouldPresentWaitFromSyncedUserThread_()) {
             // Preventing dead-locks
             // See https://docs.microsoft.com/en-us/windows/win32/api/DXGI1_2/nf-dxgi1_2-idxgiswapchain1-present1#remarks
             finish();
-            present_(swapChain, syncInterval);
+            UInt64 timestamp = present_(lastBoundSwapChain_.get(), syncInterval, flags);
+            --lastBoundSwapChain_->pendingPresentCount_;
+            presentedCallback(timestamp);
         }
         else {
             struct CommandParameters {
-                SwapChainPtr swapChain;
+                SwapChain* swapChain;
                 UInt32 syncInterval;
+                PresentFlags flags;
+                std::function<void(UInt64 /*timestamp*/)> presentedCallback;
             };
             queueLambdaCommandWithParameters_<CommandParameters>(
                 "present",
                 [](Engine* engine, const CommandParameters& p) {
-                    engine->present_(p.swapChain, p.syncInterval);
+                    UInt64 timestamp = engine->present_(p.swapChain, p.syncInterval, p.flags);
+                    --p.swapChain->pendingPresentCount_;
+                    p.presentedCallback(timestamp);
                 },
-                swapChain, syncInterval);
+                lastBoundSwapChain_.get(), syncInterval, flags, std::move(presentedCallback));
 
             if (shouldSync) {
                 finish();
             }
+            else {
+                submitPendingCommandList_();
+            }
         }
     }
 
-    // nullptr means default target (current window's framebuffer for OpenGL)
-    void setTarget(RenderTargetViewPtr rtv = nullptr) {
-        queueLambdaCommandWithParameters_<RenderTargetViewPtr>(
-            "setTarget",
-            [](Engine* engine, const RenderTargetViewPtr& view) {
-                engine->setTarget_(view);
+    FramebufferPtr getDefaultFramebuffer() {
+        SwapChain* swapChain = lastBoundSwapChain_.get();
+        return swapChain ? swapChain->defaultFrameBuffer_ : FramebufferPtr();
+    }
+
+    void bindFramebuffer(Framebuffer* framebuffer = nullptr) {
+        if (!framebuffer) {
+            framebuffer = getDefaultFramebuffer().get();
+        }
+        else if (framebuffer->owningList_ != resourceList_) {
+            // XXX error, using a resource from another engine..
+            return;
+        }
+        queueLambdaCommandWithParameters_<Framebuffer*>(
+            "bindFramebuffer",
+            [](Engine* engine, Framebuffer* framebuffer) {
+                engine->bindFramebuffer_(framebuffer);
             },
-            rtv);
+            framebuffer);
     }
 
     void setViewport(Int x, Int y, Int width, Int height) {
@@ -268,13 +326,18 @@ public:
     //
     template<typename DataGetter>
     BufferPtr createPrimitiveBuffer(DataGetter&& initialDataGetter, Int initialLengthInBytes, bool dynamic) {
-        BufferPtr buffer = constructBuffer_(
+        if (initialLengthInBytes < 0) {
+            throw core::NegativeIntegerError(core::format(
+                "Negative initialLengthInBytes ({}) provided to vgc::graphics::Engine::createPrimitiveBuffer()", initialLengthInBytes));
+        }
+
+        BufferPtr buffer = BufferPtr(createBuffer_(
             dynamic ? Usage::Dynamic : Usage::Immutable,
             BindFlags::VertexBuffer,
-            dynamic ? CpuAccessFlags::Write : CpuAccessFlags::None);
+            dynamic ? CpuAccessFlags::Write : CpuAccessFlags::None));
 
         struct CommandParameters {
-            BufferPtr buffer;
+            Buffer* buffer;
             std::decay_t<DataGetter> initialDataGetter;
             Int initialLengthInBytes;
         };
@@ -284,30 +347,44 @@ public:
                 engine->initBuffer_(p.buffer, p.initialDataGetter(), p.initialLengthInBytes);
                 engine->initVertexBufferForPaintShader_(buf);
             },
-            buffer, std::move(initialDataGetter), initialLengthInBytes);
+            buffer.get(), std::move(initialDataGetter), initialLengthInBytes);
         return buffer;
     }
 
     BufferPtr createDynamicPrimitiveBuffer() {
-        BufferPtr buffer = constructBuffer_(
+        BufferPtr buffer = BufferPtr(createBuffer_(
             Usage::Dynamic,
             BindFlags::VertexBuffer,
-            CpuAccessFlags::Write);
+            CpuAccessFlags::Write));
 
-        queueLambdaCommandWithParameters_<BufferPtr>(
+        queueLambdaCommandWithParameters_<Buffer*>(
             "initPrimitiveBuffer",
-            [](Engine* engine, const BufferPtr& buf) {
+            [](Engine* engine, Buffer* buf) {
                 engine->initBuffer_(buf, nullptr, 0);
-                engine->initVertexBufferForPaintShader_(buf);
+                engine->setupVertexBufferForPaintShader_(buf);
             },
-            buffer);
+            buffer.get());
         return buffer;
     }
 
     template<typename DataGetter>
-    void updateBufferData(const BufferPtr& buffer, DataGetter&& initialDataGetter, Int lengthInBytes) {
+    void updateBufferData(Buffer* buffer, DataGetter&& initialDataGetter, Int lengthInBytes) {
+        if (lengthInBytes < 0) {
+            throw core::NegativeIntegerError(core::format(
+                "Negative lengthInBytes ({}) provided to vgc::graphics::Engine::updateBufferData()", lengthInBytes));
+        }
+
+        if (buffer->owningList_ != resourceList_) {
+            // XXX error, using a resource from another engine..
+            return;
+        }
+
+        if (!(buffer->cpuAccessFlags() & CpuAccessFlags::Write)) {
+            VGC_ERROR(LogVgcGraphics, "cpu does not have write access on buffer");
+        }
+
         struct CommandParameters {
-            BufferPtr buffer;
+            Buffer* buffer;
             std::decay_t<DataGetter> initialDataGetter;
             Int lengthInBytes;
         };
@@ -319,9 +396,14 @@ public:
             buffer, std::move(initialDataGetter), lengthInBytes);
     }
 
-    void drawPrimitives(const BufferPtr& buffer, PrimitiveType type) {
+    void drawPrimitives(Buffer* buffer, PrimitiveType type) {
+        if (buffer->owningList_ != resourceList_) {
+            // XXX error, using a resource from another engine..
+            return;
+        }
+
         struct CommandParameters {
-            BufferPtr buffer;
+            Buffer* buffer;
             PrimitiveType type;
         };
         queueLambdaCommandWithParameters_<CommandParameters>(
@@ -334,78 +416,90 @@ public:
 
 protected:
     detail::ResourceList* resourceList_ = nullptr;
-    std::list<CommandUPtr> commandList_;
+    std::list<CommandUPtr> pendingCommands_;
 
     // USER THREAD pimpl functions
 
-    virtual SwapChainPtr createSwapChain_(const SwapChainDesc& desc, void* windowNativeHandle, WindowNativeHandleType handleType, UInt32 flags) = 0;
-    virtual RenderTargetViewPtr constructRenderTargetView_(const SwapChainPtr& swapChain) = 0;
-    virtual BufferPtr constructBuffer_(Usage usage, BindFlags bindFlags, CpuAccessFlags cpuAccessFlags) = 0;
+    virtual SwapChain* createSwapChain_(const SwapChainDesc& desc) = 0;
+    virtual void resizeSwapChain_(SwapChain* swapChain, UInt32 width, UInt32 height) = 0;
+    // XXX virtual FramebufferPtr createFramebuffer_(const RenderTargetViewPtr& colorRtv) = 0;
+    // XXX virtual void setDefaultFramebuffer_(const SwapChainPtr& swapChain, const FramebufferPtr& fb) = 0;
+    virtual Buffer* createBuffer_(Usage usage, BindFlags bindFlags, CpuAccessFlags cpuAccessFlags) = 0;
 
     virtual bool shouldPresentWaitFromSyncedUserThread_() { return false; }
 
     // RENDER THREAD functions
 
-    virtual void present_(const SwapChainPtr& swapChain, UInt32 syncInterval) = 0;
-    virtual void setTarget_(const RenderTargetViewPtr& rtv = nullptr) = 0;
+    virtual void bindSwapChain_(SwapChain* swapChain) = 0;
+    virtual UInt64 present_(SwapChain* swapChain, UInt32 syncInterval, PresentFlags flags) = 0;
+    // XXX virtual void initFramebuffer_(Framebuffer* framebuffer) = 0;
+    virtual void bindFramebuffer_(Framebuffer* framebuffer) = 0;
     virtual void setViewport_(Int x, Int y, Int width, Int height) = 0;
     virtual void clear_(const core::Color& color) = 0;
     virtual void setProjectionMatrix_(const geometry::Mat4f& m) = 0;
     virtual void setViewMatrix_(const geometry::Mat4f& m) = 0;
     virtual void bindPaintShader_() = 0;
     virtual void releasePaintShader_() = 0;
-    virtual void initBuffer_(const BufferPtr& buffer, const float* data, Int initialLengthInBytes) = 0;
-    virtual void updateBufferData_(const BufferPtr& buffer, const float* data, Int lengthInBytes) = 0;
-    virtual void initVertexBufferForPaintShader_(const BufferPtr& buffer) = 0;
-    virtual void drawPrimitives_(const BufferPtr& buffer, PrimitiveType type) = 0;
+    virtual void initBuffer_(Buffer* buffer, const void* data, Int initialLengthInBytes) = 0;
+    virtual void updateBufferData_(Buffer* buffer, const void* data, Int lengthInBytes) = 0;
+    virtual void setupVertexBufferForPaintShader_(Buffer* buffer) = 0;
+    virtual void drawPrimitives_(Buffer* buffer, PrimitiveType type) = 0;
 
     // QUEUING
 
     template<typename TCommand, typename... Args>
     void queueCommand_(Args&&... args) {
-        commandList_.emplace_back(
+        pendingCommands_.emplace_back(
             new TCommand(std::forward<Args>(args)...));
     };
 
     template<typename Lambda>
     void queueLambdaCommand_(std::string_view name, Lambda&& lambda) {
-        commandList_.emplace_back(
+        pendingCommands_.emplace_back(
             new detail::LambdaCommand(name, std::forward<Lambda>(lambda)));
     };
 
     template<typename Data, typename Lambda, typename... Args>
     void queueLambdaCommandWithParameters_(std::string_view name, Lambda&& lambda, Args&&... args) {
-        commandList_.emplace_back(
+        pendingCommands_.emplace_back(
             new detail::LambdaCommandWithParameters<Data, std::decay_t<Lambda>>(name, std::forward<Lambda>(lambda), std::forward<Args>(args)...));
     };
 
-    void flushResourcesPendingForRelease_();
-
 private:
+    SwapChainPtr lastBoundSwapChain_;
     core::Array<geometry::Mat4f> projectionMatrixStack_;
     core::Array<geometry::Mat4f> viewMatrixStack_;
-
     std::thread renderThread_;
 
     std::mutex mutex_;
     std::condition_variable wakeRenderThreadConditionVariable_;
     std::condition_variable renderThreadEventConditionVariable_;
-
-    core::Array<std::list<CommandUPtr>> commandQueue_;
-    UInt lastExecutedCommandListId_ = 0;
+    std::atomic_uint64_t lastExecutedCommandListId_ = 0;
     UInt lastSubmittedCommandListId_ = 0;
-
     bool running_ = false;
     bool stopRequested_ = false;
+
+    struct CommandList {
+        CommandList(
+            std::list<CommandUPtr>&& commands,
+            core::Array<Resource*>&& garbagedResources)
+            : commands(std::move(commands))
+            , garbagedResources(std::move(garbagedResources))
+        {}
+
+        std::list<CommandUPtr> commands;
+        core::Array<Resource*> garbagedResources;
+    };
+    core::Array<CommandList> commandQueue_;
 
     void renderThreadProc_();
     void startRenderThread_();
     void stopRenderThread_(); // blocking
 
-    UInt flushPendingCommandList_();
+    UInt submitPendingCommandList_();
 
-    // returns false if execution was cancelled by a stop request.
-    void waitCommandListExecutionFinished_(UInt commandListId = 0);
+    // returns false if translation was cancelled by a stop request.
+    void waitCommandListTranslationFinished_(UInt commandListId = 0);
 };
 
 } // namespace vgc::graphics

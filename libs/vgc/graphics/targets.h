@@ -18,6 +18,7 @@
 #define VGC_GRAPHICS_TARGETS_H
 
 #include <unordered_set>
+#include <atomic>
 
 #include <vgc/core/arithmetic.h>
 #include <vgc/graphics/api.h>
@@ -67,15 +68,12 @@ public:
         return windowNativeHandle_;
     }
 
-    void setWindowNativeHandle(void* windowNativeHandle) {
-        windowNativeHandle_ = windowNativeHandle;
-    }
-
     WindowNativeHandleType windowNativeHandleType() const {
         return windowNativeHandleType_;
     }
 
-    void setWindowNativeHandle(WindowNativeHandleType windowNativeHandleType) {
+    void setWindowNativeHandle(void* windowNativeHandle, WindowNativeHandleType windowNativeHandleType) {
+        windowNativeHandle_ = windowNativeHandle;
         windowNativeHandleType_ = windowNativeHandleType;
     }
 
@@ -124,37 +122,79 @@ private:
     UInt flags_;
 };
 
-/// \class vgc::graphics::RenderTargetView
-/// \brief Abstract view of a render target buffer.
+/// \class vgc::graphics::ImageView
+/// \brief Abstract view of an image buffer attachable to some stage of the graphics pipeline.
 ///
-class VGC_GRAPHICS_API RenderTargetView : public Resource {
+// Since a swap chain's render target view represents different buffers over
+// time, a Vulkan implementation should probably cache a view for each
+// back buffer.
+//
+class VGC_GRAPHICS_API ImageView : public Resource {
 protected:
-    RenderTargetView(ResourceList* owningList)
+    ImageView(ResourceList* owningList)
         : Resource(owningList) {}
 
     using Resource::Resource;
 };
-using RenderTargetViewPtr = ResourcePtr<RenderTargetView>;
+using ImageViewPtr = ResourcePtr<ImageView>;
+
+/// \class vgc::graphics::Framebuffer
+/// \brief Abstract framebuffer, a collection of graphics pipeline attachments.
+///
+// Since a swap chain's render target view represents different buffers over
+// time, a Vulkan implementation should probably cache a vkFramebuffer for each
+// back buffer.
+//
+class VGC_GRAPHICS_API Framebuffer : public Resource {
+protected:
+    Framebuffer(ResourceList* owningList)
+        : Resource(owningList) {}
+
+    using Resource::Resource;
+};
+using FramebufferPtr = ResourcePtr<Framebuffer>;
 
 /// \class vgc::graphics::SwapChain
-/// \brief Abstract swap chain.
+/// \brief Abstract window swap buffers chain.
 ///
 class VGC_GRAPHICS_API SwapChain : public Resource {
 protected:
     using Resource::Resource;
 
     SwapChain(ResourceList* owningList, const SwapChainDesc& desc)
-        : Resource(owningList), desc_(desc) {}
+        : Resource(owningList), desc_(desc)
+    {}
 
 public:
     const SwapChainDesc& desc() const {
         return desc_;
     }
 
+    UInt32 pendingPresentCount() const {
+        return pendingPresentCount_.load();
+    }
+
+    const FramebufferPtr& defaultFrameBuffer() const {
+        return defaultFrameBuffer_;
+    }
+
+protected:
+    friend Engine;
+
+    void clearSubResources_() override {
+        defaultFrameBuffer_.reset();
+    }
+
+    FramebufferPtr defaultFrameBuffer_;
+
 private:
     SwapChainDesc desc_;
+    std::atomic_uint32_t pendingPresentCount_ = 0; // to limit queuing in the Engine.
 };
 using SwapChainPtr = ResourcePtr<SwapChain>;
+
+
+
 
 } // namespace vgc::graphics
 

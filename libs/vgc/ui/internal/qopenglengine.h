@@ -17,6 +17,7 @@
 #ifndef VGC_UI_QOPENGLENGINE_H
 #define VGC_UI_QOPENGLENGINE_H
 
+#include <chrono>
 #include <memory>
 
 #include <QOpenGLBuffer>
@@ -92,7 +93,7 @@ inline geometry::Mat4f toMat4f(const geometry::Mat4d& m) {
 VGC_DECLARE_OBJECT(QOpenglEngine);
 
 /// \class vgc::widget::QOpenglEngine
-/// \brief The graphics::Engine for windows and widgets.
+/// \brief The QtOpenGL-based graphics::Engine.
 ///
 /// This class is an implementation of graphics::Engine using QOpenGLContext and
 /// OpenGL calls.
@@ -117,9 +118,7 @@ public:
 
     // not part of the common interface
 
-    void makeCurrent(QSurface* qs);
     void setupContext();
-    graphics::RenderTargetViewPtr getDefaultTarget();
 
     OpenGLFunctions* api() const {
         return api_;
@@ -130,31 +129,36 @@ public:
 
     // USER THREAD pimpl functions
 
-    graphics::SwapChainPtr createSwapChain_(const graphics::SwapChainDesc& desc, void* windowNativeHandle, graphics::WindowNativeHandleType handleType, UInt32 flags) override;
-    graphics::RenderTargetViewPtr constructRenderTargetView_(const graphics::SwapChainPtr& swapChain) override;
-    graphics::BufferPtr constructBuffer_(graphics::Usage usage, graphics::BindFlags bindFlags, graphics::CpuAccessFlags cpuAccessFlags) override;
+    graphics::SwapChain* createSwapChain_(const graphics::SwapChainDesc& desc) override;
+    void resizeSwapChain_(graphics::SwapChain* swapChain, UInt32 width, UInt32 height) override;
+    graphics::Buffer* createBuffer_(graphics::Usage usage, graphics::BindFlags bindFlags, graphics::CpuAccessFlags cpuAccessFlags) override;
 
     // RENDER THREAD functions
 
-    void present_(const graphics::SwapChainPtr& swapChain, UInt32 syncInterval) override;
-    void setTarget_(const graphics::RenderTargetViewPtr& rtv = nullptr) override;
+    void bindSwapChain_(graphics::SwapChain* swapChain) override;
+    UInt64 present_(graphics::SwapChain* swapChain, UInt32 syncInterval, graphics::PresentFlags flags) override;
+    void bindFramebuffer_(graphics::Framebuffer* framebuffer) override;
     void setViewport_(Int x, Int y, Int width, Int height) override;
     void clear_(const core::Color& color) override;
     void setProjectionMatrix_(const geometry::Mat4f& m) override;
     void setViewMatrix_(const geometry::Mat4f& m) override;
     void bindPaintShader_() override;
     void releasePaintShader_() override;
-    void initBuffer_(const graphics::BufferPtr& buffer, const float* data, Int initialLengthInBytes) override;
-    void updateBufferData_(const graphics::BufferPtr& buffer, const float* data, Int lengthInBytes) override;
-    void initVertexBufferForPaintShader_(const graphics::BufferPtr& buffer) override;
-    void drawPrimitives_(const graphics::BufferPtr& buffer, graphics::PrimitiveType type) override;
+    void initBuffer_(graphics::Buffer* buffer, const void* data, Int initialLengthInBytes) override;
+    void updateBufferData_(graphics::Buffer* buffer, const void* data, Int lengthInBytes) override;
+    void setupVertexBufferForPaintShader_(graphics::Buffer* buffer) override;
+    void drawPrimitives_(graphics::Buffer* buffer, graphics::PrimitiveType type) override;
 
 private:
+    // XXX keep only format of first chain and compare against new windows ?
+    QSurfaceFormat format_;
     QOpenGLContext* ctx_ = nullptr;
     bool isExternalCtx_ = false;
     QOpenGLFunctions_3_2_Core* api_ = nullptr;
 
     QSurface* surface_ = nullptr;
+
+    std::chrono::steady_clock::time_point startTime_;
 
     // Shader
     std::unique_ptr<QOpenGLShaderProgram> paintShaderProgram_;
@@ -162,11 +166,6 @@ private:
     int colLoc_ = -1;
     int projLoc_ = -1;
     int viewLoc_ = -1;
-
-    // Matrices
-    geometry::Mat4f proj_;
-    core::Array<geometry::Mat4f> projectionMatrices_;
-    core::Array<geometry::Mat4f> viewMatrices_;
 };
 
 } // namespace vgc::ui::internal

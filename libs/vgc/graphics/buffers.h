@@ -48,12 +48,11 @@ class VGC_GRAPHICS_API Buffer : public Resource {
 protected:
     Buffer(
         ResourceList* owningList,
-        Int lengthInBytes,
         Usage usage,
         BindFlags bindFlags,
         CpuAccessFlags cpuAccessFlags)
         : Resource(owningList)
-        , lengthInBytes_(lengthInBytes)
+        , lengthInBytes_(0)
         , usage_(usage)
         , bindFlags_(bindFlags)
         , cpuAccessFlags_(cpuAccessFlags)
@@ -76,8 +75,10 @@ public:
         return cpuAccessFlags_;
     }
 
-private:
+protected:
     Int lengthInBytes_;
+
+private:
     Usage usage_;
     BindFlags bindFlags_;
     CpuAccessFlags cpuAccessFlags_;
