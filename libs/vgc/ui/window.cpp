@@ -23,12 +23,39 @@
 
 #include <vgc/core/paths.h>
 #include <vgc/geometry/camera2d.h>
-#include <vgc/widgets/qtutil.h>
-#include <vgc/graphics/d3d11/d3d11engine.h>
-#include <vgc/ui/widget.h>
+
 #include <vgc/ui/internal/qopenglengine.h>
+#include <vgc/ui/widget.h>
+#include <vgc/widgets/qtutil.h>
+
+#include <vgc/graphics/d3d11/d3d11engine.h>
 
 namespace vgc::ui {
+
+LRESULT WINAPI Window::WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
+{
+    Window* w = (Window*)::GetWindowLongPtr(hwnd, 19 * sizeof(LONG_PTR));
+    NativeEventResult res = {};
+    MSG mmsg = {};
+    mmsg.message = msg;
+    mmsg.hwnd = hwnd;
+    mmsg.wParam = wParam;
+    mmsg.lParam = lParam;
+    switch (msg)
+    {
+    case WM_SIZE:
+        w->nativeEvent(QByteArray("windows_generic_MSG"), &mmsg, &res);
+        return 0;
+    case WM_SYSCOMMAND:
+        if ((wParam & 0xfff0) == SC_KEYMENU) // Disable ALT application menu
+            return 0;
+        break;
+    case WM_DESTROY:
+        ::PostQuitMessage(0);
+        return 0;
+    }
+    return ::DefWindowProc(hwnd, msg, wParam, lParam);
+}
 
 Window::Window(ui::WidgetPtr widget) :
     QWindow(),
@@ -36,7 +63,8 @@ Window::Window(ui::WidgetPtr widget) :
     proj_(geometry::Mat4f::identity),
     clearColor_(0.337f, 0.345f, 0.353f, 1.f)
 {
-    setSurfaceType(QWindow::OpenGLSurface);
+    //setSurfaceType(QWindow::OpenGLSurface);
+    setSurfaceType(QWindow::Direct3DSurface);
 
     connect(this, &QWindow::activeChanged, this, &Window::onActiveChanged_);
 
@@ -48,10 +76,19 @@ Window::Window(ui::WidgetPtr widget) :
     scd.setBufferCount(2);
     scd.setSampleCount(8);
 
-#if defined(VGC_CORE_COMPILER_MSVC) and 1
+#if defined(VGC_CORE_COMPILER_MSVC) && TRUE
     QWindow::create();
     engine_ = graphics::D3d11Engine::create();
+
     scd.setWindowNativeHandle((HWND)QWindow::winId(), graphics::WindowNativeHandleType::Win32);
+
+    //WNDCLASSEXW wc = { sizeof(WNDCLASSEXW), CS_CLASSDC, Window::WndProc, 0L, 20 * sizeof(LONG_PTR), ::GetModuleHandle(NULL), NULL, NULL, NULL, NULL, L"Win32 Window", NULL };
+    //::RegisterClassExW(&wc);
+    //HWND hwnd = ::CreateWindowW(wc.lpszClassName, L"Win32 Window", WS_OVERLAPPEDWINDOW, 100, 100, 1280, 800, NULL, NULL, wc.hInstance, NULL);
+    //::SetWindowLongPtr(hwnd, 19 * sizeof(LONG_PTR), (LONG_PTR)(Window*)this);
+    //scd.setWindowNativeHandle(hwnd, graphics::WindowNativeHandleType::Win32);
+    //::ShowWindow(hwnd, SW_SHOWDEFAULT);
+    //::UpdateWindow(hwnd);
 #else
     engine_ = internal::QOpenglEngine::create();
     scd.setWindowNativeHandle(static_cast<QWindow*>(this), graphics::WindowNativeHandleType::QOpenGLWindow);
@@ -167,8 +204,9 @@ void Window::focusOutEvent(QFocusEvent* /*event*/)
     widget_->setTreeActive(false);
 }
 
-void Window::resizeEvent(QResizeEvent*)
+void Window::resizeEvent(QResizeEvent* /*event*/)
 {
+#if !defined(VGC_CORE_COMPILER_MSVC)
     geometry::Camera2d c;
     c.setViewportSize(width(), height());
     proj_ = internal::toMat4f(c.projectionMatrix());
@@ -182,11 +220,9 @@ void Window::resizeEvent(QResizeEvent*)
     if (engine_) {
         engine_->resizeSwapChain(swapChain_.get(), width(), height());
         paint(true);
+        qDebug() << "painted";
     }
-
-    // Ask for redraw. This often improves how smooth resizing the window looks like,
-    // since Qt doesn't always immediately post an update during resize.
-    requestUpdate();
+#endif
 }
 
 void Window::keyPressEvent(QKeyEvent* event)
@@ -259,13 +295,22 @@ void Window::paint(bool sync) {
     updateDeferred_ = false;
 
     engine_->bindSwapChain(swapChain_);
-    engine_->setViewport(0, 0, width(), height());
+    engine_->setViewport(0, 0, width_, height_);
     engine_->clear(clearColor_);
 
     engine_->bindPaintShader();
     engine_->setProjectionMatrix(proj_);
     engine_->setViewMatrix(geometry::Mat4f::identity);
-    widget_->paint(engine_.get());
+
+    static float triangle[15] = {
+         20.f,  20.f, 1.f, 0.f, 0.f,
+        120.f,  40.f, 0.f, 1.f, 0.f,
+         40.f, 120.f, 0.f, 0.f, 1.f,
+    };
+    static auto bptr = engine_->createPrimitiveBuffer([]{ return triangle; }, 15*4, false);
+    engine_->drawPrimitives(bptr.get(), graphics::PrimitiveType::TriangleList);
+
+    //widget_->paint(engine_.get());
     engine_->releasePaintShader();
 
 #ifdef VGC_QOPENGL_EXPERIMENT
@@ -288,7 +333,9 @@ bool Window::event(QEvent* e)
 {
     switch (e->type()) {
     case QEvent::UpdateRequest:
-        paint();
+        if (!resizing_) {
+            paint(true);
+        }
         return true;
     case QEvent::ShortcutOverride:
         e->accept();
@@ -298,6 +345,92 @@ bool Window::event(QEvent* e)
     }
     return QWindow::event(e);
 }
+
+#if defined(VGC_CORE_COMPILER_MSVC)
+bool Window::nativeEvent(const QByteArray& eventType, void* message, NativeEventResult* result)
+{
+    if (eventType == "windows_generic_MSG") {
+        MSG* msg = reinterpret_cast<MSG*>(message);
+        switch (msg->message) {
+        case WM_SIZE: {
+            UINT w = LOWORD(msg->lParam);
+            UINT h = HIWORD(msg->lParam);
+
+            width_ = w;
+            height_ = h;
+
+            geometry::Camera2d c;
+            c.setViewportSize(w, h);
+            proj_ = internal::toMat4f(c.projectionMatrix());
+
+            // Set new widget geometry. Note: if w or h is > 16777216 (=2^24), then static_cast
+            // silently rounds to the nearest integer representable as a float. See:
+            //   https://stackoverflow.com/a/60339495/1951907
+            // Should we issue a warning in these cases?
+
+            //widget_->setGeometry(0, 0, static_cast<float>(w), static_cast<float>(h));
+            if (engine_ && swapChain_) {
+                engine_->resizeSwapChain(swapChain_.get(), w, h);
+                paint(true);
+                //qDebug() << "painted";
+            }
+
+            *result = 0;
+            return true;
+        }
+        case WM_ENTERSIZEMOVE: {
+            resizing_ = true;
+            break;
+        }
+        case WM_EXITSIZEMOVE: {
+            resizing_ = false;
+            break;
+        }
+        //case WM_PAINT:
+        case WM_WINDOWPOSCHANGED:
+        case WM_NCPAINT:
+        case WM_SIZING:
+        case WM_NCCALCSIZE: {
+            *result = ::DefWindowProc(msg->hwnd, msg->message, msg->wParam, msg->lParam);
+            return true;
+        }
+        default:
+            break;
+        }
+        /*
+        seq sample:
+        WM_ENTERSIZEMOVE - enter loop
+        WM_SIZING
+        WM_SIZING
+        WM_WINDOWPOSCHANGING
+        WM_GETMINMAXINFO
+        WM_NCCALCSIZE
+        WM_NCPAINT
+        WM_GETTEXT
+        WM_ERASEBKGND
+        WM_WINDOWPOSCHANGED
+        WM_SIZE
+        WM_ERASEBKGND
+        WM_PAINT
+        WM_SIZING
+        WM_WINDOWPOSCHANGING
+        WM_GETMINMAXINFO
+        WM_NCCALCSIZE
+        WM_NCPAINT
+        WM_GETTEXT
+        WM_ERASEBKGND
+        WM_WINDOWPOSCHANGED
+        WM_SIZE
+        */
+    }
+    return false;
+}
+#else
+bool Window::nativeEvent(const QByteArray& /*eventType*/, void* /*message*/, NativeEventResult* /*result*/)
+{
+}
+#endif
+
 
 void Window::exposeEvent(QExposeEvent*)
 {

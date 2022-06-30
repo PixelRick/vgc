@@ -158,7 +158,7 @@ public:
     }
 
 protected:
-    void release_(graphics::Engine* engine) override
+    void release_(graphics::Engine* /*engine*/) override
     {
         if (!vao_) return;
         vao_->destroy();
@@ -218,7 +218,7 @@ public:
     }
 
 protected:
-    void release_(graphics::Engine* engine) override
+    void release_(graphics::Engine* /*engine*/) override
     {
         // no-op..
     }
@@ -316,7 +316,7 @@ graphics::SwapChain* QOpenglEngine::createSwapChain_(const graphics::SwapChainDe
     return new QOpenglSwapChain(resourceList_, desc, wnd);
 }
 
-void QOpenglEngine::resizeSwapChain_(graphics::SwapChain* swapChain, UInt32 width, UInt32 height)
+void QOpenglEngine::resizeSwapChain_(graphics::SwapChain* /*swapChain*/, UInt32 /*width*/, UInt32 /*height*/)
 {
     // no-op
 }

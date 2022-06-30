@@ -20,11 +20,11 @@
 #include <vgc/core/compiler.h>
 #ifdef VGC_CORE_COMPILER_MSVC
 
+#include <d3d11.h>
+
 #include <array>
 #include <chrono>
 #include <memory>
-
-#include <d3d11.h>
 
 #include <vgc/core/color.h>
 #include <vgc/core/paths.h>

@@ -74,8 +74,9 @@ void Engine::renderThreadProc_() {
             command->execute(this);
         }
 
-        // atomic
+        lock.lock();
         ++lastExecutedCommandListId_;
+        lock.unlock();
 
         renderThreadEventConditionVariable_.notify_all();
 

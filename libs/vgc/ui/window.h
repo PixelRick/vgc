@@ -56,6 +56,8 @@ public:
     //QVariant inputMethodQuery(Qt::InputMethodQuery querty) const override;
 
 protected:
+    static LRESULT WINAPI WndProc(HWND, UINT, WPARAM, LPARAM);
+
     void mouseMoveEvent(QMouseEvent* event) override;
     void mousePressEvent(QMouseEvent* event) override;
     void mouseReleaseEvent(QMouseEvent* event) override;
@@ -72,10 +74,21 @@ protected:
     //void inputMethodEvent(QInputMethodEvent* event) override;
     bool event(QEvent* e) override;
 
+#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
+    using NativeEventResult = long;
+#else
+    using NativeEventResult = qintptr;
+#endif
+
+    bool nativeEvent(const QByteArray& eventType, void* message, NativeEventResult* result) override;
+
 private:
     ui::WidgetPtr widget_;
     graphics::EnginePtr engine_;
     graphics::SwapChainPtr swapChain_;
+    int width_ = 0;
+    int height_ = 0;
+    bool resizing_ = false;
 
     geometry::Mat4f proj_;
     core::Color clearColor_;

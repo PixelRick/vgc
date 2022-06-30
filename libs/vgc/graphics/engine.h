@@ -345,7 +345,7 @@ public:
             "initPrimitiveBuffer",
             [](Engine* engine, const CommandParameters& p) {
                 engine->initBuffer_(p.buffer, p.initialDataGetter(), p.initialLengthInBytes);
-                engine->initVertexBufferForPaintShader_(buf);
+                engine->setupVertexBufferForPaintShader_(p.buffer);
             },
             buffer.get(), std::move(initialDataGetter), initialLengthInBytes);
         return buffer;
@@ -474,7 +474,7 @@ private:
     std::mutex mutex_;
     std::condition_variable wakeRenderThreadConditionVariable_;
     std::condition_variable renderThreadEventConditionVariable_;
-    std::atomic_uint64_t lastExecutedCommandListId_ = 0;
+    UInt lastExecutedCommandListId_ = 0;
     UInt lastSubmittedCommandListId_ = 0;
     bool running_ = false;
     bool stopRequested_ = false;

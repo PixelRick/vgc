@@ -114,7 +114,7 @@ public:
     }
 
 protected:
-    void release_(Engine* engine) override {
+    void release_(Engine* /*engine*/) override {
         object_.reset();
     }
 
@@ -142,7 +142,7 @@ public:
     }
 
 protected:
-    void release_(Engine* engine) override {
+    void release_(Engine* /*engine*/) override {
         forceRelease();
     }
 
@@ -191,7 +191,7 @@ protected:
         depthStencilView_.reset();
     }
 
-    void release_(Engine* engine) override {}
+    void release_(Engine* /*engine*/) override {}
 
 private:
     D3d11ImageViewPtr colorView_;
@@ -233,7 +233,7 @@ public:
     }
 
 protected:
-    void release_(Engine* engine) override {}
+    void release_(Engine* /*engine*/) override {}
 
 private:
     ComPtr<IDXGISwapChain> dxgiSwapChain_;
@@ -250,7 +250,7 @@ D3d11Engine::D3d11Engine()
         NULL,
         D3D_DRIVER_TYPE_HARDWARE,
         NULL,
-        D3D11_CREATE_DEVICE_DEBUG |
+        //D3D11_CREATE_DEVICE_DEBUG |
         0, // could use D3D11_CREATE_DEVICE_SINGLETHREADED
            // if we defer creation of buffers and swapchain.
         featureLevels, 1,
@@ -449,10 +449,11 @@ SwapChain* D3d11Engine::createSwapChain_(const SwapChainDesc& desc)
     // do we need DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT ?
     sd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
     sd.OutputWindow = static_cast<HWND>(desc.windowNativeHandle());
-    sd.SampleDesc.Count = desc.sampleCount();
+    sd.SampleDesc.Count = 1;//desc.sampleCount();
     sd.SampleDesc.Quality = 0;
     sd.Windowed = true;
     sd.SwapEffect = DXGI_SWAP_EFFECT_DISCARD;
+    //sd.SwapEffect = DXGI_SWAP_EFFECT_SEQUENTIAL;
 
     ComPtr<IDXGISwapChain> swapChain;
     if (factory_->CreateSwapChain(device_.get(), &sd, swapChain.addressOf()) < 0) {
@@ -537,10 +538,10 @@ void D3d11Engine::bindFramebuffer_(Framebuffer* framebuffer)
 void D3d11Engine::setViewport_(Int x, Int y, Int width, Int height)
 {
     D3D11_VIEWPORT vp = {};
-    vp.TopLeftX = x;
-    vp.TopLeftY = y;
-    vp.Width = width;
-    vp.Height = height;
+    vp.TopLeftX = static_cast<float>(x);
+    vp.TopLeftY = static_cast<float>(y);
+    vp.Width = static_cast<float>(width);
+    vp.Height = static_cast<float>(height);
     vp.MinDepth = 0.0f;
     vp.MaxDepth = 1.0f;
     deviceCtx_->RSSetViewports(1, &vp);
@@ -619,7 +620,7 @@ void D3d11Engine::updateBufferData_(Buffer* buffer, const void* data, Int length
     d3dBuffer->lengthInBytes_ = lengthInBytes;
 }
 
-void D3d11Engine::setupVertexBufferForPaintShader_(Buffer* buffer)
+void D3d11Engine::setupVertexBufferForPaintShader_(Buffer* /*buffer*/)
 {
     // no-op
 }
@@ -659,8 +660,8 @@ bool D3d11Engine::loadBuffer_(ID3D11Buffer** bufferPtr, D3D11_BUFFER_DESC* desc,
     if (dataSize == 0) {
         return false;
     }
-    if ((dataSize > desc->ByteWidth) || (dataSize * 2 < desc->ByteWidth) || !*bufferPtr) {
-        desc->ByteWidth = dataSize;
+    if ((dataSize > desc->ByteWidth) || (dataSize * 4 < desc->ByteWidth) || !*bufferPtr) {
+        desc->ByteWidth = core::int_cast<UINT>(dataSize);
         D3D11_SUBRESOURCE_DATA srData = {};
         srData.pSysMem = data;
         if (device_->CreateBuffer(desc, (data ? &srData : NULL), bufferPtr) < 0) {
