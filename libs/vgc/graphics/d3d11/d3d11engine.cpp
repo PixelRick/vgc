@@ -48,54 +48,7 @@ public:
         ResourceList* owningList,
         Usage usage,
         BindFlags bindFlags,
-        CpuAccessFlags cpuAccessFlags)
-        : Buffer(owningList, usage, bindFlags, cpuAccessFlags)
-    {
-        switch (usage) {
-        case Usage::Default:
-            desc_.Usage = D3D11_USAGE::D3D11_USAGE_DEFAULT; break;
-        case Usage::Immutable:
-            desc_.Usage = D3D11_USAGE::D3D11_USAGE_IMMUTABLE; break;
-        case Usage::Dynamic:
-            desc_.Usage = D3D11_USAGE::D3D11_USAGE_DYNAMIC; break;
-        case Usage::Staging:
-            desc_.Usage = D3D11_USAGE::D3D11_USAGE_STAGING; break;
-        default:
-            throw core::LogicError("D3d11Buffer: unsupported usage");
-        }
-
-        switch (bindFlags) {
-        case BindFlags::VertexBuffer:
-            desc_.BindFlags = D3D11_BIND_FLAG::D3D11_BIND_VERTEX_BUFFER; break;
-        case BindFlags::IndexBuffer:
-            desc_.BindFlags = D3D11_BIND_FLAG::D3D11_BIND_INDEX_BUFFER; break;
-        case BindFlags::UniformBuffer:
-            desc_.BindFlags = D3D11_BIND_FLAG::D3D11_BIND_CONSTANT_BUFFER; break;
-        case BindFlags::ShaderResource:
-            desc_.BindFlags = D3D11_BIND_FLAG::D3D11_BIND_SHADER_RESOURCE; break;
-        case BindFlags::StreamOutput:
-            desc_.BindFlags = D3D11_BIND_FLAG::D3D11_BIND_STREAM_OUTPUT; break;
-        case BindFlags::RenderTarget:
-            desc_.BindFlags = D3D11_BIND_FLAG::D3D11_BIND_RENDER_TARGET; break;
-        case BindFlags::DepthStencil:
-            desc_.BindFlags = D3D11_BIND_FLAG::D3D11_BIND_DEPTH_STENCIL; break;
-        case BindFlags::UnorderedAccess:
-            desc_.BindFlags = D3D11_BIND_FLAG::D3D11_BIND_UNORDERED_ACCESS; break;
-        case BindFlags::DecoderOutput:
-            desc_.BindFlags = D3D11_BIND_FLAG::D3D11_BIND_DECODER; break;
-        case BindFlags::EncoderInput:
-            desc_.BindFlags = D3D11_BIND_FLAG::D3D11_BIND_VIDEO_ENCODER; break;
-        default:
-            throw core::LogicError("D3d11Buffer: unsupported bind flags");
-        }
-
-        if (!!(cpuAccessFlags & CpuAccessFlags::Write)) {
-            desc_.CPUAccessFlags |= D3D11_CPU_ACCESS_FLAG::D3D11_CPU_ACCESS_WRITE;
-        }
-        if (!!(cpuAccessFlags & CpuAccessFlags::Read)) {
-            desc_.CPUAccessFlags |= D3D11_CPU_ACCESS_FLAG::D3D11_CPU_ACCESS_READ;
-        }
-    }
+        CpuAccessFlags cpuAccessFlags);
 
     ID3D11Buffer* object() const {
         return object_.get();
@@ -238,6 +191,59 @@ protected:
 private:
     ComPtr<IDXGISwapChain> dxgiSwapChain_;
 };
+
+D3d11Buffer::D3d11Buffer(
+    ResourceList* owningList,
+    Usage usage,
+    BindFlags bindFlags,
+    CpuAccessFlags cpuAccessFlags)
+    : Buffer(owningList, usage, bindFlags, cpuAccessFlags)
+{
+    switch (usage) {
+    case Usage::Default:
+        desc_.Usage = D3D11_USAGE::D3D11_USAGE_DEFAULT; break;
+    case Usage::Immutable:
+        desc_.Usage = D3D11_USAGE::D3D11_USAGE_IMMUTABLE; break;
+    case Usage::Dynamic:
+        desc_.Usage = D3D11_USAGE::D3D11_USAGE_DYNAMIC; break;
+    case Usage::Staging:
+        desc_.Usage = D3D11_USAGE::D3D11_USAGE_STAGING; break;
+    default:
+        throw core::LogicError("D3d11Buffer: unsupported usage");
+    }
+
+    switch (bindFlags) {
+    case BindFlags::VertexBuffer:
+        desc_.BindFlags = D3D11_BIND_FLAG::D3D11_BIND_VERTEX_BUFFER; break;
+    case BindFlags::IndexBuffer:
+        desc_.BindFlags = D3D11_BIND_FLAG::D3D11_BIND_INDEX_BUFFER; break;
+    case BindFlags::UniformBuffer:
+        desc_.BindFlags = D3D11_BIND_FLAG::D3D11_BIND_CONSTANT_BUFFER; break;
+    case BindFlags::ShaderResource:
+        desc_.BindFlags = D3D11_BIND_FLAG::D3D11_BIND_SHADER_RESOURCE; break;
+    case BindFlags::StreamOutput:
+        desc_.BindFlags = D3D11_BIND_FLAG::D3D11_BIND_STREAM_OUTPUT; break;
+    case BindFlags::RenderTarget:
+        desc_.BindFlags = D3D11_BIND_FLAG::D3D11_BIND_RENDER_TARGET; break;
+    case BindFlags::DepthStencil:
+        desc_.BindFlags = D3D11_BIND_FLAG::D3D11_BIND_DEPTH_STENCIL; break;
+    case BindFlags::UnorderedAccess:
+        desc_.BindFlags = D3D11_BIND_FLAG::D3D11_BIND_UNORDERED_ACCESS; break;
+    case BindFlags::DecoderOutput:
+        desc_.BindFlags = D3D11_BIND_FLAG::D3D11_BIND_DECODER; break;
+    case BindFlags::EncoderInput:
+        desc_.BindFlags = D3D11_BIND_FLAG::D3D11_BIND_VIDEO_ENCODER; break;
+    default:
+        throw core::LogicError("D3d11Buffer: unsupported bind flags");
+    }
+
+    if (!!(cpuAccessFlags & CpuAccessFlags::Write)) {
+        desc_.CPUAccessFlags |= D3D11_CPU_ACCESS_FLAG::D3D11_CPU_ACCESS_WRITE;
+    }
+    if (!!(cpuAccessFlags & CpuAccessFlags::Read)) {
+        desc_.CPUAccessFlags |= D3D11_CPU_ACCESS_FLAG::D3D11_CPU_ACCESS_READ;
+    }
+}
 
 D3d11Engine::D3d11Engine()
 {
