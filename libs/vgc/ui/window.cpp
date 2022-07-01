@@ -29,6 +29,7 @@
 #include <vgc/widgets/qtutil.h>
 
 #include <vgc/graphics/d3d11/d3d11engine.h>
+#include <vgc/graphics/text.h>
 
 namespace vgc::ui {
 
@@ -54,7 +55,7 @@ LRESULT WINAPI Window::WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
         ::PostQuitMessage(0);
         return 0;
     }
-    return ::DefWindowProc(hwnd, msg, wParam, lParam);
+    return ::DefWindowProcW(hwnd, msg, wParam, lParam);
 }
 
 Window::Window(ui::WidgetPtr widget) :
@@ -63,8 +64,8 @@ Window::Window(ui::WidgetPtr widget) :
     proj_(geometry::Mat4f::identity),
     clearColor_(0.337f, 0.345f, 0.353f, 1.f)
 {
-    //setSurfaceType(QWindow::OpenGLSurface);
-    setSurfaceType(QWindow::Direct3DSurface);
+    setSurfaceType(QWindow::RasterSurface);
+    //setSurfaceType(QWindow::Direct3DSurface);
 
     connect(this, &QWindow::activeChanged, this, &Window::onActiveChanged_);
 
@@ -84,8 +85,8 @@ Window::Window(ui::WidgetPtr widget) :
 
     //WNDCLASSEXW wc = { sizeof(WNDCLASSEXW), CS_CLASSDC, Window::WndProc, 0L, 20 * sizeof(LONG_PTR), ::GetModuleHandle(NULL), NULL, NULL, NULL, NULL, L"Win32 Window", NULL };
     //::RegisterClassExW(&wc);
-    //HWND hwnd = ::CreateWindowW(wc.lpszClassName, L"Win32 Window", WS_OVERLAPPEDWINDOW, 100, 100, 1280, 800, NULL, NULL, wc.hInstance, NULL);
-    //::SetWindowLongPtr(hwnd, 19 * sizeof(LONG_PTR), (LONG_PTR)(Window*)this);
+    //HWND hwnd = ::CreateWindowExW(0L, wc.lpszClassName, L"Win32 Window", WS_OVERLAPPEDWINDOW, 100, 100, 1280, 800, NULL, NULL, wc.hInstance, NULL);
+    //::SetWindowLongPtrW(hwnd, 19 * sizeof(LONG_PTR), (LONG_PTR)(Window*)this);
     //scd.setWindowNativeHandle(hwnd, graphics::WindowNativeHandleType::Win32);
     //::ShowWindow(hwnd, SW_SHOWDEFAULT);
     //::UpdateWindow(hwnd);
@@ -304,11 +305,20 @@ void Window::paint(bool sync) {
 
     static float triangle[15] = {
          20.f,  20.f, 1.f, 0.f, 0.f,
-        120.f,  40.f, 0.f, 1.f, 0.f,
-         40.f, 120.f, 0.f, 0.f, 1.f,
+        160.f,  50.f, 0.f, 1.f, 0.f,
+         50.f, 160.f, 0.f, 0.f, 1.f,
     };
     static auto bptr = engine_->createPrimitiveBuffer([]{ return triangle; }, 15*4, false);
     engine_->drawPrimitives(bptr.get(), graphics::PrimitiveType::TriangleList);
+
+    static int i = 0;
+    static graphics::ShapedText shapedText(graphics::fontLibrary()->defaultFace(), "text");
+    shapedText.setText(core::format("{:d} {:04d} {:04d}x{:04d} {:04d}x{:04d}", swapChain_->pendingPresentCount(), ++i, width_, height_, width(), height()));
+    core::Array<float> a;
+    shapedText.fill(a, geometry::Vec2f(60.f, 60.f), 0.f, 0.f, 0.f, 0.f, 1000.f, 0.f, 1000.f);
+    static auto textBuf = engine_->createDynamicPrimitiveBuffer();
+    engine_->updateBufferData(textBuf.get(), [a = std::move(a)](){ return a.data(); }, a.length() * 4);
+    engine_->drawPrimitives(textBuf.get(), graphics::PrimitiveType::TriangleList);
 
     //widget_->paint(engine_.get());
     engine_->releasePaintShader();
@@ -371,6 +381,7 @@ bool Window::nativeEvent(const QByteArray& eventType, void* message, NativeEvent
             //widget_->setGeometry(0, 0, static_cast<float>(w), static_cast<float>(h));
             if (engine_ && swapChain_) {
                 engine_->resizeSwapChain(swapChain_.get(), w, h);
+                //Sleep(50);
                 paint(true);
                 //qDebug() << "painted";
             }
@@ -386,12 +397,18 @@ bool Window::nativeEvent(const QByteArray& eventType, void* message, NativeEvent
             resizing_ = false;
             break;
         }
-        //case WM_PAINT:
+        case WM_PAINT: {
+            requestUpdate();
+            //*result = 0;
+            //return true;
+            break;
+        }
         case WM_WINDOWPOSCHANGED:
         case WM_NCPAINT:
         case WM_SIZING:
+        case WM_ERASEBKGND:
         case WM_NCCALCSIZE: {
-            *result = ::DefWindowProc(msg->hwnd, msg->message, msg->wParam, msg->lParam);
+            *result = ::DefWindowProcW(msg->hwnd, msg->message, msg->wParam, msg->lParam);
             return true;
         }
         default:

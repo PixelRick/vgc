@@ -250,7 +250,7 @@ D3d11Engine::D3d11Engine()
         NULL,
         D3D_DRIVER_TYPE_HARDWARE,
         NULL,
-        //D3D11_CREATE_DEVICE_DEBUG |
+        D3D11_CREATE_DEVICE_DEBUG |
         0, // could use D3D11_CREATE_DEVICE_SINGLETHREADED
            // if we defer creation of buffers and swapchain.
         featureLevels, 1,
@@ -444,16 +444,16 @@ SwapChain* D3d11Engine::createSwapChain_(const SwapChainDesc& desc)
         break;
     }
     sd.BufferDesc.RefreshRate.Numerator = 0;
-    sd.BufferDesc.RefreshRate.Denominator = 0;
+    sd.BufferDesc.RefreshRate.Denominator = 1;
     sd.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
     // do we need DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT ?
     sd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
     sd.OutputWindow = static_cast<HWND>(desc.windowNativeHandle());
-    sd.SampleDesc.Count = 1;//desc.sampleCount();
+    sd.SampleDesc.Count = desc.sampleCount();
     sd.SampleDesc.Quality = 0;
     sd.Windowed = true;
-    sd.SwapEffect = DXGI_SWAP_EFFECT_DISCARD;
-    //sd.SwapEffect = DXGI_SWAP_EFFECT_SEQUENTIAL;
+    //sd.SwapEffect = DXGI_SWAP_EFFECT_DISCARD;
+    sd.SwapEffect = DXGI_SWAP_EFFECT_SEQUENTIAL;
 
     ComPtr<IDXGISwapChain> swapChain;
     if (factory_->CreateSwapChain(device_.get(), &sd, swapChain.addressOf()) < 0) {
