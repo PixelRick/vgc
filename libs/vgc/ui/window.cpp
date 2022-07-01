@@ -56,6 +56,8 @@ Window::Window(ui::WidgetPtr widget) :
     engine_ = graphics::D3d11Engine::create();
 
     HWND hwnd = (HWND)QWindow::winId();
+    hwnd_ = hwnd;
+
     scd.setWindowNativeHandle(hwnd, graphics::WindowNativeHandleType::Win32);
 
     //WNDCLASSEXW wc = { sizeof(WNDCLASSEXW), CS_CLASSDC, Window::WndProc, 0L, 20 * sizeof(LONG_PTR), ::GetModuleHandle(NULL), NULL, NULL, NULL, NULL, L"Win32 Window", NULL };
@@ -276,6 +278,8 @@ void Window::keyReleaseEvent(QKeyEvent* event)
 //}
 
 void Window::paint(bool sync) {
+    VGC_DEBUG(LogVgcUi, "paint({})", sync);
+
     if (!isExposed()) {
         return;
     }
@@ -383,6 +387,7 @@ LRESULT WINAPI Window::WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
 
 bool Window::nativeEvent(const QByteArray& eventType, void* message, NativeEventResult* result)
 {
+    static HBRUSH hbrWhite, hbrGray;
     if (eventType == "windows_generic_MSG") {
         *result = 0;
         MSG* msg = reinterpret_cast<MSG*>(message);
@@ -423,10 +428,17 @@ bool Window::nativeEvent(const QByteArray& eventType, void* message, NativeEvent
         }
         case WM_EXITSIZEMOVE: {
             resizing_ = false;
+            requestUpdate();
             break;
         }
         case WM_PAINT: {
-            VGC_DEBUG(LogVgcUi, "WM_PAINT");
+            static int i = 0;
+            VGC_DEBUG(LogVgcUi, "WM_PAINT {}", ++i);
+
+            if (resizing_) {
+                paint(true);
+            }
+
             //static bool once = true;
             //requestUpdate();
             //if (once) {
@@ -437,9 +449,26 @@ bool Window::nativeEvent(const QByteArray& eventType, void* message, NativeEvent
             //return true;
             break;
         }
+        case WM_CREATE: {
+            hbrWhite = (HBRUSH)GetStockObject(WHITE_BRUSH);
+            hbrGray  = (HBRUSH)GetStockObject(GRAY_BRUSH);
+            return false;
+        }
+        case WM_ERASEBKGND: {
+            static int i = 0;
+            VGC_DEBUG(LogVgcUi, "WM_ERASEBKGND {}", ++i);
+
+            //RECT rc = {};
+            //HDC hdc = (HDC)msg->wParam;
+            //GetClientRect(hwnd_, &rc);
+            //FillRect(hdc, &rc, hbrGray);
+            //*result = 1;
+            //return true;
+
+            break;
+        }
         case WM_WINDOWPOSCHANGED:
         case WM_NCPAINT:
-        case WM_ERASEBKGND:
         case WM_SIZING:
         case WM_NCCALCSIZE:
         {
@@ -493,8 +522,13 @@ bool Window::nativeEvent(const QByteArray& /*eventType*/, void* /*message*/, Nat
 void Window::exposeEvent(QExposeEvent*)
 {
     if (isExposed()) {
-        requestUpdate();
-        //onRepaintRequested_();
+        if (resizing_) {
+            requestUpdate();
+        }
+        else {
+            VGC_DEBUG(LogVgcUi, "paint from exposeEvent");
+            paint(true);
+        }
     }
 }
 

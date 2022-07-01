@@ -57,6 +57,7 @@ public:
 
 protected:
 #if defined(VGC_CORE_COMPILER_MSVC)
+    HWND hwnd_ = {};
     static LRESULT WINAPI WndProc(HWND, UINT, WPARAM, LPARAM);
 #endif
     void mouseMoveEvent(QMouseEvent* event) override;
