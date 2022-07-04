@@ -17,6 +17,7 @@
 #ifndef VGC_GRAPHICS_ENGINE_H
 #define VGC_GRAPHICS_ENGINE_H
 
+#include <array>
 #include <atomic>
 #include <condition_variable>
 #include <functional>
@@ -33,16 +34,33 @@
 #include <vgc/core/templateutil.h>
 #include <vgc/geometry/mat4f.h>
 #include <vgc/graphics/api.h>
-#include <vgc/graphics/buffers.h>
+#include <vgc/graphics/buffer.h>
 #include <vgc/graphics/detail/commands.h>
 #include <vgc/graphics/enums.h>
+#include <vgc/graphics/geometryview.h>
 #include <vgc/graphics/logcategories.h>
+#include <vgc/graphics/program.h>
 #include <vgc/graphics/resource.h>
 #include <vgc/graphics/targets.h>
 
 namespace vgc::graphics {
 
 VGC_DECLARE_OBJECT(Engine);
+
+struct SimpleVertexShaderConstants {
+    std::array<float, 16> projMatrix;
+    std::array<float, 16> viewMatrix;
+};
+
+struct AtlasGlyphVertexShaderConstants {
+    std::array<float, 16> projMatrix;
+    std::array<float, 16> viewMatrix;
+};
+
+struct RoundedRectangleVertexShaderConstants {
+    std::array<float, 16> projMatrix;
+    std::array<float, 16> viewMatrix;
+};
 
 // XXX add something to limit the number of pending frames for each swapchain..
 
@@ -135,10 +153,9 @@ public:
     }
 
     // presentedCallback is called from an unspecified thread.
-    void present(
-        UInt32 syncInterval,
-        std::function<void(UInt64 /*timestamp*/)>&& presentedCallback,
-        PresentFlags flags = PresentFlags::None)
+    void present(UInt32 syncInterval,
+                 std::function<void(UInt64 /*timestamp*/)>&& presentedCallback,
+                 PresentFlags flags = PresentFlags::None)
     {
         ++lastBoundSwapChain_->pendingPresentCount_;
         bool shouldSync = syncInterval > 0;
@@ -293,19 +310,19 @@ public:
         setViewMatrix(viewMatrixStack_.last());
     }
 
-    void bindPaintShader() {
+    void bindPaintShaders() {
         queueLambdaCommand_(
-            "bindPaintShader",
+            "bindSimpleShaders",
             [](Engine* engine) {
-                engine->bindPaintShader_();
+                engine->bindSimpleShaders_();
             });
     }
 
-    void releasePaintShader() {
+    void releaseSimpleShaders() {
         queueLambdaCommand_(
-            "releasePaintShader",
+            "releaseSimpleShaders",
             [](Engine* engine) {
-                engine->releasePaintShader_();
+                engine->releaseSimpleShaders_();
             });
     }
 
@@ -334,6 +351,7 @@ public:
         BufferPtr buffer = BufferPtr(createBuffer_(
             dynamic ? Usage::Dynamic : Usage::Immutable,
             BindFlags::VertexBuffer,
+            ResourceMiscFlags::None,
             dynamic ? CpuAccessFlags::Write : CpuAccessFlags::None));
 
         struct CommandParameters {
@@ -355,6 +373,7 @@ public:
         BufferPtr buffer = BufferPtr(createBuffer_(
             Usage::Dynamic,
             BindFlags::VertexBuffer,
+            ResourceMiscFlags::None,
             CpuAccessFlags::Write));
 
         queueLambdaCommandWithParameters_<Buffer*>(
@@ -415,20 +434,22 @@ public:
     }
 
 protected:
-    detail::ResourceList* resourceList_ = nullptr;
-    std::list<CommandUPtr> pendingCommands_;
-
-    // USER THREAD pimpl functions
+    // USER THREAD implementation functions
 
     virtual SwapChain* createSwapChain_(const SwapChainDesc& desc) = 0;
     virtual void resizeSwapChain_(SwapChain* swapChain, UInt32 width, UInt32 height) = 0;
     // XXX virtual FramebufferPtr createFramebuffer_(const RenderTargetViewPtr& colorRtv) = 0;
     // XXX virtual void setDefaultFramebuffer_(const SwapChainPtr& swapChain, const FramebufferPtr& fb) = 0;
-    virtual Buffer* createBuffer_(Usage usage, BindFlags bindFlags, CpuAccessFlags cpuAccessFlags) = 0;
+    virtual Buffer* createBuffer_(
+        Usage usage, BindFlags bindFlags, ResourceMiscFlags resourceMiscFlags, CpuAccessFlags cpuAccessFlags) = 0;
+
+    virtual GeometryView* createGeometryView_(
+        PrimitiveType primitiveType, const BuiltinGeometryLayout& layout,
+        const BufferPtr& indexBuffer, const BufferPtr& vertexBuffer0) = 0;
 
     virtual bool shouldPresentWaitFromSyncedUserThread_() { return false; }
 
-    // RENDER THREAD functions
+    // RENDER THREAD implementation functions
 
     virtual void bindSwapChain_(SwapChain* swapChain) = 0;
     virtual UInt64 present_(SwapChain* swapChain, UInt32 syncInterval, PresentFlags flags) = 0;
@@ -436,14 +457,28 @@ protected:
     virtual void bindFramebuffer_(Framebuffer* framebuffer) = 0;
     virtual void setViewport_(Int x, Int y, Int width, Int height) = 0;
     virtual void clear_(const core::Color& color) = 0;
-    virtual void setProjectionMatrix_(const geometry::Mat4f& m) = 0;
-    virtual void setViewMatrix_(const geometry::Mat4f& m) = 0;
-    virtual void bindPaintShader_() = 0;
-    virtual void releasePaintShader_() = 0;
+
     virtual void initBuffer_(Buffer* buffer, const void* data, Int initialLengthInBytes) = 0;
     virtual void updateBufferData_(Buffer* buffer, const void* data, Int lengthInBytes) = 0;
+
+    // XXX aim at removing this.. vao with multiple shaders is pain..
     virtual void setupVertexBufferForPaintShader_(Buffer* buffer) = 0;
+
     virtual void drawPrimitives_(Buffer* buffer, PrimitiveType type) = 0;
+
+    virtual void bindProgram_(Program* program) = 0;
+    virtual void releaseProgram_() = 0;
+
+    // am i sure we can use exactly the same data for uniform blocks ?
+
+    // single func ?
+    virtual void updateSimpleVertexShaderConstants_(SimpleVertexShaderConstants& constants) = 0;
+    virtual void updateAtlasGlyphVertexShaderConstants_(AtlasGlyphVertexShaderConstants& constants) = 0;
+    virtual void updateRoundedRectangleVertexShaderConstants_(RoundedRectangleVertexShaderConstants& constants) = 0;
+
+protected:
+    detail::ResourceList* resourceList_ = nullptr;
+    std::list<CommandUPtr> pendingCommands_;
 
     // QUEUING
 
@@ -465,10 +500,15 @@ protected:
             new detail::LambdaCommandWithParameters<Data, std::decay_t<Lambda>>(name, std::forward<Lambda>(lambda), std::forward<Args>(args)...));
     };
 
+    // BATCHING early impl
+
+
 private:
     SwapChainPtr lastBoundSwapChain_;
     core::Array<geometry::Mat4f> projectionMatrixStack_;
     core::Array<geometry::Mat4f> viewMatrixStack_;
+    bool dirtyBuiltinConstants_ = false;
+
     std::thread renderThread_;
 
     std::mutex mutex_;
@@ -480,9 +520,8 @@ private:
     bool stopRequested_ = false;
 
     struct CommandList {
-        CommandList(
-            std::list<CommandUPtr>&& commands,
-            core::Array<Resource*>&& garbagedResources)
+        CommandList(std::list<CommandUPtr>&& commands,
+                    core::Array<Resource*>&& garbagedResources)
             : commands(std::move(commands))
             , garbagedResources(std::move(garbagedResources))
         {}

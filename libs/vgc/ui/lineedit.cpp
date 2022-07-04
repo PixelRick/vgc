@@ -96,7 +96,7 @@ void LineEdit::onPaintCreate(graphics::Engine* engine)
     triangles_ = engine->createDynamicPrimitiveBuffer();
 }
 
-void LineEdit::onPaintDraw(graphics::Engine* engine)
+void LineEdit::onPaintDraw(graphics::Engine* engine, PaintFlags /*flags*/)
 {
     if (reload_) {
         reload_ = false;

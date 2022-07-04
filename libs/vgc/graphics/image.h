@@ -14,8 +14,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef VGC_GRAPHICS_BUFFERS_H
-#define VGC_GRAPHICS_BUFFERS_H
+#ifndef VGC_GRAPHICS_IMAGE_H
+#define VGC_GRAPHICS_IMAGE_H
 
 #include <vgc/core/arithmetic.h>
 #include <vgc/graphics/api.h>
@@ -24,27 +24,16 @@
 
 namespace vgc::graphics {
 
-//class BufferDataSpan {
-//    BufferDataSpan(const float* data, Int length)
-//        : data_(data), length_(length) {}
+// Concept mapping:
+//  D3D11  -> Image
+//  OpenGL -> Image (with Texture)
+//  Vulkan -> Image
 //
-//    const float* data() const {
-//        return data_;
-//    }
-//
-//    Int length() const {
-//        return length_;
-//    }
-//
-//private:
-//    const float* data_;
-//    Int length_;
-//};
 
 /// \class vgc::graphics::PrimitivesBuffer
 /// \brief Abstract primitive data buffer.
 ///
-class VGC_GRAPHICS_API Buffer : public Resource {
+class VGC_GRAPHICS_API Image2D : public Resource {
 protected:
     Buffer(
         ResourceList* owningList,
@@ -87,4 +76,4 @@ using BufferPtr = ResourcePtr<Buffer>;
 
 } // namespace vgc::graphics
 
-#endif // VGC_GRAPHICS_BUFFERS_H
+#endif // VGC_GRAPHICS_IMAGE_H

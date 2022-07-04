@@ -22,7 +22,7 @@
 
 #include <vgc/core/arithmetic.h>
 #include <vgc/graphics/api.h>
-#include <vgc/graphics/buffers.h>
+#include <vgc/graphics/buffer.h>
 #include <vgc/graphics/enums.h>
 #include <vgc/graphics/resource.h>
 
@@ -128,6 +128,12 @@ private:
 // Since a swap chain's render target view represents different buffers over
 // time, a Vulkan implementation should probably cache a view for each
 // back buffer.
+//
+// Concept mapping:
+//  D3D11  -> Shader Resource View (SRV)
+//  OpenGL -> Texture
+//  Vulkan -> Image View
+// Looks like all three support buffers as image.
 //
 class VGC_GRAPHICS_API ImageView : public Resource {
 protected:

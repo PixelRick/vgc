@@ -345,7 +345,7 @@ bool Window::event(QEvent* e)
 {
     switch (e->type()) {
     case QEvent::UpdateRequest:
-        if (!resizing_) {
+        if (!activeSizemove_) {
             VGC_DEBUG(LogVgcUi, "paint from UpdateRequest");
             paint(true);
         }
@@ -395,10 +395,8 @@ bool Window::nativeEvent(const QByteArray& eventType, void* message, NativeEvent
         case WM_SIZE: {
             UINT w = LOWORD(msg->lParam);
             UINT h = HIWORD(msg->lParam);
-
             width_ = w;
             height_ = h;
-
             VGC_DEBUG(LogVgcUi, core::format("WM_SIZE({:04d}, {:04d})", width_, height_));
 
             geometry::Camera2d c;
@@ -418,98 +416,66 @@ bool Window::nativeEvent(const QByteArray& eventType, void* message, NativeEvent
                 //qDebug() << "painted";
             }
 
-            //*result = 0;
-            //return true;
-            break;
+            return false;
         }
+        /*case WM_MOVING: {
+            VGC_DEBUG(LogVgcUi, "WM_MOVING");
+            return false;
+        }
+        case WM_MOVE: {
+            VGC_DEBUG(LogVgcUi, "WM_MOVE");
+            return false;
+        }
+        case WM_WINDOWPOSCHANGING: {
+            VGC_DEBUG(LogVgcUi, "WM_WINDOWPOSCHANGING");
+            return false;
+        }
+        case WM_WINDOWPOSCHANGED: {
+            VGC_DEBUG(LogVgcUi, "WM_WINDOWPOSCHANGED");
+            return false;
+        }
+        case WM_GETMINMAXINFO: {
+            VGC_DEBUG(LogVgcUi, "WM_GETMINMAXINFO");
+            return false;
+        }*/
         case WM_ENTERSIZEMOVE: {
-            resizing_ = true;
-            break;
+            activeSizemove_ = true;
+            return false;
         }
         case WM_EXITSIZEMOVE: {
-            resizing_ = false;
+            activeSizemove_ = false;
+            // If the last render was downgraded for performance during WM_MOVE
+            // we should ask for a redraw now.
             requestUpdate();
-            break;
-        }
-        case WM_PAINT: {
-            static int i = 0;
-            VGC_DEBUG(LogVgcUi, "WM_PAINT {}", ++i);
-
-            if (resizing_) {
-                paint(true);
-            }
-
-            //static bool once = true;
-            //requestUpdate();
-            //if (once) {
-            //    once = false;
-            //    return false;
-            //}
-            //*result = 0;
-            //return true;
-            break;
-        }
-        case WM_CREATE: {
-            hbrWhite = (HBRUSH)GetStockObject(WHITE_BRUSH);
-            hbrGray  = (HBRUSH)GetStockObject(GRAY_BRUSH);
             return false;
         }
         case WM_ERASEBKGND: {
             static int i = 0;
             VGC_DEBUG(LogVgcUi, "WM_ERASEBKGND {}", ++i);
+            //if (activeSizemove_) {
+            //    paint(true);
+            //}
 
-            //RECT rc = {};
-            //HDC hdc = (HDC)msg->wParam;
-            //GetClientRect(hwnd_, &rc);
-            //FillRect(hdc, &rc, hbrGray);
+            // test get DC
+
             //*result = 1;
             //return true;
-
-            break;
+            return false;
         }
-        case WM_WINDOWPOSCHANGED:
-        case WM_NCPAINT:
-        case WM_SIZING:
-        case WM_NCCALCSIZE:
-        {
-            //*result = ::DefWindowProcW(msg->hwnd, msg->message, msg->wParam, msg->lParam);
-            //return true;
-            break;
+        case WM_PAINT: {
+            static int i = 0;
+            VGC_DEBUG(LogVgcUi, "WM_PAINT {}", ++i);
+            if (activeSizemove_) {
+                paint(true);
+            }
+            return false;
         }
-        /*{
-            *result = ::DefWindowProcW(msg->hwnd, msg->message, msg->wParam, msg->lParam);
-            return true;
-            break;
-        }*/
         default:
             break;
         }
-        /*
-        seq sample:
-        WM_ENTERSIZEMOVE - enter loop
-        WM_SIZING
-        WM_SIZING
-        WM_WINDOWPOSCHANGING
-        WM_GETMINMAXINFO
-        WM_NCCALCSIZE
-        WM_NCPAINT
-        WM_GETTEXT
-        WM_ERASEBKGND
-        WM_WINDOWPOSCHANGED
-        WM_SIZE
-        WM_ERASEBKGND
-        WM_PAINT
-        WM_SIZING
-        WM_WINDOWPOSCHANGING
-        WM_GETMINMAXINFO
-        WM_NCCALCSIZE
-        WM_NCPAINT
-        WM_GETTEXT
-        WM_ERASEBKGND
-        WM_WINDOWPOSCHANGED
-        WM_SIZE
-        */
     }
+    //*result = ::DefWindowProcW(msg->hwnd, msg->message, msg->wParam, msg->lParam);
+    //return true;
     return false;
 }
 #else
@@ -522,7 +488,9 @@ bool Window::nativeEvent(const QByteArray& /*eventType*/, void* /*message*/, Nat
 void Window::exposeEvent(QExposeEvent*)
 {
     if (isExposed()) {
-        if (resizing_) {
+        if (activeSizemove_) {
+            // On windows Expose events happen on both WM_PAINT and WM_ERASEBKGND
+            // but in the case of a resize we already redraw properly.
             requestUpdate();
         }
         else {

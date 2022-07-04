@@ -47,6 +47,13 @@ VGC_DECLARE_OBJECT(Action);
 VGC_DECLARE_OBJECT(Widget);
 VGC_DECLARE_OBJECT(UiWidgetEngine);
 
+enum class PaintFlags : UInt16 {
+    None = 0,
+    Resizing = 1,
+    LayoutViz = 2,
+};
+VGC_DEFINE_SCOPED_ENUM_FLAGS_OPERATORS(PaintFlags)
+
 /// \class vgc::ui::Widget
 /// \brief Base class of all elements in the user interface.
 ///
@@ -375,10 +382,10 @@ public:
     ///
     void repaint();
 
-    /// This function is called whenever the widget needs to be
-    /// repainted.
+    /// This function is called by the widget container whenever the widget
+    /// needs to be repainted for a frame.
     ///
-    void paint(graphics::Engine* engine);
+    void paint(graphics::Engine* engine, PaintFlags flags = PaintFlags::None);
 
     /// This signal is emitted when someone requested this widget, or one of
     /// its descendent widgets, to be repainted.
@@ -577,8 +584,8 @@ public:
     Action* createAction(const Shortcut& shortcut);
 
     /// This virtual function is called once before the first call to
-    /// onPaintDraw(), and should be reimplemented to create required GPU
-    /// resources.
+    /// onPaintDraw(), and should be reimplemented to create required static
+    /// GPU resources.
     ///
     virtual void onPaintCreate(graphics::Engine* engine);
 
@@ -586,7 +593,7 @@ public:
     /// repainted. Subclasses should reimplement this, typically by issuing
     /// draw calls.
     ///
-    virtual void onPaintDraw(graphics::Engine* engine);
+    virtual void onPaintDraw(graphics::Engine* engine, PaintFlags flags);
 
     /// This virtual function is called once after the last call to
     /// onPaintDraw(), for example before the widget is destructed, or if

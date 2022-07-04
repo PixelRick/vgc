@@ -90,7 +90,7 @@ private:
     graphics::SwapChainPtr swapChain_;
     int width_ = 0;
     int height_ = 0;
-    bool resizing_ = false;
+    bool activeSizemove_ = false;
 
     geometry::Mat4f proj_;
     core::Color clearColor_;

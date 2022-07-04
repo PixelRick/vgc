@@ -62,7 +62,7 @@ void Button::onPaintCreate(graphics::Engine* engine)
     triangles_ = engine->createDynamicPrimitiveBuffer();
 }
 
-void Button::onPaintDraw(graphics::Engine* engine)
+void Button::onPaintDraw(graphics::Engine* engine, PaintFlags /*flags*/)
 {
     if (reload_) {
         reload_ = false;

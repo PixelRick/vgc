@@ -216,7 +216,7 @@ void Widget::repaint()
     }
 }
 
-void Widget::paint(graphics::Engine* engine)
+void Widget::paint(graphics::Engine* engine, PaintFlags flags)
 {
     if (engine != lastPaintEngine_) {
         if (lastPaintEngine_) {
@@ -227,7 +227,7 @@ void Widget::paint(graphics::Engine* engine)
             onEngineAboutToBeDestroyed());
         onPaintCreate(engine);
     }
-    onPaintDraw(engine);
+    onPaintDraw(engine, flags);
 }
 
 void Widget::onPaintCreate(graphics::Engine* engine)
@@ -237,7 +237,7 @@ void Widget::onPaintCreate(graphics::Engine* engine)
     }
 }
 
-void Widget::onPaintDraw(graphics::Engine* engine)
+void Widget::onPaintDraw(graphics::Engine* engine, PaintFlags flags)
 {
     for (Widget* widget : children()) {
         engine->pushViewMatrix();
@@ -245,7 +245,7 @@ void Widget::onPaintDraw(graphics::Engine* engine)
         geometry::Vec2f pos = widget->position();
         m.translate(pos[0], pos[1]); // TODO: Mat4f.translate(const Vec2f&)
         engine->setViewMatrix(m);
-        widget->onPaintDraw(engine);
+        widget->onPaintDraw(engine, flags);
         engine->popViewMatrix();
     }
 }

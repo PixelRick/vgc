@@ -66,7 +66,7 @@ void Label::onPaintCreate(graphics::Engine* engine)
     triangles_ = engine->createDynamicPrimitiveBuffer();
 }
 
-void Label::onPaintDraw(graphics::Engine* engine)
+void Label::onPaintDraw(graphics::Engine* engine, PaintFlags /*flags*/)
 {
     if (reload_) {
         reload_ = false;

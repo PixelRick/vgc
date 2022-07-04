@@ -11,15 +11,20 @@ vgc_add_library(graphics
 
     HEADER_FILES
         api.h
-        buffers.h
+        batch.h
+        buffer.h
         d3d11/d3d11engine.h
         detail/commands.h
+        detail/comptr.h
         engine.h
         enums.h
         exceptions.h
         font.h
+        geometryview.h
         idgenerator.h
+        image.h
         logcategories.h
+        program.h
         resource.h
         richtext.h
         strings.h

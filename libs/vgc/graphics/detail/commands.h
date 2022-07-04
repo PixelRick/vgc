@@ -14,8 +14,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef VGC_GRAPHICS_COMMANDS_H
-#define VGC_GRAPHICS_COMMANDS_H
+#ifndef VGC_GRAPHICS_DETAIL_COMMANDS_H
+#define VGC_GRAPHICS_DETAIL_COMMANDS_H
 
 #include <any>
 #include <string_view>
@@ -27,7 +27,7 @@
 #include <vgc/core/object.h>
 #include <vgc/geometry/mat4f.h>
 #include <vgc/graphics/api.h>
-#include <vgc/graphics/buffers.h>
+#include <vgc/graphics/buffer.h>
 #include <vgc/graphics/targets.h>
 
 namespace vgc::graphics {
@@ -110,4 +110,4 @@ LambdaCommandWithParameters(U, Lambda, Data) -> LambdaCommandWithParameters<std:
 
 } // namespace vgc::graphics::detail
 
-#endif // VGC_GRAPHICS_COMMANDS_H
+#endif // VGC_GRAPHICS_DETAIL_COMMANDS_H

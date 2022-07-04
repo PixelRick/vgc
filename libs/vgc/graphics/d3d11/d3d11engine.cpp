@@ -48,6 +48,7 @@ public:
         ResourceList* owningList,
         Usage usage,
         BindFlags bindFlags,
+        ResourceMiscFlags resourceMiscFlags,
         CpuAccessFlags cpuAccessFlags);
 
     ID3D11Buffer* object() const {
@@ -196,8 +197,9 @@ D3d11Buffer::D3d11Buffer(
     ResourceList* owningList,
     Usage usage,
     BindFlags bindFlags,
+    ResourceMiscFlags resourceMiscFlags,
     CpuAccessFlags cpuAccessFlags)
-    : Buffer(owningList, usage, bindFlags, cpuAccessFlags)
+    : Buffer(owningList, usage, bindFlags, resourceMiscFlags, cpuAccessFlags)
 {
     switch (usage) {
     case Usage::Default:
@@ -212,29 +214,62 @@ D3d11Buffer::D3d11Buffer(
         throw core::LogicError("D3d11Buffer: unsupported usage");
     }
 
-    switch (bindFlags) {
-    case BindFlags::VertexBuffer:
-        desc_.BindFlags = D3D11_BIND_FLAG::D3D11_BIND_VERTEX_BUFFER; break;
-    case BindFlags::IndexBuffer:
-        desc_.BindFlags = D3D11_BIND_FLAG::D3D11_BIND_INDEX_BUFFER; break;
-    case BindFlags::UniformBuffer:
-        desc_.BindFlags = D3D11_BIND_FLAG::D3D11_BIND_CONSTANT_BUFFER; break;
-    case BindFlags::ShaderResource:
-        desc_.BindFlags = D3D11_BIND_FLAG::D3D11_BIND_SHADER_RESOURCE; break;
-    case BindFlags::StreamOutput:
-        desc_.BindFlags = D3D11_BIND_FLAG::D3D11_BIND_STREAM_OUTPUT; break;
-    case BindFlags::RenderTarget:
-        desc_.BindFlags = D3D11_BIND_FLAG::D3D11_BIND_RENDER_TARGET; break;
-    case BindFlags::DepthStencil:
-        desc_.BindFlags = D3D11_BIND_FLAG::D3D11_BIND_DEPTH_STENCIL; break;
-    case BindFlags::UnorderedAccess:
-        desc_.BindFlags = D3D11_BIND_FLAG::D3D11_BIND_UNORDERED_ACCESS; break;
-    case BindFlags::DecoderOutput:
-        desc_.BindFlags = D3D11_BIND_FLAG::D3D11_BIND_DECODER; break;
-    case BindFlags::EncoderInput:
-        desc_.BindFlags = D3D11_BIND_FLAG::D3D11_BIND_VIDEO_ENCODER; break;
-    default:
-        throw core::LogicError("D3d11Buffer: unsupported bind flags");
+    if (!!(bindFlags & BindFlags::UniformBuffer)) {
+        desc_.BindFlags |= D3D11_BIND_FLAG::D3D11_BIND_CONSTANT_BUFFER;
+        if (bindFlags != BindFlags::UniformBuffer) {
+            throw core::LogicError("D3d11Buffer: BindFlags::UniformBuffer cannot be combined with any other bind flag");
+        }
+    }
+    else {
+        if (!!(bindFlags & BindFlags::VertexBuffer)) {
+            desc_.BindFlags |= D3D11_BIND_FLAG::D3D11_BIND_VERTEX_BUFFER;
+        }
+        if (!!(bindFlags & BindFlags::IndexBuffer)) {
+            desc_.BindFlags |= D3D11_BIND_FLAG::D3D11_BIND_INDEX_BUFFER;
+        }
+        if (!!(bindFlags & BindFlags::UniformBuffer)) {
+            desc_.BindFlags |= D3D11_BIND_FLAG::D3D11_BIND_CONSTANT_BUFFER;
+        }
+        if (!!(bindFlags & BindFlags::ShaderResource)) {
+            desc_.BindFlags |= D3D11_BIND_FLAG::D3D11_BIND_SHADER_RESOURCE;
+        }
+        if (!!(bindFlags & BindFlags::StreamOutput)) {
+            desc_.BindFlags |= D3D11_BIND_FLAG::D3D11_BIND_STREAM_OUTPUT;
+        }
+        if (!!(bindFlags & BindFlags::Image)) {
+            desc_.BindFlags |= D3D11_BIND_FLAG::D3D11_BIND_RENDER_TARGET;
+        }
+        if (!!(bindFlags & BindFlags::DepthStencil)) {
+            desc_.BindFlags |= D3D11_BIND_FLAG::D3D11_BIND_DEPTH_STENCIL;
+        }
+        if (!!(bindFlags & BindFlags::UnorderedAccess)) {
+            desc_.BindFlags |= D3D11_BIND_FLAG::D3D11_BIND_UNORDERED_ACCESS;
+        }
+    }
+
+    if (!!(resourceMiscFlags & ResourceMiscFlags::GenerateMips)) {
+        desc_.MiscFlags |= D3D11_RESOURCE_MISC_FLAG::D3D11_RESOURCE_MISC_GENERATE_MIPS;
+    }
+    if (!!(resourceMiscFlags & ResourceMiscFlags::Shared)) {
+        desc_.MiscFlags |= D3D11_RESOURCE_MISC_FLAG::D3D11_RESOURCE_MISC_SHARED;
+    }
+    if (!!(resourceMiscFlags & ResourceMiscFlags::TextureCube)) {
+        desc_.MiscFlags |= D3D11_RESOURCE_MISC_FLAG::D3D11_RESOURCE_MISC_TEXTURECUBE;
+    }
+    if (!!(resourceMiscFlags & ResourceMiscFlags::DrawIndirectArgs)) {
+        desc_.MiscFlags |= D3D11_RESOURCE_MISC_FLAG::D3D11_RESOURCE_MISC_DRAWINDIRECT_ARGS;
+    }
+    if (!!(resourceMiscFlags & ResourceMiscFlags::BufferRaw)) {
+        desc_.MiscFlags |= D3D11_RESOURCE_MISC_FLAG::D3D11_RESOURCE_MISC_BUFFER_ALLOW_RAW_VIEWS;
+    }
+    if (!!(resourceMiscFlags & ResourceMiscFlags::BufferStructured)) {
+        desc_.MiscFlags |= D3D11_RESOURCE_MISC_FLAG::D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
+    }
+    if (!!(resourceMiscFlags & ResourceMiscFlags::ResourceClamp)) {
+        desc_.MiscFlags |= D3D11_RESOURCE_MISC_FLAG::D3D11_RESOURCE_MISC_RESOURCE_CLAMP;
+    }
+    if (!!(resourceMiscFlags & ResourceMiscFlags::SharedKeyedMutex)) {
+        desc_.MiscFlags |= D3D11_RESOURCE_MISC_FLAG::D3D11_RESOURCE_MISC_SHARED_KEYEDMUTEX;
     }
 
     if (!!(cpuAccessFlags & CpuAccessFlags::Write)) {
@@ -506,9 +541,10 @@ void D3d11Engine::resizeSwapChain_(SwapChain* swapChain, UInt32 width, UInt32 he
     d3dSwapChain->setDefaultFramebuffer(newFramebuffer);
 }
 
-Buffer* D3d11Engine::createBuffer_(Usage usage, BindFlags bindFlags, CpuAccessFlags cpuAccessFlags)
+Buffer* D3d11Engine::createBuffer_(
+    Usage usage, BindFlags bindFlags, ResourceMiscFlags resourceMiscFlags, CpuAccessFlags cpuAccessFlags)
 {
-    return new D3d11Buffer(resourceList_, usage, bindFlags, cpuAccessFlags);
+    return new D3d11Buffer(resourceList_, usage, bindFlags, resourceMiscFlags, cpuAccessFlags);
 }
 
 // RENDER THREAD functions
@@ -567,12 +603,7 @@ void D3d11Engine::clear_(const core::Color& color)
 
 void D3d11Engine::setProjectionMatrix_(const geometry::Mat4f& m)
 {
-    paintVertexShaderConstantBuffer_.projMatrix = {
-        m(0, 0), m(1, 0), m(2, 0), m(3, 0),
-        m(0, 1), m(1, 1), m(2, 1), m(3, 1),
-        m(0, 2), m(1, 2), m(2, 2), m(3, 2),
-        m(0, 3), m(1, 3), m(2, 3), m(3, 3)
-    };
+    paintVertexShaderConstantBuffer_.projMatrix = m;
     writeBufferReserved_(
         vertexConstantBuffer_.get(), &paintVertexShaderConstantBuffer_,
         sizeof(PaintVertexShaderConstantBuffer));
@@ -580,34 +611,10 @@ void D3d11Engine::setProjectionMatrix_(const geometry::Mat4f& m)
 
 void D3d11Engine::setViewMatrix_(const geometry::Mat4f& m)
 {
-    paintVertexShaderConstantBuffer_.viewMatrix = {
-        m(0, 0), m(1, 0), m(2, 0), m(3, 0),
-        m(0, 1), m(1, 1), m(2, 1), m(3, 1),
-        m(0, 2), m(1, 2), m(2, 2), m(3, 2),
-        m(0, 3), m(1, 3), m(2, 3), m(3, 3)
-    };
+    paintVertexShaderConstantBuffer_.viewMatrix = m;
     writeBufferReserved_(
         vertexConstantBuffer_.get(), &paintVertexShaderConstantBuffer_,
         sizeof(PaintVertexShaderConstantBuffer));
-}
-
-void D3d11Engine::bindPaintShader_()
-{
-    deviceCtx_->IASetInputLayout(inputLayout_.get());
-    deviceCtx_->VSSetShader(vertexShader_.get(), NULL, 0);
-    deviceCtx_->VSSetConstantBuffers(0, 1, &vertexConstantBuffer_);
-    deviceCtx_->PSSetShader(pixelShader_.get(), NULL, 0);
-    deviceCtx_->GSSetShader(NULL, NULL, 0);
-    deviceCtx_->HSSetShader(NULL, NULL, 0);
-    deviceCtx_->DSSetShader(NULL, NULL, 0);
-    deviceCtx_->CSSetShader(NULL, NULL, 0);
-}
-
-void D3d11Engine::releasePaintShader_()
-{
-    deviceCtx_->VSSetShader(NULL, NULL, 0);
-    deviceCtx_->VSSetConstantBuffers(0, 0, NULL);
-    deviceCtx_->PSSetShader(NULL, NULL, 0);
 }
 
 void D3d11Engine::initBuffer_(Buffer* buffer, const void* data, Int initialLengthInBytes)
@@ -661,6 +668,27 @@ void D3d11Engine::drawPrimitives_(Buffer* buffer, PrimitiveType type)
     deviceCtx_->Draw(core::int_cast<UINT>(numVertices), 0);
 }
 
+void D3d11Engine::bindPaintShader_()
+{
+    deviceCtx_->IASetInputLayout(inputLayout_.get());
+    deviceCtx_->VSSetShader(vertexShader_.get(), NULL, 0);
+    deviceCtx_->VSSetConstantBuffers(0, 1, &vertexConstantBuffer_);
+    deviceCtx_->PSSetShader(pixelShader_.get(), NULL, 0);
+    deviceCtx_->GSSetShader(NULL, NULL, 0);
+    deviceCtx_->HSSetShader(NULL, NULL, 0);
+    deviceCtx_->DSSetShader(NULL, NULL, 0);
+    deviceCtx_->CSSetShader(NULL, NULL, 0);
+}
+
+void D3d11Engine::releasePaintShader_()
+{
+    deviceCtx_->VSSetShader(NULL, NULL, 0);
+    deviceCtx_->VSSetConstantBuffers(0, 0, NULL);
+    deviceCtx_->PSSetShader(NULL, NULL, 0);
+}
+
+// Private methods
+
 bool D3d11Engine::loadBuffer_(ID3D11Buffer** bufferPtr, D3D11_BUFFER_DESC* desc, const void* data, Int dataSize)
 {
     if (dataSize == 0) {
@@ -689,6 +717,20 @@ bool D3d11Engine::writeBufferReserved_(ID3D11Buffer* buffer, const void* data, I
     deviceCtx_->Unmap(buffer, 0);
     return true;
 }
+
+void D3d11Engine::updatePaintVertexShaderConstantBuffer_()
+{
+    PaintVertexShaderConstantBuffer buffer = {};
+    memcpy(buffer.projMatrix.data(), projMatrix_.data(), 16 * sizeof(float));
+    memcpy(buffer.viewMatrix.data(), viewMatrix_.data(), 16 * sizeof(float));
+    writeBufferReserved_(
+        vertexConstantBuffer_.get(), &buffer,
+        sizeof(PaintVertexShaderConstantBuffer));
+}
+
+
+
+
 
 } // namespace vgc::graphics
 

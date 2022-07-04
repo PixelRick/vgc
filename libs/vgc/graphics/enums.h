@@ -17,6 +17,7 @@
 #ifndef VGC_GRAPHICS_ENUMS_H
 #define VGC_GRAPHICS_ENUMS_H
 
+#include <vgc/core/arithmetic.h>
 #include <vgc/core/enum.h>
 
 namespace vgc::graphics {
@@ -30,13 +31,26 @@ enum class BindFlags : UInt16 {
     UniformBuffer = 4,
     ShaderResource = 8,
     StreamOutput = 0x10,
-    RenderTarget = 0x20,
+    Image = 0x20,
     DepthStencil = 0x40,
     UnorderedAccess = 0x80,
-    DecoderOutput = 0x200,
-    EncoderInput = 0x400
 };
 VGC_DEFINE_SCOPED_ENUM_FLAGS_OPERATORS(BindFlags)
+
+// See https://docs.microsoft.com/en-us/windows/win32/api/d3d11/ne-d3d11-d3d11_resource_misc_flag
+//
+enum class ResourceMiscFlags : UInt32 {
+    None = 0,
+    GenerateMips = 1,
+    Shared = 2,
+    TextureCube = 4,
+    DrawIndirectArgs = 0x10,
+    BufferRaw = 0x20,
+    BufferStructured = 0x40,
+    ResourceClamp = 0x80,
+    SharedKeyedMutex = 0x100,
+};
+VGC_DEFINE_SCOPED_ENUM_FLAGS_OPERATORS(ResourceMiscFlags)
 
 // See https://docs.microsoft.com/en-us/windows/win32/api/d3d11/ne-d3d11-d3d11_cpu_access_flag
 //
@@ -50,7 +64,7 @@ VGC_DEFINE_SCOPED_ENUM_FLAGS_OPERATORS(CpuAccessFlags)
 // See https://docs.microsoft.com/en-us/windows/win32/api/d3d11/ne-d3d11-d3d11_usage
 //
 enum class Usage : UInt8 {
-    Default = 0,
+    Default,
     Immutable,
     Dynamic,
     Staging
@@ -59,7 +73,7 @@ enum class Usage : UInt8 {
 // See https://docs.microsoft.com/en-us/windows/win32/api/d3d11/ne-d3d11-d3d11_cpu_access_flag
 //
 enum class Mapping : UInt8 {
-    None = 0,
+    None,
     Read,
     Write,
     ReadWrite,
@@ -81,9 +95,21 @@ enum class SwapChainTargetFormat : UInt8 {
 };
 
 enum class PresentFlags : UInt32 {
-    None = 0,
+    None,
 };
 VGC_DEFINE_SCOPED_ENUM_FLAGS_OPERATORS(PresentFlags)
+
+enum class BuiltinProgram : UInt8 {
+    Simple,
+    GlyphAtlas,
+    RoundedRectangle
+};
+
+enum class BuiltinGeometryLayout : UInt8 {
+    XY,
+    XYRGB,
+    XYZ,
+};
 
 } // namespace vgc::graphics
 

@@ -131,7 +131,9 @@ public:
 
     graphics::SwapChain* createSwapChain_(const graphics::SwapChainDesc& desc) override;
     void resizeSwapChain_(graphics::SwapChain* swapChain, UInt32 width, UInt32 height) override;
-    graphics::Buffer* createBuffer_(graphics::Usage usage, graphics::BindFlags bindFlags, graphics::CpuAccessFlags cpuAccessFlags) override;
+    graphics::Buffer* createBuffer_(
+        graphics::Usage usage, graphics::BindFlags bindFlags,
+        graphics::ResourceMiscFlags resourceMiscFlags, graphics::CpuAccessFlags cpuAccessFlags) override;
 
     // RENDER THREAD functions
 
@@ -142,12 +144,18 @@ public:
     void clear_(const core::Color& color) override;
     void setProjectionMatrix_(const geometry::Mat4f& m) override;
     void setViewMatrix_(const geometry::Mat4f& m) override;
-    void bindPaintShader_() override;
-    void releasePaintShader_() override;
+
     void initBuffer_(graphics::Buffer* buffer, const void* data, Int initialLengthInBytes) override;
     void updateBufferData_(graphics::Buffer* buffer, const void* data, Int lengthInBytes) override;
     void setupVertexBufferForPaintShader_(graphics::Buffer* buffer) override;
     void drawPrimitives_(graphics::Buffer* buffer, graphics::PrimitiveType type) override;
+
+    //void bindPaintShader_() override;
+    //void releasePaintShader_() override;
+    //void bindAtlasGlyphShader_() override;
+    //void releaseAtlasGlyphShader_() override;
+    //void bindRoundedRectangleShader_() override;
+    //void releaseRoundedRectangleShader_() override;
 
 private:
     // XXX keep only format of first chain and compare against new windows ?

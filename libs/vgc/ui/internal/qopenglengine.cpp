@@ -45,11 +45,14 @@ struct XYRGBVertex {
 
 namespace {
 
-class QOpenglBuffer : public graphics::Buffer {
+class OpenglBuffer : public graphics::Buffer {
 public:
-    friend QOpenglEngine;
-
-    using Buffer::Buffer;
+    OpenglBuffer(
+        ResourceList* owningList,
+        graphics::Usage usage,
+        graphics::BindFlags bindFlags,
+        graphics::ResourceMiscFlags resourceMiscFlags,
+        graphics::CpuAccessFlags cpuAccessFlags);
 
     void init(const void* data, Int length)
     {
@@ -149,7 +152,7 @@ public:
 
     void draw(QOpenglEngine* engine, GLenum mode)
     {
-        if (!vao_) return;
+        if (!allocated_) return;
         vao_->bind();
         auto api = engine->api();
         api->glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
@@ -158,9 +161,14 @@ public:
     }
 
 protected:
-    void release_(graphics::Engine* /*engine*/) override
+    void release_(graphics::Engine* engine) override
     {
-        if (!vao_) return;
+        if (!allocated_) return;
+        auto oglApi = static_cast<QOpenglEngine*>(engine)->api();
+        oglApi->glDeleteVertexArrays(1, &cacheVao_);
+        oglApi->glDeleteBuffers(1, &vbo_);
+
+        inited_ = false;
         vao_->destroy();
         delete vao_;
         vao_ = nullptr;
@@ -170,10 +178,12 @@ protected:
     }
 
 private:
-    QOpenGLBuffer* vbo_ = nullptr;
-    QOpenGLVertexArrayObject* vao_ = nullptr;
-    Int numVertices_ = 0;
-    Int allocSize_ = 0;
+    friend QOpenglEngine;
+
+    bool allocated_ = false;
+    GLuint vbo_;
+    GLuint cachedVao_;
+    void* cachedVaoLayoutId_ = nullptr;
 };
 
 class QOpenglFramebuffer : public graphics::Framebuffer {
@@ -321,9 +331,11 @@ void QOpenglEngine::resizeSwapChain_(graphics::SwapChain* /*swapChain*/, UInt32 
     // no-op
 }
 
-graphics::Buffer* QOpenglEngine::createBuffer_(graphics::Usage usage, graphics::BindFlags bindFlags, graphics::CpuAccessFlags cpuAccessFlags)
+graphics::Buffer* QOpenglEngine::createBuffer_(
+    graphics::Usage usage, graphics::BindFlags bindFlags,
+    graphics::ResourceMiscFlags resourceMiscFlags, graphics::CpuAccessFlags cpuAccessFlags)
 {
-    return new QOpenglBuffer(resourceList_, usage, bindFlags, cpuAccessFlags);
+    return new QOpenglBuffer(resourceList_, usage, bindFlags, resourceMiscFlags, cpuAccessFlags);
 }
 
 // RENDER THREAD functions
@@ -385,16 +397,6 @@ void QOpenglEngine::setViewMatrix_(const geometry::Mat4f& m)
     paintShaderProgram_->setUniformValue(viewLoc_, toQtMatrix(m));
 }
 
-void QOpenglEngine::bindPaintShader_()
-{
-    paintShaderProgram_->bind();
-}
-
-void QOpenglEngine::releasePaintShader_()
-{
-    paintShaderProgram_->release();
-}
-
 void QOpenglEngine::initBuffer_(graphics::Buffer* buffer, const void* data, Int initialLengthInBytes)
 {
     QOpenglBuffer* oglBuffer = static_cast<QOpenglBuffer*>(buffer);
@@ -436,6 +438,16 @@ void QOpenglEngine::drawPrimitives_(graphics::Buffer* buffer, graphics::Primitiv
         break;
     }
     oglBuffer->draw(this, mode);
+}
+
+void QOpenglEngine::bindPaintShader_()
+{
+    paintShaderProgram_->bind();
+}
+
+void QOpenglEngine::releasePaintShader_()
+{
+    paintShaderProgram_->release();
 }
 
 } // namespace vgc::ui::internal

@@ -14,8 +14,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef VGC_GRAPHICS_D3D11ENGINE_H
-#define VGC_GRAPHICS_D3D11ENGINE_H
+#ifndef VGC_GRAPHICS_D3D11_D3D11ENGINE_H
+#define VGC_GRAPHICS_D3D11_D3D11ENGINE_H
 
 #include <vgc/core/compiler.h>
 #ifdef VGC_CORE_COMPILER_MSVC
@@ -34,73 +34,11 @@
 #include <vgc/geometry/vec2f.h>
 #include <vgc/graphics/api.h>
 #include <vgc/graphics/engine.h>
+#include <vgc/graphics/detail/comptr.h>
 
 namespace vgc::graphics {
 
 VGC_DECLARE_OBJECT(D3d11Engine);
-
-template<typename T>
-class ComPtr {
-public:
-    ComPtr() noexcept = default;
-    ComPtr(T* p) : p_(p) {
-        if (p_) {
-            p_->AddRef();
-        }
-    }
-
-    ~ComPtr() {
-        if (p_) {
-            p_->Release();
-        }
-    }
-
-    ComPtr(const ComPtr&) = delete;
-    ComPtr& operator=(const ComPtr&) = delete;
-
-    ComPtr& operator=(T* p) {
-        reset();
-        p_ = p;
-        if (p_) {
-            p_->AddRef();
-        }
-    }
-
-    T* get() const {
-        return p_;
-    }
-
-    void reset() {
-        if (p_) {
-            p_->Release();
-            p_ = nullptr;
-        }
-    }
-
-    T** addressOf() {
-        reset();
-        return &p_;
-    }
-
-    explicit operator bool() const noexcept {
-        return p_ != nullptr;
-    }
-
-    T& operator*() const noexcept {
-        return *p_;
-    }
-
-    T* operator->() const noexcept {
-        return p_;
-    }
-
-    T* const* operator&() {
-        return &p_;
-    }
-
-private:
-    T* p_ = nullptr;
-};
 
 /// \class vgc::widget::D3d11Engine
 /// \brief The D3D11-based graphics::Engine.
@@ -128,7 +66,8 @@ protected:
 
     SwapChain* createSwapChain_(const SwapChainDesc& desc) override;
     void resizeSwapChain_(SwapChain* swapChain, UInt32 width, UInt32 height) override;
-    Buffer* createBuffer_(Usage usage, BindFlags bindFlags, CpuAccessFlags cpuAccessFlags) override;
+    Buffer* createBuffer_(
+        Usage usage, BindFlags bindFlags, ResourceMiscFlags resourceMiscFlags, CpuAccessFlags cpuAccessFlags) override;
 
     // RENDER THREAD functions
 
@@ -139,12 +78,18 @@ protected:
     void clear_(const core::Color& color) override;
     void setProjectionMatrix_(const geometry::Mat4f& m) override;
     void setViewMatrix_(const geometry::Mat4f& m) override;
-    void bindPaintShader_() override;
-    void releasePaintShader_() override;
+
     void initBuffer_(Buffer* buffer, const void* data, Int initialLengthInBytes) override;
     void updateBufferData_(Buffer* buffer, const void* data, Int lengthInBytes) override;
     void setupVertexBufferForPaintShader_(Buffer* buffer) override;
     void drawPrimitives_(Buffer* buffer, PrimitiveType type) override;
+
+    void bindPaintShader_() override;
+    void releasePaintShader_() override;
+    void bindAtlasGlyphShader_() override;
+    void releaseAtlasGlyphShader_() override;
+    void bindRoundedRectangleShader_() override;
+    void releaseRoundedRectangleShader_() override;
 
 private:
     ComPtr<IDXGIFactory> factory_;
@@ -158,10 +103,9 @@ private:
     ComPtr<ID3D11VertexShader> vertexShader_;
     ComPtr<ID3D11Buffer> vertexConstantBuffer_;
     ComPtr<ID3D11PixelShader> pixelShader_;
-    struct PaintVertexShaderConstantBuffer {
-        std::array<float, 16> projMatrix;
-        std::array<float, 16> viewMatrix;
-    } paintVertexShaderConstantBuffer_;
+    geometry::Mat4f projMatrix_;
+    geometry::Mat4f viewMatrix_;
+    bool matricesDirty_;
 
     std::chrono::steady_clock::time_point startTime_;
 
@@ -172,4 +116,4 @@ private:
 } // namespace vgc::graphics
 
 #endif // VGC_CORE_COMPILER_MSVC
-#endif // VGC_GRAPHICS_D3D11ENGINE_H
+#endif // VGC_GRAPHICS_D3D11_D3D11ENGINE_H
