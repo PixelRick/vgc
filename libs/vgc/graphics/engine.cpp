@@ -21,14 +21,15 @@ namespace graphics {
 
 Engine::Engine()
     : Object()
-    , resourceList_(new detail::ResourceList())
+    , gcResourceList_(new detail::ResourceList())
 {
     projectionMatrixStack_.emplaceLast(geometry::Mat4f::identity);
     viewMatrixStack_.emplaceLast(geometry::Mat4f::identity);
 }
 
 // XXX add try/catch ?
-void Engine::renderThreadProc_() {
+void Engine::renderThreadProc_()
+{
     std::unique_lock<std::mutex> lock(mutex_, std::defer_lock);
     while (1) {
         lock.lock();
@@ -47,16 +48,16 @@ void Engine::renderThreadProc_() {
             commandQueue_.clear();
             lastExecutedCommandListId_ = lastSubmittedCommandListId_;
             // release all resources..
-            for (Resource* r : resourceList_->danglingResources_) {
+            for (Resource* r : gcResourceList_->danglingResources_) {
                 r->release_(this);
                 delete r;
             }
-            for (Resource* r : resourceList_->resources_) {
+            for (Resource* r : gcResourceList_->resources_) {
                 r->release_(this);
-                r->owningList_ = nullptr;
+                r->gcList_ = nullptr;
             }
-            resourceList_->resources_.clear();
-            resourceList_->danglingResources_.clear();
+            gcResourceList_->resources_.clear();
+            gcResourceList_->danglingResources_.clear();
             // notify
             lock.unlock();
             renderThreadEventConditionVariable_.notify_all();
@@ -88,7 +89,8 @@ void Engine::renderThreadProc_() {
     }
 }
 
-void Engine::startRenderThread_() {
+void Engine::startRenderThread_()
+{
     if (stopRequested_) {
         throw core::LogicError("Engine: restarts are not supported.");
     }
@@ -98,9 +100,10 @@ void Engine::startRenderThread_() {
     }
 }
 
-void Engine::stopRenderThread_() {
+void Engine::stopRenderThread_()
+{
     pendingCommands_.clear();
-    lastBoundSwapChain_.reset();
+    swapChain_.reset();
     if (running_) {
         std::unique_lock<std::mutex> lock(mutex_);
         stopRequested_ = true;
@@ -113,12 +116,19 @@ void Engine::stopRenderThread_() {
     }
 }
 
-UInt Engine::submitPendingCommandList_() {
+UInt Engine::submitPendingCommandList_(bool withGarbage)
+{
     std::unique_lock<std::mutex> lock(mutex_);
     bool notifyRenderThread = commandQueue_.isEmpty();
-    commandQueue_.emplaceLast(std::move(pendingCommands_), std::move(resourceList_->danglingResources_));
-    pendingCommands_.clear();
-    resourceList_->danglingResources_.clear();
+    if (withGarbage) {
+        commandQueue_.emplaceLast(std::move(pendingCommands_), std::move(gcResourceList_->danglingResources_));
+        pendingCommands_.clear();
+        gcResourceList_->danglingResources_.clear();
+    }
+    else {
+        commandQueue_.emplaceLast(std::move(pendingCommands_));
+        pendingCommands_.clear();
+    }
     UInt id = ++lastSubmittedCommandListId_;
     lock.unlock();
     if (notifyRenderThread) {
@@ -127,7 +137,8 @@ UInt Engine::submitPendingCommandList_() {
     return id;
 }
 
-void Engine::waitCommandListTranslationFinished_(UInt commandListId) {
+void Engine::waitCommandListTranslationFinished_(UInt commandListId)
+{
     std::unique_lock<std::mutex> lock(mutex_);
     if (commandListId == 0) {
         commandListId = lastSubmittedCommandListId_;

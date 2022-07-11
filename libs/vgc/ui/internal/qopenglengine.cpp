@@ -48,7 +48,7 @@ namespace {
 class OpenglBuffer : public graphics::Buffer {
 public:
     OpenglBuffer(
-        ResourceList* owningList,
+        ResourceList* gcList,
         graphics::Usage usage,
         graphics::BindFlags bindFlags,
         graphics::ResourceMiscFlags resourceMiscFlags,
@@ -188,8 +188,8 @@ private:
 
 class QOpenglFramebuffer : public graphics::Framebuffer {
 public:
-    QOpenglFramebuffer(ResourceList* owningList, bool isDefault = false)
-        : Framebuffer(owningList)
+    QOpenglFramebuffer(ResourceList* gcList, bool isDefault = false)
+        : Framebuffer(gcList)
         , isDefault_(isDefault)
     {}
 
@@ -215,11 +215,11 @@ private:
 
 class QOpenglSwapChain : public graphics::SwapChain {
 public:
-    QOpenglSwapChain(ResourceList* owningList, const graphics::SwapChainDesc& desc, QSurface* surface)
-        : SwapChain(owningList, desc)
+    QOpenglSwapChain(ResourceList* gcList, const graphics::SwapChainCreateInfo& desc, QSurface* surface)
+        : SwapChain(gcList, desc)
         , surface_(surface)
     {
-        defaultFrameBuffer_.reset(new QOpenglFramebuffer(owningList, true));
+        defaultFrameBuffer_.reset(new QOpenglFramebuffer(gcList, true));
     }
 
     QSurface* surface() const
@@ -302,7 +302,7 @@ void QOpenglEngine::setupContext()
 
 // USER THREAD pimpl functions
 
-graphics::SwapChain* QOpenglEngine::createSwapChain_(const graphics::SwapChainDesc& desc)
+graphics::SwapChain* QOpenglEngine::createSwapChain_(const graphics::SwapChainCreateInfo& desc)
 {
     //if (ctx_ == nullptr) {
     //    throw core::LogicError("ctx_ is null.");
@@ -323,7 +323,7 @@ graphics::SwapChain* QOpenglEngine::createSwapChain_(const graphics::SwapChainDe
     wnd->setFormat(format_);
     wnd->create();
 
-    return new QOpenglSwapChain(resourceList_, desc, wnd);
+    return new QOpenglSwapChain(gcResourceList_, desc, wnd);
 }
 
 void QOpenglEngine::resizeSwapChain_(graphics::SwapChain* /*swapChain*/, UInt32 /*width*/, UInt32 /*height*/)
@@ -335,7 +335,7 @@ graphics::Buffer* QOpenglEngine::createBuffer_(
     graphics::Usage usage, graphics::BindFlags bindFlags,
     graphics::ResourceMiscFlags resourceMiscFlags, graphics::CpuAccessFlags cpuAccessFlags)
 {
-    return new QOpenglBuffer(resourceList_, usage, bindFlags, resourceMiscFlags, cpuAccessFlags);
+    return new QOpenglBuffer(gcResourceList_, usage, bindFlags, resourceMiscFlags, cpuAccessFlags);
 }
 
 // RENDER THREAD functions

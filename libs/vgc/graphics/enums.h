@@ -57,7 +57,7 @@ VGC_DEFINE_SCOPED_ENUM_FLAGS_OPERATORS(ResourceMiscFlags)
 enum class CpuAccessFlags : UInt8 {
     None = 0,
     Read = 1,
-    Write = 2
+    Write = 2,
 };
 VGC_DEFINE_SCOPED_ENUM_FLAGS_OPERATORS(CpuAccessFlags)
 
@@ -67,7 +67,7 @@ enum class Usage : UInt8 {
     Default,
     Immutable,
     Dynamic,
-    Staging
+    Staging,
 };
 
 // See https://docs.microsoft.com/en-us/windows/win32/api/d3d11/ne-d3d11-d3d11_cpu_access_flag
@@ -78,7 +78,7 @@ enum class Mapping : UInt8 {
     Write,
     ReadWrite,
     WriteDiscard,
-    WriteNoOverwrite
+    WriteNoOverwrite,
 };
 
 enum class PrimitiveType : UInt8 {
@@ -86,12 +86,12 @@ enum class PrimitiveType : UInt8 {
     LineList,
     LineStrip,
     TriangleList,
-    TriangleStrip
+    TriangleStrip,
 };
 
 enum class SwapChainTargetFormat : UInt8 {
-    R8G8B8A8_UNORM,
-    B8G8R8A8_SRGB,
+    RGBA_8_UNORM,
+    BGRA_8_SRGB,
 };
 
 enum class PresentFlags : UInt32 {
@@ -99,13 +99,94 @@ enum class PresentFlags : UInt32 {
 };
 VGC_DEFINE_SCOPED_ENUM_FLAGS_OPERATORS(PresentFlags)
 
+enum class ImageRank : UInt8 {
+    _1D,
+    _2D,
+    // XXX future
+    //_3D,
+    //_CubeMap, // OpenGL doesn't support cubemap textures from 2d image array.
+};
+
+enum class ImageFormat : UInt8 {
+    None,
+    // Depth
+    D_16_UNORM,
+    D_32_FLOAT,
+    // Depth + Stencil
+    DS_24_UNORM_8_UINT,
+    DS_32_FLOAT_8_UINT_24_X,
+    // Red
+    R_8_UNORM,
+    R_8_SNORM,
+    R_8_UINT,
+    R_8_SINT,
+    R_16_UNORM,
+    R_16_SNORM,
+    R_16_UINT,
+    R_16_SINT,
+    R_16_FLOAT,
+    R_32_UINT,
+    R_32_SINT,
+    R_32_FLOAT,
+    // RG
+    RG_8_UNORM,
+    RG_8_SNORM,
+    RG_8_UINT,
+    RG_8_SINT,
+    RG_16_UNORM,
+    RG_16_SNORM,
+    RG_16_UINT,
+    RG_16_SINT,
+    RG_16_FLOAT,
+    RG_32_UINT,
+    RG_32_SINT,
+    RG_32_FLOAT,
+    // RGB
+    RGB_11_11_10_FLOAT,
+    RGB_32_UINT,
+    RGB_32_SINT,
+    RGB_32_FLOAT,
+    // RGBA
+    RGBA_8_UNORM,
+    RGBA_8_UNORM_SRGB,
+    RGBA_8_UINT,
+    RGBA_8_SNORM,
+    RGBA_8_SINT,
+    RGBA_10_10_10_2_UNORM,
+    RGBA_10_10_10_2_UINT,
+    RGBA_16_UNORM,
+    RGBA_16_UINT,
+    RGBA_16_SINT,
+    RGBA_16_FLOAT,
+    RGBA_32_UINT,
+    RGBA_32_SINT,
+    RGBA_32_FLOAT,
+    // XXX future
+    // Compressed
+    //BC1_UNORM,
+    //BC1_UNORM_SRGB,
+    //BC2_UNORM,
+    //BC2_UNORM_SRGB,
+    //BC3_UNORM,
+    //BC3_UNORM_SRGB,
+    //BC4_UNORM,
+    //BC4_SNORM,
+    //BC5_UNORM,
+    //BC5_SNORM,
+    //BC7_UNORM,
+    //BC7_UNORM_SRGB,
+};
+
 enum class BuiltinProgram : UInt8 {
     Simple,
-    GlyphAtlas,
-    RoundedRectangle
+    // XXX publicize ?
+    //GlyphAtlas,
+    //IconsAtlas,
+    //RoundedRectangle,
 };
 
 enum class BuiltinGeometryLayout : UInt8 {
+    None,
     XY,
     XYRGB,
     XYZ,

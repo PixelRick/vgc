@@ -41,24 +41,76 @@ namespace vgc::graphics {
 //    Int length_;
 //};
 
-/// \class vgc::graphics::PrimitivesBuffer
-/// \brief Abstract primitive data buffer.
+/// \class vgc::graphics::BufferCreateInfo
+/// \brief Parameters for buffer creation.
+///
+class VGC_GRAPHICS_API BufferCreateInfo {
+public:
+    Usage usage() const
+    {
+        return usage_;
+    }
+
+    void setUsage(Usage usage)
+    {
+        usage_ = usage;
+    }
+
+    BindFlags bindFlags() const
+    {
+        return bindFlags_;
+    }
+
+    void setBindFlags(BindFlags bindFlags)
+    {
+        bindFlags_ = bindFlags;
+    }
+
+    CpuAccessFlags cpuAccessFlags() const
+    {
+        return cpuAccessFlags_;
+    }
+
+    void setCpuAccessFlags(CpuAccessFlags cpuAccessFlags)
+    {
+        cpuAccessFlags_ = cpuAccessFlags;
+    }
+
+    ResourceMiscFlags resourceMiscFlags() const
+    {
+        return resourceMiscFlags_;
+    }
+
+    void setResourceMiscFlags(ResourceMiscFlags resourceMiscFlags)
+    {
+        resourceMiscFlags_ = resourceMiscFlags;
+    }
+
+private:
+    Usage usage_ = Usage::Default;
+    BindFlags bindFlags_ = BindFlags::None;
+    CpuAccessFlags cpuAccessFlags_ = CpuAccessFlags::None;
+    ResourceMiscFlags resourceMiscFlags_ = ResourceMiscFlags::None;
+};
+
+/// \class vgc::graphics::Buffer
+/// \brief Abstract buffer resource.
+///
+/// It can be bound to different views attached to the graphics pipeline.
 ///
 class VGC_GRAPHICS_API Buffer : public Resource {
 protected:
-    Buffer(ResourceList* owningList,
-           Usage usage,
-           BindFlags bindFlags,
-           ResourceMiscFlags resourceMiscFlags,
-           CpuAccessFlags cpuAccessFlags)
-        : Resource(owningList)
+    Buffer(ResourceList* gcList,
+           const BufferCreateInfo& info)
+        : Resource(gcList)
         , lengthInBytes_(0)
-        , usage_(usage)
-        , bindFlags_(bindFlags)
-        , resourceMiscFlags_(resourceMiscFlags)
-        , cpuAccessFlags_(cpuAccessFlags)
+        , info_(info)
     {
-        // Limitation of D3D11
+        // Limitation of D3D11 impl
+        const BindFlags bindFlags = this->bindFlags();
+        if (bindFlags == BindFlags::None) {
+            throw core::LogicError("Bind flags cannot be None");
+        }
         if (!!(bindFlags & BindFlags::UniformBuffer)) {
             if (bindFlags != BindFlags::UniformBuffer) {
                 throw core::LogicError("BindFlags::UniformBuffer cannot be combined with any other bind flag");
@@ -67,34 +119,36 @@ protected:
     }
 
 public:
-    Int lengthInBytes() const {
+    Int lengthInBytes() const
+    {
         return lengthInBytes_;
     }
 
-    Usage usage() const {
-        return usage_;
+    Usage usage() const
+    {
+        return info_.usage();
     }
 
-    BindFlags bindFlags() const {
-        return bindFlags_;
+    BindFlags bindFlags() const
+    {
+        return info_.bindFlags();
     }
 
-    ResourceMiscFlags resourceMiscFlags() const {
-        return resourceMiscFlags_;
+    CpuAccessFlags cpuAccessFlags() const
+    {
+        return info_.cpuAccessFlags();
     }
 
-    CpuAccessFlags cpuAccessFlags() const {
-        return cpuAccessFlags_;
+    ResourceMiscFlags resourceMiscFlags() const
+    {
+        return info_.resourceMiscFlags();
     }
 
 protected:
     Int lengthInBytes_ = 0;
 
 private:
-    Usage usage_;
-    BindFlags bindFlags_;
-    ResourceMiscFlags resourceMiscFlags_;
-    CpuAccessFlags cpuAccessFlags_;
+    BufferCreateInfo info_;
 };
 using BufferPtr = ResourcePtr<Buffer>;
 

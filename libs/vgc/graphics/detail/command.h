@@ -17,18 +17,12 @@
 #ifndef VGC_GRAPHICS_DETAIL_COMMANDS_H
 #define VGC_GRAPHICS_DETAIL_COMMANDS_H
 
-#include <any>
 #include <string_view>
 #include <type_traits>
 #include <utility>
 
-#include <vgc/core/array.h>
-#include <vgc/core/arithmetic.h>
-#include <vgc/core/object.h>
-#include <vgc/geometry/mat4f.h>
+#include <vgc/core/format.h>
 #include <vgc/graphics/api.h>
-#include <vgc/graphics/buffer.h>
-#include <vgc/graphics/targets.h>
 
 namespace vgc::graphics {
 

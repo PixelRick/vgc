@@ -45,7 +45,7 @@ struct XYRGBVertex {
 class D3d11Buffer : public Buffer {
 public:
     D3d11Buffer(
-        ResourceList* owningList,
+        ResourceList* gcList,
         Usage usage,
         BindFlags bindFlags,
         ResourceMiscFlags resourceMiscFlags,
@@ -81,8 +81,8 @@ private:
 
 class D3d11ImageView : public ImageView {
 public:
-    D3d11ImageView(ResourceList* owningList, ID3D11View* view)
-        : ImageView(owningList)
+    D3d11ImageView(ResourceList* gcList, ID3D11View* view)
+        : ImageView(gcList)
         , view_(view)
     {}
 
@@ -109,11 +109,11 @@ using D3d11ImageViewPtr = ResourcePtr<D3d11ImageView>;
 class D3d11Framebuffer : public Framebuffer {
 public:
     D3d11Framebuffer(
-        ResourceList* owningList,
+        ResourceList* gcList,
         const D3d11ImageViewPtr& colorView,
         const D3d11ImageViewPtr& depthStencilView,
         bool isDefault = false)
-        : Framebuffer(owningList)
+        : Framebuffer(gcList)
         , colorView_(colorView)
         , depthStencilView_(depthStencilView)
         , isDefault_(isDefault)
@@ -157,10 +157,10 @@ using D3d11FramebufferPtr = ResourcePtr<D3d11Framebuffer>;
 
 class D3d11SwapChain : public SwapChain {
 public:
-    D3d11SwapChain(ResourceList* owningList,
-        const SwapChainDesc& desc,
+    D3d11SwapChain(ResourceList* gcList,
+        const SwapChainCreateInfo& desc,
         IDXGISwapChain* dxgiSwapChain)
-        : SwapChain(owningList, desc)
+        : SwapChain(gcList, desc)
         , dxgiSwapChain_(dxgiSwapChain)
     {}
 
@@ -194,12 +194,12 @@ private:
 };
 
 D3d11Buffer::D3d11Buffer(
-    ResourceList* owningList,
+    ResourceList* gcList,
     Usage usage,
     BindFlags bindFlags,
     ResourceMiscFlags resourceMiscFlags,
     CpuAccessFlags cpuAccessFlags)
-    : Buffer(owningList, usage, bindFlags, resourceMiscFlags, cpuAccessFlags)
+    : Buffer(gcList, usage, bindFlags, resourceMiscFlags, cpuAccessFlags)
 {
     switch (usage) {
     case Usage::Default:
@@ -460,7 +460,7 @@ D3d11EnginePtr D3d11Engine::create()
 
 // USER THREAD pimpl functions
 
-SwapChain* D3d11Engine::createSwapChain_(const SwapChainDesc& desc)
+SwapChain* D3d11Engine::createSwapChain_(const SwapChainCreateInfo& desc)
 {
     if (!device_) {
         throw core::LogicError("device_ is null.");
@@ -505,14 +505,14 @@ SwapChain* D3d11Engine::createSwapChain_(const SwapChainDesc& desc)
     swapChain->GetBuffer(0, IID_PPV_ARGS(backBuffer.addressOf()));
     ComPtr<ID3D11RenderTargetView> backBufferView;
     device_->CreateRenderTargetView(backBuffer.get(), NULL, backBufferView.addressOf());
-    D3d11ImageViewPtr colorView(new D3d11ImageView(resourceList_, backBufferView.get()));
+    D3d11ImageViewPtr colorView(new D3d11ImageView(gcResourceList_, backBufferView.get()));
     D3d11FramebufferPtr newFramebuffer(
         new D3d11Framebuffer(
-            resourceList_,
+            gcResourceList_,
             colorView,
             D3d11ImageViewPtr()));
 
-    D3d11SwapChain* d3dSwapChain = new D3d11SwapChain(resourceList_, desc, swapChain.get());
+    D3d11SwapChain* d3dSwapChain = new D3d11SwapChain(gcResourceList_, desc, swapChain.get());
     d3dSwapChain->setDefaultFramebuffer(newFramebuffer);
 
     return d3dSwapChain;
@@ -535,8 +535,8 @@ void D3d11Engine::resizeSwapChain_(SwapChain* swapChain, UInt32 width, UInt32 he
     device_->CreateRenderTargetView(backBuffer.get(), NULL, backBufferView.addressOf());
     D3d11FramebufferPtr newFramebuffer(
         new D3d11Framebuffer(
-            resourceList_,
-            D3d11ImageViewPtr(new D3d11ImageView(resourceList_, backBufferView.get())),
+            gcResourceList_,
+            D3d11ImageViewPtr(new D3d11ImageView(gcResourceList_, backBufferView.get())),
             D3d11ImageViewPtr()));
     d3dSwapChain->setDefaultFramebuffer(newFramebuffer);
 }
@@ -544,7 +544,7 @@ void D3d11Engine::resizeSwapChain_(SwapChain* swapChain, UInt32 width, UInt32 he
 Buffer* D3d11Engine::createBuffer_(
     Usage usage, BindFlags bindFlags, ResourceMiscFlags resourceMiscFlags, CpuAccessFlags cpuAccessFlags)
 {
-    return new D3d11Buffer(resourceList_, usage, bindFlags, resourceMiscFlags, cpuAccessFlags);
+    return new D3d11Buffer(gcResourceList_, usage, bindFlags, resourceMiscFlags, cpuAccessFlags);
 }
 
 // RENDER THREAD functions

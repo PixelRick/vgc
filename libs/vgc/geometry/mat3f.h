@@ -368,10 +368,16 @@ public:
     /// Returns a reference to this Mat3f.
     ///
     Mat3f& translate(float vx, float vy = 0) {
-        Mat3f m(1, 0, vx,
-                0, 1, vy,
-                0, 0, 1);
-        return (*this) *= m;
+        // only column 2 is modified
+        data_[2][0] += vx*data_[0][0] + vy*data_[1][0];
+        data_[2][1] += vx*data_[0][1] + vy*data_[1][1];
+        data_[2][2] += vx*data_[0][2] + vy*data_[1][2];
+        return *this;
+        // equivalent to:
+        // Mat3f m(1, 0, vx,
+        //         0, 1, vy,
+        //         0, 0, 1);
+        // return (*this) *= m;
     }
 
     /// Overloads `Mat3f::translate(float, float)`.

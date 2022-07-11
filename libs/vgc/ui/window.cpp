@@ -45,7 +45,7 @@ Window::Window(ui::WidgetPtr widget) :
     widget_->repaintRequested().connect(onRepaintRequested());
     //widget_->focusRequested().connect([this](){ this->onFocusRequested(); });
 
-    graphics::SwapChainDesc scd = {};
+    graphics::SwapChainCreateInfo scd = {};
     scd.setBufferCount(2);
     scd.setSampleCount(8);
 

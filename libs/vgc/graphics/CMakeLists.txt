@@ -14,20 +14,23 @@ vgc_add_library(graphics
         batch.h
         buffer.h
         d3d11/d3d11engine.h
-        detail/commands.h
+        detail/command.h
         detail/comptr.h
         engine.h
         enums.h
         exceptions.h
         font.h
+        framebuffer.h
         geometryview.h
         idgenerator.h
         image.h
+        imageview.h
         logcategories.h
         program.h
         resource.h
         richtext.h
         strings.h
+        swapchain.h
         targets.h
         text.h
 

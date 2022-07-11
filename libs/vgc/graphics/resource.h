@@ -67,10 +67,10 @@ protected:
     using ResourceList = detail::ResourceList;
 
     // should be called in the user thread, not the rendering thread.
-    explicit Resource(ResourceList* owningList)
-        : owningList_(owningList)
+    explicit Resource(ResourceList* gcList)
+        : gcList_(gcList)
     {
-        owningList_->resources_.insert(this);
+        gcList_->resources_.insert(this);
     }
 
 public:
@@ -98,7 +98,8 @@ protected:
     virtual void clearSubResources_() {}
 
 private:
-    void initRef_() {
+    void initRef_()
+    {
         int64_t noCount = core::Int64Max;
         if (refCount_ == noCount) {
             refCount_ = 1;
@@ -108,7 +109,8 @@ private:
         }
     }
 
-    void incRef_() {
+    void incRef_()
+    {
         int64_t newCount = ++refCount_;
 #ifdef VGC_DEBUG
         if (newCount <= 1) {
@@ -117,11 +119,12 @@ private:
 #endif
     }
 
-    void decRef_() {
+    void decRef_()
+    {
         if (--refCount_ == 0) {
-            if (owningList_) {
-                owningList_->resources_.erase(this);
-                owningList_->danglingResources_.append(this);
+            if (gcList_) {
+                gcList_->resources_.erase(this);
+                gcList_->danglingResources_.append(this);
                 clearSubResources_();
             }
             else {
@@ -130,20 +133,23 @@ private:
         }
     }
 
-    ResourceList* owningList_;
+    ResourceList* gcList_;
     Int64 refCount_ = core::Int64Max;
+    // XXX make it optionally threadsafe with a second count and a bool to
+    // switch to using this tsafe count.
 };
 
 namespace detail {
 
-inline ResourceList::~ResourceList() {
+inline ResourceList::~ResourceList()
+{
     if (!resources_.empty() || !danglingResources_.isEmpty()) {
         VGC_ERROR(LogVgcGraphics, "Some resources were not released yet.");
         for (Resource* res : resources_) {
-            res->owningList_ = nullptr;
+            res->gcList_ = nullptr;
         }
         for (Resource* res : danglingResources_) {
-            res->owningList_ = nullptr;
+            res->gcList_ = nullptr;
             delete res;
         }
     }

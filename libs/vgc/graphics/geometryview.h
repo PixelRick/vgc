@@ -27,6 +27,69 @@
 
 namespace vgc::graphics {
 
+inline constexpr size_t maxAttachedVertexBufferCount = 4;
+
+using VertexBufferArray = std::array<BufferPtr, maxAttachedVertexBufferCount>;
+
+/// \class vgc::graphics::GeometryViewCreateInfo
+/// \brief Parameters for geometry view creation.
+///
+class VGC_GRAPHICS_API GeometryViewCreateInfo {
+public:
+    PrimitiveType primitiveType() const
+    {
+        return primitiveType_;
+    }
+
+    void setPrimitiveType(PrimitiveType primitiveType)
+    {
+        primitiveType_ = primitiveType;
+    }
+
+    BuiltinGeometryLayout builtinGeometryLayout() const
+    {
+        return builtinGeometryLayout_;
+    }
+
+    void setBuiltinGeometryLayout(BuiltinGeometryLayout builtinGeometryLayout)
+    {
+        builtinGeometryLayout_ = builtinGeometryLayout;
+    }
+
+    const BufferPtr& indexBuffer() const
+    {
+        return indexBuffer_;
+    }
+
+    void setIndexBuffer(const BufferPtr& indexBuffer)
+    {
+        indexBuffer_ = indexBuffer;
+    }
+
+    const VertexBufferArray& vertexBuffers() const
+    {
+        return vertexBuffers_;
+    }
+
+    void setVertexBuffer(Int i, const BufferPtr& vertexBuffer)
+    {
+        size_t idx = core::int_cast<size_t>(i);
+        if (idx >= vertexBuffers_.size()) {
+            throw core::IndexError(core::format(
+                "Vertex buffer index {} is out of range [0, {}]", i, vertexBuffers_.size() - 1));
+        }
+        vertexBuffers_[i] = vertexBuffer;
+    }
+
+private:
+    friend class GeometryView; // to reset resource pointers
+
+    PrimitiveType primitiveType_ = PrimitiveType::Point;
+    BuiltinGeometryLayout builtinGeometryLayout_ = BuiltinGeometryLayout::None;
+    BufferPtr indexBuffer_ = {};
+    VertexBufferArray vertexBuffers_ = {};
+};
+
 /// \class vgc::graphics::GeometryView
 /// \brief View on a sequence of primitives.
 ///
@@ -38,68 +101,57 @@ namespace vgc::graphics {
 ///
 class VGC_GRAPHICS_API GeometryView : public Resource {
 protected:
-    static constexpr size_t maxVertexBuffersCount = 4;
-
-    using VertexBuffersArray = std::array<BufferPtr, maxVertexBuffersCount>;
-
-    GeometryView(ResourceList* owningList,
-                 PrimitiveType primitiveType,
-                 const BuiltinGeometryLayout& layout,
-                 const BufferPtr& indexBuffer,
-                 const BufferPtr& vertexBuffer0)
-        : Resource(owningList)
-        , primitiveType_(primitiveType)
-        , vertexBuffers_{vertexBuffer0}
-        , indexBuffer_(indexBuffer)
-        , layout_(layout)
+    GeometryView(ResourceList* gcList,
+                 const GeometryViewCreateInfo& info)
+        : Resource(gcList)
+        , info_(info)
     {
-        // XXX check buffers against layout
+        // XXX check buffers against layout (slots, alignment, ..)
 
-        for (const BufferPtr& vb : vertexBuffers_) {
-            if (vb) {
-                if (!(vb->bindFlags() & BindFlags::VertexBuffer)) {
-                    throw core::LogicError("Buffer needs BindFlags::VertexBuffer flag to be used as a vertex buffer");
-                }
+        for (const BufferPtr& vb : info_.vertexBuffers()) {
+            if (vb && !(vb->bindFlags() & BindFlags::VertexBuffer)) {
+                throw core::LogicError("Buffer needs BindFlags::VertexBuffer flag to be used as a vertex buffer");
             }
         }
-        if (indexBuffer_) {
-            if (!(indexBuffer_->bindFlags() & BindFlags::VertexBuffer)) {
-                throw core::LogicError("Buffer needs BindFlags::IndexBuffer flag to be used as an index buffer");
-            }
+        const BufferPtr& ib = info_.indexBuffer();
+        if (ib && !(ib->bindFlags() & BindFlags::IndexBuffer)) {
+            throw core::LogicError("Buffer needs BindFlags::IndexBuffer flag to be used as an index buffer");
         }
     }
 
 public:
-    PrimitiveType primitiveType() const {
-        return primitiveType_;
+    PrimitiveType primitiveType() const
+    {
+        return info_.primitiveType();
     }
 
-    const BuiltinGeometryLayout& layout() const {
-        return layout_;
+    const BuiltinGeometryLayout& builtinGeometryLayout() const
+    {
+        return info_.builtinGeometryLayout();
     }
 
-    const BufferPtr& indexBuffer() const {
-        return indexBuffer_;
+    const BufferPtr& indexBuffer() const
+    {
+        return info_.indexBuffer();
     }
 
-    VertexBuffersArray vertexBuffers() const {
-        return vertexBuffers_;
+    const VertexBufferArray& vertexBuffers() const
+    {
+        return info_.vertexBuffers();
     }
 
 private:
     friend Engine;
 
-    void clearSubResources_() override {
-        for (BufferPtr& vb : vertexBuffers_) {
+    void clearSubResources_() override
+    {
+        for (BufferPtr& vb : info_.vertexBuffers_) {
             vb.reset();
         }
-        indexBuffer_.reset();
+        info_.indexBuffer_.reset();
     }
 
-    PrimitiveType primitiveType_;
-    const BuiltinGeometryLayout& layout_;
-    BufferPtr indexBuffer_;
-    VertexBuffersArray vertexBuffers_;
+    GeometryViewCreateInfo info_;
 };
 using GeometryViewPtr = ResourcePtr<GeometryView>;
 

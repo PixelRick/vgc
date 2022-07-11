@@ -129,7 +129,7 @@ public:
 
     // USER THREAD pimpl functions
 
-    graphics::SwapChain* createSwapChain_(const graphics::SwapChainDesc& desc) override;
+    graphics::SwapChain* createSwapChain_(const graphics::SwapChainCreateInfo& desc) override;
     void resizeSwapChain_(graphics::SwapChain* swapChain, UInt32 width, UInt32 height) override;
     graphics::Buffer* createBuffer_(
         graphics::Usage usage, graphics::BindFlags bindFlags,
@@ -149,7 +149,8 @@ public:
     void updateBufferData_(graphics::Buffer* buffer, const void* data, Int lengthInBytes) override;
     void setupVertexBufferForPaintShader_(graphics::Buffer* buffer) override;
     void drawPrimitives_(graphics::Buffer* buffer, graphics::PrimitiveType type) override;
-
+    GL_DEPTH_COMPONENT16
+        GL_RGBA32I
     //void bindPaintShader_() override;
     //void releasePaintShader_() override;
     //void bindAtlasGlyphShader_() override;

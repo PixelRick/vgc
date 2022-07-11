@@ -14,16 +14,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef VGC_GRAPHICS_TARGETS_H
-#define VGC_GRAPHICS_TARGETS_H
+#ifndef VGC_GRAPHICS_SWAPCHAIN_H
+#define VGC_GRAPHICS_SWAPCHAIN_H
 
-#include <unordered_set>
 #include <atomic>
 
 #include <vgc/core/arithmetic.h>
 #include <vgc/graphics/api.h>
-#include <vgc/graphics/buffer.h>
 #include <vgc/graphics/enums.h>
+#include <vgc/graphics/framebuffer.h>
 #include <vgc/graphics/resource.h>
 
 namespace vgc::graphics {
@@ -36,76 +35,92 @@ enum class WindowNativeHandleType : uint8_t {
     QOpenGLWindow,
 };
 
-class VGC_GRAPHICS_API SwapChainDesc {
+class VGC_GRAPHICS_API SwapChainCreateInfo {
 public:
-    SwapChainDesc() = default;
-
-    UInt32 width() const {
+    UInt32 width() const
+    {
         return width_;
     }
 
-    void setWidth(UInt32 width) {
+    void setWidth(UInt32 width)
+    {
         width_ = width;
     }
 
-    UInt32 height() const {
+    UInt32 height() const
+    {
         return height_;
     }
 
-    void setHeight(UInt32 height) {
+    void setHeight(UInt32 height)
+    {
         height_ = height;
     }
 
-    SwapChainTargetFormat format() const {
+    SwapChainTargetFormat format() const
+    {
         return format_;
     }
 
-    void setFormat(SwapChainTargetFormat format) {
+    void setFormat(SwapChainTargetFormat format)
+    {
         format_ = format;
     }
 
-    void* windowNativeHandle() const {
+    void* windowNativeHandle() const
+    {
         return windowNativeHandle_;
     }
 
-    WindowNativeHandleType windowNativeHandleType() const {
+    WindowNativeHandleType windowNativeHandleType() const
+    {
         return windowNativeHandleType_;
     }
 
-    void setWindowNativeHandle(void* windowNativeHandle, WindowNativeHandleType windowNativeHandleType) {
+    void setWindowNativeHandle(
+        void* windowNativeHandle, WindowNativeHandleType windowNativeHandleType)
+    {
         windowNativeHandle_ = windowNativeHandle;
         windowNativeHandleType_ = windowNativeHandleType;
     }
 
-    UInt32 windowed() const {
+    UInt32 windowed() const
+    {
         return windowed_;
     }
 
-    void setWindowed(UInt32 windowed) {
+    void setWindowed(UInt32 windowed)
+    {
         windowed_ = windowed;
     }
 
-    UInt8 sampleCount() const {
+    UInt8 sampleCount() const
+    {
         return sampleCount_;
     }
 
-    void setSampleCount(UInt8 sampleCount) {
+    void setSampleCount(UInt8 sampleCount)
+    {
         sampleCount_ = sampleCount;
     }
 
-    UInt8 bufferCount() const {
+    UInt8 bufferCount() const
+    {
         return bufferCount_;
     }
 
-    void setBufferCount(UInt8 bufferCount) {
+    void setBufferCount(UInt8 bufferCount)
+    {
         bufferCount_ = bufferCount;
     }
 
-    UInt flags() const {
+    UInt flags() const
+    {
         return flags_;
     }
 
-    void setFlags(UInt flags) {
+    void setFlags(UInt flags)
+    {
         flags_ = flags;
     }
 
@@ -122,44 +137,6 @@ private:
     UInt flags_;
 };
 
-/// \class vgc::graphics::ImageView
-/// \brief Abstract view of an image buffer attachable to some stage of the graphics pipeline.
-///
-// Since a swap chain's render target view represents different buffers over
-// time, a Vulkan implementation should probably cache a view for each
-// back buffer.
-//
-// Concept mapping:
-//  D3D11  -> Shader Resource View (SRV)
-//  OpenGL -> Texture
-//  Vulkan -> Image View
-// Looks like all three support buffers as image.
-//
-class VGC_GRAPHICS_API ImageView : public Resource {
-protected:
-    ImageView(ResourceList* owningList)
-        : Resource(owningList) {}
-
-    using Resource::Resource;
-};
-using ImageViewPtr = ResourcePtr<ImageView>;
-
-/// \class vgc::graphics::Framebuffer
-/// \brief Abstract framebuffer, a collection of graphics pipeline attachments.
-///
-// Since a swap chain's render target view represents different buffers over
-// time, a Vulkan implementation should probably cache a vkFramebuffer for each
-// back buffer.
-//
-class VGC_GRAPHICS_API Framebuffer : public Resource {
-protected:
-    Framebuffer(ResourceList* owningList)
-        : Resource(owningList) {}
-
-    using Resource::Resource;
-};
-using FramebufferPtr = ResourcePtr<Framebuffer>;
-
 /// \class vgc::graphics::SwapChain
 /// \brief Abstract window swap buffers chain.
 ///
@@ -167,41 +144,42 @@ class VGC_GRAPHICS_API SwapChain : public Resource {
 protected:
     using Resource::Resource;
 
-    SwapChain(ResourceList* owningList, const SwapChainDesc& desc)
-        : Resource(owningList), desc_(desc)
+    SwapChain(ResourceList* gcList, const SwapChainCreateInfo& desc)
+        : Resource(gcList), desc_(desc)
     {}
 
 public:
-    const SwapChainDesc& desc() const {
+    const SwapChainCreateInfo& desc() const
+    {
         return desc_;
     }
 
-    UInt32 pendingPresentCount() const {
+    UInt32 pendingPresentCount() const
+    {
         return pendingPresentCount_.load();
     }
 
-    const FramebufferPtr& defaultFrameBuffer() const {
+    const FramebufferPtr& defaultFrameBuffer() const
+    {
         return defaultFrameBuffer_;
     }
 
 protected:
     friend Engine;
 
-    void clearSubResources_() override {
+    void clearSubResources_() override
+    {
         defaultFrameBuffer_.reset();
     }
 
     FramebufferPtr defaultFrameBuffer_;
 
 private:
-    SwapChainDesc desc_;
+    SwapChainCreateInfo desc_;
     std::atomic_uint32_t pendingPresentCount_ = 0; // to limit queuing in the Engine.
 };
 using SwapChainPtr = ResourcePtr<SwapChain>;
 
-
-
-
 } // namespace vgc::graphics
 
-#endif // VGC_GRAPHICS_TARGETS_H
+#endif // VGC_GRAPHICS_SWAPCHAIN_H

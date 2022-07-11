@@ -26,6 +26,7 @@
 #include <mutex>
 #include <thread>
 #include <unordered_set>
+#include <chrono>
 
 #include <vgc/core/assert.h>
 #include <vgc/core/color.h>
@@ -35,13 +36,16 @@
 #include <vgc/geometry/mat4f.h>
 #include <vgc/graphics/api.h>
 #include <vgc/graphics/buffer.h>
-#include <vgc/graphics/detail/commands.h>
+#include <vgc/graphics/detail/command.h>
 #include <vgc/graphics/enums.h>
+#include <vgc/graphics/framebuffer.h>
 #include <vgc/graphics/geometryview.h>
+#include <vgc/graphics/image.h>
+#include <vgc/graphics/imageview.h>
 #include <vgc/graphics/logcategories.h>
 #include <vgc/graphics/program.h>
 #include <vgc/graphics/resource.h>
-#include <vgc/graphics/targets.h>
+#include <vgc/graphics/swapchain.h>
 
 namespace vgc::graphics {
 
@@ -93,13 +97,18 @@ protected:
     ///
     Engine();
 
-    void onDestroyed() override {
+    void onDestroyed() override
+    {
+        swapChain_.reset();
+        program_.reset();
+        framebufferStack_.clear();
         stopRenderThread_();
     }
 
 public:
 
-    void start() {
+    void start()
+    {
         startRenderThread_();
     }
 
@@ -111,26 +120,30 @@ public:
     /// If the current command list is empty, `flush()` does nothing and
     /// returns the index of the previous list.
     ///
-    UInt flush() {
-        return submitPendingCommandList_();
+    UInt flush()
+    {
+        return submitPendingCommandList_(true);
     }
 
     /// Submits the current command list if present then waits for all submitted
     /// command lists to finish being translated to GPU commands.
     ///
-    void finish() {
-        UInt id = submitPendingCommandList_();
+    void finish()
+    {
+        UInt id = submitPendingCommandList_(true);
         waitCommandListTranslationFinished_(id);
     }
 
     /// Creates a swap chain for the given window.
     ///
-    SwapChainPtr createSwapChain(const SwapChainDesc& desc) {
+    SwapChainPtr createSwapChain(const SwapChainCreateInfo& desc)
+    {
         return SwapChainPtr(createSwapChain_(desc));
     }
 
-    void resizeSwapChain(SwapChain* swapChain, UInt32 width, UInt32 height) {
-        if (swapChain->owningList_ != resourceList_) {
+    void resizeSwapChain(SwapChain* swapChain, UInt32 width, UInt32 height)
+    {
+        if (swapChain->gcList_ != gcResourceList_) {
             // XXX error, using a resource from another engine..
             return;
         }
@@ -138,12 +151,13 @@ public:
         resizeSwapChain_(swapChain, width, height);
     }
 
-    void bindSwapChain(const SwapChainPtr& swapChain) {
-        if (swapChain->owningList_ != resourceList_) {
+    void bindSwapChain(const SwapChainPtr& swapChain)
+    {
+        if (swapChain->gcList_ != gcResourceList_) {
             // XXX error, using a resource from another engine..
             return;
         }
-        lastBoundSwapChain_ = swapChain;
+        swapChain_ = swapChain;
         queueLambdaCommandWithParameters_<SwapChain*>(
             "bindSwapChain",
             [](Engine* engine, SwapChain* swapChain) {
@@ -157,14 +171,14 @@ public:
                  std::function<void(UInt64 /*timestamp*/)>&& presentedCallback,
                  PresentFlags flags = PresentFlags::None)
     {
-        ++lastBoundSwapChain_->pendingPresentCount_;
+        ++swapChain_->pendingPresentCount_;
         bool shouldSync = syncInterval > 0;
         if (shouldSync && shouldPresentWaitFromSyncedUserThread_()) {
             // Preventing dead-locks
             // See https://docs.microsoft.com/en-us/windows/win32/api/DXGI1_2/nf-dxgi1_2-idxgiswapchain1-present1#remarks
             finish();
-            UInt64 timestamp = present_(lastBoundSwapChain_.get(), syncInterval, flags);
-            --lastBoundSwapChain_->pendingPresentCount_;
+            UInt64 timestamp = present_(swapChain_.get(), syncInterval, flags);
+            --swapChain_->pendingPresentCount_;
             presentedCallback(timestamp);
         }
         else {
@@ -181,27 +195,29 @@ public:
                     --p.swapChain->pendingPresentCount_;
                     p.presentedCallback(timestamp);
                 },
-                lastBoundSwapChain_.get(), syncInterval, flags, std::move(presentedCallback));
+                swapChain_.get(), syncInterval, flags, std::move(presentedCallback));
 
             if (shouldSync) {
                 finish();
             }
             else {
-                submitPendingCommandList_();
+                submitPendingCommandList_(true);
             }
         }
     }
 
-    FramebufferPtr getDefaultFramebuffer() {
-        SwapChain* swapChain = lastBoundSwapChain_.get();
+    FramebufferPtr getDefaultFramebuffer()
+    {
+        SwapChain* swapChain = swapChain_.get();
         return swapChain ? swapChain->defaultFrameBuffer_ : FramebufferPtr();
     }
 
-    void bindFramebuffer(Framebuffer* framebuffer = nullptr) {
+    void bindFramebuffer(Framebuffer* framebuffer = nullptr)
+    {
         if (!framebuffer) {
             framebuffer = getDefaultFramebuffer().get();
         }
-        else if (framebuffer->owningList_ != resourceList_) {
+        else if (framebuffer->gcList_ != gcResourceList_) {
             // XXX error, using a resource from another engine..
             return;
         }
@@ -213,7 +229,8 @@ public:
             framebuffer);
     }
 
-    void setViewport(Int x, Int y, Int width, Int height) {
+    void setViewport(Int x, Int y, Int width, Int height)
+    {
         struct CommandParameters {
             Int x, y, width, height;
         };
@@ -227,7 +244,8 @@ public:
 
     /// Clears the whole render area with the given color.
     ///
-    void clear(const core::Color& color) {
+    void clear(const core::Color& color)
+    {
         queueLambdaCommandWithParameters_<core::Color>(
             "clear",
             [](Engine* engine, const core::Color& c) {
@@ -238,28 +256,25 @@ public:
 
     /// Returns the current projection matrix (top-most on the stack).
     ///
-    geometry::Mat4f projectionMatrix() const {
+    geometry::Mat4f projectionMatrix() const
+    {
         return projectionMatrixStack_.last();
     }
 
     /// Assigns `m` to the top-most matrix of the projection matrix stack.
     /// `m` becomes the current projection matrix.
     ///
-    void setProjectionMatrix(const geometry::Mat4f& projectionMatrix) {
+    void setProjectionMatrix(const geometry::Mat4f& projectionMatrix)
+    {
         projectionMatrixStack_.last() = projectionMatrix;
-        queueLambdaCommandWithParameters_<geometry::Mat4f>(
-            "setProjectionMatrix",
-            [](Engine* engine, const geometry::Mat4f& m) {
-                engine->setProjectionMatrix_(m);
-            },
-            projectionMatrix);
+        dirtyBuiltinConstantBuffer_ = true;
     }
 
     /// Duplicates the top-most matrix on the projection matrix stack.
     ///
-    void pushProjectionMatrix() {
+    void pushProjectionMatrix()
+    {
         projectionMatrixStack_.emplaceLast(projectionMatrixStack_.last());
-        setViewMatrix(projectionMatrixStack_.last());
     }
 
     /// Removes the top-most matrix of the projection matrix stack.
@@ -268,35 +283,33 @@ public:
     /// The behavior is undefined if there is only one matrix in the stack
     /// before calling this function.
     ///
-    void popProjectionMatrix() {
+    void popProjectionMatrix()
+    {
         projectionMatrixStack_.removeLast();
-        setViewMatrix(projectionMatrixStack_.last());
+        dirtyBuiltinConstantBuffer_ = true;
     }
 
     /// Returns the current view matrix (top-most on the stack).
     ///
-    geometry::Mat4f viewMatrix() const {
+    geometry::Mat4f viewMatrix() const
+    {
         return viewMatrixStack_.last();
     }
 
     /// Assigns `m` to the top-most matrix of the view matrix stack.
     /// `m` becomes the current view matrix.
     ///
-    void setViewMatrix(const geometry::Mat4f& viewMatrix) {
+    void setViewMatrix(const geometry::Mat4f& viewMatrix)
+    {
         viewMatrixStack_.last() = viewMatrix;
-        queueLambdaCommandWithParameters_<geometry::Mat4f>(
-            "setViewMatrix",
-            [](Engine* engine, const geometry::Mat4f& m) {
-                engine->setViewMatrix_(m);
-            },
-            viewMatrix);
+        dirtyBuiltinConstantBuffer_ = true;
     }
 
     /// Duplicates the top-most matrix on the view matrix stack.
     ///
-    void pushViewMatrix() {
+    void pushViewMatrix()
+    {
         viewMatrixStack_.emplaceLast(viewMatrixStack_.last());
-        setViewMatrix(viewMatrixStack_.last());
     }
 
     /// Removes the top-most matrix of the view matrix stack.
@@ -305,24 +318,19 @@ public:
     /// The behavior is undefined if there is only one matrix in the stack
     /// before calling this function.
     ///
-    void popViewMatrix() {
+    void popViewMatrix()
+    {
         viewMatrixStack_.removeLast();
-        setViewMatrix(viewMatrixStack_.last());
+        dirtyBuiltinConstantBuffer_ = true;
     }
 
-    void bindPaintShaders() {
+    void bindSimpleProgram()
+    {
+        Program* program = simpleProgram_.get();
         queueLambdaCommand_(
-            "bindSimpleShaders",
-            [](Engine* engine) {
-                engine->bindSimpleShaders_();
-            });
-    }
-
-    void releaseSimpleShaders() {
-        queueLambdaCommand_(
-            "releaseSimpleShaders",
-            [](Engine* engine) {
-                engine->releaseSimpleShaders_();
+            "bindSimpleProgram",
+            [=](Engine* engine) {
+                engine->bindProgram_(program);
             });
     }
 
@@ -342,7 +350,8 @@ public:
     // the format is fixed (XYRGB).
     //
     template<typename DataGetter>
-    BufferPtr createPrimitiveBuffer(DataGetter&& initialDataGetter, Int initialLengthInBytes, bool dynamic) {
+    BufferPtr createPrimitiveBuffer(DataGetter&& initialDataGetter, Int initialLengthInBytes, bool dynamic)
+    {
         if (initialLengthInBytes < 0) {
             throw core::NegativeIntegerError(core::format(
                 "Negative initialLengthInBytes ({}) provided to vgc::graphics::Engine::createPrimitiveBuffer()", initialLengthInBytes));
@@ -369,7 +378,8 @@ public:
         return buffer;
     }
 
-    BufferPtr createDynamicPrimitiveBuffer() {
+    BufferPtr createDynamicPrimitiveBuffer()
+    {
         BufferPtr buffer = BufferPtr(createBuffer_(
             Usage::Dynamic,
             BindFlags::VertexBuffer,
@@ -387,13 +397,14 @@ public:
     }
 
     template<typename DataGetter>
-    void updateBufferData(Buffer* buffer, DataGetter&& initialDataGetter, Int lengthInBytes) {
+    void updateBufferData(Buffer* buffer, DataGetter&& initialDataGetter, Int lengthInBytes)
+    {
         if (lengthInBytes < 0) {
             throw core::NegativeIntegerError(core::format(
                 "Negative lengthInBytes ({}) provided to vgc::graphics::Engine::updateBufferData()", lengthInBytes));
         }
 
-        if (buffer->owningList_ != resourceList_) {
+        if (buffer->gcList_ != gcResourceList_) {
             // XXX error, using a resource from another engine..
             return;
         }
@@ -415,8 +426,9 @@ public:
             buffer, std::move(initialDataGetter), lengthInBytes);
     }
 
-    void drawPrimitives(Buffer* buffer, PrimitiveType type) {
-        if (buffer->owningList_ != resourceList_) {
+    void drawPrimitives(Buffer* buffer, PrimitiveType type)
+    {
+        if (buffer->gcList_ != gcResourceList_) {
             // XXX error, using a resource from another engine..
             return;
         }
@@ -436,16 +448,29 @@ public:
 protected:
     // USER THREAD implementation functions
 
-    virtual SwapChain* createSwapChain_(const SwapChainDesc& desc) = 0;
+    virtual SwapChain* createSwapChain_(const SwapChainCreateInfo& desc) = 0;
     virtual void resizeSwapChain_(SwapChain* swapChain, UInt32 width, UInt32 height) = 0;
-    // XXX virtual FramebufferPtr createFramebuffer_(const RenderTargetViewPtr& colorRtv) = 0;
+    virtual FramebufferPtr createFramebuffer_(const ImageViewPtr& colorRtv) = 0;
     // XXX virtual void setDefaultFramebuffer_(const SwapChainPtr& swapChain, const FramebufferPtr& fb) = 0;
-    virtual Buffer* createBuffer_(
-        Usage usage, BindFlags bindFlags, ResourceMiscFlags resourceMiscFlags, CpuAccessFlags cpuAccessFlags) = 0;
 
-    virtual GeometryView* createGeometryView_(
-        PrimitiveType primitiveType, const BuiltinGeometryLayout& layout,
-        const BufferPtr& indexBuffer, const BufferPtr& vertexBuffer0) = 0;
+    virtual Buffer* createBuffer_(const BufferCreateInfo& createInfo) = 0;
+    virtual Image* createImage_(const ImageCreateInfo& createInfo) = 0;
+    virtual GeometryView* createGeometryView_(const GeometryViewCreateInfo& createInfo) = 0;
+
+    virtual void setVSConstantBuffers_(Buffer** buffers, Int startIndex, Int count) = 0;
+    virtual void setGSConstantBuffers_(Buffer** buffers, Int startIndex, Int count) = 0;
+    virtual void setPSConstantBuffers_(Buffer** buffers, Int startIndex, Int count) = 0;
+
+    virtual void setVSImageViews_(ImageView** views, Int startIndex, Int count) = 0;
+    virtual void setGSImageViews_(ImageView** views, Int startIndex, Int count) = 0;
+    virtual void setPSImageViews_(ImageView** views, Int startIndex, Int count) = 0;
+
+    virtual void setVSSamplers_(ImageView** views, Int startIndex, Int count) = 0;
+    virtual void setGSSamplers_(ImageView** views, Int startIndex, Int count) = 0;
+    virtual void setPSSamplers_(ImageView** views, Int startIndex, Int count) = 0;
+
+    virtual Image* createImage_(const ImageCreateInfo& createInfo) = 0;
+    virtual GeometryView* createGeometryView_(const GeometryViewCreateInfo& createInfo) = 0;
 
     virtual bool shouldPresentWaitFromSyncedUserThread_() { return false; }
 
@@ -477,40 +502,63 @@ protected:
     virtual void updateRoundedRectangleVertexShaderConstants_(RoundedRectangleVertexShaderConstants& constants) = 0;
 
 protected:
-    detail::ResourceList* resourceList_ = nullptr;
+    detail::ResourceList* gcResourceList_ = nullptr;
+    // cannot be flushed in out-of-order chunks unless garbagedResources is only sent with the last
     std::list<CommandUPtr> pendingCommands_;
 
     // QUEUING
 
     template<typename TCommand, typename... Args>
-    void queueCommand_(Args&&... args) {
+    void queueCommand_(Args&&... args)
+    {
         pendingCommands_.emplace_back(
             new TCommand(std::forward<Args>(args)...));
     };
 
     template<typename Lambda>
-    void queueLambdaCommand_(std::string_view name, Lambda&& lambda) {
+    void queueLambdaCommand_(std::string_view name, Lambda&& lambda)
+    {
         pendingCommands_.emplace_back(
             new detail::LambdaCommand(name, std::forward<Lambda>(lambda)));
     };
 
     template<typename Data, typename Lambda, typename... Args>
-    void queueLambdaCommandWithParameters_(std::string_view name, Lambda&& lambda, Args&&... args) {
+    void queueLambdaCommandWithParameters_(std::string_view name, Lambda&& lambda, Args&&... args)
+    {
         pendingCommands_.emplace_back(
             new detail::LambdaCommandWithParameters<Data, std::decay_t<Lambda>>(name, std::forward<Lambda>(lambda), std::forward<Args>(args)...));
     };
 
     // BATCHING early impl
 
+    ImagePtr glyphStagingImage_; // 2D
+    ImageViewPtr glyphStagingImageView_;
+    ImagePtr glyphAtlasImage_; // 1D layered
+    ImageViewPtr glyphAtlasImageView_;
+    ImagePtr iconsAtlasImage_; // 2D
+    ImageViewPtr iconsAtlasImageView_;
+    ImagePtr colorGradientsBuffer_; // 2D
+    ImageViewPtr colorGradientsImageView_; // 1D buffer
 
 private:
-    SwapChainPtr lastBoundSwapChain_;
+    // pipeline state on the user thread
+    SwapChainPtr swapChain_;
+    ProgramPtr program_;
+    core::Array<FramebufferPtr> framebufferStack_;
+
+    // builtin shaders (create by api-specific engine implementations)
+    ProgramPtr simpleProgram_;
+    ProgramPtr glyphAtlasProgram_;
+    ProgramPtr roundedRectangleProgram_;
+
+    // builtin constants + dirty bool
     core::Array<geometry::Mat4f> projectionMatrixStack_;
     core::Array<geometry::Mat4f> viewMatrixStack_;
-    bool dirtyBuiltinConstants_ = false;
+    UInt64 engineTimeInNs_ = 0;
+    bool dirtyBuiltinConstantBuffer_ = false;
 
+    // render thread + sync
     std::thread renderThread_;
-
     std::mutex mutex_;
     std::condition_variable wakeRenderThreadConditionVariable_;
     std::condition_variable renderThreadEventConditionVariable_;
@@ -526,6 +574,10 @@ private:
             , garbagedResources(std::move(garbagedResources))
         {}
 
+        CommandList(std::list<CommandUPtr>&& commands)
+            : commands(std::move(commands))
+        {}
+
         std::list<CommandUPtr> commands;
         core::Array<Resource*> garbagedResources;
     };
@@ -535,7 +587,7 @@ private:
     void startRenderThread_();
     void stopRenderThread_(); // blocking
 
-    UInt submitPendingCommandList_();
+    UInt submitPendingCommandList_(bool withGarbage);
 
     // returns false if translation was cancelled by a stop request.
     void waitCommandListTranslationFinished_(UInt commandListId = 0);

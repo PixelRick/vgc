@@ -26,53 +26,194 @@ namespace vgc::graphics {
 
 // Concept mapping:
 //  D3D11  -> Image
-//  OpenGL -> Image (with Texture)
+//  OpenGL -> Image (within Texture)
 //  Vulkan -> Image
 //
 
-/// \class vgc::graphics::PrimitivesBuffer
-/// \brief Abstract primitive data buffer.
+/// \class vgc::graphics::ImageCreateInfo
+/// \brief Parameters for image creation.
 ///
-class VGC_GRAPHICS_API Image2D : public Resource {
-protected:
-    Buffer(
-        ResourceList* owningList,
-        Usage usage,
-        BindFlags bindFlags,
-        CpuAccessFlags cpuAccessFlags)
-        : Resource(owningList)
-        , lengthInBytes_(0)
-        , usage_(usage)
-        , bindFlags_(bindFlags)
-        , cpuAccessFlags_(cpuAccessFlags)
-    {}
-
+class VGC_GRAPHICS_API ImageCreateInfo {
 public:
-    Int lengthInBytes() const {
-        return lengthInBytes_;
+    UInt32 width() const
+    {
+        return width_;
     }
 
-    Usage usage() const {
+    void setWidth(UInt32 width)
+    {
+        width_ = width;
+    }
+
+    UInt32 height() const
+    {
+        return height_;
+    }
+
+    void setHeight(UInt32 height)
+    {
+        height_ = height;
+    }
+
+    ImageFormat format() const
+    {
+        return format_;
+    }
+
+    void setFormat(ImageFormat format)
+    {
+        format_ = format;
+    }
+
+    UInt8 layerCount() const
+    {
+        return layerCount_;
+    }
+
+    void setLayerCount(UInt8 layerCount)
+    {
+        layerCount_ = layerCount;
+    }
+
+    UInt8 mipLevelCount() const
+    {
+        return mipLevelCount_;
+    }
+
+    void setMipLevelCount(UInt8 mipLevelCount)
+    {
+        mipLevelCount_ = mipLevelCount;
+    }
+
+    UInt8 sampleCount() const
+    {
+        return sampleCount_;
+    }
+
+    void setSampleCount(UInt8 sampleCount)
+    {
+        sampleCount_ = sampleCount;
+    }
+
+    Usage usage() const
+    {
         return usage_;
     }
 
-    BindFlags bindFlags() const {
-        return bindFlags_;
+    void setUsage(Usage usage)
+    {
+        usage_ = usage;
     }
 
-    CpuAccessFlags cpuAccessFlags() const {
+    bool isRenderTargetable() const
+    {
+        return isRenderTargetable_;
+    }
+
+    void setRenderTargetable(bool isRenderTargetable)
+    {
+        isRenderTargetable_ = isRenderTargetable;
+    }
+
+    ResourceMiscFlags resourceMiscFlags() const
+    {
+        return resourceMiscFlags_;
+    }
+
+    void setResourceMiscFlags(ResourceMiscFlags resourceMiscFlags)
+    {
+        resourceMiscFlags_ = resourceMiscFlags;
+    }
+
+    CpuAccessFlags cpuAccessFlags() const
+    {
         return cpuAccessFlags_;
     }
 
-protected:
-    Int lengthInBytes_;
+    void setCpuAccessFlags(CpuAccessFlags cpuAccessFlags)
+    {
+        cpuAccessFlags_ = cpuAccessFlags;
+    }
 
 private:
-    Usage usage_;
-    BindFlags bindFlags_;
-    CpuAccessFlags cpuAccessFlags_;
+    UInt32 width_;
+    UInt32 height_;
+    ImageFormat format_;
+    UInt8 layerCount_;
+    UInt8 mipLevelCount_;
+    UInt8 sampleCount_;
+    Usage usage_ = Usage::Default;
+    bool isRenderTargetable_;
+    CpuAccessFlags cpuAccessFlags_ = CpuAccessFlags::None;
+    ResourceMiscFlags resourceMiscFlags_ = ResourceMiscFlags::None;
 };
-using BufferPtr = ResourcePtr<Buffer>;
+
+/// \class vgc::graphics::Image
+/// \brief Abstract image resource.
+///
+class VGC_GRAPHICS_API Image : public Resource {
+protected:
+    Image(ResourceList* gcList,
+          const ImageCreateInfo& info)
+        : Resource(gcList)
+        , info_(info)
+    {}
+
+public:
+    UInt32 width() const
+    {
+        return info_.width();
+    }
+
+    UInt32 height() const
+    {
+        return info_.height();
+    }
+
+    ImageFormat format() const
+    {
+        return info_.format();
+    }
+
+    UInt8 layerCount() const
+    {
+        return info_.layerCount();
+    }
+
+    UInt8 mipLevelCount() const
+    {
+        return info_.mipLevelCount();
+    }
+
+    UInt8 sampleCount() const
+    {
+        return info_.sampleCount();
+    }
+
+    Usage usage() const
+    {
+        return info_.usage();
+    }
+
+    bool isRenderTargetable() const
+    {
+        return info_.isRenderTargetable();
+    }
+
+    CpuAccessFlags cpuAccessFlags() const
+    {
+        return info_.cpuAccessFlags();
+    }
+
+    ResourceMiscFlags resourceMiscFlags() const
+    {
+        return info_.resourceMiscFlags();
+    }
+
+private:
+    ImageCreateInfo info_;
+};
+using ImagePtr = ResourcePtr<Image>;
 
 } // namespace vgc::graphics
 
