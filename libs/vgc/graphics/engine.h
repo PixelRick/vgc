@@ -35,8 +35,10 @@
 #include <vgc/core/templateutil.h>
 #include <vgc/geometry/mat4f.h>
 #include <vgc/graphics/api.h>
+#include <vgc/graphics/batch.h>
 #include <vgc/graphics/buffer.h>
 #include <vgc/graphics/detail/command.h>
+#include <vgc/graphics/detail/pipelinestate.h>
 #include <vgc/graphics/enums.h>
 #include <vgc/graphics/framebuffer.h>
 #include <vgc/graphics/geometryview.h>
@@ -51,19 +53,10 @@ namespace vgc::graphics {
 
 VGC_DECLARE_OBJECT(Engine);
 
-struct SimpleVertexShaderConstants {
-    std::array<float, 16> projMatrix;
-    std::array<float, 16> viewMatrix;
-};
-
-struct AtlasGlyphVertexShaderConstants {
-    std::array<float, 16> projMatrix;
-    std::array<float, 16> viewMatrix;
-};
-
-struct RoundedRectangleVertexShaderConstants {
-    std::array<float, 16> projMatrix;
-    std::array<float, 16> viewMatrix;
+struct BuiltinConstants {
+    geometry::Mat4f projMatrix;
+    geometry::Mat4f viewMatrix;
+    UInt32 engineTimeInMs_ = 0;
 };
 
 // XXX add something to limit the number of pending frames for each swapchain..
@@ -100,8 +93,24 @@ protected:
     void onDestroyed() override
     {
         swapChain_.reset();
-        program_.reset();
+        programStack_.clear();
         framebufferStack_.clear();
+
+        colorGradientsBuffer_; // 1D buffer
+        colorGradientsBufferImageView_;
+
+        glyphAtlasProgram_.reset();
+        glyphStagingImage_.reset();
+        glyphStagingImageView_.reset();
+        glyphAtlasBuffer_.reset();
+        glyphAtlasBufferImageView_.reset();
+
+        iconAtlasProgram_.reset();
+        iconAtlasImage_.reset();
+        iconAtlasImageView_.reset();
+
+        roundedRectangleProgram_.reset();
+
         stopRenderThread_();
     }
 
@@ -112,7 +121,7 @@ public:
         startRenderThread_();
     }
 
-    // MODEL THREAD functions
+    // USER THREAD functions
 
     /// Submits the current command list for execution by the render thread.
     /// Returns the index assigned to the submitted command list.
@@ -217,16 +226,32 @@ public:
         if (!framebuffer) {
             framebuffer = getDefaultFramebuffer().get();
         }
-        else if (framebuffer->gcList_ != gcResourceList_) {
-            // XXX error, using a resource from another engine..
+        else if (!checkResourceIsValid(framebuffer)) {
             return;
         }
+
         queueLambdaCommandWithParameters_<Framebuffer*>(
             "bindFramebuffer",
             [](Engine* engine, Framebuffer* framebuffer) {
                 engine->bindFramebuffer_(framebuffer);
             },
             framebuffer);
+    }
+
+    void pushProgram()
+    {
+        programStack_.emplaceLast(programStack_.last());
+    }
+
+    void popProgram()
+    {
+        programStack_.removeLast();
+        Program* p = programStack_.last().get();
+        queueLambdaCommand_(
+            "bindProgram",
+            [=](Engine* engine) {
+                engine->bindProgram_(p);
+            });
     }
 
     void setViewport(Int x, Int y, Int width, Int height)
@@ -324,44 +349,49 @@ public:
         dirtyBuiltinConstantBuffer_ = true;
     }
 
-    void bindSimpleProgram()
+    void bindBuiltinProgram(BuiltinProgram builtinProgram)
     {
-        Program* program = simpleProgram_.get();
+        ProgramPtr program = {};
+        switch (builtinProgram) {
+        case BuiltinProgram::Simple: {
+            program = simpleProgram_; break;
+        }
+        }
+        programStack_.emplaceLast(program);
+
+        Program* p = program.get();
         queueLambdaCommand_(
-            "bindSimpleProgram",
+            "bindProgram",
             [=](Engine* engine) {
-                engine->bindProgram_(program);
+                engine->bindProgram_(p);
             });
     }
 
-    // XXX fix comment
-    /// Creates a resource for storing primitives data, and returns a shared
-    /// pointer to it.
-    ///
-    /// Once created, you can load triangles data using
-    /// resource->load(...), and you can draw the loaded triangles
-    /// using resource->draw().
-    ///
-    /// When you don't need the buffer anymore (e.g., in the
-    /// vgc::ui::Widget::cleanup() function), you must reset the resource pointer.
-    ///
-    // Note: in the future, we may add overloads to this function to allow
-    // specifying the vertex format (i.e., XYRGB, XYZRGBA, etc.), but for now
-    // the format is fixed (XYRGB).
-    //
+    void pushProgram()
+    {
+        programStack_.emplaceLast(programStack_.last());
+    }
+
+    void popProgram()
+    {
+        programStack_.removeLast();
+        Program* p = programStack_.last().get();
+        queueLambdaCommand_(
+            "bindProgram",
+            [=](Engine* engine) {
+                engine->bindProgram_(p);
+            });
+    }
+
     template<typename DataGetter>
-    BufferPtr createPrimitiveBuffer(DataGetter&& initialDataGetter, Int initialLengthInBytes, bool dynamic)
+    BufferPtr createBuffer(const BufferCreateInfo& createInfo, DataGetter&& initialDataGetter, Int initialLengthInBytes)
     {
         if (initialLengthInBytes < 0) {
             throw core::NegativeIntegerError(core::format(
-                "Negative initialLengthInBytes ({}) provided to vgc::graphics::Engine::createPrimitiveBuffer()", initialLengthInBytes));
+                "Negative initialLengthInBytes ({}) provided to Engine::createBuffer()", initialLengthInBytes));
         }
 
-        BufferPtr buffer = BufferPtr(createBuffer_(
-            dynamic ? Usage::Dynamic : Usage::Immutable,
-            BindFlags::VertexBuffer,
-            ResourceMiscFlags::None,
-            dynamic ? CpuAccessFlags::Write : CpuAccessFlags::None));
+        BufferPtr buffer(createBuffer_(createInfo));
 
         struct CommandParameters {
             Buffer* buffer;
@@ -369,30 +399,11 @@ public:
             Int initialLengthInBytes;
         };
         queueLambdaCommandWithParameters_<CommandParameters>(
-            "initPrimitiveBuffer",
+            "initBuffer",
             [](Engine* engine, const CommandParameters& p) {
                 engine->initBuffer_(p.buffer, p.initialDataGetter(), p.initialLengthInBytes);
-                engine->setupVertexBufferForPaintShader_(p.buffer);
             },
             buffer.get(), std::move(initialDataGetter), initialLengthInBytes);
-        return buffer;
-    }
-
-    BufferPtr createDynamicPrimitiveBuffer()
-    {
-        BufferPtr buffer = BufferPtr(createBuffer_(
-            Usage::Dynamic,
-            BindFlags::VertexBuffer,
-            ResourceMiscFlags::None,
-            CpuAccessFlags::Write));
-
-        queueLambdaCommandWithParameters_<Buffer*>(
-            "initPrimitiveBuffer",
-            [](Engine* engine, Buffer* buf) {
-                engine->initBuffer_(buf, nullptr, 0);
-                engine->setupVertexBufferForPaintShader_(buf);
-            },
-            buffer.get());
         return buffer;
     }
 
@@ -404,8 +415,7 @@ public:
                 "Negative lengthInBytes ({}) provided to vgc::graphics::Engine::updateBufferData()", lengthInBytes));
         }
 
-        if (buffer->gcList_ != gcResourceList_) {
-            // XXX error, using a resource from another engine..
+        if (!checkResourceIsValid(buffer)) {
             return;
         }
 
@@ -426,23 +436,71 @@ public:
             buffer, std::move(initialDataGetter), lengthInBytes);
     }
 
-    void drawPrimitives(Buffer* buffer, PrimitiveType type)
+    // XXX fix comment
+    /// Creates a resource for storing primitives data, and returns a shared
+    /// pointer to it.
+    ///
+    /// Once created, you can load triangles data using
+    /// resource->load(...), and you can draw the loaded triangles
+    /// using resource->draw().
+    ///
+    /// When you don't need the buffer anymore (e.g., in the
+    /// vgc::ui::Widget::cleanup() function), you must reset the resource pointer.
+    ///
+    // Note: in the future, we may add overloads to this function to allow
+    // specifying the vertex format (i.e., XYRGB, XYZRGBA, etc.), but for now
+    // the format is fixed (XYRGB).
+    //
+    template<typename DataGetter>
+    BufferPtr createVertexBuffer(DataGetter&& initialDataGetter, Int initialLengthInBytes, bool dynamic)
     {
-        if (buffer->gcList_ != gcResourceList_) {
-            // XXX error, using a resource from another engine..
+        BufferCreateInfo createInfo = {};
+        createInfo.setUsage(dynamic ? Usage::Dynamic : Usage::Immutable);
+        createInfo.setBindFlags(BindFlags::VertexBuffer);
+        createInfo.setCpuAccessFlags(dynamic ? CpuAccessFlags::Write : CpuAccessFlags::None);
+        createInfo.setResourceMiscFlags(ResourceMiscFlags::None);
+        return createBuffer(createInfo, std::move(initialDataGetter), initialLengthInBytes);
+    }
+
+    template<typename DataGetter>
+    ImagePtr createImage(const ImageCreateInfo& createInfo, DataGetter&& initialDataGetter)
+    {
+        ImagePtr image(createImage_(createInfo));
+
+        struct CommandParameters {
+            Image* image;
+            std::decay_t<DataGetter> initialDataGetter;
+        };
+        queueLambdaCommandWithParameters_<CommandParameters>(
+            "initImage",
+            [](Engine* engine, const CommandParameters& p) {
+                engine->initImage_(p.image, p.initialDataGetter());
+            },
+            image.get(), std::move(initialDataGetter));
+        return image;
+    }
+
+    GeometryViewPtr createGeometryView(const GeometryViewCreateInfo& createInfo)
+    {
+        GeometryViewPtr geometryView(createGeometryView_(createInfo));
+        return geometryView;
+    }
+
+    void draw(GeometryView* geometryView)
+    {
+        if (!checkResourceIsValid(geometryView)) {
             return;
         }
 
         struct CommandParameters {
-            Buffer* buffer;
-            PrimitiveType type;
+            GeometryView* geometryView;
         };
         queueLambdaCommandWithParameters_<CommandParameters>(
-            "drawPrimitives",
+            "draw",
             [](Engine* engine, const CommandParameters& p) {
-                engine->drawPrimitives_(p.buffer, p.type);
+                engine->draw_(p.geometryView);
             },
-            buffer, type);
+            geometryView);
     }
 
 protected:
@@ -450,25 +508,10 @@ protected:
 
     virtual SwapChain* createSwapChain_(const SwapChainCreateInfo& desc) = 0;
     virtual void resizeSwapChain_(SwapChain* swapChain, UInt32 width, UInt32 height) = 0;
-    virtual FramebufferPtr createFramebuffer_(const ImageViewPtr& colorRtv) = 0;
+    virtual FramebufferPtr createFramebuffer_(const ImageViewPtr& colorImageView) = 0;
     // XXX virtual void setDefaultFramebuffer_(const SwapChainPtr& swapChain, const FramebufferPtr& fb) = 0;
 
     virtual Buffer* createBuffer_(const BufferCreateInfo& createInfo) = 0;
-    virtual Image* createImage_(const ImageCreateInfo& createInfo) = 0;
-    virtual GeometryView* createGeometryView_(const GeometryViewCreateInfo& createInfo) = 0;
-
-    virtual void setVSConstantBuffers_(Buffer** buffers, Int startIndex, Int count) = 0;
-    virtual void setGSConstantBuffers_(Buffer** buffers, Int startIndex, Int count) = 0;
-    virtual void setPSConstantBuffers_(Buffer** buffers, Int startIndex, Int count) = 0;
-
-    virtual void setVSImageViews_(ImageView** views, Int startIndex, Int count) = 0;
-    virtual void setGSImageViews_(ImageView** views, Int startIndex, Int count) = 0;
-    virtual void setPSImageViews_(ImageView** views, Int startIndex, Int count) = 0;
-
-    virtual void setVSSamplers_(ImageView** views, Int startIndex, Int count) = 0;
-    virtual void setGSSamplers_(ImageView** views, Int startIndex, Int count) = 0;
-    virtual void setPSSamplers_(ImageView** views, Int startIndex, Int count) = 0;
-
     virtual Image* createImage_(const ImageCreateInfo& createInfo) = 0;
     virtual GeometryView* createGeometryView_(const GeometryViewCreateInfo& createInfo) = 0;
 
@@ -486,20 +529,24 @@ protected:
     virtual void initBuffer_(Buffer* buffer, const void* data, Int initialLengthInBytes) = 0;
     virtual void updateBufferData_(Buffer* buffer, const void* data, Int lengthInBytes) = 0;
 
-    // XXX aim at removing this.. vao with multiple shaders is pain..
-    virtual void setupVertexBufferForPaintShader_(Buffer* buffer) = 0;
-
-    virtual void drawPrimitives_(Buffer* buffer, PrimitiveType type) = 0;
+    virtual void initImage_(Image* image, const void* data) = 0;
 
     virtual void bindProgram_(Program* program) = 0;
     virtual void releaseProgram_() = 0;
 
-    // am i sure we can use exactly the same data for uniform blocks ?
+    virtual void setVSConstantBuffers_(Buffer** buffers, Int startIndex, Int count) = 0;
+    virtual void setGSConstantBuffers_(Buffer** buffers, Int startIndex, Int count) = 0;
+    virtual void setPSConstantBuffers_(Buffer** buffers, Int startIndex, Int count) = 0;
 
-    // single func ?
-    virtual void updateSimpleVertexShaderConstants_(SimpleVertexShaderConstants& constants) = 0;
-    virtual void updateAtlasGlyphVertexShaderConstants_(AtlasGlyphVertexShaderConstants& constants) = 0;
-    virtual void updateRoundedRectangleVertexShaderConstants_(RoundedRectangleVertexShaderConstants& constants) = 0;
+    virtual void setVSImageViews_(ImageView** views, Int startIndex, Int count) = 0;
+    virtual void setGSImageViews_(ImageView** views, Int startIndex, Int count) = 0;
+    virtual void setPSImageViews_(ImageView** views, Int startIndex, Int count) = 0;
+
+    virtual void setVSSamplers_(ImageView** views, Int startIndex, Int count) = 0;
+    virtual void setGSSamplers_(ImageView** views, Int startIndex, Int count) = 0;
+    virtual void setPSSamplers_(ImageView** views, Int startIndex, Int count) = 0;
+
+    virtual void draw_(GeometryView* geometryView) = 0;
 
 protected:
     detail::ResourceList* gcResourceList_ = nullptr;
@@ -529,33 +576,41 @@ protected:
             new detail::LambdaCommandWithParameters<Data, std::decay_t<Lambda>>(name, std::forward<Lambda>(lambda), std::forward<Args>(args)...));
     };
 
-    // BATCHING early impl
-
-    ImagePtr glyphStagingImage_; // 2D
-    ImageViewPtr glyphStagingImageView_;
-    ImagePtr glyphAtlasImage_; // 1D layered
-    ImageViewPtr glyphAtlasImageView_;
-    ImagePtr iconsAtlasImage_; // 2D
-    ImageViewPtr iconsAtlasImageView_;
-    ImagePtr colorGradientsBuffer_; // 2D
-    ImageViewPtr colorGradientsImageView_; // 1D buffer
-
 private:
     // pipeline state on the user thread
     SwapChainPtr swapChain_;
-    ProgramPtr program_;
+    core::Array<ProgramPtr> programStack_;
     core::Array<FramebufferPtr> framebufferStack_;
 
     // builtin shaders (create by api-specific engine implementations)
     ProgramPtr simpleProgram_;
-    ProgramPtr glyphAtlasProgram_;
-    ProgramPtr roundedRectangleProgram_;
 
     // builtin constants + dirty bool
+    BufferPtr builtinConstantsBuffer_;
     core::Array<geometry::Mat4f> projectionMatrixStack_;
     core::Array<geometry::Mat4f> viewMatrixStack_;
-    UInt64 engineTimeInNs_ = 0;
+    UInt32 engineTimeInMs_ = 0;
     bool dirtyBuiltinConstantBuffer_ = false;
+
+    // user thread
+    void updateBuiltinConstants_(BuiltinConstants& constants);
+
+    // batching early impl
+    BufferPtr colorGradientsBuffer_; // 1D buffer
+    ImageViewPtr colorGradientsBufferImageView_;
+
+    ProgramPtr glyphAtlasProgram_;
+    ImagePtr glyphStagingImage_; // 2D
+    ImageViewPtr glyphStagingImageView_;
+    BufferPtr glyphAtlasBuffer_; // 1D layered
+    ImageViewPtr glyphAtlasBufferImageView_;
+    BufferPtr textBatch_;
+
+    ProgramPtr iconAtlasProgram_;
+    ImagePtr iconAtlasImage_; // 2D
+    ImageViewPtr iconAtlasImageView_;
+
+    ProgramPtr roundedRectangleProgram_;
 
     // render thread + sync
     std::thread renderThread_;
@@ -587,10 +642,31 @@ private:
     void startRenderThread_();
     void stopRenderThread_(); // blocking
 
+    void flushTextBatch_();
+    void flushIconBatch_();
+
     UInt submitPendingCommandList_(bool withGarbage);
 
     // returns false if translation was cancelled by a stop request.
     void waitCommandListTranslationFinished_(UInt commandListId = 0);
+
+    // checks
+    bool checkResourceIsValid(Resource* resource)
+    {
+        if (!resource) {
+            VGC_ERROR(LogVgcGraphics, "Unexpected null resource");
+            return false;
+        }
+        if (!resource->gcList_) {
+            VGC_ERROR(LogVgcGraphics, "Trying to use a resource from a stopped engine");
+            return false;
+        }
+        if (resource->gcList_ != gcResourceList_) {
+            VGC_ERROR(LogVgcGraphics, "Trying to use a geometry view from an other engine");
+            return false;
+        }
+        return true;
+    }
 };
 
 } // namespace vgc::graphics

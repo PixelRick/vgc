@@ -149,8 +149,8 @@ enum class ImageFormat : UInt8 {
     // RGBA
     RGBA_8_UNORM,
     RGBA_8_UNORM_SRGB,
-    RGBA_8_UINT,
     RGBA_8_SNORM,
+    RGBA_8_UINT,
     RGBA_8_SINT,
     RGBA_10_10_10_2_UNORM,
     RGBA_10_10_10_2_UINT,
@@ -191,6 +191,29 @@ enum class BuiltinGeometryLayout : UInt8 {
     XYRGB,
     XYZ,
 };
+
+enum class PipelineSubState : UInt8 {
+    None,
+    Program,
+    Framebuffer,
+    VSConstantBuffers,
+    GSConstantBuffers,
+    PSConstantBuffers,
+
+    //virtual void setVSConstantBuffers_(Buffer** buffers, Int startIndex, Int count) = 0;
+    //virtual void setGSConstantBuffers_(Buffer** buffers, Int startIndex, Int count) = 0;
+    //virtual void setPSConstantBuffers_(Buffer** buffers, Int startIndex, Int count) = 0;
+    //
+    //virtual void setVSImageViews_(ImageView** views, Int startIndex, Int count) = 0;
+    //virtual void setGSImageViews_(ImageView** views, Int startIndex, Int count) = 0;
+    //virtual void setPSImageViews_(ImageView** views, Int startIndex, Int count) = 0;
+    //
+    //virtual void setVSSamplers_(ImageView** views, Int startIndex, Int count) = 0;
+    //virtual void setGSSamplers_(ImageView** views, Int startIndex, Int count) = 0;
+    //virtual void setPSSamplers_(ImageView** views, Int startIndex, Int count) = 0;
+
+};
+VGC_DEFINE_SCOPED_ENUM_FLAGS_OPERATORS(PipelineSubState)
 
 } // namespace vgc::graphics
 

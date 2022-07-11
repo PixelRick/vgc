@@ -200,7 +200,7 @@ public:
     }
 
     template<typename U>
-    ResourcePtr(ResourcePtr<U>&& other)
+    ResourcePtr(ResourcePtr<U>&& other) noexcept
         : p_(other.p_)
     {
         other.p_ = nullptr;
@@ -214,7 +214,7 @@ public:
         }
     }
 
-    ResourcePtr(ResourcePtr&& other)
+    ResourcePtr(ResourcePtr&& other) noexcept
         : p_(other.p_)
     {
         other.p_ = nullptr;

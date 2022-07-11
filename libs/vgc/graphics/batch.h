@@ -18,11 +18,15 @@
 #define VGC_GRAPHICS_BATCH_H
 
 #include <vgc/core/arithmetic.h>
-#include <vgc/geometry/mat4f.h>
+#include <vgc/geometry/vec2f.h>
+#include <vgc/geometry/vec4f.h>
+#include <vgc/geometry/rect2f.h>
 #include <vgc/graphics/api.h>
-#include <vgc/graphics/enums.h>
-#include <vgc/graphics/resource.h>
 #include <vgc/graphics/buffer.h>
+#include <vgc/graphics/enums.h>
+#include <vgc/graphics/font.h>
+#include <vgc/graphics/geometryview.h>
+#include <vgc/graphics/resource.h>
 
 namespace vgc::graphics {
 
@@ -47,8 +51,36 @@ protected:
 };
 using BatchPtr = ResourcePtr<Batch>;
 
-// instancing -> use array in constant buffer
-//
+class VGC_GRAPHICS_API BatchedTextData : public Resource {
+protected:
+    friend Engine;
+
+    using Resource::Resource;
+
+    geometry::Rect2f clip_;
+};
+
+namespace detail {
+
+struct VGC_GRAPHICS_API BatchedGlyph {
+    geometry::Vec2f pos_;
+    geometry::Vec2f size_;
+    geometry::Rect2f clip_;
+
+    unsigned int color
+};
+
+struct VGC_GRAPHICS_API TextBatch : public Resource {
+protected:
+    friend Engine;
+
+    using Resource::Resource;
+
+    geometry::Vec2f size_;
+    geometry::Rect2f clip_;
+};
+
+} // namespace detail
 
 } // namespace vgc::graphics
 

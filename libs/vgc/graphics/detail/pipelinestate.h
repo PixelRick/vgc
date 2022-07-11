@@ -14,44 +14,34 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef VGC_GRAPHICS_FRAMEBUFFER_H
-#define VGC_GRAPHICS_FRAMEBUFFER_H
+#ifndef VGC_GRAPHICS_PIPELINESTATE_H
+#define VGC_GRAPHICS_PIPELINESTATE_H
 
 #include <vgc/core/arithmetic.h>
-#include <vgc/core/object.h>
-#include <vgc/graphics/api.h>
+#include <vgc/geometry/mat4f.h>
+#include <vgc/graphics/batch.h>
+#include <vgc/graphics/buffer.h>
 #include <vgc/graphics/enums.h>
+#include <vgc/graphics/framebuffer.h>
+#include <vgc/graphics/geometryview.h>
+#include <vgc/graphics/image.h>
+#include <vgc/graphics/imageview.h>
+#include <vgc/graphics/logcategories.h>
+#include <vgc/graphics/program.h>
 #include <vgc/graphics/resource.h>
 
 namespace vgc::graphics {
 
 VGC_DECLARE_OBJECT(Engine);
 
-/// \class vgc::graphics::Framebuffer
-/// \brief Abstract framebuffer, a collection of graphics pipeline output attachments.
-///
-// Since a swap chain's render target view represents different buffers over
-// time, a Vulkan implementation should probably cache a vkFramebuffer for each
-// back buffer.
-//
-class VGC_GRAPHICS_API Framebuffer : public Resource {
-protected:
-    Framebuffer(ResourceList* gcList)
-        : Resource(gcList) {}
+// Exludes: swap chain
+struct VGC_GRAPHICS_API PipelineState {
 
-    using Resource::Resource;
-
-    // can save batch here !
+    // I need shared pointers !
 
 
-
-    Int viewportX;
-    Int viewportY;
-    Int viewportWidth;
-    Int viewportHeight;
 };
-using FramebufferPtr = ResourcePtr<Framebuffer>;
 
 } // namespace vgc::graphics
 
-#endif // VGC_GRAPHICS_FRAMEBUFFER_H
+#endif // VGC_GRAPHICS_PIPELINESTATE_H

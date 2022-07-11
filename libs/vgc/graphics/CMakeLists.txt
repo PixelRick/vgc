@@ -16,6 +16,7 @@ vgc_add_library(graphics
         d3d11/d3d11engine.h
         detail/command.h
         detail/comptr.h
+        detail/pipelinestate.h
         engine.h
         enums.h
         exceptions.h
