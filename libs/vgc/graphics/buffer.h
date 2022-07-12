@@ -46,6 +46,8 @@ namespace vgc::graphics {
 ///
 class VGC_GRAPHICS_API BufferCreateInfo {
 public:
+    BufferCreateInfo() noexcept = default;
+
     Usage usage() const
     {
         return usage_;
@@ -100,11 +102,8 @@ private:
 ///
 class VGC_GRAPHICS_API Buffer : public Resource {
 protected:
-    Buffer(ResourceList* gcList,
-           const BufferCreateInfo& info)
-        : Resource(gcList)
-        , lengthInBytes_(0)
-        , info_(info)
+    Buffer(ResourceList* gcList, const BufferCreateInfo& info)
+        : Resource(gcList) , lengthInBytes_(0) , info_(info)
     {
         // Limitation of D3D11 impl
         const BindFlags bindFlags = this->bindFlags();

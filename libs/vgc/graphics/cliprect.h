@@ -14,38 +14,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef VGC_GRAPHICS_PIPELINESTATE_H
-#define VGC_GRAPHICS_PIPELINESTATE_H
+#ifndef VGC_GRAPHICS_CLIPRECT_H
+#define VGC_GRAPHICS_CLIPRECT_H
 
 #include <vgc/core/arithmetic.h>
-#include <vgc/geometry/mat4f.h>
-#include <vgc/graphics/batch.h>
-#include <vgc/graphics/buffer.h>
-#include <vgc/graphics/enums.h>
-#include <vgc/graphics/framebuffer.h>
-#include <vgc/graphics/geometryview.h>
-#include <vgc/graphics/image.h>
-#include <vgc/graphics/imageview.h>
-#include <vgc/graphics/logcategories.h>
-#include <vgc/graphics/program.h>
-#include <vgc/graphics/resource.h>
+#include <vgc/graphics/api.h>
 
 namespace vgc::graphics {
 
-VGC_DECLARE_OBJECT(Engine);
-
-// XXX using struct of stacks in Engine for now
-
-struct VGC_GRAPHICS_API PipelineState {
-
-    // I need shared pointers !
-
-    Int viewportX_;
-    Int viewportY_;
-    Int viewportWidth_;
-    Int viewportHeight_;
+/// \class vgc::graphics::ClipRect
+/// \brief Describes a clipping rectangle that can be rotated.
+///
+class VGC_GRAPHICS_API ClipRect {
 };
 
 } // namespace vgc::graphics
 
-#endif // VGC_GRAPHICS_PIPELINESTATE_H
+#endif // VGC_GRAPHICS_CLIPRECT_H

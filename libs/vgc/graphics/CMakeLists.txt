@@ -12,6 +12,7 @@ vgc_add_library(graphics
     HEADER_FILES
         api.h
         batch.h
+        blendstate.h
         buffer.h
         d3d11/d3d11engine.h
         detail/command.h
@@ -28,8 +29,10 @@ vgc_add_library(graphics
         imageview.h
         logcategories.h
         program.h
+        rasterizerstate.h
         resource.h
         richtext.h
+        samplerstate.h
         strings.h
         swapchain.h
         targets.h

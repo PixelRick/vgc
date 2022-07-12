@@ -36,6 +36,7 @@
 #include <vgc/geometry/mat4f.h>
 #include <vgc/graphics/api.h>
 #include <vgc/graphics/batch.h>
+#include <vgc/graphics/blendstate.h>
 #include <vgc/graphics/buffer.h>
 #include <vgc/graphics/detail/command.h>
 #include <vgc/graphics/detail/pipelinestate.h>
@@ -46,7 +47,9 @@
 #include <vgc/graphics/imageview.h>
 #include <vgc/graphics/logcategories.h>
 #include <vgc/graphics/program.h>
+#include <vgc/graphics/rasterizerstate.h>
 #include <vgc/graphics/resource.h>
+#include <vgc/graphics/samplerstate.h>
 #include <vgc/graphics/swapchain.h>
 
 namespace vgc::graphics {
@@ -236,6 +239,69 @@ public:
                 engine->bindFramebuffer_(framebuffer);
             },
             framebuffer);
+    }
+
+    void pushPipelineParameters(PipelineParameters parameters)
+    {
+        switch (parameters) {
+        case PipelineParameters::Viewport:
+        {
+
+        }
+        case PipelineParameters::Program:
+        {
+
+        }
+        case PipelineParameters::BlendState:
+        {
+
+        }
+        case PipelineParameters::DepthStencilState:
+        {
+
+        }
+        case PipelineParameters::VSConstantBuffers:
+        {
+
+        }
+        case PipelineParameters::GSConstantBuffers:
+        {
+
+        }
+        case PipelineParameters::PSConstantBuffers:
+        {
+
+        }
+        case PipelineParameters::VSImageViews:
+        {
+
+        }
+        case PipelineParameters::GSImageViews:
+        {
+
+        }
+        case PipelineParameters::PSImageViews:
+        {
+
+        }
+        case PipelineParameters::VSSamplerStates:
+        {
+
+        }
+        case PipelineParameters::GSSamplerStates:
+        {
+
+        }
+        case PipelineParameters::PSSamplerStates:
+        {
+
+        }
+        }
+    }
+
+    void popPipelineParameters(PipelineParameters parameters)
+    {
+
     }
 
     void pushProgram()
@@ -506,6 +572,9 @@ public:
 protected:
     // USER THREAD implementation functions
 
+    // should call parent impl
+    virtual void initBuiltinResources_();
+
     virtual SwapChain* createSwapChain_(const SwapChainCreateInfo& desc) = 0;
     virtual void resizeSwapChain_(SwapChain* swapChain, UInt32 width, UInt32 height) = 0;
     virtual FramebufferPtr createFramebuffer_(const ImageViewPtr& colorImageView) = 0;
@@ -514,6 +583,8 @@ protected:
     virtual Buffer* createBuffer_(const BufferCreateInfo& createInfo) = 0;
     virtual Image* createImage_(const ImageCreateInfo& createInfo) = 0;
     virtual GeometryView* createGeometryView_(const GeometryViewCreateInfo& createInfo) = 0;
+    virtual BlendState* createBlendState_(const BlendStateCreateInfo& createInfo) = 0;
+    virtual RasterizerState* createRasterizerState_(const RasterizerStateCreateInfo& createInfo) = 0;
 
     virtual bool shouldPresentWaitFromSyncedUserThread_() { return false; }
 
@@ -534,17 +605,17 @@ protected:
     virtual void bindProgram_(Program* program) = 0;
     virtual void releaseProgram_() = 0;
 
-    virtual void setVSConstantBuffers_(Buffer** buffers, Int startIndex, Int count) = 0;
-    virtual void setGSConstantBuffers_(Buffer** buffers, Int startIndex, Int count) = 0;
-    virtual void setPSConstantBuffers_(Buffer** buffers, Int startIndex, Int count) = 0;
+    // opengl has a single constantbuffers array and then we bind each index to a block index
 
-    virtual void setVSImageViews_(ImageView** views, Int startIndex, Int count) = 0;
-    virtual void setGSImageViews_(ImageView** views, Int startIndex, Int count) = 0;
-    virtual void setPSImageViews_(ImageView** views, Int startIndex, Int count) = 0;
+    virtual void setConstantBuffersVS_(Buffer** buffers, Int startIndex, Int count) = 0;
+    virtual void setConstantBuffersGS_(Buffer** buffers, Int startIndex, Int count) = 0;
+    virtual void setConstantBuffersPS_(Buffer** buffers, Int startIndex, Int count) = 0;
 
-    virtual void setVSSamplers_(ImageView** views, Int startIndex, Int count) = 0;
-    virtual void setGSSamplers_(ImageView** views, Int startIndex, Int count) = 0;
-    virtual void setPSSamplers_(ImageView** views, Int startIndex, Int count) = 0;
+    virtual void setImageViews_(ImageView** views, Int startIndex, Int count, ShaderType shaderType) = 0;
+
+    virtual void setSamplerStates_(SamplerState** views, Int startIndex, Int count) = 0;
+    virtual void setSamplersGS_(ImageView** views, Int startIndex, Int count) = 0;
+    virtual void setSamplersPS_(ImageView** views, Int startIndex, Int count) = 0;
 
     virtual void draw_(GeometryView* geometryView) = 0;
 
@@ -579,8 +650,18 @@ protected:
 private:
     // pipeline state on the user thread
     SwapChainPtr swapChain_;
-    core::Array<ProgramPtr> programStack_;
     core::Array<FramebufferPtr> framebufferStack_;
+    // pushable pipeline parameters
+    core::Array<Viewport> viewportStack_;
+    core::Array<ProgramPtr> programStack_;
+
+    inline constexpr size_t maxConstantBuffersPerStageCount = 6;
+    using ConstantBuffersArray = std::array<BufferPtr, maxConstantBuffersPerStageCount>;
+
+    std::array<core::Array<ConstantBuffersArray>, ShaderType::Max_ + 1> ConstantBuffersStacks_;
+
+    inline constexpr size_t maxConstantBuffersPerStageCount = 6;
+    using ImageViewsArray = std::array<ImageViewPtr, 6>;
 
     // builtin shaders (create by api-specific engine implementations)
     ProgramPtr simpleProgram_;
@@ -596,12 +677,13 @@ private:
     void updateBuiltinConstants_(BuiltinConstants& constants);
 
     // batching early impl
+
+    BufferPtr unitQuad_;
+
     BufferPtr colorGradientsBuffer_; // 1D buffer
     ImageViewPtr colorGradientsBufferImageView_;
 
     ProgramPtr glyphAtlasProgram_;
-    ImagePtr glyphStagingImage_; // 2D
-    ImageViewPtr glyphStagingImageView_;
     BufferPtr glyphAtlasBuffer_; // 1D layered
     ImageViewPtr glyphAtlasBufferImageView_;
     BufferPtr textBatch_;

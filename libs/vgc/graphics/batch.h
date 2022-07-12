@@ -18,8 +18,8 @@
 #define VGC_GRAPHICS_BATCH_H
 
 #include <vgc/core/arithmetic.h>
+#include <vgc/core/array.h>
 #include <vgc/geometry/vec2f.h>
-#include <vgc/geometry/vec4f.h>
 #include <vgc/geometry/rect2f.h>
 #include <vgc/graphics/api.h>
 #include <vgc/graphics/buffer.h>
@@ -32,24 +32,35 @@ namespace vgc::graphics {
 
 VGC_DECLARE_OBJECT(Engine);
 
-// pb with batch in opengl: needs vao caching per shader..
-
-/// \class vgc::graphics::Batch
+/// \class vgc::graphics::GeometryBatch
 /// \brief Batch of geometry data.
 ///
-class VGC_GRAPHICS_API Batch : public Resource {
+class VGC_GRAPHICS_API GeometryBatch : public Resource {
 protected:
     using Resource::Resource;
 
     void clearSubResources_() override {
         vertexBuffer_.reset();
         indexBuffer_.reset();
+        view_.reset();
     }
 
+private:
     BufferPtr vertexBuffer_;
     BufferPtr indexBuffer_;
+    GeometryViewPtr view_;
 };
-using BatchPtr = ResourcePtr<Batch>;
+using GeometryBatchPtr = ResourcePtr<GeometryBatch>;
+
+namespace detail {
+
+struct VGC_GRAPHICS_API BatchedGlyph {
+    geometry::Vec2f pos_;
+    geometry::Vec2f size_;
+    geometry::Rect2f preClip_;
+    unsigned int colorIndex_;
+    unsigned int clipIndex_;
+};
 
 class VGC_GRAPHICS_API BatchedTextData : public Resource {
 protected:
@@ -57,17 +68,9 @@ protected:
 
     using Resource::Resource;
 
-    geometry::Rect2f clip_;
-};
 
-namespace detail {
 
-struct VGC_GRAPHICS_API BatchedGlyph {
-    geometry::Vec2f pos_;
-    geometry::Vec2f size_;
-    geometry::Rect2f clip_;
-
-    unsigned int color
+    geometry::Rect2f preClip_;
 };
 
 struct VGC_GRAPHICS_API TextBatch : public Resource {

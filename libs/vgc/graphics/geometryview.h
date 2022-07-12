@@ -27,6 +27,8 @@
 
 namespace vgc::graphics {
 
+class GeometryView;
+
 inline constexpr size_t maxAttachedVertexBufferCount = 4;
 
 using VertexBufferArray = std::array<BufferPtr, maxAttachedVertexBufferCount>;
@@ -36,6 +38,8 @@ using VertexBufferArray = std::array<BufferPtr, maxAttachedVertexBufferCount>;
 ///
 class VGC_GRAPHICS_API GeometryViewCreateInfo {
 public:
+    GeometryViewCreateInfo() noexcept = default;
+
     PrimitiveType primitiveType() const
     {
         return primitiveType_;
@@ -78,11 +82,11 @@ public:
             throw core::IndexError(core::format(
                 "Vertex buffer index {} is out of range [0, {}]", i, vertexBuffers_.size() - 1));
         }
-        vertexBuffers_[i] = vertexBuffer;
+        vertexBuffers_[idx] = vertexBuffer;
     }
 
 private:
-    friend class GeometryView; // to reset resource pointers
+    friend GeometryView; // to reset resource pointers
 
     PrimitiveType primitiveType_ = PrimitiveType::Point;
     BuiltinGeometryLayout builtinGeometryLayout_ = BuiltinGeometryLayout::None;
@@ -101,10 +105,8 @@ private:
 ///
 class VGC_GRAPHICS_API GeometryView : public Resource {
 protected:
-    GeometryView(ResourceList* gcList,
-                 const GeometryViewCreateInfo& info)
-        : Resource(gcList)
-        , info_(info)
+    GeometryView(ResourceList* gcList, const GeometryViewCreateInfo& info)
+        : Resource(gcList), info_(info)
     {
         // XXX check buffers against layout (slots, alignment, ..)
 

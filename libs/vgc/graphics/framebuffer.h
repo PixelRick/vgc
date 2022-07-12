@@ -27,6 +27,39 @@ namespace vgc::graphics {
 
 VGC_DECLARE_OBJECT(Engine);
 
+class VGC_GRAPHICS_API Viewport {
+public:
+    Viewport(Int x, Int y, Int width, Int height)
+        : x_(x) , y_(y) , width_(width) , height_(height)
+    {}
+
+    Int x() const
+    {
+        return x_;
+    }
+
+    Int y() const
+    {
+        return y_;
+    }
+
+    Int width() const
+    {
+        return width_;
+    }
+
+    Int height() const
+    {
+        return height_;
+    }
+
+private:
+    Int x_;
+    Int y_;
+    Int width_;
+    Int height_;
+};
+
 /// \class vgc::graphics::Framebuffer
 /// \brief Abstract framebuffer, a collection of graphics pipeline output attachments.
 ///
@@ -42,13 +75,6 @@ protected:
     using Resource::Resource;
 
     // can save batch here !
-
-
-
-    Int viewportX;
-    Int viewportY;
-    Int viewportWidth;
-    Int viewportHeight;
 };
 using FramebufferPtr = ResourcePtr<Framebuffer>;
 

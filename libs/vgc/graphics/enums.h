@@ -177,6 +177,65 @@ enum class ImageFormat : UInt8 {
     //BC7_UNORM_SRGB,
 };
 
+enum class BlendFactor : UInt8 {
+    One,
+    Zero,
+    SourceColor,
+    OneMinusSourceColor,
+    SourceAlpha,
+    OneMinusSourceAlpha,
+    TargetColor,
+    OneMinusTargetColor,
+    TargetAlpha,
+    OneMinusTargetAlpha,
+    SourceAlphaSaturated,
+    Constant,
+    OneMinusConstant,
+    SecondSourceColor,
+    OneMinusSecondSourceColor,
+    SecondSourceAlpha,
+    OneMinusSecondSourceAlpha,
+};
+
+enum class BlendOp : UInt8 {
+    Add,
+    SourceMinusTarget,
+    TargetMinusSource,
+    Min,
+    Max,
+};
+
+enum class BlendWriteMask : UInt8 {
+    None = 0,
+    R = 1,
+    G = 2,
+    B = 4,
+    A = 8,
+    All = R | G | B | A,
+};
+VGC_DEFINE_SCOPED_ENUM_FLAGS_OPERATORS(BlendWriteMask)
+
+enum class FillMode : UInt8 {
+    Solid,
+    Wireframe,
+};
+
+enum class CullMode : UInt8 {
+    None,
+    Front,
+    Back,
+};
+
+enum class ShaderType : UInt8 {
+    Vertex,
+    //Hull,
+    //Domain,
+    Geometry,
+    Pixel,
+    //Compute,
+    Max_ = Pixel
+};
+
 enum class BuiltinProgram : UInt8 {
     Simple,
     // XXX publicize ?
@@ -192,28 +251,30 @@ enum class BuiltinGeometryLayout : UInt8 {
     XYZ,
 };
 
-enum class PipelineSubState : UInt8 {
-    None,
-    Program,
-    Framebuffer,
-    VSConstantBuffers,
-    GSConstantBuffers,
-    PSConstantBuffers,
+enum class PipelineParameters : UInt32 {
+    None = 0,
+    Viewport            = 0x00000001,
+    Program             = 0x00000002,
+    BlendState          = 0x00000004,
+    DepthStencilState   = 0x00000008,
+    RasterizerState     = 0x00000010,
+    ConstantBuffersVS   = 0x00001000,
+    ConstantBuffersGS   = 0x00002000,
+    ConstantBuffersPS   = 0x00004000,
+    ImageViewsVS        = 0x00010000,
+    ImageViewsGS        = 0x00020000,
+    ImageViewsPS        = 0x00040000,
+    SamplerStatesVS     = 0x00100000,
+    SamplerStatesGS     = 0x00200000,
+    SamplerStatesPS     = 0x00400000,
 
-    //virtual void setVSConstantBuffers_(Buffer** buffers, Int startIndex, Int count) = 0;
-    //virtual void setGSConstantBuffers_(Buffer** buffers, Int startIndex, Int count) = 0;
-    //virtual void setPSConstantBuffers_(Buffer** buffers, Int startIndex, Int count) = 0;
-    //
-    //virtual void setVSImageViews_(ImageView** views, Int startIndex, Int count) = 0;
-    //virtual void setGSImageViews_(ImageView** views, Int startIndex, Int count) = 0;
-    //virtual void setPSImageViews_(ImageView** views, Int startIndex, Int count) = 0;
-    //
-    //virtual void setVSSamplers_(ImageView** views, Int startIndex, Int count) = 0;
-    //virtual void setGSSamplers_(ImageView** views, Int startIndex, Int count) = 0;
-    //virtual void setPSSamplers_(ImageView** views, Int startIndex, Int count) = 0;
-
+    BoundConstantBuffers = VSConstantBuffers | GSConstantBuffers | PSConstantBuffers,
+    BoundImageViews = VSImageViews | GSImageViews | PSImageViews,
+    SamplerStates = VSSamplerStates | GSSamplerStates | PSSamplerStates,
+    Views = BoundConstantBuffers | BoundImageViews,
+    All = Viewport | Program | BlendState | DepthStencilState | Views | SamplerStates,
 };
-VGC_DEFINE_SCOPED_ENUM_FLAGS_OPERATORS(PipelineSubState)
+VGC_DEFINE_SCOPED_ENUM_FLAGS_OPERATORS(PipelineParameters)
 
 } // namespace vgc::graphics
 
