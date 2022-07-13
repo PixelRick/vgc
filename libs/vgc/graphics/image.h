@@ -55,6 +55,16 @@ public:
         height_ = height;
     }
 
+    ImageRank rank() const
+    {
+        return rank_;
+    }
+
+    void setRank(ImageRank rank)
+    {
+        rank_ = rank;
+    }
+
     ImageFormat format() const
     {
         return format_;
@@ -138,6 +148,7 @@ public:
 private:
     UInt32 width_;
     UInt32 height_;
+    ImageRank rank_;
     ImageFormat format_;
     UInt8 layerCount_;
     UInt8 mipLevelCount_;
@@ -157,7 +168,8 @@ protected:
           const ImageCreateInfo& info)
         : Resource(gcList)
         , info_(info)
-    {}
+    {
+    }
 
 public:
     UInt32 width() const
@@ -168,6 +180,11 @@ public:
     UInt32 height() const
     {
         return info_.height();
+    }
+
+    ImageRank rank() const
+    {
+        return info_.rank();
     }
 
     ImageFormat format() const

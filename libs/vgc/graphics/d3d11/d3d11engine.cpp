@@ -44,31 +44,32 @@ struct XYRGBVertex {
 
 class D3d11Buffer : public Buffer {
 public:
-    D3d11Buffer(
-        ResourceList* gcList,
-        Usage usage,
-        BindFlags bindFlags,
-        ResourceMiscFlags resourceMiscFlags,
-        CpuAccessFlags cpuAccessFlags);
+    D3d11Buffer(ResourceList* gcList, const BufferCreateInfo& createInfo);
 
-    ID3D11Buffer* object() const {
+    ID3D11Buffer* object() const
+    {
         return object_.get();
     }
 
-    ID3D11Buffer** objectAddress() {
+    ID3D11Buffer** objectAddress()
+    {
         return object_.addressOf();
     }
 
-    const D3D11_BUFFER_DESC& desc() const {
+    const D3D11_BUFFER_DESC& desc() const
+    {
         return desc_;
     }
 
-    D3D11_BUFFER_DESC* descAddress() {
+    D3D11_BUFFER_DESC* descAddress()
+    {
         return &desc_;
     }
 
 protected:
-    void release_(Engine* /*engine*/) override {
+    void release_(Engine* engine) override
+    {
+        Buffer::release_(engine);
         object_.reset();
     }
 
@@ -78,32 +79,156 @@ private:
     ComPtr<ID3D11Buffer> object_;
     D3D11_BUFFER_DESC desc_ = {};
 };
+using D3d11BufferPtr = ResourcePtr<D3d11Buffer>;
 
-class D3d11ImageView : public ImageView {
+class D3d11Image : public Image {
 public:
-    D3d11ImageView(ResourceList* gcList, ID3D11View* view)
-        : ImageView(gcList)
-        , view_(view)
-    {}
+    D3d11Image(ResourceList* gcList, const ImageCreateInfo& createInfo);
 
-    ID3D11View* view() const {
-        return view_.get();
+    ID3D11Resource* object() const
+    {
+        return object_.get();
     }
 
-    // resizing a swap chain requires releasing all views to its back buffers.
-    void forceRelease() {
-        view_.reset();
+    DXGI_FORMAT dxgiFormat() const
+    {
+        return dxgiFormat_;
     }
 
 protected:
-    void release_(Engine* /*engine*/) override {
+    void release_(Engine* engine) override
+    {
+        Image::release_(engine);
+        object_.reset();
+    }
+
+private:
+    friend D3d11Engine;
+
+    ComPtr<ID3D11Resource> object_;
+    DXGI_FORMAT dxgiFormat_;
+};
+using D3d11ImagePtr = ResourcePtr<D3d11Image>;
+
+class D3d11ImageView : public ImageView {
+public:
+    D3d11ImageView(ResourceList* gcList, const ImagePtr& image);
+    D3d11ImageView(ResourceList* gcList, const BufferPtr& buffer, ImageFormat format);
+
+    ID3D11View* object() const
+    {
+        return object_.get();
+    }
+
+    // resizing a swap chain requires releasing all views to its back buffers.
+    void forceRelease()
+    {
+        object_.reset();
+    }
+
+protected:
+    void release_(Engine* engine) override
+    {
+        ImageView::release_(engine);
         forceRelease();
     }
 
 private:
-    ComPtr<ID3D11View> view_;
+    friend D3d11Engine;
+
+    ComPtr<ID3D11View> object_;
+    DXGI_FORMAT dxgiFormat_;
 };
 using D3d11ImageViewPtr = ResourcePtr<D3d11ImageView>;
+
+class D3d11GeometryView : public GeometryView {
+public:
+    D3d11GeometryView(ResourceList* gcList, const GeometryViewCreateInfo& createInfo);
+
+protected:
+    void release_(Engine* engine) override
+    {
+        GeometryView::release_(engine);
+    }
+
+private:
+    D3D_PRIMITIVE_TOPOLOGY topology_;
+};
+using D3d11GeometryViewPtr = ResourcePtr<D3d11GeometryView>;
+
+class D3d11Program : public Program {
+public:
+    D3d11Program(ResourceList* gcList)
+        : Program(gcList)
+    {
+    }
+
+protected:
+    void release_(Engine* engine) override
+    {
+        Program::release_(engine);
+        vertexShader_.reset();
+        geometryShader_.reset();
+        pixelShader_.reset();
+    }
+
+private:
+    friend D3d11Engine;
+
+    ComPtr<ID3D11VertexShader> vertexShader_;
+    ComPtr<ID3D11GeometryShader> geometryShader_;
+    ComPtr<ID3D11PixelShader> pixelShader_;
+};
+using D3d11ProgramPtr = ResourcePtr<D3d11Program>;
+
+class D3d11BlendState : public BlendState {
+public:
+    D3d11BlendState::D3d11BlendState(ResourceList* gcList, const BlendStateCreateInfo& createInfo)
+        : BlendState(gcList, createInfo)
+    {
+    }
+
+    ID3D11BlendState* object() const
+    {
+        return object_.get();
+    }
+
+protected:
+    void release_(Engine* engine) override
+    {
+        BlendState::release_(engine);
+        object_.reset();
+    }
+
+private:
+    friend D3d11Engine;
+
+    ComPtr<ID3D11BlendState> object_;
+};
+using D3d11BlendStatePtr = ResourcePtr<D3d11BlendState>;
+
+class D3d11RasterizerState : public RasterizerState {
+public:
+    D3d11RasterizerState(ResourceList* gcList, const RasterizerStateCreateInfo& createInfo)
+        : RasterizerState(gcList, createInfo)
+    {
+    }
+
+    ID3D11RasterizerState* object() const
+    {
+        return object_.get();
+    }
+
+protected:
+    void release_(Engine* engine) override
+    {
+        RasterizerState::release_(engine);
+    }
+
+private:
+    ComPtr<ID3D11RasterizerState> object_;
+};
+using D3d11RasterizerStatePtr = ResourcePtr<D3d11RasterizerState>;
 
 // no equivalent in D3D11, see OMSetRenderTargets
 class D3d11Framebuffer : public Framebuffer {
@@ -112,29 +237,34 @@ public:
         ResourceList* gcList,
         const D3d11ImageViewPtr& colorView,
         const D3d11ImageViewPtr& depthStencilView,
-        bool isDefault = false)
+        bool isDefault)
         : Framebuffer(gcList)
         , colorView_(colorView)
         , depthStencilView_(depthStencilView)
         , isDefault_(isDefault)
-    {}
+    {
+    }
 
-    bool isDefault() const {
+    bool isDefault() const
+    {
         return isDefault_;
     }
 
-    ID3D11RenderTargetView* colorView() const {
+    ID3D11RenderTargetView* colorView() const
+    {
         return colorView_ ?
-            static_cast<ID3D11RenderTargetView*>(colorView_->view()) : nullptr;
+            static_cast<ID3D11RenderTargetView*>(colorView_->object()) : nullptr;
     }
 
-    ID3D11DepthStencilView* depthStencilView() const {
+    ID3D11DepthStencilView* depthStencilView() const
+    {
         return depthStencilView_ ?
-            static_cast<ID3D11DepthStencilView*>(depthStencilView_->view()) : nullptr;
+            static_cast<ID3D11DepthStencilView*>(depthStencilView_->object()) : nullptr;
     }
 
     // resizing a swap chain requires releasing all views to its back buffers.
-    void forceReleaseColorView() {
+    void forceReleaseColorView()
+    {
         colorView_->forceRelease();
     }
 
@@ -145,7 +275,10 @@ protected:
         depthStencilView_.reset();
     }
 
-    void release_(Engine* /*engine*/) override {}
+    void release_(Engine* engine) override
+    {
+        Framebuffer::release_(engine);
+    }
 
 private:
     D3d11ImageViewPtr colorView_;
@@ -162,7 +295,8 @@ public:
         IDXGISwapChain* dxgiSwapChain)
         : SwapChain(gcList, desc)
         , dxgiSwapChain_(dxgiSwapChain)
-    {}
+    {
+    }
 
     IDXGISwapChain* dxgiSwapChain() const {
         return dxgiSwapChain_.get();
@@ -187,33 +321,120 @@ public:
     }
 
 protected:
-    void release_(Engine* /*engine*/) override {}
+    void release_(Engine* engine) override
+    {
+        SwapChain::release_(engine);
+    }
 
 private:
     ComPtr<IDXGISwapChain> dxgiSwapChain_;
 };
 
-D3d11Buffer::D3d11Buffer(
-    ResourceList* gcList,
-    Usage usage,
-    BindFlags bindFlags,
-    ResourceMiscFlags resourceMiscFlags,
-    CpuAccessFlags cpuAccessFlags)
-    : Buffer(gcList, usage, bindFlags, resourceMiscFlags, cpuAccessFlags)
+// ENUM CONVERSIONS
+
+DXGI_FORMAT imageFormatToDxgiFormat(ImageFormat format)
+{
+    switch (format) {
+        // Depth
+    case ImageFormat::D_16_UNORM:               return DXGI_FORMAT_D16_UNORM;
+    case ImageFormat::D_32_FLOAT:               return DXGI_FORMAT_D32_FLOAT;
+        // Depth + Stencil
+    case ImageFormat::DS_24_UNORM_8_UINT:       return DXGI_FORMAT_D24_UNORM_S8_UINT;
+    case ImageFormat::DS_32_FLOAT_8_UINT_24_X:  return DXGI_FORMAT_D32_FLOAT_S8X24_UINT;
+        // Red
+    case ImageFormat::R_8_UNORM:                return DXGI_FORMAT_R8_UNORM;
+    case ImageFormat::R_8_SNORM:                return DXGI_FORMAT_R8_SNORM;
+    case ImageFormat::R_8_UINT:                 return DXGI_FORMAT_R8_UINT;
+    case ImageFormat::R_8_SINT:                 return DXGI_FORMAT_R8_SINT;
+    case ImageFormat::R_16_UNORM:               return DXGI_FORMAT_R16_UNORM;
+    case ImageFormat::R_16_SNORM:               return DXGI_FORMAT_R16_SNORM;
+    case ImageFormat::R_16_UINT:                return DXGI_FORMAT_R16_UINT;
+    case ImageFormat::R_16_SINT:                return DXGI_FORMAT_R16_SINT;
+    case ImageFormat::R_16_FLOAT:               return DXGI_FORMAT_R16_FLOAT;
+    case ImageFormat::R_32_UINT:                return DXGI_FORMAT_R32_UINT;
+    case ImageFormat::R_32_SINT:                return DXGI_FORMAT_R32_SINT;
+    case ImageFormat::R_32_FLOAT:               return DXGI_FORMAT_R32_FLOAT;
+        // RG
+    case ImageFormat::RG_8_UNORM:               return DXGI_FORMAT_R8G8_UNORM;
+    case ImageFormat::RG_8_SNORM:               return DXGI_FORMAT_R8G8_SNORM;
+    case ImageFormat::RG_8_UINT:                return DXGI_FORMAT_R8G8_UINT;
+    case ImageFormat::RG_8_SINT:                return DXGI_FORMAT_R8G8_SINT;
+    case ImageFormat::RG_16_UNORM:              return DXGI_FORMAT_R16G16_UNORM;
+    case ImageFormat::RG_16_SNORM:              return DXGI_FORMAT_R16G16_SNORM;
+    case ImageFormat::RG_16_UINT:               return DXGI_FORMAT_R16G16_UINT;
+    case ImageFormat::RG_16_SINT:               return DXGI_FORMAT_R16G16_SINT;
+    case ImageFormat::RG_16_FLOAT:              return DXGI_FORMAT_R16G16_FLOAT;
+    case ImageFormat::RG_32_UINT:               return DXGI_FORMAT_R32G32_UINT;
+    case ImageFormat::RG_32_SINT:               return DXGI_FORMAT_R32G32_SINT;
+    case ImageFormat::RG_32_FLOAT:              return DXGI_FORMAT_R32G32_FLOAT;
+        // RGB
+    case ImageFormat::RGB_11_11_10_FLOAT:       return DXGI_FORMAT_R11G11B10_FLOAT;
+    case ImageFormat::RGB_32_UINT:              return DXGI_FORMAT_R32G32B32_UINT;
+    case ImageFormat::RGB_32_SINT:              return DXGI_FORMAT_R32G32B32_SINT;
+    case ImageFormat::RGB_32_FLOAT:             return DXGI_FORMAT_R32G32B32_FLOAT;
+        // RGBA
+    case ImageFormat::RGBA_8_UNORM:             return DXGI_FORMAT_R8G8B8A8_UNORM;
+    case ImageFormat::RGBA_8_UNORM_SRGB:        return DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+    case ImageFormat::RGBA_8_SNORM:             return DXGI_FORMAT_R8G8B8A8_SNORM;
+    case ImageFormat::RGBA_8_UINT:              return DXGI_FORMAT_R8G8B8A8_UINT;
+    case ImageFormat::RGBA_8_SINT:              return DXGI_FORMAT_R8G8B8A8_SINT;
+    case ImageFormat::RGBA_10_10_10_2_UNORM:    return DXGI_FORMAT_R10G10B10A2_UNORM;
+    case ImageFormat::RGBA_10_10_10_2_UINT:     return DXGI_FORMAT_R10G10B10A2_UINT;
+    case ImageFormat::RGBA_16_UNORM:            return DXGI_FORMAT_R16G16B16A16_UNORM;
+    case ImageFormat::RGBA_16_UINT:             return DXGI_FORMAT_R16G16B16A16_UINT;
+    case ImageFormat::RGBA_16_SINT:             return DXGI_FORMAT_R16G16B16A16_SINT;
+    case ImageFormat::RGBA_16_FLOAT:            return DXGI_FORMAT_R16G16B16A16_FLOAT;
+    case ImageFormat::RGBA_32_UINT:             return DXGI_FORMAT_R32G32B32A32_UINT;
+    case ImageFormat::RGBA_32_SINT:             return DXGI_FORMAT_R32G32B32A32_SINT;
+    case ImageFormat::RGBA_32_FLOAT:            return DXGI_FORMAT_R32G32B32A32_FLOAT;
+    default:
+        break;
+    }
+    return DXGI_FORMAT_UNKNOWN;
+}
+
+D3D_PRIMITIVE_TOPOLOGY primitiveTypeToD3DPrimitiveTopology(PrimitiveType type)
+{
+    switch (type) {
+    case PrimitiveType::Point:          return D3D11_PRIMITIVE_TOPOLOGY_POINTLIST;
+    case PrimitiveType::LineList:       return D3D11_PRIMITIVE_TOPOLOGY_LINELIST;
+    case PrimitiveType::LineStrip:      return D3D11_PRIMITIVE_TOPOLOGY_LINESTRIP;
+    case PrimitiveType::TriangleList:   return D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
+    case PrimitiveType::TriangleStrip:  return D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP;
+    default:
+        break;
+    }
+    return D3D11_PRIMITIVE_TOPOLOGY_UNDEFINED;
+}
+
+D3D11_USAGE usageToD3DUsage(Usage usage)
 {
     switch (usage) {
     case Usage::Default:
-        desc_.Usage = D3D11_USAGE::D3D11_USAGE_DEFAULT; break;
+        return D3D11_USAGE_DEFAULT; break;
     case Usage::Immutable:
-        desc_.Usage = D3D11_USAGE::D3D11_USAGE_IMMUTABLE; break;
+        return D3D11_USAGE_IMMUTABLE; break;
     case Usage::Dynamic:
-        desc_.Usage = D3D11_USAGE::D3D11_USAGE_DYNAMIC; break;
+        return D3D11_USAGE_DYNAMIC; break;
     case Usage::Staging:
-        desc_.Usage = D3D11_USAGE::D3D11_USAGE_STAGING; break;
+        return D3D11_USAGE_STAGING; break;
     default:
-        throw core::LogicError("D3d11Buffer: unsupported usage");
+        break;
     }
+    throw core::LogicError("D3d11Engine: unsupported usage");
+}
 
+
+
+
+// RESOURCE CONSTRUCTORS
+
+D3d11Buffer::D3d11Buffer(ResourceList* gcList, const BufferCreateInfo& createInfo)
+    : Buffer(gcList, createInfo)
+{
+    desc_.Usage = usageToD3DUsage(createInfo.usage());
+
+    const BindFlags bindFlags = createInfo.bindFlags();
     if (!!(bindFlags & BindFlags::UniformBuffer)) {
         desc_.BindFlags |= D3D11_BIND_FLAG::D3D11_BIND_CONSTANT_BUFFER;
         if (bindFlags != BindFlags::UniformBuffer) {
@@ -247,6 +468,7 @@ D3d11Buffer::D3d11Buffer(
         }
     }
 
+    const ResourceMiscFlags resourceMiscFlags = createInfo.resourceMiscFlags();
     if (!!(resourceMiscFlags & ResourceMiscFlags::GenerateMips)) {
         desc_.MiscFlags |= D3D11_RESOURCE_MISC_FLAG::D3D11_RESOURCE_MISC_GENERATE_MIPS;
     }
@@ -272,6 +494,7 @@ D3d11Buffer::D3d11Buffer(
         desc_.MiscFlags |= D3D11_RESOURCE_MISC_FLAG::D3D11_RESOURCE_MISC_SHARED_KEYEDMUTEX;
     }
 
+    const CpuAccessFlags cpuAccessFlags = createInfo.cpuAccessFlags();
     if (!!(cpuAccessFlags & CpuAccessFlags::Write)) {
         desc_.CPUAccessFlags |= D3D11_CPU_ACCESS_FLAG::D3D11_CPU_ACCESS_WRITE;
     }
@@ -279,6 +502,41 @@ D3d11Buffer::D3d11Buffer(
         desc_.CPUAccessFlags |= D3D11_CPU_ACCESS_FLAG::D3D11_CPU_ACCESS_READ;
     }
 }
+
+D3d11Image::D3d11Image(ResourceList* gcList, const ImageCreateInfo& createInfo)
+    : Image(gcList, createInfo)
+    , dxgiFormat_(imageFormatToDxgiFormat(createInfo.format()))
+{
+    if (dxgiFormat_ == DXGI_FORMAT_UNKNOWN) {
+        throw core::LogicError("D3d11Image: unknown image format");
+    }
+}
+
+D3d11ImageView::D3d11ImageView(ResourceList* gcList, const ImagePtr& image)
+    : ImageView(gcList, image, image->format())
+    , dxgiFormat_(static_cast<D3d11Image*>(image.get())->dxgiFormat())
+{
+}
+
+D3d11ImageView::D3d11ImageView(ResourceList* gcList, const BufferPtr& buffer, ImageFormat format)
+    : ImageView(gcList, buffer, format)
+    , dxgiFormat_(imageFormatToDxgiFormat(format))
+{
+    if (dxgiFormat_ == DXGI_FORMAT_UNKNOWN) {
+        throw core::LogicError("D3d11ImageView: unknown image format");
+    }
+}
+
+D3d11GeometryView::D3d11GeometryView(ResourceList* gcList, const GeometryViewCreateInfo& createInfo)
+    : GeometryView(gcList, createInfo)
+    , topology_(primitiveTypeToD3DPrimitiveTopology(createInfo.primitiveType()))
+{
+    if (topology_ == D3D11_PRIMITIVE_TOPOLOGY_UNDEFINED) {
+        throw core::LogicError("D3d11GeometryView: unknown primitive type");
+    }
+}
+
+// ENGINE FUNCTIONS
 
 D3d11Engine::D3d11Engine()
 {
@@ -476,9 +734,9 @@ SwapChain* D3d11Engine::createSwapChain_(const SwapChainCreateInfo& desc)
     sd.BufferDesc.Width = desc.width();
     sd.BufferDesc.Height = desc.height();
     switch(desc.format()) {
-    case SwapChainTargetFormat::R8G8B8A8_UNORM:
+    case SwapChainTargetFormat::RGBA_8_UNORM:
         sd.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM; break;
-    case SwapChainTargetFormat::B8G8R8A8_SRGB:
+    case SwapChainTargetFormat::RGBA_8_UNORM_SRGB:
         sd.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB; break;
     default:
         throw core::LogicError("D3d11SwapChain: unsupported format");
@@ -541,22 +799,58 @@ void D3d11Engine::resizeSwapChain_(SwapChain* swapChain, UInt32 width, UInt32 he
     d3dSwapChain->setDefaultFramebuffer(newFramebuffer);
 }
 
-Buffer* D3d11Engine::createBuffer_(
-    Usage usage, BindFlags bindFlags, ResourceMiscFlags resourceMiscFlags, CpuAccessFlags cpuAccessFlags)
+
+Buffer* D3d11Engine::createBuffer_(const BufferCreateInfo& createInfo)
 {
-    return new D3d11Buffer(gcResourceList_, usage, bindFlags, resourceMiscFlags, cpuAccessFlags);
+    return new D3d11Buffer(gcResourceList_, createInfo);
+}
+
+Image* D3d11Engine::createImage_(const ImageCreateInfo& createInfo)
+{
+    return new D3d11Image(gcResourceList_, createInfo);
+}
+
+ImageView* D3d11Engine::createImageView_(const ImagePtr& image)
+{
+    return new D3d11ImageView(gcResourceList_, image);
+}
+
+ImageView* D3d11Engine::createImageView_(const BufferPtr& buffer, ImageFormat format)
+{
+    return new D3d11ImageView(gcResourceList_, buffer, format);
+}
+
+GeometryView* D3d11Engine::createGeometryView_(const GeometryViewCreateInfo& createInfo)
+{
+    return new D3d11GeometryView(gcResourceList_, createInfo);
+}
+
+BlendState* D3d11Engine::createBlendState_(const BlendStateCreateInfo& createInfo)
+{
+    return new D3d11BlendState(gcResourceList_, createInfo);
+}
+
+RasterizerState* D3d11Engine::createRasterizerState_(const RasterizerStateCreateInfo& createInfo)
+{
+    return new D3d11RasterizerState(gcResourceList_, createInfo);
+}
+
+Framebuffer* D3d11Engine::createFramebuffer_(const ImageViewPtr& colorImageView)
+{
+    return new D3d11Framebuffer(gcResourceList_, colorImageView, nullptr, false);
 }
 
 // RENDER THREAD functions
 
-void D3d11Engine::bindSwapChain_(SwapChain* swapChain)
+void D3d11Engine::setSwapChain_(SwapChain* swapChain)
 {
     D3d11SwapChain* d3dSwapChain = static_cast<D3d11SwapChain*>(swapChain);
-    bindFramebuffer_(d3dSwapChain->d3dDefaultFrameBuffer());
+    setFramebuffer_(d3dSwapChain->d3dDefaultFrameBuffer());
     const float blend_factor[4] = { 0.f, 0.f, 0.f, 0.f };
-    deviceCtx_->OMSetBlendState(blendState_.get(), blend_factor, 0xffffffff);
     deviceCtx_->OMSetDepthStencilState(depthStencilState_.get(), 0);
-    deviceCtx_->RSSetState(rasterizerState_.get());
+
+    //deviceCtx_->OMSetBlendState(blendState_.get(), blend_factor, 0xffffffff);
+    //deviceCtx_->RSSetState(rasterizerState_.get());
 }
 
 UInt64 D3d11Engine::present_(SwapChain* swapChain, UInt32 syncInterval, PresentFlags /*flags*/)
@@ -565,6 +859,72 @@ UInt64 D3d11Engine::present_(SwapChain* swapChain, UInt32 syncInterval, PresentF
     d3dSwapChain->dxgiSwapChain()->Present(syncInterval, 0);
     return std::chrono::nanoseconds(std::chrono::steady_clock::now() - startTime_).count();
 }
+
+
+void D3d11Engine::initFramebuffer_(Framebuffer* framebuffer)
+{
+    // no-op
+}
+
+void D3d11Engine::initBuffer_(Buffer* buffer, const void* data, Int initialLengthInBytes)
+{
+    D3d11Buffer* d3dBuffer = static_cast<D3d11Buffer*>(buffer);
+    if (initialLengthInBytes) {
+        loadBuffer_(d3dBuffer->objectAddress(), d3dBuffer->descAddress(), data, initialLengthInBytes);
+    }
+    d3dBuffer->lengthInBytes_ = initialLengthInBytes;
+}
+
+void D3d11Engine::initImage_(Image* image, const void* data)
+{
+    D3d11Image* d3dImage = static_cast<D3d11Image*>(image);
+    if (d3dImage->rank() == ImageRank::_1D) {
+        D3D11_TEXTURE1D_DESC desc = {};
+        desc.Width = d3dImage->width();
+        desc.MipLevels = d3dImage->mipLevelCount();
+        desc.ArraySize = d3dImage->layerCount();
+        desc.Format = d3dImage->dxgiFormat();
+        desc.Usage = usageToD3DUsage(d3dImage->usage());
+        desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+        if (d3dImage->isRenderTargetable()) {
+            desc.BindFlags |= D3D11_BIND_RENDER_TARGET;
+        }
+        desc.CPUAccessFlags = d3dImage->cpuAccessFlags();
+        desc.MiscFlags = d3dImage->resourceMiscFlags();
+    }
+    else {
+        VGC_CORE_ASSERT(d3dImage->rank() == ImageRank::_2D);
+        D3D11_TEXTURE2D_DESC desc = {};
+
+    }
+}
+
+void D3d11Engine::initImageView_(ImageView* view)
+{
+    D3d11ImageView* d3dImageView = static_cast<D3d11ImageView*>(view);
+
+}
+
+void D3d11Engine::initGeometryView_(GeometryView* view)
+{
+    D3d11GeometryView* d3dGeometryView = static_cast<D3d11GeometryView*>(view);
+
+}
+
+void D3d11Engine::initBlendState_(BlendState* state)
+{
+    D3d11BlendState* d3dBlendState = static_cast<D3d11BlendState*>(state);
+
+}
+
+void D3d11Engine::initRasterizerState_(RasterizerState* state)
+{
+    D3d11RasterizerState* d3dRasterizerState = static_cast<D3d11RasterizerState*>(state);
+
+}
+
+
+
 
 void D3d11Engine::bindFramebuffer_(Framebuffer* framebuffer)
 {
@@ -617,14 +977,7 @@ void D3d11Engine::setViewMatrix_(const geometry::Mat4f& m)
         sizeof(PaintVertexShaderConstantBuffer));
 }
 
-void D3d11Engine::initBuffer_(Buffer* buffer, const void* data, Int initialLengthInBytes)
-{
-    D3d11Buffer* d3dBuffer = static_cast<D3d11Buffer*>(buffer);
-    if (initialLengthInBytes) {
-        loadBuffer_(d3dBuffer->objectAddress(), d3dBuffer->descAddress(), data, initialLengthInBytes);
-    }
-    d3dBuffer->lengthInBytes_ = initialLengthInBytes;
-}
+
 
 void D3d11Engine::updateBufferData_(Buffer* buffer, const void* data, Int lengthInBytes)
 {

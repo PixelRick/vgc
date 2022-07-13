@@ -123,7 +123,8 @@ class VGC_GRAPHICS_API RasterizerState : public Resource {
 protected:
     RasterizerState(ResourceList* gcList, const RasterizerStateCreateInfo& info)
         : Resource(gcList), info_(info)
-    {}
+    {
+    }
 
 public:
     FillMode fillMode() const

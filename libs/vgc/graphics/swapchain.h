@@ -146,7 +146,8 @@ protected:
 
     SwapChain(ResourceList* gcList, const SwapChainCreateInfo& desc)
         : Resource(gcList), desc_(desc)
-    {}
+    {
+    }
 
 public:
     const SwapChainCreateInfo& desc() const

@@ -31,7 +31,8 @@ class VGC_GRAPHICS_API Viewport {
 public:
     Viewport(Int x, Int y, Int width, Int height)
         : x_(x) , y_(y) , width_(width) , height_(height)
-    {}
+    {
+    }
 
     Int x() const
     {

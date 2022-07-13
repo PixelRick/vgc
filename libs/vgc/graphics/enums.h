@@ -91,7 +91,7 @@ enum class PrimitiveType : UInt8 {
 
 enum class SwapChainTargetFormat : UInt8 {
     RGBA_8_UNORM,
-    BGRA_8_SRGB,
+    RGBA_8_UNORM_SRGB,
 };
 
 enum class PresentFlags : UInt32 {
@@ -226,7 +226,7 @@ enum class CullMode : UInt8 {
     Back,
 };
 
-enum class ShaderType : UInt8 {
+enum class ShaderStage : UInt8 {
     Vertex,
     //Hull,
     //Domain,
@@ -253,26 +253,37 @@ enum class BuiltinGeometryLayout : UInt8 {
 
 enum class PipelineParameters : UInt32 {
     None = 0,
-    Viewport            = 0x00000001,
-    Program             = 0x00000002,
-    BlendState          = 0x00000004,
-    DepthStencilState   = 0x00000008,
-    RasterizerState     = 0x00000010,
-    ConstantBuffersVS   = 0x00001000,
-    ConstantBuffersGS   = 0x00002000,
-    ConstantBuffersPS   = 0x00004000,
-    ImageViewsVS        = 0x00010000,
-    ImageViewsGS        = 0x00020000,
-    ImageViewsPS        = 0x00040000,
-    SamplerStatesVS     = 0x00100000,
-    SamplerStatesGS     = 0x00200000,
-    SamplerStatesPS     = 0x00400000,
 
-    BoundConstantBuffers = VSConstantBuffers | GSConstantBuffers | PSConstantBuffers,
-    BoundImageViews = VSImageViews | GSImageViews | PSImageViews,
-    SamplerStates = VSSamplerStates | GSSamplerStates | PSSamplerStates,
-    Views = BoundConstantBuffers | BoundImageViews,
-    All = Viewport | Program | BlendState | DepthStencilState | Views | SamplerStates,
+    Framebuffer                     = 0x00000001,
+    Viewport                        = 0x00000002,
+    Program                         = 0x00000004,
+    BlendState                      = 0x00000008,
+    DepthStencilState               = 0x00000010,
+    RasterizerState                 = 0x00000020,
+
+    VertexShaderConstantBuffers     = 0x00001000,
+    VertexShaderImageViews          = 0x00010000,
+    VertexShaderSamplers            = 0x00100000,
+
+    GeometryShaderConstantBuffers   = 0x00002000,
+    GeometryShaderImageViews        = 0x00020000,
+    GeometryShaderSamplers          = 0x00200000,
+
+    PixelShaderConstantBuffers      = 0x00004000,
+    PixelShaderImageViews           = 0x00040000,
+    PixelShaderSamplers             = 0x00400000,
+
+    VertexShaderResources       = VertexShaderConstantBuffers   | VertexShaderImageViews    | VertexShaderSamplers,
+    GeometryShaderResources     = GeometryShaderConstantBuffers | GeometryShaderImageViews  | GeometryShaderSamplers,
+    PixelShaderResources        = PixelShaderConstantBuffers    | PixelShaderImageViews     | PixelShaderSamplers,
+
+    AllShadersConstantBuffers   = VertexShaderConstantBuffers   | GeometryShaderConstantBuffers | PixelShaderConstantBuffers,
+    AllShadersImageViews        = VertexShaderImageViews        | GeometryShaderImageViews      | PixelShaderImageViews,
+    AllShadersSamplers          = VertexShaderSamplers          | GeometryShaderSamplers        | PixelShaderSamplers,
+
+    AllShadersResources = AllShadersConstantBuffers | AllShadersImageViews | AllShadersSamplers,
+
+    All = Viewport | Program | BlendState | DepthStencilState | RasterizerState | AllShadersResources,
 };
 VGC_DEFINE_SCOPED_ENUM_FLAGS_OPERATORS(PipelineParameters)
 

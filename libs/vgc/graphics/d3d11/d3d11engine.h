@@ -64,48 +64,52 @@ protected:
 
     // USER THREAD pimpl functions
 
-    SwapChain* createSwapChain_(const SwapChainDesc& desc) override;
+    SwapChain* createSwapChain_(const SwapChainCreateInfo& createInfo) override;
     void resizeSwapChain_(SwapChain* swapChain, UInt32 width, UInt32 height) override;
-    Buffer* createBuffer_(
-        Usage usage, BindFlags bindFlags, ResourceMiscFlags resourceMiscFlags, CpuAccessFlags cpuAccessFlags) override;
+
+    Buffer* createBuffer_(const BufferCreateInfo& createInfo) override;
+    Image* createImage_(const ImageCreateInfo& createInfo) override;
+    ImageView* createImageView_(const ImagePtr& image) override;
+    ImageView* createImageView_(const BufferPtr& buffer, ImageFormat format) override;
+    GeometryView* createGeometryView_(const GeometryViewCreateInfo& createInfo) override;
+    BlendState* createBlendState_(const BlendStateCreateInfo& createInfo) override;
+    RasterizerState* createRasterizerState_(const RasterizerStateCreateInfo& createInfo) override;
+    Framebuffer* createFramebuffer_(const ImageViewPtr& colorImageView) override;
 
     // RENDER THREAD functions
 
-    void bindSwapChain_(SwapChain* swapChain) override;
+    void setSwapChain_(SwapChain* swapChain) override;
     UInt64 present_(SwapChain* swapChain, UInt32 syncInterval, PresentFlags flags) override;
-    void bindFramebuffer_(Framebuffer* framebuffer) override;
-    void setViewport_(Int x, Int y, Int width, Int height) override;
-    void clear_(const core::Color& color) override;
-    void setProjectionMatrix_(const geometry::Mat4f& m) override;
-    void setViewMatrix_(const geometry::Mat4f& m) override;
 
+    void initFramebuffer_(Framebuffer* framebuffer) override;
     void initBuffer_(Buffer* buffer, const void* data, Int initialLengthInBytes) override;
-    void updateBufferData_(Buffer* buffer, const void* data, Int lengthInBytes) override;
-    void setupVertexBufferForPaintShader_(Buffer* buffer) override;
-    void drawPrimitives_(Buffer* buffer, PrimitiveType type) override;
+    void initImage_(Image* image, const void* data) override;
+    void initImageView_(ImageView* view) override;
+    void initGeometryView_(GeometryView* view) override;
+    void initBlendState_(BlendState* state) override;
+    void initRasterizerState_(RasterizerState* state) override;
 
-    void bindPaintShader_() override;
-    void releasePaintShader_() override;
-    void bindAtlasGlyphShader_() override;
-    void releaseAtlasGlyphShader_() override;
-    void bindRoundedRectangleShader_() override;
-    void releaseRoundedRectangleShader_() override;
+    void updateBufferData_(Buffer* buffer, const void* data, Int lengthInBytes) override;
+
+    void setFramebuffer_(Framebuffer* framebuffer) override;
+    void setViewport_(Int x, Int y, Int width, Int height) override;
+    void setProgram_(Program* program) override;
+    void setBlendState_(BlendState* state) override;
+    void setRasterizerState_(RasterizerState* state) override;
+    void setStageConstantBuffers_(Buffer* const* buffers, Int startIndex, Int count, ShaderStage shaderStage) override;
+    void setStageImageViews_(ImageView* const* views, Int startIndex, Int count, ShaderStage shaderStage) override;
+    void setStageSamplers_(SamplerState* const* states, Int startIndex, Int count, ShaderStage shaderStage) override;
+
+    void draw_(GeometryView* view) override;
+    void clear_(const core::Color& color) override;
 
 private:
     ComPtr<IDXGIFactory> factory_;
     ComPtr<ID3D11Device> device_;
     ComPtr<ID3D11DeviceContext> deviceCtx_;
-    ComPtr<ID3D11RasterizerState> rasterizerState_;
-    ComPtr<ID3D11BlendState> blendState_;
     ComPtr<ID3D11DepthStencilState> depthStencilState_;
-    ComPtr<ID3D11InputLayout> inputLayout_;
 
-    ComPtr<ID3D11VertexShader> vertexShader_;
-    ComPtr<ID3D11Buffer> vertexConstantBuffer_;
-    ComPtr<ID3D11PixelShader> pixelShader_;
-    geometry::Mat4f projMatrix_;
-    geometry::Mat4f viewMatrix_;
-    bool matricesDirty_;
+    //ComPtr<ID3D11InputLayout> inputLayout_;
 
     std::chrono::steady_clock::time_point startTime_;
 

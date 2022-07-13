@@ -14,6 +14,7 @@ vgc_add_library(graphics
         batch.h
         blendstate.h
         buffer.h
+        constants.h
         d3d11/d3d11engine.h
         detail/command.h
         detail/comptr.h

@@ -172,10 +172,14 @@ public:
     static_assert(std::is_base_of_v<Resource, T>);
 
     constexpr ResourcePtr() noexcept
-        : p_(nullptr) {}
+        : p_(nullptr)
+    {
+    }
 
     constexpr ResourcePtr(std::nullptr_t) noexcept
-        : p_(nullptr) {}
+        : p_(nullptr)
+    {
+    }
 
     explicit ResourcePtr(T* p)
         : p_(p)

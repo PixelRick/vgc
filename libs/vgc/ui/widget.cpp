@@ -216,15 +216,19 @@ void Widget::repaint()
     }
 }
 
+void Widget::preparePaint(graphics::Engine* engine, PaintFlags flags)
+{
+    if (engine != lastPaintEngine_) {
+        setEngine_(engine);
+        onPaintCreate(engine);
+    }
+    onPaintPrepare(engine, flags);
+}
+
 void Widget::paint(graphics::Engine* engine, PaintFlags flags)
 {
     if (engine != lastPaintEngine_) {
-        if (lastPaintEngine_) {
-            releaseEngine_();
-        }
-        lastPaintEngine_ = engine;
-        engine->aboutToBeDestroyed().connect(
-            onEngineAboutToBeDestroyed());
+        setEngine_(engine);
         onPaintCreate(engine);
     }
     onPaintDraw(engine, flags);
@@ -237,6 +241,13 @@ void Widget::onPaintCreate(graphics::Engine* engine)
     }
 }
 
+void Widget::onPaintPrepare(graphics::Engine* engine, PaintFlags flags)
+{
+    for (Widget* widget : children()) {
+        widget->preparePaint(engine, flags);
+    }
+}
+
 void Widget::onPaintDraw(graphics::Engine* engine, PaintFlags flags)
 {
     for (Widget* widget : children()) {
@@ -245,7 +256,7 @@ void Widget::onPaintDraw(graphics::Engine* engine, PaintFlags flags)
         geometry::Vec2f pos = widget->position();
         m.translate(pos[0], pos[1]); // TODO: Mat4f.translate(const Vec2f&)
         engine->setViewMatrix(m);
-        widget->onPaintDraw(engine, flags);
+        widget->paint(engine, flags);
         engine->popViewMatrix();
     }
 }
@@ -612,6 +623,16 @@ void Widget::releaseEngine_()
     lastPaintEngine_->aboutToBeDestroyed().disconnect(
         onEngineAboutToBeDestroyed());
     lastPaintEngine_ = nullptr;
+}
+
+void Widget::setEngine_(graphics::Engine* engine)
+{
+    if (lastPaintEngine_) {
+        releaseEngine_();
+    }
+    lastPaintEngine_ = engine;
+    engine->aboutToBeDestroyed().connect(
+        onEngineAboutToBeDestroyed());
 }
 
 } // namespace ui

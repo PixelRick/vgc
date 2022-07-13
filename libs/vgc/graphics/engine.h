@@ -38,6 +38,7 @@
 #include <vgc/graphics/batch.h>
 #include <vgc/graphics/blendstate.h>
 #include <vgc/graphics/buffer.h>
+#include <vgc/graphics/constants.h>
 #include <vgc/graphics/detail/command.h>
 #include <vgc/graphics/detail/pipelinestate.h>
 #include <vgc/graphics/enums.h>
@@ -103,8 +104,6 @@ protected:
         colorGradientsBufferImageView_;
 
         glyphAtlasProgram_.reset();
-        glyphStagingImage_.reset();
-        glyphStagingImageView_.reset();
         glyphAtlasBuffer_.reset();
         glyphAtlasBufferImageView_.reset();
 
@@ -114,13 +113,15 @@ protected:
 
         roundedRectangleProgram_.reset();
 
+        // XXX also clear state stacks !
+
         stopRenderThread_();
     }
 
 public:
-
     void start()
     {
+        createBuiltinResources_();
         startRenderThread_();
     }
 
@@ -163,7 +164,7 @@ public:
         resizeSwapChain_(swapChain, width, height);
     }
 
-    void bindSwapChain(const SwapChainPtr& swapChain)
+    void setSwapChain(const SwapChainPtr& swapChain)
     {
         if (swapChain->gcList_ != gcResourceList_) {
             // XXX error, using a resource from another engine..
@@ -173,9 +174,17 @@ public:
         queueLambdaCommandWithParameters_<SwapChain*>(
             "bindSwapChain",
             [](Engine* engine, SwapChain* swapChain) {
-                engine->bindSwapChain_(swapChain);
+                engine->setSwapChain_(swapChain);
             },
             swapChain.get());
+        if (!areBuiltinResourcesInited_) {
+            queueLambdaCommand_(
+                "initBuiltinResources",
+                [](Engine* engine) {
+                    engine->initBuiltinResources_();
+                });
+            areBuiltinResourcesInited_ = true;
+        }
     }
 
     // presentedCallback is called from an unspecified thread.
@@ -224,125 +233,22 @@ public:
         return swapChain ? swapChain->defaultFrameBuffer_ : FramebufferPtr();
     }
 
-    void bindFramebuffer(Framebuffer* framebuffer = nullptr)
+    void setFramebuffer(const FramebufferPtr& framebuffer = nullptr)
     {
-        if (!framebuffer) {
-            framebuffer = getDefaultFramebuffer().get();
-        }
-        else if (!checkResourceIsValid(framebuffer)) {
+        if (framebuffer && !checkResourceIsValid(framebuffer.get())) {
             return;
         }
-
-        queueLambdaCommandWithParameters_<Framebuffer*>(
-            "bindFramebuffer",
-            [](Engine* engine, Framebuffer* framebuffer) {
-                engine->bindFramebuffer_(framebuffer);
-            },
-            framebuffer);
+        framebufferStack_.emplaceLast(framebuffer);
+        dirtyPipelineParameters_ |= PipelineParameters::Framebuffer;
     }
 
-    void pushPipelineParameters(PipelineParameters parameters)
-    {
-        switch (parameters) {
-        case PipelineParameters::Viewport:
-        {
-
-        }
-        case PipelineParameters::Program:
-        {
-
-        }
-        case PipelineParameters::BlendState:
-        {
-
-        }
-        case PipelineParameters::DepthStencilState:
-        {
-
-        }
-        case PipelineParameters::VSConstantBuffers:
-        {
-
-        }
-        case PipelineParameters::GSConstantBuffers:
-        {
-
-        }
-        case PipelineParameters::PSConstantBuffers:
-        {
-
-        }
-        case PipelineParameters::VSImageViews:
-        {
-
-        }
-        case PipelineParameters::GSImageViews:
-        {
-
-        }
-        case PipelineParameters::PSImageViews:
-        {
-
-        }
-        case PipelineParameters::VSSamplerStates:
-        {
-
-        }
-        case PipelineParameters::GSSamplerStates:
-        {
-
-        }
-        case PipelineParameters::PSSamplerStates:
-        {
-
-        }
-        }
-    }
-
-    void popPipelineParameters(PipelineParameters parameters)
-    {
-
-    }
-
-    void pushProgram()
-    {
-        programStack_.emplaceLast(programStack_.last());
-    }
-
-    void popProgram()
-    {
-        programStack_.removeLast();
-        Program* p = programStack_.last().get();
-        queueLambdaCommand_(
-            "bindProgram",
-            [=](Engine* engine) {
-                engine->bindProgram_(p);
-            });
-    }
+    void pushPipelineParameters(PipelineParameters parameters);
+    void popPipelineParameters(PipelineParameters parameters);
 
     void setViewport(Int x, Int y, Int width, Int height)
     {
-        struct CommandParameters {
-            Int x, y, width, height;
-        };
-        queueLambdaCommandWithParameters_<CommandParameters>(
-            "setViewport",
-            [](Engine* engine, const CommandParameters& p) {
-                engine->setViewport_(p.x, p.y, p.width, p.height);
-            },
-            x, y, width, height);
-    }
-
-    /// Clears the whole render area with the given color.
-    ///
-    void clear(const core::Color& color)
-    {
-        queueLambdaCommandWithParameters_<core::Color>(
-            "clear",
-            [](Engine* engine, const core::Color& c) {
-                engine->clear_(c);
-            },
-            color);
+        viewportStack_.emplaceLast(x, y, width, height);
+        dirtyPipelineParameters_ |= PipelineParameters::Viewport;
     }
 
     /// Returns the current projection matrix (top-most on the stack).
@@ -415,7 +321,7 @@ public:
         dirtyBuiltinConstantBuffer_ = true;
     }
 
-    void bindBuiltinProgram(BuiltinProgram builtinProgram)
+    void bindProgram(BuiltinProgram builtinProgram)
     {
         ProgramPtr program = {};
         switch (builtinProgram) {
@@ -424,29 +330,7 @@ public:
         }
         }
         programStack_.emplaceLast(program);
-
-        Program* p = program.get();
-        queueLambdaCommand_(
-            "bindProgram",
-            [=](Engine* engine) {
-                engine->bindProgram_(p);
-            });
-    }
-
-    void pushProgram()
-    {
-        programStack_.emplaceLast(programStack_.last());
-    }
-
-    void popProgram()
-    {
-        programStack_.removeLast();
-        Program* p = programStack_.last().get();
-        queueLambdaCommand_(
-            "bindProgram",
-            [=](Engine* engine) {
-                engine->bindProgram_(p);
-            });
+        dirtyPipelineParameters_ |= PipelineParameters::Program;
     }
 
     template<typename DataGetter>
@@ -549,77 +433,94 @@ public:
     GeometryViewPtr createGeometryView(const GeometryViewCreateInfo& createInfo)
     {
         GeometryViewPtr geometryView(createGeometryView_(createInfo));
+
+        queueLambdaCommandWithParameters_<GeometryView*>(
+            "initImage",
+            [](Engine* engine, GeometryView* gv) {
+                engine->initGeometryView_(gv);
+            },
+            geometryView.get());
+
         return geometryView;
     }
 
-    void draw(GeometryView* geometryView)
+    void draw(const GeometryViewPtr& geometryView)
     {
-        if (!checkResourceIsValid(geometryView)) {
+        if (!checkResourceIsValid(geometryView.get())) {
             return;
         }
-
-        struct CommandParameters {
-            GeometryView* geometryView;
-        };
-        queueLambdaCommandWithParameters_<CommandParameters>(
+        syncState_();
+        queueLambdaCommandWithParameters_<GeometryView*>(
             "draw",
-            [](Engine* engine, const CommandParameters& p) {
-                engine->draw_(p.geometryView);
+            [](Engine* engine, GeometryView* gv) {
+                engine->draw_(gv);
             },
-            geometryView);
+            geometryView.get());
+    }
+
+    /// Clears the whole render area with the given color.
+    ///
+    void clear(const core::Color& color)
+    {
+        syncState_();
+        queueLambdaCommandWithParameters_<core::Color>(
+            "clear",
+            [](Engine* engine, const core::Color& c) {
+                engine->clear_(c);
+            },
+            color);
     }
 
 protected:
     // USER THREAD implementation functions
 
-    // should call parent impl
-    virtual void initBuiltinResources_();
-
-    virtual SwapChain* createSwapChain_(const SwapChainCreateInfo& desc) = 0;
+    virtual SwapChain* createSwapChain_(const SwapChainCreateInfo& createInfo) = 0;
     virtual void resizeSwapChain_(SwapChain* swapChain, UInt32 width, UInt32 height) = 0;
-    virtual FramebufferPtr createFramebuffer_(const ImageViewPtr& colorImageView) = 0;
+
     // XXX virtual void setDefaultFramebuffer_(const SwapChainPtr& swapChain, const FramebufferPtr& fb) = 0;
 
     virtual Buffer* createBuffer_(const BufferCreateInfo& createInfo) = 0;
     virtual Image* createImage_(const ImageCreateInfo& createInfo) = 0;
+    virtual ImageView* createImageView_(const ImagePtr& image) = 0;
+    virtual ImageView* createImageView_(const BufferPtr& buffer, ImageFormat format) = 0;
     virtual GeometryView* createGeometryView_(const GeometryViewCreateInfo& createInfo) = 0;
     virtual BlendState* createBlendState_(const BlendStateCreateInfo& createInfo) = 0;
     virtual RasterizerState* createRasterizerState_(const RasterizerStateCreateInfo& createInfo) = 0;
+    virtual Framebuffer* createFramebuffer_(const ImageViewPtr& colorImageView) = 0;
 
     virtual bool shouldPresentWaitFromSyncedUserThread_() { return false; }
 
     // RENDER THREAD implementation functions
 
-    virtual void bindSwapChain_(SwapChain* swapChain) = 0;
-    virtual UInt64 present_(SwapChain* swapChain, UInt32 syncInterval, PresentFlags flags) = 0;
-    // XXX virtual void initFramebuffer_(Framebuffer* framebuffer) = 0;
-    virtual void bindFramebuffer_(Framebuffer* framebuffer) = 0;
-    virtual void setViewport_(Int x, Int y, Int width, Int height) = 0;
-    virtual void clear_(const core::Color& color) = 0;
+    virtual void initBuiltinResources_() = 0;
 
+    virtual void setSwapChain_(SwapChain* swapChain) = 0;
+    virtual UInt64 present_(SwapChain* swapChain, UInt32 syncInterval, PresentFlags flags) = 0;
+
+    virtual void initFramebuffer_(Framebuffer* framebuffer) = 0;
     virtual void initBuffer_(Buffer* buffer, const void* data, Int initialLengthInBytes) = 0;
+    virtual void initImage_(Image* image, const void* data) = 0;
+    virtual void initImageView_(ImageView* view) = 0;
+    virtual void initGeometryView_(GeometryView* view) = 0;
+    virtual void initBlendState_(BlendState* state) = 0;
+    virtual void initRasterizerState_(RasterizerState* state) = 0;
+
     virtual void updateBufferData_(Buffer* buffer, const void* data, Int lengthInBytes) = 0;
 
-    virtual void initImage_(Image* image, const void* data) = 0;
+    virtual void setFramebuffer_(Framebuffer* framebuffer) = 0;
+    virtual void setViewport_(Int x, Int y, Int width, Int height) = 0;
+    virtual void setProgram_(Program* program) = 0;
+    virtual void setBlendState_(BlendState* state) = 0;
+    virtual void setRasterizerState_(RasterizerState* state) = 0;
+    virtual void setStageConstantBuffers_(Buffer* const* buffers, Int startIndex, Int count, ShaderStage shaderStage) = 0;
+    virtual void setStageImageViews_(ImageView* const* views, Int startIndex, Int count, ShaderStage shaderStage) = 0;
+    virtual void setStageSamplers_(SamplerState* const* states, Int startIndex, Int count, ShaderStage shaderStage) = 0;
 
-    virtual void bindProgram_(Program* program) = 0;
-    virtual void releaseProgram_() = 0;
-
-    // opengl has a single constantbuffers array and then we bind each index to a block index
-
-    virtual void setConstantBuffersVS_(Buffer** buffers, Int startIndex, Int count) = 0;
-    virtual void setConstantBuffersGS_(Buffer** buffers, Int startIndex, Int count) = 0;
-    virtual void setConstantBuffersPS_(Buffer** buffers, Int startIndex, Int count) = 0;
-
-    virtual void setImageViews_(ImageView** views, Int startIndex, Int count, ShaderType shaderType) = 0;
-
-    virtual void setSamplerStates_(SamplerState** views, Int startIndex, Int count) = 0;
-    virtual void setSamplersGS_(ImageView** views, Int startIndex, Int count) = 0;
-    virtual void setSamplersPS_(ImageView** views, Int startIndex, Int count) = 0;
-
-    virtual void draw_(GeometryView* geometryView) = 0;
+    virtual void draw_(GeometryView* view) = 0;
+    virtual void clear_(const core::Color& color) = 0;
 
 protected:
+    bool areBuiltinResourcesInited_ = false;
     detail::ResourceList* gcResourceList_ = nullptr;
     // cannot be flushed in out-of-order chunks unless garbagedResources is only sent with the last
     std::list<CommandUPtr> pendingCommands_;
@@ -648,35 +549,59 @@ protected:
     };
 
 private:
-    // pipeline state on the user thread
+    // -- pipeline state on the user thread --
+
     SwapChainPtr swapChain_;
     core::Array<FramebufferPtr> framebufferStack_;
+
     // pushable pipeline parameters
     core::Array<Viewport> viewportStack_;
     core::Array<ProgramPtr> programStack_;
+    core::Array<BlendStatePtr> blendStateStack_;
+    core::Array<RasterizerStatePtr> rasterizerStateStack_;
 
-    inline constexpr size_t maxConstantBuffersPerStageCount = 6;
-    using ConstantBuffersArray = std::array<BufferPtr, maxConstantBuffersPerStageCount>;
+    static constexpr size_t shaderStageToIndex_(ShaderStage stage)
+    {
+        return core::toUnderlying(stage);
+    }
 
-    std::array<core::Array<ConstantBuffersArray>, ShaderType::Max_ + 1> ConstantBuffersStacks_;
+    static constexpr Int stageEndIndex = core::toUnderlying(ShaderStage::Max_) + 1;
 
-    inline constexpr size_t maxConstantBuffersPerStageCount = 6;
-    using ImageViewsArray = std::array<ImageViewPtr, 6>;
+    using StageConstantBuffers = std::array<BufferPtr, maxConstantBufferCountPerStage>;
+    using StageConstantBuffersStack = core::Array<StageConstantBuffers>;
+    std::array<StageConstantBuffersStack, stageEndIndex> constantBuffersStacks_;
 
-    // builtin shaders (create by api-specific engine implementations)
+    using StageImageViews = std::array<ImageViewPtr, maxImageViewCountPerStage>;
+    using StageImageViewsStack = core::Array<StageImageViews>;
+    std::array<StageImageViewsStack, stageEndIndex> imageViewsStacks_;
+
+    using StageSamplers = std::array<SamplerStatePtr, maxSamplerCountPerStage>;
+    using StageSamplersStack = core::Array<StageSamplers>;
+    std::array<StageSamplersStack, stageEndIndex> samplersStacks_;
+
+    PipelineParameters dirtyPipelineParameters_ = PipelineParameters::None;
+
+    // called in user thread
+    void syncState_();
+    void syncStageConstantBuffers_(ShaderStage shaderStage);
+    void syncStageImageViews_(ShaderStage shaderStage);
+    void syncStageSamplers_(ShaderStage shaderStage);
+
+    // -- builtin shaders -- (create by api-specific engine implementations)
+
+    void createBuiltinResources_();
+
     ProgramPtr simpleProgram_;
 
-    // builtin constants + dirty bool
+    // -- builtin constants + dirty bool --
+
     BufferPtr builtinConstantsBuffer_;
     core::Array<geometry::Mat4f> projectionMatrixStack_;
     core::Array<geometry::Mat4f> viewMatrixStack_;
     UInt32 engineTimeInMs_ = 0;
     bool dirtyBuiltinConstantBuffer_ = false;
 
-    // user thread
-    void updateBuiltinConstants_(BuiltinConstants& constants);
-
-    // batching early impl
+    // -- builtin batching early impl --
 
     BufferPtr unitQuad_;
 
@@ -694,7 +619,11 @@ private:
 
     ProgramPtr roundedRectangleProgram_;
 
-    // render thread + sync
+    void flushBuiltinBatches_();
+    void prependBuiltinBatchesResourceUpdates_();
+
+    // -- render thread + sync --
+
     std::thread renderThread_;
     std::mutex mutex_;
     std::condition_variable wakeRenderThreadConditionVariable_;
@@ -709,11 +638,13 @@ private:
                     core::Array<Resource*>&& garbagedResources)
             : commands(std::move(commands))
             , garbagedResources(std::move(garbagedResources))
-        {}
+        {
+        }
 
         CommandList(std::list<CommandUPtr>&& commands)
             : commands(std::move(commands))
-        {}
+        {
+        }
 
         std::list<CommandUPtr> commands;
         core::Array<Resource*> garbagedResources;
@@ -724,15 +655,15 @@ private:
     void startRenderThread_();
     void stopRenderThread_(); // blocking
 
-    void flushTextBatch_();
-    void flushIconBatch_();
+    // -- threads sync --
 
     UInt submitPendingCommandList_(bool withGarbage);
 
     // returns false if translation was cancelled by a stop request.
     void waitCommandListTranslationFinished_(UInt commandListId = 0);
 
-    // checks
+    // -- checks --
+
     bool checkResourceIsValid(Resource* resource)
     {
         if (!resource) {

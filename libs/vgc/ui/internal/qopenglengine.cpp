@@ -191,7 +191,8 @@ public:
     QOpenglFramebuffer(ResourceList* gcList, bool isDefault = false)
         : Framebuffer(gcList)
         , isDefault_(isDefault)
-    {}
+    {
+    }
 
     bool isDefault() const
     {

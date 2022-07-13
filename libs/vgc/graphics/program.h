@@ -17,10 +17,7 @@
 #ifndef VGC_GRAPHICS_PROGRAM_H
 #define VGC_GRAPHICS_PROGRAM_H
 
-#include <vgc/core/arithmetic.h>
-#include <vgc/geometry/mat4f.h>
 #include <vgc/graphics/api.h>
-#include <vgc/graphics/enums.h>
 #include <vgc/graphics/resource.h>
 
 namespace vgc::graphics {
@@ -28,17 +25,11 @@ namespace vgc::graphics {
 VGC_DECLARE_OBJECT(Engine);
 
 /// \class vgc::graphics::Program
-/// \brief Graphics program (linked shaders).
+/// \brief Abstract graphics program (linked shaders).
 ///
 class VGC_GRAPHICS_API Program : public Resource {
 protected:
     using Resource::Resource;
-
-    //void clearSubResources_() override {
-    //    vertexShaderConstantsBuffer_.reset();
-    //}
-
-    //BufferPtr vertexShaderConstantsBuffer_;
 };
 using ProgramPtr = ResourcePtr<Program>;
 

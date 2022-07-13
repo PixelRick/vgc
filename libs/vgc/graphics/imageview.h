@@ -21,6 +21,7 @@
 #include <vgc/graphics/api.h>
 #include <vgc/graphics/enums.h>
 #include <vgc/graphics/resource.h>
+#include <vgc/graphics/image.h>
 
 namespace vgc::graphics {
 
@@ -41,10 +42,25 @@ VGC_DECLARE_OBJECT(Engine);
 //
 class VGC_GRAPHICS_API ImageView : public Resource {
 protected:
-    ImageView(ResourceList* gcList)
-        : Resource(gcList) {}
+    ImageView(ResourceList* gcList, const ResourcePtr<Resource>& resource, ImageFormat format)
+        : Resource(gcList), resource_(resource), format_(format)
+    {
+    }
 
-    using Resource::Resource;
+    ImageFormat format() const {
+        return format_;
+    }
+
+private:
+    friend Engine;
+
+    void clearSubResources_() override
+    {
+        resource_.reset();
+    }
+
+    ImageFormat format_;
+    ResourcePtr<Resource> resource_;
 };
 using ImageViewPtr = ResourcePtr<ImageView>;
 

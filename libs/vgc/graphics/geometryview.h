@@ -127,7 +127,7 @@ public:
         return info_.primitiveType();
     }
 
-    const BuiltinGeometryLayout& builtinGeometryLayout() const
+    BuiltinGeometryLayout builtinGeometryLayout() const
     {
         return info_.builtinGeometryLayout();
     }

@@ -35,7 +35,8 @@ public:
 
     BlendEquation(BlendOp operation, BlendFactor sourceFactor, BlendFactor targetFactor)
         : operation_(operation), sourceFactor_(sourceFactor), targetFactor_(targetFactor)
-    {}
+    {
+    }
 
     BlendOp operation() const
     {
@@ -167,10 +168,10 @@ public:
         targetBlendStates_[idx].setEquationAlpha(operation, sourceFactor, targetFactor);
     }
 
-    void setTargetBlendEnabled(Int i, bool enabledd)
+    void setTargetBlendEnabled(Int i, bool enabled)
     {
         size_t idx = toStateIndex_(i);
-        targetBlendStates_[idx].setEnabled(enabledd);
+        targetBlendStates_[idx].setEnabled(enabled);
     }
 
     void setTargetBlendWriteMask(Int i, BlendWriteMask writeMask)
@@ -190,6 +191,7 @@ private:
             throw core::IndexError(core::format(
                 "Target blend state index {} is out of range [0, {}]", i, targetBlendStates_.size() - 1));
         }
+        return idx;
     }
 };
 
@@ -200,7 +202,8 @@ class VGC_GRAPHICS_API BlendState : public Resource {
 protected:
     BlendState(ResourceList* gcList, const BlendStateCreateInfo& info)
         : Resource(gcList), info_(info)
-    {}
+    {
+    }
 
 public:
     bool isAlphaToCoverageEnabled() const

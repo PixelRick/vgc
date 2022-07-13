@@ -49,8 +49,8 @@ VGC_DECLARE_OBJECT(UiWidgetEngine);
 
 enum class PaintFlags : UInt16 {
     None = 0,
-    Resizing = 1,
-    LayoutViz = 2,
+    Resizing            = 0x0001,
+    LayoutViz           = 0x0002,
 };
 VGC_DEFINE_SCOPED_ENUM_FLAGS_OPERATORS(PaintFlags)
 
@@ -383,6 +383,11 @@ public:
     void repaint();
 
     /// This function is called by the widget container whenever the widget
+    /// needs to prepare to be repainted for a frame.
+    ///
+    void preparePaint(graphics::Engine* engine, PaintFlags flags = PaintFlags::None);
+
+    /// This function is called by the widget container whenever the widget
     /// needs to be repainted for a frame.
     ///
     void paint(graphics::Engine* engine, PaintFlags flags = PaintFlags::None);
@@ -584,10 +589,16 @@ public:
     Action* createAction(const Shortcut& shortcut);
 
     /// This virtual function is called once before the first call to
-    /// onPaintDraw(), and should be reimplemented to create required static
-    /// GPU resources.
+    /// onPaintDraw(), and should be reimplemented to create required static GPU
+    /// resources.
     ///
     virtual void onPaintCreate(graphics::Engine* engine);
+
+    /// This virtual function is called whenever the widget needs to prepare to
+    /// be repainted. Subclasses should reimplement this, typically to update
+    /// resources.
+    ///
+    virtual void onPaintPrepare(graphics::Engine* engine, PaintFlags flags);
 
     /// This virtual function is called whenever the widget needs to be
     /// repainted. Subclasses should reimplement this, typically by issuing
@@ -655,6 +666,7 @@ private:
 
     graphics::Engine* lastPaintEngine_ = nullptr;
     void releaseEngine_();
+    void setEngine_(graphics::Engine* engine);
 
     VGC_SLOT(onEngineAboutToBeDestroyed, releaseEngine_);
     VGC_SLOT(onWidgetAdded_, onWidgetAdded);

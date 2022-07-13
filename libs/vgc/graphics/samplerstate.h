@@ -123,7 +123,8 @@ class VGC_GRAPHICS_API SamplerState : public Resource {
 protected:
     SamplerState(ResourceList* gcList, const SamplerStateCreateInfo& info)
         : Resource(gcList), info_(info)
-    {}
+    {
+    }
 
 public:
     FillMode fillMode() const
