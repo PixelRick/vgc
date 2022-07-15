@@ -31,7 +31,7 @@ namespace vgc::graphics {
 ///
 class VGC_GRAPHICS_API BlendEquation {
 public:
-    BlendEquation() noexcept = default;
+    constexpr BlendEquation() noexcept = default;
 
     BlendEquation(BlendOp operation, BlendFactor sourceFactor, BlendFactor targetFactor)
         : operation_(operation), sourceFactor_(sourceFactor), targetFactor_(targetFactor)
@@ -64,7 +64,7 @@ private:
 ///
 class VGC_GRAPHICS_API TargetBlendState {
 public:
-    TargetBlendState() noexcept = default;
+    constexpr TargetBlendState() noexcept = default;
 
     bool isEnabled() const
     {
@@ -117,10 +117,10 @@ public:
     }
 
 private:
-    bool isEnabled_;
-    BlendEquation equationRGB_;
-    BlendEquation equationAlpha_;
-    BlendWriteMask writeMask_;
+    bool isEnabled_ = true;
+    BlendEquation equationRGB_ = {};
+    BlendEquation equationAlpha_ = {};
+    BlendWriteMask writeMask_ = BlendWriteMask::All;
 };
 
 /// \class vgc::graphics::BlendStateCreateInfo
@@ -128,7 +128,7 @@ private:
 ///
 class VGC_GRAPHICS_API BlendStateCreateInfo {
 public:
-    BlendStateCreateInfo() noexcept = default;
+    constexpr BlendStateCreateInfo() noexcept = default;
 
     bool isAlphaToCoverageEnabled() const
     {
@@ -152,40 +152,41 @@ public:
 
     const TargetBlendState& targetBlendState(Int i) const
     {
-        size_t idx = toStateIndex_(i);
+        size_t idx = castStateIndex_(i);
         return targetBlendStates_[idx];
     }
 
     void setTargetBlendEquationRGB(Int i, BlendOp operation, BlendFactor sourceFactor, BlendFactor targetFactor)
     {
-        size_t idx = toStateIndex_(i);
+        size_t idx = castStateIndex_(i);
         targetBlendStates_[idx].setEquationRGB(operation, sourceFactor, targetFactor);
     }
 
     void setTargetBlendEquationAlpha(Int i, BlendOp operation, BlendFactor sourceFactor, BlendFactor targetFactor)
     {
-        size_t idx = toStateIndex_(i);
+        size_t idx = castStateIndex_(i);
         targetBlendStates_[idx].setEquationAlpha(operation, sourceFactor, targetFactor);
     }
 
     void setTargetBlendEnabled(Int i, bool enabled)
     {
-        size_t idx = toStateIndex_(i);
+        size_t idx = castStateIndex_(i);
         targetBlendStates_[idx].setEnabled(enabled);
     }
 
     void setTargetBlendWriteMask(Int i, BlendWriteMask writeMask)
     {
-        size_t idx = toStateIndex_(i);
+        size_t idx = castStateIndex_(i);
         targetBlendStates_[idx].setWriteMask(writeMask);
     }
 
 private:
     bool isAlphaToCoverageEnabled_ = false;
     bool isIndependentBlendEnabled_ = false;
-    std::array<TargetBlendState, 8> targetBlendStates_;
+    std::array<TargetBlendState, 8> targetBlendStates_ = {};
 
-    size_t toStateIndex_(Int i) const {
+    size_t castStateIndex_(Int i) const
+    {
         size_t idx = core::int_cast<size_t>(i);
         if (idx >= targetBlendStates_.size()) {
             throw core::IndexError(core::format(

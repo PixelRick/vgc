@@ -46,7 +46,7 @@ namespace vgc::graphics {
 ///
 class VGC_GRAPHICS_API BufferCreateInfo {
 public:
-    BufferCreateInfo() noexcept = default;
+    constexpr BufferCreateInfo() noexcept = default;
 
     Usage usage() const
     {
@@ -110,8 +110,8 @@ protected:
         if (bindFlags == BindFlags::None) {
             throw core::LogicError("Bind flags cannot be None");
         }
-        if (!!(bindFlags & BindFlags::UniformBuffer)) {
-            if (bindFlags != BindFlags::UniformBuffer) {
+        if (!!(bindFlags & BindFlags::ConstantBuffer)) {
+            if (bindFlags != BindFlags::ConstantBuffer) {
                 throw core::LogicError("BindFlags::UniformBuffer cannot be combined with any other bind flag");
             }
         }

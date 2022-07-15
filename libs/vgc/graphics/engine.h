@@ -481,8 +481,8 @@ protected:
 
     virtual Buffer* createBuffer_(const BufferCreateInfo& createInfo) = 0;
     virtual Image* createImage_(const ImageCreateInfo& createInfo) = 0;
-    virtual ImageView* createImageView_(const ImagePtr& image) = 0;
-    virtual ImageView* createImageView_(const BufferPtr& buffer, ImageFormat format) = 0;
+    virtual ImageView* createImageView_(const ImageViewCreateInfo& createInfo, const ImagePtr& image) = 0;
+    virtual ImageView* createImageView_(const ImageViewCreateInfo& createInfo, const BufferPtr& buffer, ImageFormat format, UInt32 elementsCount) = 0;
     virtual GeometryView* createGeometryView_(const GeometryViewCreateInfo& createInfo) = 0;
     virtual BlendState* createBlendState_(const BlendStateCreateInfo& createInfo) = 0;
     virtual RasterizerState* createRasterizerState_(const RasterizerStateCreateInfo& createInfo) = 0;
@@ -497,17 +497,14 @@ protected:
     virtual void setSwapChain_(SwapChain* swapChain) = 0;
     virtual UInt64 present_(SwapChain* swapChain, UInt32 syncInterval, PresentFlags flags) = 0;
 
-    virtual void initFramebuffer_(Framebuffer* framebuffer) = 0;
     virtual void initBuffer_(Buffer* buffer, const void* data, Int initialLengthInBytes) = 0;
     virtual void initImage_(Image* image, const void* data) = 0;
     virtual void initImageView_(ImageView* view) = 0;
     virtual void initGeometryView_(GeometryView* view) = 0;
     virtual void initBlendState_(BlendState* state) = 0;
     virtual void initRasterizerState_(RasterizerState* state) = 0;
+    virtual void initFramebuffer_(Framebuffer* framebuffer) = 0;
 
-    virtual void updateBufferData_(Buffer* buffer, const void* data, Int lengthInBytes) = 0;
-
-    virtual void setFramebuffer_(Framebuffer* framebuffer) = 0;
     virtual void setViewport_(Int x, Int y, Int width, Int height) = 0;
     virtual void setProgram_(Program* program) = 0;
     virtual void setBlendState_(BlendState* state) = 0;
@@ -515,6 +512,9 @@ protected:
     virtual void setStageConstantBuffers_(Buffer* const* buffers, Int startIndex, Int count, ShaderStage shaderStage) = 0;
     virtual void setStageImageViews_(ImageView* const* views, Int startIndex, Int count, ShaderStage shaderStage) = 0;
     virtual void setStageSamplers_(SamplerState* const* states, Int startIndex, Int count, ShaderStage shaderStage) = 0;
+    virtual void setFramebuffer_(Framebuffer* framebuffer) = 0;
+
+    virtual void updateBufferData_(Buffer* buffer, const void* data, Int lengthInBytes) = 0;
 
     virtual void draw_(GeometryView* view) = 0;
     virtual void clear_(const core::Color& color) = 0;

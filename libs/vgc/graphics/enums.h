@@ -28,14 +28,25 @@ enum class BindFlags : UInt16 {
     None = 0,
     VertexBuffer = 1,
     IndexBuffer = 2,
-    UniformBuffer = 4,
+    ConstantBuffer = 4,
     ShaderResource = 8,
-    StreamOutput = 0x10,
-    Image = 0x20,
-    DepthStencil = 0x40,
+    RenderTarget = 0x10,
+    DepthStencil = 0x20,
+    StreamOutput = 0x40,
     UnorderedAccess = 0x80,
 };
 VGC_DEFINE_SCOPED_ENUM_FLAGS_OPERATORS(BindFlags)
+
+/// Subset of `BindFlags` compatible with images.
+//
+enum class ImageBindFlags : UInt16 {
+    None = 0,
+    ShaderResource = 8,
+    RenderTarget = 0x10,
+    DepthStencil = 0x20,
+    UnorderedAccess = 0x80,
+};
+VGC_DEFINE_SCOPED_ENUM_FLAGS_OPERATORS(ImageBindFlags)
 
 // See https://docs.microsoft.com/en-us/windows/win32/api/d3d11/ne-d3d11-d3d11_resource_misc_flag
 //
@@ -108,7 +119,7 @@ enum class ImageRank : UInt8 {
 };
 
 enum class ImageFormat : UInt8 {
-    None,
+    Unknown,
     // Depth
     D_16_UNORM,
     D_32_FLOAT,
@@ -177,6 +188,61 @@ enum class ImageFormat : UInt8 {
     //BC7_UNORM_SRGB,
 };
 
+inline constexpr UInt8 imageFormatToElementSizeInBytes(ImageFormat format)
+{
+    switch (format) {
+    case ImageFormat::D_16_UNORM:               return 2;
+    case ImageFormat::D_32_FLOAT:               return 4;
+    case ImageFormat::DS_24_UNORM_8_UINT:       return 4;
+    case ImageFormat::DS_32_FLOAT_8_UINT_24_X:  return 8;
+    case ImageFormat::R_8_UNORM:                return 1;
+    case ImageFormat::R_8_SNORM:                return 1;
+    case ImageFormat::R_8_UINT:                 return 1;
+    case ImageFormat::R_8_SINT:                 return 1;
+    case ImageFormat::R_16_UNORM:               return 2;
+    case ImageFormat::R_16_SNORM:               return 2;
+    case ImageFormat::R_16_UINT:                return 2;
+    case ImageFormat::R_16_SINT:                return 2;
+    case ImageFormat::R_16_FLOAT:               return 2;
+    case ImageFormat::R_32_UINT:                return 4;
+    case ImageFormat::R_32_SINT:                return 4;
+    case ImageFormat::R_32_FLOAT:               return 4;
+    case ImageFormat::RG_8_UNORM:               return 2;
+    case ImageFormat::RG_8_SNORM:               return 2;
+    case ImageFormat::RG_8_UINT:                return 2;
+    case ImageFormat::RG_8_SINT:                return 2;
+    case ImageFormat::RG_16_UNORM:              return 4;
+    case ImageFormat::RG_16_SNORM:              return 4;
+    case ImageFormat::RG_16_UINT:               return 4;
+    case ImageFormat::RG_16_SINT:               return 4;
+    case ImageFormat::RG_16_FLOAT:              return 4;
+    case ImageFormat::RG_32_UINT:               return 8;
+    case ImageFormat::RG_32_SINT:               return 8;
+    case ImageFormat::RG_32_FLOAT:              return 8;
+    case ImageFormat::RGB_11_11_10_FLOAT:       return 12;
+    case ImageFormat::RGB_32_UINT:              return 12;
+    case ImageFormat::RGB_32_SINT:              return 12;
+    case ImageFormat::RGB_32_FLOAT:             return 12;
+    case ImageFormat::RGBA_8_UNORM:             return 4;
+    case ImageFormat::RGBA_8_UNORM_SRGB:        return 4;
+    case ImageFormat::RGBA_8_SNORM:             return 4;
+    case ImageFormat::RGBA_8_UINT:              return 4;
+    case ImageFormat::RGBA_8_SINT:              return 4;
+    case ImageFormat::RGBA_10_10_10_2_UNORM:    return 4;
+    case ImageFormat::RGBA_10_10_10_2_UINT:     return 4;
+    case ImageFormat::RGBA_16_UNORM:            return 8;
+    case ImageFormat::RGBA_16_UINT:             return 8;
+    case ImageFormat::RGBA_16_SINT:             return 8;
+    case ImageFormat::RGBA_16_FLOAT:            return 8;
+    case ImageFormat::RGBA_32_UINT:             return 16;
+    case ImageFormat::RGBA_32_SINT:             return 16;
+    case ImageFormat::RGBA_32_FLOAT:            return 16;
+    default:
+        break;
+    }
+    return 1;
+}
+
 enum class BlendFactor : UInt8 {
     One,
     Zero,
@@ -224,6 +290,31 @@ enum class CullMode : UInt8 {
     None,
     Front,
     Back,
+};
+
+enum class FilterMode : UInt8 {
+    Point = 0,
+    Linear = 1,
+};
+
+enum class ImageWrapMode : UInt8 {
+    ConstantColor = 0,
+    Clamp = 1,
+    MirrorClamp = 2,
+    Repeat = 3,
+    MirrorRepeat = 4,
+};
+
+enum class SamplerComparisonFunction : UInt8 {
+    Disabled = 0,
+    Always = 1,
+    Never = 2,
+    Equal = 3,
+    NotEqual = 4,
+    Less = 5,
+    LessEqual = 6,
+    Greater = 7,
+    GreaterEqual = 8,
 };
 
 enum class ShaderStage : UInt8 {

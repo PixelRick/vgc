@@ -43,9 +43,11 @@ struct XYRGBVertex {
 } // namespace
 
 class D3d11Buffer : public Buffer {
-public:
-    D3d11Buffer(ResourceList* gcList, const BufferCreateInfo& createInfo);
+protected:
+    friend D3d11Engine;
+    using Buffer::Buffer;
 
+public:
     ID3D11Buffer* object() const
     {
         return object_.get();
@@ -74,17 +76,17 @@ protected:
     }
 
 private:
-    friend D3d11Engine;
-
     ComPtr<ID3D11Buffer> object_;
     D3D11_BUFFER_DESC desc_ = {};
 };
 using D3d11BufferPtr = ResourcePtr<D3d11Buffer>;
 
 class D3d11Image : public Image {
-public:
-    D3d11Image(ResourceList* gcList, const ImageCreateInfo& createInfo);
+protected:
+    friend D3d11Engine;
+    using Image::Image;
 
+public:
     ID3D11Resource* object() const
     {
         return object_.get();
@@ -103,27 +105,38 @@ protected:
     }
 
 private:
-    friend D3d11Engine;
-
     ComPtr<ID3D11Resource> object_;
     DXGI_FORMAT dxgiFormat_;
 };
 using D3d11ImagePtr = ResourcePtr<D3d11Image>;
 
 class D3d11ImageView : public ImageView {
-public:
-    D3d11ImageView(ResourceList* gcList, const ImagePtr& image);
-    D3d11ImageView(ResourceList* gcList, const BufferPtr& buffer, ImageFormat format);
+protected:
+    friend D3d11Engine;
+    using ImageView::ImageView;
 
-    ID3D11View* object() const
+public:
+    ID3D11ShaderResourceView* srvObject() const
     {
-        return object_.get();
+        return srv_.get();
+    }
+
+    ID3D11RenderTargetView* rtvObject() const
+    {
+        return rtv_.get();
+    }
+
+    ID3D11DepthStencilView* dsvObject() const
+    {
+        return dsv_.get();
     }
 
     // resizing a swap chain requires releasing all views to its back buffers.
     void forceRelease()
     {
-        object_.reset();
+        srv_.reset();
+        rtv_.reset();
+        dsv_.reset();
     }
 
 protected:
@@ -134,16 +147,22 @@ protected:
     }
 
 private:
-    friend D3d11Engine;
-
-    ComPtr<ID3D11View> object_;
+    ComPtr<ID3D11ShaderResourceView> srv_;
+    ComPtr<ID3D11RenderTargetView> rtv_;
+    ComPtr<ID3D11DepthStencilView> dsv_;
     DXGI_FORMAT dxgiFormat_;
 };
 using D3d11ImageViewPtr = ResourcePtr<D3d11ImageView>;
 
 class D3d11GeometryView : public GeometryView {
+protected:
+    friend D3d11Engine;
+    using GeometryView::GeometryView;
+
 public:
-    D3d11GeometryView(ResourceList* gcList, const GeometryViewCreateInfo& createInfo);
+    D3D_PRIMITIVE_TOPOLOGY topology() const {
+        return topology_;
+    }
 
 protected:
     void release_(Engine* engine) override
@@ -157,11 +176,12 @@ private:
 using D3d11GeometryViewPtr = ResourcePtr<D3d11GeometryView>;
 
 class D3d11Program : public Program {
+protected:
+    friend D3d11Engine;
+    using Program::Program;
+
 public:
-    D3d11Program(ResourceList* gcList)
-        : Program(gcList)
-    {
-    }
+    // ...
 
 protected:
     void release_(Engine* engine) override
@@ -173,8 +193,6 @@ protected:
     }
 
 private:
-    friend D3d11Engine;
-
     ComPtr<ID3D11VertexShader> vertexShader_;
     ComPtr<ID3D11GeometryShader> geometryShader_;
     ComPtr<ID3D11PixelShader> pixelShader_;
@@ -182,12 +200,11 @@ private:
 using D3d11ProgramPtr = ResourcePtr<D3d11Program>;
 
 class D3d11BlendState : public BlendState {
-public:
-    D3d11BlendState::D3d11BlendState(ResourceList* gcList, const BlendStateCreateInfo& createInfo)
-        : BlendState(gcList, createInfo)
-    {
-    }
+protected:
+    friend D3d11Engine;
+    using BlendState::BlendState;
 
+public:
     ID3D11BlendState* object() const
     {
         return object_.get();
@@ -201,19 +218,16 @@ protected:
     }
 
 private:
-    friend D3d11Engine;
-
     ComPtr<ID3D11BlendState> object_;
 };
 using D3d11BlendStatePtr = ResourcePtr<D3d11BlendState>;
 
 class D3d11RasterizerState : public RasterizerState {
-public:
-    D3d11RasterizerState(ResourceList* gcList, const RasterizerStateCreateInfo& createInfo)
-        : RasterizerState(gcList, createInfo)
-    {
-    }
+protected:
+    friend D3d11Engine;
+    using RasterizerState::RasterizerState;
 
+public:
     ID3D11RasterizerState* object() const
     {
         return object_.get();
@@ -223,6 +237,7 @@ protected:
     void release_(Engine* engine) override
     {
         RasterizerState::release_(engine);
+        object_.reset();
     }
 
 private:
@@ -250,16 +265,16 @@ public:
         return isDefault_;
     }
 
-    ID3D11RenderTargetView* colorView() const
+    ID3D11RenderTargetView* rtvObject() const
     {
         return colorView_ ?
-            static_cast<ID3D11RenderTargetView*>(colorView_->object()) : nullptr;
+            static_cast<ID3D11RenderTargetView*>(colorView_->rtvObject()) : nullptr;
     }
 
-    ID3D11DepthStencilView* depthStencilView() const
+    ID3D11DepthStencilView* dsvObject() const
     {
         return depthStencilView_ ?
-            static_cast<ID3D11DepthStencilView*>(depthStencilView_->object()) : nullptr;
+            static_cast<ID3D11DepthStencilView*>(depthStencilView_->dsvObject()) : nullptr;
     }
 
     // resizing a swap chain requires releasing all views to its back buffers.
@@ -422,118 +437,6 @@ D3D11_USAGE usageToD3DUsage(Usage usage)
         break;
     }
     throw core::LogicError("D3d11Engine: unsupported usage");
-}
-
-
-
-
-// RESOURCE CONSTRUCTORS
-
-D3d11Buffer::D3d11Buffer(ResourceList* gcList, const BufferCreateInfo& createInfo)
-    : Buffer(gcList, createInfo)
-{
-    desc_.Usage = usageToD3DUsage(createInfo.usage());
-
-    const BindFlags bindFlags = createInfo.bindFlags();
-    if (!!(bindFlags & BindFlags::UniformBuffer)) {
-        desc_.BindFlags |= D3D11_BIND_FLAG::D3D11_BIND_CONSTANT_BUFFER;
-        if (bindFlags != BindFlags::UniformBuffer) {
-            throw core::LogicError("D3d11Buffer: BindFlags::UniformBuffer cannot be combined with any other bind flag");
-        }
-    }
-    else {
-        if (!!(bindFlags & BindFlags::VertexBuffer)) {
-            desc_.BindFlags |= D3D11_BIND_FLAG::D3D11_BIND_VERTEX_BUFFER;
-        }
-        if (!!(bindFlags & BindFlags::IndexBuffer)) {
-            desc_.BindFlags |= D3D11_BIND_FLAG::D3D11_BIND_INDEX_BUFFER;
-        }
-        if (!!(bindFlags & BindFlags::UniformBuffer)) {
-            desc_.BindFlags |= D3D11_BIND_FLAG::D3D11_BIND_CONSTANT_BUFFER;
-        }
-        if (!!(bindFlags & BindFlags::ShaderResource)) {
-            desc_.BindFlags |= D3D11_BIND_FLAG::D3D11_BIND_SHADER_RESOURCE;
-        }
-        if (!!(bindFlags & BindFlags::StreamOutput)) {
-            desc_.BindFlags |= D3D11_BIND_FLAG::D3D11_BIND_STREAM_OUTPUT;
-        }
-        if (!!(bindFlags & BindFlags::Image)) {
-            desc_.BindFlags |= D3D11_BIND_FLAG::D3D11_BIND_RENDER_TARGET;
-        }
-        if (!!(bindFlags & BindFlags::DepthStencil)) {
-            desc_.BindFlags |= D3D11_BIND_FLAG::D3D11_BIND_DEPTH_STENCIL;
-        }
-        if (!!(bindFlags & BindFlags::UnorderedAccess)) {
-            desc_.BindFlags |= D3D11_BIND_FLAG::D3D11_BIND_UNORDERED_ACCESS;
-        }
-    }
-
-    const ResourceMiscFlags resourceMiscFlags = createInfo.resourceMiscFlags();
-    if (!!(resourceMiscFlags & ResourceMiscFlags::GenerateMips)) {
-        desc_.MiscFlags |= D3D11_RESOURCE_MISC_FLAG::D3D11_RESOURCE_MISC_GENERATE_MIPS;
-    }
-    if (!!(resourceMiscFlags & ResourceMiscFlags::Shared)) {
-        desc_.MiscFlags |= D3D11_RESOURCE_MISC_FLAG::D3D11_RESOURCE_MISC_SHARED;
-    }
-    if (!!(resourceMiscFlags & ResourceMiscFlags::TextureCube)) {
-        desc_.MiscFlags |= D3D11_RESOURCE_MISC_FLAG::D3D11_RESOURCE_MISC_TEXTURECUBE;
-    }
-    if (!!(resourceMiscFlags & ResourceMiscFlags::DrawIndirectArgs)) {
-        desc_.MiscFlags |= D3D11_RESOURCE_MISC_FLAG::D3D11_RESOURCE_MISC_DRAWINDIRECT_ARGS;
-    }
-    if (!!(resourceMiscFlags & ResourceMiscFlags::BufferRaw)) {
-        desc_.MiscFlags |= D3D11_RESOURCE_MISC_FLAG::D3D11_RESOURCE_MISC_BUFFER_ALLOW_RAW_VIEWS;
-    }
-    if (!!(resourceMiscFlags & ResourceMiscFlags::BufferStructured)) {
-        desc_.MiscFlags |= D3D11_RESOURCE_MISC_FLAG::D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
-    }
-    if (!!(resourceMiscFlags & ResourceMiscFlags::ResourceClamp)) {
-        desc_.MiscFlags |= D3D11_RESOURCE_MISC_FLAG::D3D11_RESOURCE_MISC_RESOURCE_CLAMP;
-    }
-    if (!!(resourceMiscFlags & ResourceMiscFlags::SharedKeyedMutex)) {
-        desc_.MiscFlags |= D3D11_RESOURCE_MISC_FLAG::D3D11_RESOURCE_MISC_SHARED_KEYEDMUTEX;
-    }
-
-    const CpuAccessFlags cpuAccessFlags = createInfo.cpuAccessFlags();
-    if (!!(cpuAccessFlags & CpuAccessFlags::Write)) {
-        desc_.CPUAccessFlags |= D3D11_CPU_ACCESS_FLAG::D3D11_CPU_ACCESS_WRITE;
-    }
-    if (!!(cpuAccessFlags & CpuAccessFlags::Read)) {
-        desc_.CPUAccessFlags |= D3D11_CPU_ACCESS_FLAG::D3D11_CPU_ACCESS_READ;
-    }
-}
-
-D3d11Image::D3d11Image(ResourceList* gcList, const ImageCreateInfo& createInfo)
-    : Image(gcList, createInfo)
-    , dxgiFormat_(imageFormatToDxgiFormat(createInfo.format()))
-{
-    if (dxgiFormat_ == DXGI_FORMAT_UNKNOWN) {
-        throw core::LogicError("D3d11Image: unknown image format");
-    }
-}
-
-D3d11ImageView::D3d11ImageView(ResourceList* gcList, const ImagePtr& image)
-    : ImageView(gcList, image, image->format())
-    , dxgiFormat_(static_cast<D3d11Image*>(image.get())->dxgiFormat())
-{
-}
-
-D3d11ImageView::D3d11ImageView(ResourceList* gcList, const BufferPtr& buffer, ImageFormat format)
-    : ImageView(gcList, buffer, format)
-    , dxgiFormat_(imageFormatToDxgiFormat(format))
-{
-    if (dxgiFormat_ == DXGI_FORMAT_UNKNOWN) {
-        throw core::LogicError("D3d11ImageView: unknown image format");
-    }
-}
-
-D3d11GeometryView::D3d11GeometryView(ResourceList* gcList, const GeometryViewCreateInfo& createInfo)
-    : GeometryView(gcList, createInfo)
-    , topology_(primitiveTypeToD3DPrimitiveTopology(createInfo.primitiveType()))
-{
-    if (topology_ == D3D11_PRIMITIVE_TOPOLOGY_UNDEFINED) {
-        throw core::LogicError("D3d11GeometryView: unknown primitive type");
-    }
 }
 
 // ENGINE FUNCTIONS
@@ -799,30 +702,129 @@ void D3d11Engine::resizeSwapChain_(SwapChain* swapChain, UInt32 width, UInt32 he
     d3dSwapChain->setDefaultFramebuffer(newFramebuffer);
 }
 
-
 Buffer* D3d11Engine::createBuffer_(const BufferCreateInfo& createInfo)
 {
-    return new D3d11Buffer(gcResourceList_, createInfo);
+    auto buffer = std::make_unique<D3d11Buffer>(gcResourceList_, createInfo);
+    D3D11_BUFFER_DESC& desc = buffer->desc_;
+
+    desc.Usage = usageToD3DUsage(createInfo.usage());
+
+    const BindFlags bindFlags = createInfo.bindFlags();
+    if (!!(bindFlags & BindFlags::ConstantBuffer)) {
+        desc.BindFlags |= D3D11_BIND_FLAG::D3D11_BIND_CONSTANT_BUFFER;
+        if (bindFlags != BindFlags::ConstantBuffer) {
+            throw core::LogicError("D3d11Buffer: BindFlags::UniformBuffer cannot be combined with any other bind flag");
+        }
+    }
+    else {
+        if (!!(bindFlags & BindFlags::VertexBuffer)) {
+            desc.BindFlags |= D3D11_BIND_VERTEX_BUFFER;
+        }
+        if (!!(bindFlags & BindFlags::IndexBuffer)) {
+            desc.BindFlags |= D3D11_BIND_INDEX_BUFFER;
+        }
+        if (!!(bindFlags & BindFlags::ConstantBuffer)) {
+            desc.BindFlags |= D3D11_BIND_CONSTANT_BUFFER;
+        }
+        if (!!(bindFlags & BindFlags::ShaderResource)) {
+            desc.BindFlags |= D3D11_BIND_SHADER_RESOURCE;
+        }
+        if (!!(bindFlags & BindFlags::RenderTarget)) {
+            desc.BindFlags |= D3D11_BIND_RENDER_TARGET;
+        }
+        if (!!(bindFlags & BindFlags::DepthStencil)) {
+            desc.BindFlags |= D3D11_BIND_DEPTH_STENCIL;
+        }
+        if (!!(bindFlags & BindFlags::UnorderedAccess)) {
+            desc.BindFlags |= D3D11_BIND_UNORDERED_ACCESS;
+        }
+        if (!!(bindFlags & BindFlags::StreamOutput)) {
+            desc.BindFlags |= D3D11_BIND_STREAM_OUTPUT;
+        }
+    }
+
+    const ResourceMiscFlags resourceMiscFlags = createInfo.resourceMiscFlags();
+    if (!!(resourceMiscFlags & ResourceMiscFlags::GenerateMips)) {
+        desc.MiscFlags |= D3D11_RESOURCE_MISC_GENERATE_MIPS;
+    }
+    if (!!(resourceMiscFlags & ResourceMiscFlags::Shared)) {
+        desc.MiscFlags |= D3D11_RESOURCE_MISC_SHARED;
+    }
+    if (!!(resourceMiscFlags & ResourceMiscFlags::TextureCube)) {
+        desc.MiscFlags |= D3D11_RESOURCE_MISC_TEXTURECUBE;
+    }
+    if (!!(resourceMiscFlags & ResourceMiscFlags::DrawIndirectArgs)) {
+        desc.MiscFlags |= D3D11_RESOURCE_MISC_DRAWINDIRECT_ARGS;
+    }
+    if (!!(resourceMiscFlags & ResourceMiscFlags::BufferRaw)) {
+        desc.MiscFlags |= D3D11_RESOURCE_MISC_BUFFER_ALLOW_RAW_VIEWS;
+    }
+    if (!!(resourceMiscFlags & ResourceMiscFlags::BufferStructured)) {
+        desc.MiscFlags |= D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
+    }
+    if (!!(resourceMiscFlags & ResourceMiscFlags::ResourceClamp)) {
+        desc.MiscFlags |= D3D11_RESOURCE_MISC_RESOURCE_CLAMP;
+    }
+    if (!!(resourceMiscFlags & ResourceMiscFlags::SharedKeyedMutex)) {
+        desc.MiscFlags |= D3D11_RESOURCE_MISC_SHARED_KEYEDMUTEX;
+    }
+
+    const CpuAccessFlags cpuAccessFlags = createInfo.cpuAccessFlags();
+    if (!!(cpuAccessFlags & CpuAccessFlags::Write)) {
+        desc.CPUAccessFlags |= D3D11_CPU_ACCESS_WRITE;
+    }
+    if (!!(cpuAccessFlags & CpuAccessFlags::Read)) {
+        desc.CPUAccessFlags |= D3D11_CPU_ACCESS_READ;
+    }
+
+    return buffer.release();
 }
 
 Image* D3d11Engine::createImage_(const ImageCreateInfo& createInfo)
 {
-    return new D3d11Image(gcResourceList_, createInfo);
+    DXGI_FORMAT dxgiFormat = imageFormatToDxgiFormat(createInfo.format());
+    if (dxgiFormat == DXGI_FORMAT_UNKNOWN) {
+        throw core::LogicError("D3d11: unknown image format");
+    }
+
+    auto image = std::make_unique<D3d11Image>(gcResourceList_, createInfo);
+    image->dxgiFormat_ = dxgiFormat;
+    return image.release();
 }
 
-ImageView* D3d11Engine::createImageView_(const ImagePtr& image)
+ImageView* D3d11Engine::createImageView_(const ImageViewCreateInfo& createInfo, const ImagePtr& image)
 {
-    return new D3d11ImageView(gcResourceList_, image);
+    // XXX should check bind flags compatibility in abstract engine
+
+    auto imageView = std::make_unique<D3d11ImageView>(gcResourceList_, createInfo, image, 0);
+    imageView->dxgiFormat_ = static_cast<D3d11Image*>(image.get())->dxgiFormat();
+    return imageView.release();
 }
 
-ImageView* D3d11Engine::createImageView_(const BufferPtr& buffer, ImageFormat format)
+ImageView* D3d11Engine::createImageView_(const ImageViewCreateInfo& createInfo, const BufferPtr& buffer, ImageFormat format, UInt32 elementsCount)
 {
-    return new D3d11ImageView(gcResourceList_, buffer, format);
+    // XXX should check bind flags compatibility in abstract engine
+
+    DXGI_FORMAT dxgiFormat = imageFormatToDxgiFormat(format);
+    if (dxgiFormat == DXGI_FORMAT_UNKNOWN) {
+        throw core::LogicError("D3d11: unknown image format");
+    }
+
+    auto view = std::make_unique<D3d11ImageView>(gcResourceList_, createInfo, buffer, format);
+    view->dxgiFormat_ = dxgiFormat;
+    return view.release();
 }
 
 GeometryView* D3d11Engine::createGeometryView_(const GeometryViewCreateInfo& createInfo)
 {
-    return new D3d11GeometryView(gcResourceList_, createInfo);
+    D3D_PRIMITIVE_TOPOLOGY topology = primitiveTypeToD3DPrimitiveTopology(createInfo.primitiveType());
+    if (topology == D3D11_PRIMITIVE_TOPOLOGY_UNDEFINED) {
+        throw core::LogicError("D3d11: unknown primitive type");
+    }
+
+    auto view = std::make_unique<D3d11GeometryView>(gcResourceList_, createInfo);
+    view->topology_ = topology;
+    return view.release();
 }
 
 BlendState* D3d11Engine::createBlendState_(const BlendStateCreateInfo& createInfo)

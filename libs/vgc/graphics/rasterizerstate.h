@@ -31,7 +31,7 @@ namespace vgc::graphics {
 ///
 class VGC_GRAPHICS_API RasterizerStateCreateInfo {
 public:
-    RasterizerStateCreateInfo() noexcept = default;
+    constexpr RasterizerStateCreateInfo() noexcept = default;
 
     FillMode fillMode() const
     {
@@ -104,16 +104,16 @@ public:
     }
 
 private:
-    FillMode fillMode_;
-    CullMode cullMode_;
-    bool isFrontCounterClockwise_;
+    FillMode fillMode_ = FillMode::Solid;
+    CullMode cullMode_ = CullMode::None;
+    bool isFrontCounterClockwise_ = true;
     //Int32 depthBias_;
     //float depthBiasClamp_;
     //float slopeScaledDepthBias_;
-    bool isDepthClippingEnabled_;
-    bool isScissoringEnabled_;
-    bool isMultisamplingEnabled_;
-    bool isLineAntialiasingEnabled_;
+    bool isDepthClippingEnabled_ = false;
+    bool isScissoringEnabled_ = false;
+    bool isMultisamplingEnabled_ = false;
+    bool isLineAntialiasingEnabled_ = false;
 };
 
 /// \class vgc::graphics::RasterizerState

@@ -35,6 +35,8 @@ namespace vgc::graphics {
 ///
 class VGC_GRAPHICS_API ImageCreateInfo {
 public:
+    constexpr ImageCreateInfo() noexcept = default;
+
     UInt32 width() const
     {
         return width_;
@@ -115,14 +117,14 @@ public:
         usage_ = usage;
     }
 
-    bool isRenderTargetable() const
+    ImageBindFlags bindFlags() const
     {
-        return isRenderTargetable_;
+        return bindFlags_;
     }
 
-    void setRenderTargetable(bool isRenderTargetable)
+    void setBindFlags(ImageBindFlags bindFlags)
     {
-        isRenderTargetable_ = isRenderTargetable;
+        bindFlags_ = bindFlags;
     }
 
     ResourceMiscFlags resourceMiscFlags() const
@@ -146,15 +148,15 @@ public:
     }
 
 private:
-    UInt32 width_;
-    UInt32 height_;
-    ImageRank rank_;
-    ImageFormat format_;
-    UInt8 layerCount_;
-    UInt8 mipLevelCount_;
-    UInt8 sampleCount_;
+    UInt32 width_ = 0;
+    UInt32 height_ = 0;
+    ImageRank rank_ = ImageRank::_1D;
+    ImageFormat format_ = ImageFormat::Unknown;
+    UInt8 layerCount_ = 1;
+    UInt8 mipLevelCount_ = 1;
+    UInt8 sampleCount_ = 1;
     Usage usage_ = Usage::Default;
-    bool isRenderTargetable_;
+    ImageBindFlags bindFlags_ = ImageBindFlags::ShaderResource;
     CpuAccessFlags cpuAccessFlags_ = CpuAccessFlags::None;
     ResourceMiscFlags resourceMiscFlags_ = ResourceMiscFlags::None;
 };
@@ -212,9 +214,9 @@ public:
         return info_.usage();
     }
 
-    bool isRenderTargetable() const
+    ImageBindFlags bindFlags() const
     {
-        return info_.isRenderTargetable();
+        return info_.bindFlags();
     }
 
     CpuAccessFlags cpuAccessFlags() const

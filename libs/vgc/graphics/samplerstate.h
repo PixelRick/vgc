@@ -20,9 +20,11 @@
 #include <array>
 
 #include <vgc/core/arithmetic.h>
+#include <vgc/geometry/vec4f.h>
 #include <vgc/graphics/api.h>
 #include <vgc/graphics/enums.h>
 #include <vgc/graphics/resource.h>
+
 
 namespace vgc::graphics {
 
@@ -31,89 +33,144 @@ namespace vgc::graphics {
 ///
 class VGC_GRAPHICS_API SamplerStateCreateInfo {
 public:
-    SamplerStateCreateInfo() noexcept = default;
+    constexpr SamplerStateCreateInfo() noexcept = default;
 
-    FillMode fillMode() const
+    FilterMode magFilter() const
     {
-        return fillMode_;
+        return magFilter_;
     }
 
-    void setFillMode(FillMode fillMode)
+    void setMagFilter(FilterMode magFilter)
     {
-        fillMode_ = fillMode;
+        magFilter_ = magFilter;
     }
 
-    CullMode cullMode() const
+    FilterMode minFilter() const
     {
-        return cullMode_;
+        return minFilter_;
     }
 
-    void setCullMode(CullMode cullMode)
+    void setMinFilter(FilterMode minFilter)
     {
-        cullMode_ = cullMode;
+        minFilter_ = minFilter;
     }
 
-    bool isFrontCounterClockwise() const
+    FilterMode mipFilter() const
     {
-        return isFrontCounterClockwise_;
+        return mipFilter_;
     }
 
-    void setFrontCounterClockwise_(bool isFrontCounterClockwise)
+    void setMipFilter(FilterMode mipFilter)
     {
-        isFrontCounterClockwise_ = isFrontCounterClockwise;
+        mipFilter_ = mipFilter;
     }
 
-    bool isDepthClippingEnabled() const
+    UInt8 maxAnisotropy() const
     {
-        return isDepthClippingEnabled_;
+        return maxAnisotropy_;
     }
 
-    void setDepthClippingEnabled(bool enabled)
+    void setMaxAnisotropy(UInt8 maxAnisotropy)
     {
-        isDepthClippingEnabled_ = enabled;
+        maxAnisotropy_ = maxAnisotropy;
     }
 
-    bool isScissoringEnabled() const
+    ImageWrapMode wrapModeU() const
     {
-        return isScissoringEnabled_;
+        return wrapModeU_;
     }
 
-    void setScissoringEnabled(bool enabled)
+    void setWrapModeU(ImageWrapMode wrapModeU)
     {
-        isScissoringEnabled_ = enabled;
+        wrapModeU_ = wrapModeU;
     }
 
-    bool isMultisamplingEnabled() const
+    ImageWrapMode wrapModeV() const
     {
-        return isMultisamplingEnabled_;
+        return wrapModeV_;
     }
 
-    void setMultisamplingEnabled(bool enabled)
+    void setWrapModeV(ImageWrapMode wrapModeV)
     {
-        isMultisamplingEnabled_ = enabled;
+        wrapModeV_ = wrapModeV;
     }
 
-    bool isLineAntialiasingEnabled() const
+    ImageWrapMode wrapModeW() const
     {
-        return isLineAntialiasingEnabled_;
+        return wrapModeW_;
     }
 
-    void setLineAntialiasingEnabled(bool enabled)
+    void setWrapModeW(ImageWrapMode wrapModeW)
     {
-        isLineAntialiasingEnabled_ = enabled;
+        wrapModeW_ = wrapModeW;
+    }
+
+    SamplerComparisonFunction comparisonFunction() const
+    {
+        return comparisonFunction_;
+    }
+
+    void setComparisonFunction(SamplerComparisonFunction comparisonFunction)
+    {
+        comparisonFunction_ = comparisonFunction;
+    }
+
+    const geometry::Vec4f& wrapColor() const
+    {
+        return wrapColor_;
+    }
+
+    void setWrapColor(const geometry::Vec4f& wrapColor)
+    {
+        wrapColor_ = wrapColor;
+    }
+
+    float mipLODBias() const
+    {
+        return mipLODBias_;
+    }
+
+    void setMipLODBias(float mipLODBias)
+    {
+        mipLODBias_ = mipLODBias;
+    }
+
+    float minLOD() const
+    {
+        return minLOD_;
+    }
+
+    void setMinLOD(float minLOD)
+    {
+        minLOD_ = minLOD;
+    }
+
+    float maxLOD() const
+    {
+        return maxLOD_;
+    }
+
+    void setMaxLOD(float maxLOD)
+    {
+        maxLOD_ = maxLOD;
     }
 
 private:
-    FillMode fillMode_;
-    CullMode cullMode_;
-    bool isFrontCounterClockwise_;
-    //Int32 depthBias_;
-    //float depthBiasClamp_;
-    //float slopeScaledDepthBias_;
-    bool isDepthClippingEnabled_;
-    bool isScissoringEnabled_;
-    bool isMultisamplingEnabled_;
-    bool isLineAntialiasingEnabled_;
+    FilterMode magFilter_ = FilterMode::Point;
+    FilterMode minFilter_ = FilterMode::Point;
+    FilterMode mipFilter_ = FilterMode::Point;
+    // enables anisotropic filtering if >= 1, max is 16.
+    // has precedence over user-defined filter modes.
+    UInt8 maxAnisotropy_ = 0;
+    ImageWrapMode wrapModeU_ = ImageWrapMode::ConstantColor;
+    ImageWrapMode wrapModeV_ = ImageWrapMode::ConstantColor;
+    ImageWrapMode wrapModeW_ = ImageWrapMode::ConstantColor;
+    SamplerComparisonFunction comparisonFunction_ = SamplerComparisonFunction::Disabled;
+    // enables comparison filtering if != None
+    geometry::Vec4f wrapColor_ = {0.f, 0.f, 0.f, 0.f};
+    float mipLODBias_ = 0.f;
+    float minLOD_ = 0.f;
+    float maxLOD_ = 0.f;
 };
 
 /// \class vgc::graphics::SamplerState
@@ -127,39 +184,64 @@ protected:
     }
 
 public:
-    FillMode fillMode() const
+    FilterMode magFilter() const
     {
-        return info_.fillMode();
+        return info_.magFilter();
     }
 
-    CullMode cullMode() const
+    FilterMode minFilter() const
     {
-        return info_.cullMode();
+        return info_.minFilter();
     }
 
-    bool isFrontCounterClockwise() const
+    FilterMode mipFilter() const
     {
-        return info_.isFrontCounterClockwise();
+        return info_.mipFilter();
     }
 
-    bool isDepthClippingEnabled() const
+    UInt8 maxAnisotropy() const
     {
-        return info_.isDepthClippingEnabled();
+        return info_.maxAnisotropy();
     }
 
-    bool isScissoringEnabled() const
+    ImageWrapMode wrapModeU() const
     {
-        return info_.isScissoringEnabled();
+        return info_.wrapModeU();
     }
 
-    bool isMultisamplingEnabled() const
+    ImageWrapMode wrapModeV() const
     {
-        return info_.isMultisamplingEnabled();
+        return info_.wrapModeV();
     }
 
-    bool isLineAntialiasingEnabled() const
+    ImageWrapMode wrapModeW() const
     {
-        return info_.isLineAntialiasingEnabled();
+        return info_.wrapModeW();
+    }
+
+    SamplerComparisonFunction comparisonFunction() const
+    {
+        return info_.comparisonFunction();
+    }
+
+    const geometry::Vec4f& wrapColor() const
+    {
+        return info_.wrapColor();
+    }
+
+    float mipLODBias() const
+    {
+        return info_.mipLODBias();
+    }
+
+    float minLOD() const
+    {
+        return info_.minLOD();
+    }
+
+    float maxLOD() const
+    {
+        return info_.maxLOD();
     }
 
 private:

@@ -69,8 +69,8 @@ protected:
 
     Buffer* createBuffer_(const BufferCreateInfo& createInfo) override;
     Image* createImage_(const ImageCreateInfo& createInfo) override;
-    ImageView* createImageView_(const ImagePtr& image) override;
-    ImageView* createImageView_(const BufferPtr& buffer, ImageFormat format) override;
+    ImageView* createImageView_(const ImageViewCreateInfo& createInfo, const ImagePtr& image) override;
+    ImageView* createImageView_(const ImageViewCreateInfo& createInfo, const BufferPtr& buffer, ImageFormat format, UInt32 elementsCount) override;
     GeometryView* createGeometryView_(const GeometryViewCreateInfo& createInfo) override;
     BlendState* createBlendState_(const BlendStateCreateInfo& createInfo) override;
     RasterizerState* createRasterizerState_(const RasterizerStateCreateInfo& createInfo) override;
@@ -89,9 +89,6 @@ protected:
     void initBlendState_(BlendState* state) override;
     void initRasterizerState_(RasterizerState* state) override;
 
-    void updateBufferData_(Buffer* buffer, const void* data, Int lengthInBytes) override;
-
-    void setFramebuffer_(Framebuffer* framebuffer) override;
     void setViewport_(Int x, Int y, Int width, Int height) override;
     void setProgram_(Program* program) override;
     void setBlendState_(BlendState* state) override;
@@ -99,6 +96,9 @@ protected:
     void setStageConstantBuffers_(Buffer* const* buffers, Int startIndex, Int count, ShaderStage shaderStage) override;
     void setStageImageViews_(ImageView* const* views, Int startIndex, Int count, ShaderStage shaderStage) override;
     void setStageSamplers_(SamplerState* const* states, Int startIndex, Int count, ShaderStage shaderStage) override;
+    void setFramebuffer_(Framebuffer* framebuffer) override;
+
+    void updateBufferData_(Buffer* buffer, const void* data, Int lengthInBytes) override;
 
     void draw_(GeometryView* view) override;
     void clear_(const core::Color& color) override;

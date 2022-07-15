@@ -27,6 +27,84 @@ namespace vgc::graphics {
 
 VGC_DECLARE_OBJECT(Engine);
 
+/// \class vgc::graphics::ImageViewCreateInfo
+/// \brief Parameters for image view creation.
+///
+class VGC_GRAPHICS_API ImageViewCreateInfo {
+public:
+    constexpr ImageViewCreateInfo() noexcept = default;
+
+    UInt8 layerStart() const
+    {
+        return layerStart_;
+    }
+
+    void setLayerStart(UInt8 layerStart)
+    {
+        layerStart_ = layerStart;
+    }
+
+    UInt8 layerCount() const
+    {
+        return layerCount_;
+    }
+
+    void setLayerCount(UInt8 layerCount)
+    {
+        layerCount_ = layerCount;
+    }
+
+    UInt8 layerLast() const
+    {
+        return layerStart_ + layerCount_ - 1;
+    }
+
+    UInt8 mipLevelStart() const
+    {
+        return mipLevelStart_;
+    }
+
+    void setMipLevelStart(UInt8 mipLevelStart)
+    {
+        mipLevelStart_ = mipLevelStart;
+    }
+
+    UInt8 mipLevelCount() const
+    {
+        return mipLevelCount_;
+    }
+
+    /// Only effective when binding as a shader resource.
+    ///
+    void setMipLevelCount(UInt8 mipLevelCount)
+    {
+        mipLevelCount_ = mipLevelCount;
+    }
+
+    UInt8 mipLevelLast() const
+    {
+        return mipLevelStart_ + mipLevelCount_ - 1;
+    }
+
+    ImageBindFlags bindFlags() const
+    {
+        return bindFlags_;
+    }
+
+    void setBindFlags(ImageBindFlags bindFlags)
+    {
+        bindFlags_ = bindFlags;
+    }
+
+private:
+    UInt8 layerStart_ = 0;
+    UInt8 layerCount_ = 0;
+    UInt8 mipLevelStart_ = 0;
+    UInt8 mipLevelCount_ = 0;
+
+    ImageBindFlags bindFlags_ = ImageBindFlags::None;
+};
+
 /// \class vgc::graphics::ImageView
 /// \brief Abstract view of an image buffer attachable to some stage of the graphics pipeline.
 ///
@@ -35,20 +113,80 @@ VGC_DECLARE_OBJECT(Engine);
 // back buffer.
 //
 // Concept mapping:
-//  D3D11  -> Shader Resource View (SRV)
+//  D3D11  -> Shader Resource View (SRV), Render Target View (RTV), Depth Stencil View (DSV)
 //  OpenGL -> Texture
 //  Vulkan -> Image View
 // Looks like all three support buffers as image.
 //
 class VGC_GRAPHICS_API ImageView : public Resource {
 protected:
-    ImageView(ResourceList* gcList, const ResourcePtr<Resource>& resource, ImageFormat format)
-        : Resource(gcList), resource_(resource), format_(format)
+    ImageView(ResourceList* gcList,
+              const ImageViewCreateInfo& createInfo,
+              const ResourcePtr<Resource>& viewedResource,
+              ImageFormat format,
+              UInt32 bufferElementsCount)
+        : Resource(gcList)
+        , info_(createInfo)
+        , viewedResource_(viewedResource)
+        , format_(format)
+        , bufferElementsCount_(bufferElementsCount)
     {
     }
 
-    ImageFormat format() const {
+public:
+    UInt8 layerStart() const
+    {
+        return info_.layerStart();
+    }
+
+    UInt8 layerCount() const
+    {
+        return info_.layerCount();
+    }
+
+    UInt8 layerLast() const
+    {
+        return info_.layerLast();
+    }
+
+    UInt8 mipLevelStart() const
+    {
+        return info_.mipLevelStart();
+    }
+
+    UInt8 mipLevelCount() const
+    {
+        return info_.mipLevelCount();
+    }
+
+    UInt8 mipLevelLast() const
+    {
+        return info_.mipLevelLast();
+    }
+
+    ImageBindFlags bindFlags() const
+    {
+        return info_.bindFlags();
+    }
+
+    const ResourcePtr<Resource>& viewedResource() const
+    {
+        return viewedResource_;
+    }
+
+    ImageFormat format() const
+    {
         return format_;
+    }
+
+    UInt32 bufferElementsCount() const
+    {
+        return bufferElementsCount_;
+    }
+
+    bool isBuffer() const
+    {
+        return bufferElementsCount_ > 0;
     }
 
 private:
@@ -56,11 +194,13 @@ private:
 
     void clearSubResources_() override
     {
-        resource_.reset();
+        viewedResource_.reset();
     }
 
+    ImageViewCreateInfo info_;
+    ResourcePtr<Resource> viewedResource_;
     ImageFormat format_;
-    ResourcePtr<Resource> resource_;
+    UInt32 bufferElementsCount_ = 0;
 };
 using ImageViewPtr = ResourcePtr<ImageView>;
 
