@@ -100,11 +100,6 @@ enum class PrimitiveType : UInt8 {
     TriangleStrip,
 };
 
-enum class SwapChainTargetFormat : UInt8 {
-    RGBA_8_UNORM,
-    RGBA_8_UNORM_SRGB,
-};
-
 enum class PresentFlags : UInt32 {
     None,
 };
@@ -187,6 +182,17 @@ enum class ImageFormat : UInt8 {
     //BC7_UNORM,
     //BC7_UNORM_SRGB,
 };
+
+enum class SwapChainTargetFormat : UInt8 {
+    RGBA_8_UNORM = core::toUnderlying(ImageFormat::RGBA_8_UNORM),
+    RGBA_8_UNORM_SRGB = core::toUnderlying(ImageFormat::RGBA_8_UNORM_SRGB),
+};
+
+inline constexpr ImageFormat swapChainTargetFormatToImageFormat(SwapChainTargetFormat format)
+{
+    return static_cast<ImageFormat>(core::toUnderlying(format));
+}
+
 
 inline constexpr UInt8 imageFormatToElementSizeInBytes(ImageFormat format)
 {
@@ -305,7 +311,7 @@ enum class ImageWrapMode : UInt8 {
     MirrorRepeat = 4,
 };
 
-enum class SamplerComparisonFunction : UInt8 {
+enum class ComparisonFunction : UInt8 {
     Disabled = 0,
     Always = 1,
     Never = 2,
@@ -317,8 +323,9 @@ enum class SamplerComparisonFunction : UInt8 {
     GreaterEqual = 8,
 };
 
-enum class ShaderStage : UInt8 {
-    Vertex,
+enum class ShaderStage : Int8 {
+    None = -1,
+    Vertex = 0,
     //Hull,
     //Domain,
     Geometry,
@@ -335,11 +342,12 @@ enum class BuiltinProgram : UInt8 {
     //RoundedRectangle,
 };
 
-enum class BuiltinGeometryLayout : UInt8 {
-    None,
-    XY,
+enum class BuiltinGeometryLayout : Int8 {
+    None = -1,
+    XY = 0,
     XYRGB,
     XYZ,
+    Max_ = XYZ
 };
 
 enum class PipelineParameters : UInt32 {

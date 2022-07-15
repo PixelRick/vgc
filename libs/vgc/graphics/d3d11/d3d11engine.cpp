@@ -19,6 +19,7 @@
 
 #include <vgc/graphics/d3d11/d3d11engine.h>
 
+#include <algorithm>
 #include <array>
 #include <chrono>
 
@@ -28,7 +29,6 @@
 #pragma comment(lib, "d3d11")
 
 #include <vgc/core/exceptions.h>
-#include <vgc/core/paths.h>
 
 namespace vgc::graphics {
 
@@ -131,12 +131,30 @@ public:
         return dsv_.get();
     }
 
+    DXGI_FORMAT dxgiFormat() const
+    {
+        return dxgiFormat_;
+    }
+
     // resizing a swap chain requires releasing all views to its back buffers.
     void forceRelease()
     {
         srv_.reset();
         rtv_.reset();
         dsv_.reset();
+    }
+
+    ID3D11Resource* d3dViewedResource() const
+    {
+        Buffer* buffer = viewedBuffer().get();
+        if (buffer) {
+            D3d11Buffer* d3dBuffer = static_cast<D3d11Buffer*>(buffer);
+            return d3dBuffer->object();
+        }
+        else {
+            D3d11Image* d3dImage = static_cast<D3d11Image*>(viewedImage().get());
+            return d3dImage->object();
+        }
     }
 
 protected:
@@ -153,6 +171,28 @@ private:
     DXGI_FORMAT dxgiFormat_;
 };
 using D3d11ImageViewPtr = ResourcePtr<D3d11ImageView>;
+
+class D3d11SamplerState : public SamplerState {
+protected:
+    friend D3d11Engine;
+    using SamplerState::SamplerState;
+
+public:
+    ID3D11SamplerState* object() const {
+        return object_.get();
+    }
+
+protected:
+    void release_(Engine* engine) override
+    {
+        SamplerState::release_(engine);
+        object_.reset();
+    }
+
+private:
+    ComPtr<ID3D11SamplerState> object_;
+};
+using D3d11SamplerStatePtr = ResourcePtr<D3d11SamplerState>;
 
 class D3d11GeometryView : public GeometryView {
 protected:
@@ -190,12 +230,16 @@ protected:
         vertexShader_.reset();
         geometryShader_.reset();
         pixelShader_.reset();
+        for (auto& x : builtinLayouts_) {
+            x.reset();
+        }
     }
 
 private:
     ComPtr<ID3D11VertexShader> vertexShader_;
     ComPtr<ID3D11GeometryShader> geometryShader_;
     ComPtr<ID3D11PixelShader> pixelShader_;
+    std::array<ComPtr<ID3D11InputLayout>, core::toUnderlying(BuiltinGeometryLayout::Max_) - 1> builtinLayouts_;
 };
 using D3d11ProgramPtr = ResourcePtr<D3d11Program>;
 
@@ -426,17 +470,183 @@ D3D11_USAGE usageToD3DUsage(Usage usage)
 {
     switch (usage) {
     case Usage::Default:
-        return D3D11_USAGE_DEFAULT; break;
+        return D3D11_USAGE_DEFAULT;
     case Usage::Immutable:
-        return D3D11_USAGE_IMMUTABLE; break;
+        return D3D11_USAGE_IMMUTABLE;
     case Usage::Dynamic:
-        return D3D11_USAGE_DYNAMIC; break;
+        return D3D11_USAGE_DYNAMIC;
     case Usage::Staging:
-        return D3D11_USAGE_STAGING; break;
+        return D3D11_USAGE_STAGING;
     default:
         break;
     }
     throw core::LogicError("D3d11Engine: unsupported usage");
+}
+
+UINT resourceMiscFlagsToD3DResourceMiscFlags(ResourceMiscFlags resourceMiscFlags)
+{
+    UINT x;
+    if (!!(resourceMiscFlags & ResourceMiscFlags::GenerateMips)) {
+        x |= D3D11_RESOURCE_MISC_GENERATE_MIPS;
+    }
+    if (!!(resourceMiscFlags & ResourceMiscFlags::Shared)) {
+        x |= D3D11_RESOURCE_MISC_SHARED;
+    }
+    if (!!(resourceMiscFlags & ResourceMiscFlags::TextureCube)) {
+        x |= D3D11_RESOURCE_MISC_TEXTURECUBE;
+    }
+    if (!!(resourceMiscFlags & ResourceMiscFlags::DrawIndirectArgs)) {
+        x |= D3D11_RESOURCE_MISC_DRAWINDIRECT_ARGS;
+    }
+    if (!!(resourceMiscFlags & ResourceMiscFlags::BufferRaw)) {
+        x |= D3D11_RESOURCE_MISC_BUFFER_ALLOW_RAW_VIEWS;
+    }
+    if (!!(resourceMiscFlags & ResourceMiscFlags::BufferStructured)) {
+        x |= D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
+    }
+    if (!!(resourceMiscFlags & ResourceMiscFlags::ResourceClamp)) {
+        x |= D3D11_RESOURCE_MISC_RESOURCE_CLAMP;
+    }
+    if (!!(resourceMiscFlags & ResourceMiscFlags::SharedKeyedMutex)) {
+        x |= D3D11_RESOURCE_MISC_SHARED_KEYEDMUTEX;
+    }
+    return x;
+}
+
+D3D11_TEXTURE_ADDRESS_MODE imageWrapModeToD3DTextureAddressMode(ImageWrapMode mode)
+{
+    switch (mode) {
+    case ImageWrapMode::ConstantColor:
+        return D3D11_TEXTURE_ADDRESS_BORDER;
+    case ImageWrapMode::Clamp:
+        return D3D11_TEXTURE_ADDRESS_CLAMP;
+    case ImageWrapMode::MirrorClamp:
+        return D3D11_TEXTURE_ADDRESS_MIRROR_ONCE;
+    case ImageWrapMode::Repeat:
+        return D3D11_TEXTURE_ADDRESS_WRAP;
+    case ImageWrapMode::MirrorRepeat:
+        return D3D11_TEXTURE_ADDRESS_MIRROR;
+    default:
+        break;
+    }
+    throw core::LogicError("D3d11Engine: unknown image wrap mode");
+}
+
+D3D11_COMPARISON_FUNC comparisonFunctionToD3DComparisonFunc(ComparisonFunction func)
+{
+    switch (func) {
+    case ComparisonFunction::Disabled:
+        return D3D11_COMPARISON_FUNC{};
+    case ComparisonFunction::Always:
+        return D3D11_COMPARISON_ALWAYS;
+    case ComparisonFunction::Never:
+        return D3D11_COMPARISON_NEVER;
+    case ComparisonFunction::Equal:
+        return D3D11_COMPARISON_EQUAL;
+    case ComparisonFunction::NotEqual:
+        return D3D11_COMPARISON_NOT_EQUAL;
+    case ComparisonFunction::Less:
+        return D3D11_COMPARISON_LESS;
+    case ComparisonFunction::LessEqual:
+        return D3D11_COMPARISON_LESS_EQUAL;
+    case ComparisonFunction::Greater:
+        return D3D11_COMPARISON_GREATER;
+    case ComparisonFunction::GreaterEqual:
+        return D3D11_COMPARISON_GREATER_EQUAL;
+    default:
+        break;
+    }
+    throw core::LogicError("D3d11Engine: unknown comparison func");
+}
+
+D3D11_BLEND blendFactorToD3DBlend(BlendFactor factor)
+{
+    switch (factor) {
+    case BlendFactor::One:
+        return D3D11_BLEND_ONE;
+    case BlendFactor::Zero:
+        return D3D11_BLEND_ZERO;
+    case BlendFactor::SourceColor:
+        return D3D11_BLEND_SRC_COLOR;
+    case BlendFactor::OneMinusSourceColor:
+        return D3D11_BLEND_INV_SRC_COLOR;
+    case BlendFactor::SourceAlpha:
+        return D3D11_BLEND_SRC_ALPHA;
+    case BlendFactor::OneMinusSourceAlpha:
+        return D3D11_BLEND_INV_SRC_ALPHA;
+    case BlendFactor::TargetColor:
+        return D3D11_BLEND_DEST_COLOR;
+    case BlendFactor::OneMinusTargetColor:
+        return D3D11_BLEND_INV_DEST_COLOR;
+    case BlendFactor::TargetAlpha:
+        return D3D11_BLEND_DEST_ALPHA;
+    case BlendFactor::OneMinusTargetAlpha:
+        return D3D11_BLEND_INV_DEST_ALPHA;
+    case BlendFactor::SourceAlphaSaturated:
+        return D3D11_BLEND_SRC_ALPHA_SAT;
+    case BlendFactor::Constant:
+        return D3D11_BLEND_BLEND_FACTOR;
+    case BlendFactor::OneMinusConstant:
+        return D3D11_BLEND_INV_BLEND_FACTOR;
+    case BlendFactor::SecondSourceColor:
+        return D3D11_BLEND_SRC1_COLOR;
+    case BlendFactor::OneMinusSecondSourceColor:
+        return D3D11_BLEND_INV_SRC1_COLOR;
+    case BlendFactor::SecondSourceAlpha:
+        return D3D11_BLEND_SRC1_ALPHA;
+    case BlendFactor::OneMinusSecondSourceAlpha:
+        return D3D11_BLEND_INV_SRC1_ALPHA;
+    default:
+        break;
+    }
+    throw core::LogicError("D3d11Engine: unknown blend factor");
+}
+
+D3D11_BLEND_OP blendOpToD3DBlendOp(BlendOp op)
+{
+    switch (op) {
+    case BlendOp::Add:
+        return D3D11_BLEND_OP_ADD;
+    case BlendOp::SourceMinusTarget:
+        return D3D11_BLEND_OP_SUBTRACT;
+    case BlendOp::TargetMinusSource:
+        return D3D11_BLEND_OP_REV_SUBTRACT;
+    case BlendOp::Min:
+        return D3D11_BLEND_OP_MIN;
+    case BlendOp::Max:
+        return D3D11_BLEND_OP_MAX;
+    default:
+        break;
+    }
+    throw core::LogicError("D3d11Engine: unknown blend op");
+}
+
+D3D11_FILL_MODE fillModeToD3DFilleMode(FillMode mode)
+{
+    switch (mode) {
+    case FillMode::Solid:
+        return D3D11_FILL_SOLID;
+    case FillMode::Wireframe:
+        return D3D11_FILL_WIREFRAME;
+    default:
+        break;
+    }
+    throw core::LogicError("D3d11Engine: unknown fill mode");
+}
+
+D3D11_CULL_MODE cullModeToD3DCulleMode(CullMode mode)
+{
+    switch (mode) {
+    case CullMode::None:
+        return D3D11_CULL_NONE;
+    case CullMode::Front:
+        return D3D11_CULL_FRONT;
+    case CullMode::Back:
+        return D3D11_CULL_BACK;
+    default:
+        break;
+    }
+    throw core::LogicError("D3d11Engine: unknown cull mode");
 }
 
 // ENGINE FUNCTIONS
@@ -444,8 +654,6 @@ D3D11_USAGE usageToD3DUsage(Usage usage)
 D3d11Engine::D3d11Engine()
 {
     // XXX add success checks (S_OK)
-
-    startTime_ = std::chrono::steady_clock::now();
 
     const D3D_FEATURE_LEVEL featureLevels[1] = { D3D_FEATURE_LEVEL_11_0 };
     D3D11CreateDevice(
@@ -467,10 +675,29 @@ D3d11Engine::D3d11Engine()
     device_->QueryInterface(IID_PPV_ARGS(dxgiDevice.addressOf()));
     dxgiDevice->GetParent(IID_PPV_ARGS(dxgiAdapter.addressOf()));
     dxgiAdapter->GetParent(IID_PPV_ARGS(factory_.addressOf()));
+}
 
-    // Create the paint vertex shader
+void D3d11Engine::onDestroyed()
+{
+    Engine::onDestroyed();
+}
+
+/* static */
+D3d11EnginePtr D3d11Engine::create()
+{
+    return D3d11EnginePtr(new D3d11Engine());
+}
+
+// USER THREAD pimpl functions
+
+void D3d11Engine::createBuiltinShaders_()
+{
+    D3d11ProgramPtr simpleProgram(new D3d11Program(gcResourceList_));
+    simpleProgram_ = simpleProgram;
+
+    // Create the simple shader
     {
-        static const char* vertexShader = R"hlsl(
+        static const char* vertexShaderSrc = R"hlsl(
 
             cbuffer vertexBuffer : register(b0)
             {
@@ -502,7 +729,7 @@ D3d11Engine::D3d11Engine()
         ComPtr<ID3DBlob> errorBlob;
         ComPtr<ID3DBlob> vertexShaderBlob;
         if (0 > D3DCompile(
-            vertexShader, strlen(vertexShader),
+            vertexShaderSrc, strlen(vertexShaderSrc),
             NULL, NULL, NULL, "main", "vs_4_0", 0, 0,
             vertexShaderBlob.addressOf(), errorBlob.addressOf()))
         {
@@ -511,20 +738,23 @@ D3d11Engine::D3d11Engine()
         }
         errorBlob.reset();
 
+        ComPtr<ID3D11VertexShader> vertexShader;
         device_->CreateVertexShader(
             vertexShaderBlob->GetBufferPointer(), vertexShaderBlob->GetBufferSize(),
-            NULL, vertexShader_.addressOf());
+            NULL, vertexShader.addressOf());
+        simpleProgram->vertexShader_ = vertexShader;
 
         // Create the input layout
+        ComPtr<ID3D11InputLayout> inputLayout;
         D3D11_INPUT_ELEMENT_DESC layout[] = {
             { "POSITION", 0, DXGI_FORMAT_R32G32_FLOAT,    0, (UINT)offsetof(XYRGBVertex, x), D3D11_INPUT_PER_VERTEX_DATA, 0 },
             { "COLOR",    0, DXGI_FORMAT_R32G32B32_FLOAT, 0, (UINT)offsetof(XYRGBVertex, r), D3D11_INPUT_PER_VERTEX_DATA, 0 },
         };
-        device_->CreateInputLayout(layout, 2, vertexShaderBlob->GetBufferPointer(), vertexShaderBlob->GetBufferSize(), inputLayout_.addressOf());
-        vertexShaderBlob.reset();
+        device_->CreateInputLayout(layout, 2, vertexShaderBlob->GetBufferPointer(), vertexShaderBlob->GetBufferSize(), inputLayout.addressOf());
+        simpleProgram->builtinLayouts_[core::toUnderlying(BuiltinGeometryLayout::XYRGB)] = inputLayout;
 
         // Create the constant buffer
-        {
+        /*{
             D3D11_BUFFER_DESC desc = {};
             desc.ByteWidth = sizeof(PaintVertexShaderConstantBuffer);
             desc.Usage = D3D11_USAGE_DYNAMIC;
@@ -532,12 +762,12 @@ D3d11Engine::D3d11Engine()
             desc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
             desc.MiscFlags = 0;
             device_->CreateBuffer(&desc, NULL, vertexConstantBuffer_.addressOf());
-        }
+        }*/
     }
 
     // Create the paint pixel shader
     {
-        static const char* pixelShader = R"hlsl(
+        static const char* pixelShaderSrc = R"hlsl(
             struct PS_INPUT
             {
                 float4 pos : SV_POSITION;
@@ -554,7 +784,7 @@ D3d11Engine::D3d11Engine()
         ComPtr<ID3DBlob> errorBlob;
         ComPtr<ID3DBlob> pixelShaderBlob;
         if (0 > D3DCompile(
-            pixelShader, strlen(pixelShader),
+            pixelShaderSrc, strlen(pixelShaderSrc),
             NULL, NULL, NULL, "main", "ps_4_0", 0, 0,
             pixelShaderBlob.addressOf(), errorBlob.addressOf()))
         {
@@ -563,84 +793,80 @@ D3d11Engine::D3d11Engine()
         }
         errorBlob.reset();
 
+        ComPtr<ID3D11PixelShader> pixelShader;
         device_->CreatePixelShader(
             pixelShaderBlob->GetBufferPointer(), pixelShaderBlob->GetBufferSize(),
-            NULL, pixelShader_.addressOf());
-
+            NULL, pixelShader.addressOf());
+        simpleProgram->pixelShader_ = pixelShader;
     }
 
     // Create the blending setup
-    {
-        D3D11_BLEND_DESC desc = {};
-        desc.AlphaToCoverageEnable = false;
-        desc.RenderTarget[0].BlendEnable = true;
-        desc.RenderTarget[0].SrcBlend = D3D11_BLEND_SRC_ALPHA;
-        desc.RenderTarget[0].DestBlend = D3D11_BLEND_INV_SRC_ALPHA;
-        desc.RenderTarget[0].BlendOp = D3D11_BLEND_OP_ADD;
-        desc.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_ONE;
-        desc.RenderTarget[0].DestBlendAlpha = D3D11_BLEND_INV_SRC_ALPHA;
-        desc.RenderTarget[0].BlendOpAlpha = D3D11_BLEND_OP_ADD;
-        desc.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
-        device_->CreateBlendState(&desc, blendState_.addressOf());
-    }
+    //{
+    //    D3D11_BLEND_DESC desc = {};
+    //    desc.AlphaToCoverageEnable = false;
+    //    desc.RenderTarget[0].BlendEnable = true;
+    //    desc.RenderTarget[0].SrcBlend = D3D11_BLEND_SRC_ALPHA;
+    //    desc.RenderTarget[0].DestBlend = D3D11_BLEND_INV_SRC_ALPHA;
+    //    desc.RenderTarget[0].BlendOp = D3D11_BLEND_OP_ADD;
+    //    desc.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_ONE;
+    //    desc.RenderTarget[0].DestBlendAlpha = D3D11_BLEND_INV_SRC_ALPHA;
+    //    desc.RenderTarget[0].BlendOpAlpha = D3D11_BLEND_OP_ADD;
+    //    desc.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
+    //    device_->CreateBlendState(&desc, blendState_.addressOf());
+    //}
 
-    // Create the rasterizer state
-    {
-        D3D11_RASTERIZER_DESC desc = {};
-        desc.FillMode = D3D11_FILL_SOLID;
-        desc.CullMode = D3D11_CULL_NONE;
-        desc.ScissorEnable = false;
-        desc.DepthClipEnable = false;
-        device_->CreateRasterizerState(&desc, rasterizerState_.addressOf());
-    }
+    //// Create the rasterizer state
+    //{
+    //    D3D11_RASTERIZER_DESC desc = {};
+    //    desc.FillMode = D3D11_FILL_SOLID;
+    //    desc.CullMode = D3D11_CULL_NONE;
+    //    desc.ScissorEnable = false;
+    //    desc.DepthClipEnable = false;
+    //    device_->CreateRasterizerState(&desc, rasterizerState_.addressOf());
+    //}
 
-    // Create depth-stencil State
-    {
-        D3D11_DEPTH_STENCIL_DESC desc = {};
-        desc.DepthEnable = false;
-        desc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ALL;
-        desc.DepthFunc = D3D11_COMPARISON_ALWAYS;
-        desc.StencilEnable = false;
-        desc.FrontFace.StencilFailOp = desc.FrontFace.StencilDepthFailOp = desc.FrontFace.StencilPassOp = D3D11_STENCIL_OP_KEEP;
-        desc.FrontFace.StencilFunc = D3D11_COMPARISON_ALWAYS;
-        desc.BackFace = desc.FrontFace;
-        device_->CreateDepthStencilState(&desc, depthStencilState_.addressOf());
-    }
+    //// Create depth-stencil State
+    //{
+    //    D3D11_DEPTH_STENCIL_DESC desc = {};
+    //    desc.DepthEnable = false;
+    //    desc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ALL;
+    //    desc.DepthFunc = D3D11_COMPARISON_ALWAYS;
+    //    desc.StencilEnable = false;
+    //    desc.FrontFace.StencilFailOp = desc.FrontFace.StencilDepthFailOp = desc.FrontFace.StencilPassOp = D3D11_STENCIL_OP_KEEP;
+    //    desc.FrontFace.StencilFunc = D3D11_COMPARISON_ALWAYS;
+    //    desc.BackFace = desc.FrontFace;
+    //    device_->CreateDepthStencilState(&desc, depthStencilState_.addressOf());
+    //}
 }
 
-void D3d11Engine::onDestroyed()
-{
-    Engine::onDestroyed();
-}
-
-/* static */
-D3d11EnginePtr D3d11Engine::create()
-{
-    return D3d11EnginePtr(new D3d11Engine());
-}
-
-// USER THREAD pimpl functions
-
-SwapChain* D3d11Engine::createSwapChain_(const SwapChainCreateInfo& desc)
+SwapChainPtr D3d11Engine::createSwapChain_(const SwapChainCreateInfo& createInfo)
 {
     if (!device_) {
         throw core::LogicError("device_ is null.");
     }
 
-    if (desc.windowNativeHandleType() != WindowNativeHandleType::Win32) {
+    if (createInfo.windowNativeHandleType() != WindowNativeHandleType::Win32) {
         return nullptr;
     }
 
+    ImageFormat colorViewFormat = {};
+
     DXGI_SWAP_CHAIN_DESC sd;
     ZeroMemory(&sd, sizeof(sd));
-    sd.BufferCount = desc.bufferCount();
-    sd.BufferDesc.Width = desc.width();
-    sd.BufferDesc.Height = desc.height();
-    switch(desc.format()) {
-    case SwapChainTargetFormat::RGBA_8_UNORM:
-        sd.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM; break;
-    case SwapChainTargetFormat::RGBA_8_UNORM_SRGB:
-        sd.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB; break;
+    sd.BufferCount = createInfo.bufferCount();
+    sd.BufferDesc.Width = createInfo.width();
+    sd.BufferDesc.Height = createInfo.height();
+    switch(createInfo.format()) {
+    case SwapChainTargetFormat::RGBA_8_UNORM: {
+        sd.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+        colorViewFormat = ImageFormat::RGBA_8_UNORM;
+        break;
+    }
+    case SwapChainTargetFormat::RGBA_8_UNORM_SRGB: {
+        sd.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+        colorViewFormat = ImageFormat::RGBA_8_UNORM_SRGB;
+        break;
+    }
     default:
         throw core::LogicError("D3d11SwapChain: unsupported format");
         break;
@@ -650,59 +876,59 @@ SwapChain* D3d11Engine::createSwapChain_(const SwapChainCreateInfo& desc)
     sd.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
     // do we need DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT ?
     sd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-    sd.OutputWindow = static_cast<HWND>(desc.windowNativeHandle());
-    sd.SampleDesc.Count = desc.sampleCount();
+    sd.OutputWindow = static_cast<HWND>(createInfo.windowNativeHandle());
+    sd.SampleDesc.Count = createInfo.sampleCount();
     sd.SampleDesc.Quality = 0;
     sd.Windowed = true;
     //sd.SwapEffect = DXGI_SWAP_EFFECT_DISCARD;
     sd.SwapEffect = DXGI_SWAP_EFFECT_SEQUENTIAL;
 
-    ComPtr<IDXGISwapChain> swapChain;
-    if (factory_->CreateSwapChain(device_.get(), &sd, swapChain.addressOf()) < 0) {
+    ComPtr<IDXGISwapChain> dxgiSwapChain;
+    if (factory_->CreateSwapChain(device_.get(), &sd, dxgiSwapChain.addressOf()) < 0) {
         throw core::LogicError("D3d11Engine: could not create swap chain");
     }
 
     ComPtr<ID3D11Texture2D> backBuffer;
-    swapChain->GetBuffer(0, IID_PPV_ARGS(backBuffer.addressOf()));
+    dxgiSwapChain->GetBuffer(0, IID_PPV_ARGS(backBuffer.addressOf()));
+
+    D3D11_TEXTURE2D_DESC backBufferDesc = {};
+    backBuffer->GetDesc(&backBufferDesc);
+
+    ImageCreateInfo imageCreateInfo = {};
+    imageCreateInfo.setRank(ImageRank::_2D);
+    // XXX fill it using backBufferDesc
+
+    D3d11ImagePtr backBufferImage(new D3d11Image(gcResourceList_, imageCreateInfo));
+    backBufferImage->object_ = backBuffer;
+
+    ImageViewCreateInfo viewCreateInfo = {};
+    viewCreateInfo.setBindFlags(ImageBindFlags::RenderTarget);
+    D3d11ImageViewPtr colorView(new D3d11ImageView(gcResourceList_, viewCreateInfo, backBufferImage, colorViewFormat, 0));
+
     ComPtr<ID3D11RenderTargetView> backBufferView;
     device_->CreateRenderTargetView(backBuffer.get(), NULL, backBufferView.addressOf());
-    D3d11ImageViewPtr colorView(new D3d11ImageView(gcResourceList_, backBufferView.get()));
+    colorView->rtv_ = backBufferView.get();
+
     D3d11FramebufferPtr newFramebuffer(
         new D3d11Framebuffer(
             gcResourceList_,
             colorView,
-            D3d11ImageViewPtr()));
+            D3d11ImageViewPtr(),
+            true));
 
-    D3d11SwapChain* d3dSwapChain = new D3d11SwapChain(gcResourceList_, desc, swapChain.get());
-    d3dSwapChain->setDefaultFramebuffer(newFramebuffer);
+    auto swapChain = std::make_unique<D3d11SwapChain>(gcResourceList_, createInfo, dxgiSwapChain.get());
+    swapChain->setDefaultFramebuffer(newFramebuffer);
 
-    return d3dSwapChain;
+    return SwapChainPtr(swapChain.release());
 }
 
-void D3d11Engine::resizeSwapChain_(SwapChain* swapChain, UInt32 width, UInt32 height)
+FramebufferPtr D3d11Engine::createFramebuffer_(const ImageViewPtr& colorImageView)
 {
-    D3d11SwapChain* d3dSwapChain = static_cast<D3d11SwapChain*>(swapChain);
-    d3dSwapChain->clearDefaultFramebuffer();
-
-    HRESULT hres = d3dSwapChain->dxgiSwapChain()->ResizeBuffers(
-        0, width, height, DXGI_FORMAT_UNKNOWN, 0);
-    if (hres < 0) {
-        throw core::LogicError("D3d11Engine: could not resize swap chain buffers");
-    }
-
-    ComPtr<ID3D11Texture2D> backBuffer;
-    d3dSwapChain->dxgiSwapChain()->GetBuffer(0, IID_PPV_ARGS(backBuffer.addressOf()));
-    ComPtr<ID3D11RenderTargetView> backBufferView;
-    device_->CreateRenderTargetView(backBuffer.get(), NULL, backBufferView.addressOf());
-    D3d11FramebufferPtr newFramebuffer(
-        new D3d11Framebuffer(
-            gcResourceList_,
-            D3d11ImageViewPtr(new D3d11ImageView(gcResourceList_, backBufferView.get())),
-            D3d11ImageViewPtr()));
-    d3dSwapChain->setDefaultFramebuffer(newFramebuffer);
+    auto framebuffer = std::make_unique<D3d11Framebuffer>(gcResourceList_, colorImageView, nullptr, false);
+    return FramebufferPtr(framebuffer.release());
 }
 
-Buffer* D3d11Engine::createBuffer_(const BufferCreateInfo& createInfo)
+BufferPtr D3d11Engine::createBuffer_(const BufferCreateInfo& createInfo)
 {
     auto buffer = std::make_unique<D3d11Buffer>(gcResourceList_, createInfo);
     D3D11_BUFFER_DESC& desc = buffer->desc_;
@@ -744,30 +970,7 @@ Buffer* D3d11Engine::createBuffer_(const BufferCreateInfo& createInfo)
     }
 
     const ResourceMiscFlags resourceMiscFlags = createInfo.resourceMiscFlags();
-    if (!!(resourceMiscFlags & ResourceMiscFlags::GenerateMips)) {
-        desc.MiscFlags |= D3D11_RESOURCE_MISC_GENERATE_MIPS;
-    }
-    if (!!(resourceMiscFlags & ResourceMiscFlags::Shared)) {
-        desc.MiscFlags |= D3D11_RESOURCE_MISC_SHARED;
-    }
-    if (!!(resourceMiscFlags & ResourceMiscFlags::TextureCube)) {
-        desc.MiscFlags |= D3D11_RESOURCE_MISC_TEXTURECUBE;
-    }
-    if (!!(resourceMiscFlags & ResourceMiscFlags::DrawIndirectArgs)) {
-        desc.MiscFlags |= D3D11_RESOURCE_MISC_DRAWINDIRECT_ARGS;
-    }
-    if (!!(resourceMiscFlags & ResourceMiscFlags::BufferRaw)) {
-        desc.MiscFlags |= D3D11_RESOURCE_MISC_BUFFER_ALLOW_RAW_VIEWS;
-    }
-    if (!!(resourceMiscFlags & ResourceMiscFlags::BufferStructured)) {
-        desc.MiscFlags |= D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
-    }
-    if (!!(resourceMiscFlags & ResourceMiscFlags::ResourceClamp)) {
-        desc.MiscFlags |= D3D11_RESOURCE_MISC_RESOURCE_CLAMP;
-    }
-    if (!!(resourceMiscFlags & ResourceMiscFlags::SharedKeyedMutex)) {
-        desc.MiscFlags |= D3D11_RESOURCE_MISC_SHARED_KEYEDMUTEX;
-    }
+    desc.MiscFlags = resourceMiscFlagsToD3DResourceMiscFlags(resourceMiscFlags);
 
     const CpuAccessFlags cpuAccessFlags = createInfo.cpuAccessFlags();
     if (!!(cpuAccessFlags & CpuAccessFlags::Write)) {
@@ -777,10 +980,10 @@ Buffer* D3d11Engine::createBuffer_(const BufferCreateInfo& createInfo)
         desc.CPUAccessFlags |= D3D11_CPU_ACCESS_READ;
     }
 
-    return buffer.release();
+    return BufferPtr(buffer.release());
 }
 
-Image* D3d11Engine::createImage_(const ImageCreateInfo& createInfo)
+ImagePtr D3d11Engine::createImage_(const ImageCreateInfo& createInfo)
 {
     DXGI_FORMAT dxgiFormat = imageFormatToDxgiFormat(createInfo.format());
     if (dxgiFormat == DXGI_FORMAT_UNKNOWN) {
@@ -789,19 +992,19 @@ Image* D3d11Engine::createImage_(const ImageCreateInfo& createInfo)
 
     auto image = std::make_unique<D3d11Image>(gcResourceList_, createInfo);
     image->dxgiFormat_ = dxgiFormat;
-    return image.release();
+    return ImagePtr(image.release());
 }
 
-ImageView* D3d11Engine::createImageView_(const ImageViewCreateInfo& createInfo, const ImagePtr& image)
+ImageViewPtr D3d11Engine::createImageView_(const ImageViewCreateInfo& createInfo, const ImagePtr& image)
 {
     // XXX should check bind flags compatibility in abstract engine
 
     auto imageView = std::make_unique<D3d11ImageView>(gcResourceList_, createInfo, image, 0);
     imageView->dxgiFormat_ = static_cast<D3d11Image*>(image.get())->dxgiFormat();
-    return imageView.release();
+    return ImageViewPtr(imageView.release());
 }
 
-ImageView* D3d11Engine::createImageView_(const ImageViewCreateInfo& createInfo, const BufferPtr& buffer, ImageFormat format, UInt32 elementsCount)
+ImageViewPtr D3d11Engine::createImageView_(const ImageViewCreateInfo& createInfo, const BufferPtr& buffer, ImageFormat format, UInt32 elementsCount)
 {
     // XXX should check bind flags compatibility in abstract engine
 
@@ -812,10 +1015,16 @@ ImageView* D3d11Engine::createImageView_(const ImageViewCreateInfo& createInfo, 
 
     auto view = std::make_unique<D3d11ImageView>(gcResourceList_, createInfo, buffer, format);
     view->dxgiFormat_ = dxgiFormat;
-    return view.release();
+    return ImageViewPtr(view.release());
 }
 
-GeometryView* D3d11Engine::createGeometryView_(const GeometryViewCreateInfo& createInfo)
+SamplerStatePtr D3d11Engine::createSamplerState_(const SamplerStateCreateInfo& createInfo)
+{
+    auto state = std::make_unique<D3d11SamplerState>(gcResourceList_, createInfo);
+    return SamplerStatePtr(state.release());
+}
+
+GeometryViewPtr D3d11Engine::createGeometryView_(const GeometryViewCreateInfo& createInfo)
 {
     D3D_PRIMITIVE_TOPOLOGY topology = primitiveTypeToD3DPrimitiveTopology(createInfo.primitiveType());
     if (topology == D3D11_PRIMITIVE_TOPOLOGY_UNDEFINED) {
@@ -824,25 +1033,351 @@ GeometryView* D3d11Engine::createGeometryView_(const GeometryViewCreateInfo& cre
 
     auto view = std::make_unique<D3d11GeometryView>(gcResourceList_, createInfo);
     view->topology_ = topology;
-    return view.release();
+    return GeometryViewPtr(view.release());
 }
 
-BlendState* D3d11Engine::createBlendState_(const BlendStateCreateInfo& createInfo)
+BlendStatePtr D3d11Engine::createBlendState_(const BlendStateCreateInfo& createInfo)
 {
-    return new D3d11BlendState(gcResourceList_, createInfo);
+    auto state = std::make_unique<D3d11BlendState>(gcResourceList_, createInfo);
+    return BlendStatePtr(state.release());
 }
 
-RasterizerState* D3d11Engine::createRasterizerState_(const RasterizerStateCreateInfo& createInfo)
+RasterizerStatePtr D3d11Engine::createRasterizerState_(const RasterizerStateCreateInfo& createInfo)
 {
-    return new D3d11RasterizerState(gcResourceList_, createInfo);
+    auto state = std::make_unique<D3d11RasterizerState>(gcResourceList_, createInfo);
+    return RasterizerStatePtr(state.release());
 }
 
-Framebuffer* D3d11Engine::createFramebuffer_(const ImageViewPtr& colorImageView)
+// -- RENDER THREAD functions --
+
+void D3d11Engine::initBuiltinShaders_()
 {
-    return new D3d11Framebuffer(gcResourceList_, colorImageView, nullptr, false);
+    // no-op, everything was done on create
 }
 
-// RENDER THREAD functions
+void D3d11Engine::initFramebuffer_(Framebuffer* framebuffer)
+{
+    // no-op
+}
+
+void D3d11Engine::initBuffer_(Buffer* buffer, const Span<const char>* dataSpan, Int initialLengthInBytes)
+{
+    D3d11Buffer* d3dBuffer = static_cast<D3d11Buffer*>(buffer);
+    if (initialLengthInBytes) {
+        loadBuffer_(d3dBuffer->objectAddress(),
+                    d3dBuffer->descAddress(),
+                    dataSpan ? dataSpan->data() : nullptr,
+                    initialLengthInBytes);
+    }
+    d3dBuffer->lengthInBytes_ = initialLengthInBytes;
+}
+
+void D3d11Engine::initImage_(Image* image, const Span<const Span<const char>>* dataSpanSpan)
+{
+    D3d11Image* d3dImage = static_cast<D3d11Image*>(image);
+
+    // XXX add size checks, see https://docs.microsoft.com/en-us/windows/win32/api/d3d11/nf-d3d11-id3d11device-createtexture2d
+    core::Array<D3D11_SUBRESOURCE_DATA> initData;
+    if (dataSpanSpan) {
+        initData.resize(dataSpanSpan->size());
+        for (Int i = 0; i < dataSpanSpan->size(); ++i) {
+            initData[i].pSysMem = dataSpanSpan->data()[i].data();
+        }
+    }
+
+    D3D11_USAGE d3dUsage = usageToD3DUsage(d3dImage->usage());
+
+    UINT d3dBindFlags = 0;
+    if (!!(d3dImage->bindFlags() & ImageBindFlags::ShaderResource)) {
+        d3dBindFlags |= D3D11_BIND_SHADER_RESOURCE;
+    }
+    if (!!(d3dImage->bindFlags() & ImageBindFlags::RenderTarget)) {
+        d3dBindFlags |= D3D11_BIND_RENDER_TARGET;
+    }
+    if (!!(d3dImage->bindFlags() & ImageBindFlags::DepthStencil)) {
+        d3dBindFlags |= D3D11_BIND_DEPTH_STENCIL;
+    }
+
+    const CpuAccessFlags cpuAccessFlags = d3dImage->cpuAccessFlags();
+    UINT d3dCPUAccessFlags = 0;
+    if (!!(cpuAccessFlags & CpuAccessFlags::Write)) {
+        d3dCPUAccessFlags |= D3D11_CPU_ACCESS_WRITE;
+    }
+    if (!!(cpuAccessFlags & CpuAccessFlags::Read)) {
+        d3dCPUAccessFlags |= D3D11_CPU_ACCESS_READ;
+    }
+
+    UINT d3dMiscFlags = resourceMiscFlagsToD3DResourceMiscFlags(d3dImage->resourceMiscFlags());
+
+    if (d3dImage->rank() == ImageRank::_1D) {
+        D3D11_TEXTURE1D_DESC desc = {};
+        desc.Width = d3dImage->width();
+        desc.MipLevels = d3dImage->mipLevelCount();
+        desc.ArraySize = d3dImage->layerCount();
+        desc.Format = d3dImage->dxgiFormat();
+        desc.Usage = d3dUsage;
+        desc.BindFlags = d3dBindFlags;
+        desc.CPUAccessFlags = d3dCPUAccessFlags;
+        desc.MiscFlags = d3dMiscFlags;
+
+        ComPtr<ID3D11Texture1D> texture;
+        device_->CreateTexture1D(&desc, initData.size() ? initData.data() : nullptr, texture.addressOf());
+        d3dImage->object_ = texture;
+    }
+    else {
+        VGC_CORE_ASSERT(d3dImage->rank() == ImageRank::_2D);
+        D3D11_TEXTURE2D_DESC desc = {};
+        desc.Width = d3dImage->width();
+        desc.Height = d3dImage->height();
+        desc.MipLevels = d3dImage->mipLevelCount();
+        desc.ArraySize = std::max<UInt8>(1, d3dImage->layerCount());
+        desc.Format = d3dImage->dxgiFormat();
+        desc.SampleDesc.Count = d3dImage->sampleCount();
+        desc.Usage = d3dUsage;
+        desc.BindFlags = d3dBindFlags;
+        desc.CPUAccessFlags = d3dCPUAccessFlags;
+        desc.MiscFlags = d3dMiscFlags;
+
+        ComPtr<ID3D11Texture2D> texture;
+        device_->CreateTexture2D(&desc, initData.size() ? initData.data() : nullptr, texture.addressOf());
+        d3dImage->object_ = texture;
+    }
+}
+
+void D3d11Engine::initImageView_(ImageView* view)
+{
+    D3d11ImageView* d3dImageView = static_cast<D3d11ImageView*>(view);
+    if (!!(d3dImageView->bindFlags() & ImageBindFlags::ShaderResource)) {
+        D3D11_SHADER_RESOURCE_VIEW_DESC desc = {};
+        desc.Format = d3dImageView->dxgiFormat();
+        if (view->isBuffer()) {
+            BufferPtr buffer = view->viewedBuffer();
+            desc.ViewDimension = D3D11_SRV_DIMENSION_BUFFER;
+            desc.Buffer.FirstElement = 0;
+            desc.Buffer.NumElements = d3dImageView->bufferElementsCount();
+        }
+        else {
+            ImagePtr image = view->viewedImage();
+            switch (image->rank()) {
+            case ImageRank::_1D: {
+                if (image->layerCount() > 1) {
+                    desc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE1DARRAY;
+                    desc.Texture1DArray.FirstArraySlice = d3dImageView->layerStart();
+                    desc.Texture1DArray.ArraySize = d3dImageView->layerCount();
+                    desc.Texture1DArray.MostDetailedMip = d3dImageView->mipLevelStart();
+                    desc.Texture1DArray.MipLevels = d3dImageView->mipLevelCount();
+                }
+                else {
+                    desc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE1D;
+                    desc.Texture1D.MostDetailedMip = d3dImageView->mipLevelStart();
+                    desc.Texture1D.MipLevels = d3dImageView->mipLevelCount();
+                }
+                break;
+            }
+            case ImageRank::_2D: {
+                if (image->layerCount() > 1) {
+                    desc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2DARRAY;
+                    desc.Texture2DArray.FirstArraySlice = d3dImageView->layerStart();
+                    desc.Texture2DArray.ArraySize = d3dImageView->layerCount();
+                    desc.Texture2DArray.MostDetailedMip = d3dImageView->mipLevelStart();
+                    desc.Texture2DArray.MipLevels = d3dImageView->mipLevelCount();
+                }
+                else {
+                    desc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+                    desc.Texture2D.MostDetailedMip = d3dImageView->mipLevelStart();
+                    desc.Texture2D.MipLevels = d3dImageView->mipLevelCount();
+                }
+                break;
+            }
+            default:
+                throw core::LogicError("D3d11: unknown image rank");
+                break;
+            }
+        }
+        device_->CreateShaderResourceView(d3dImageView->d3dViewedResource(), &desc, d3dImageView->srv_.addressOf());
+    }
+    if (!!(d3dImageView->bindFlags() & ImageBindFlags::RenderTarget)) {
+        D3D11_RENDER_TARGET_VIEW_DESC desc = {};
+        desc.Format = d3dImageView->dxgiFormat();
+        if (view->isBuffer()) {
+            BufferPtr buffer = view->viewedBuffer();
+            desc.ViewDimension = D3D11_RTV_DIMENSION_BUFFER;
+            desc.Buffer.FirstElement = 0;
+            desc.Buffer.NumElements = d3dImageView->bufferElementsCount();
+        }
+        else {
+            ImagePtr image = view->viewedImage();
+            switch (image->rank()) {
+            case ImageRank::_1D: {
+                if (image->layerCount() > 1) {
+                    desc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE1DARRAY;
+                    desc.Texture1DArray.FirstArraySlice = d3dImageView->layerStart();
+                    desc.Texture1DArray.ArraySize = d3dImageView->layerCount();
+                    desc.Texture1DArray.MipSlice = d3dImageView->mipLevelStart();
+                }
+                else {
+                    desc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE1D;
+                    desc.Texture1D.MipSlice = d3dImageView->mipLevelStart();
+                }
+                break;
+            }
+            case ImageRank::_2D: {
+                if (image->layerCount() > 1) {
+                    desc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2DARRAY;
+                    desc.Texture2DArray.FirstArraySlice = d3dImageView->layerStart();
+                    desc.Texture2DArray.ArraySize = d3dImageView->layerCount();
+                    desc.Texture2DArray.MipSlice = d3dImageView->mipLevelStart();
+                }
+                else {
+                    desc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
+                    desc.Texture2D.MipSlice = d3dImageView->mipLevelStart();
+                }
+                break;
+            }
+            default:
+                throw core::LogicError("D3d11: unknown image rank");
+                break;
+            }
+        }
+        device_->CreateRenderTargetView(d3dImageView->d3dViewedResource(), &desc, d3dImageView->rtv_.addressOf());
+    }
+    if (!!(d3dImageView->bindFlags() & ImageBindFlags::DepthStencil)) {
+        D3D11_DEPTH_STENCIL_VIEW_DESC desc = {};
+        desc.Format = d3dImageView->dxgiFormat();
+        if (view->isBuffer()) {
+            throw core::LogicError("D3d11: buffer cannot be bound as Depth Stencil");
+        }
+        else {
+            ImagePtr image = view->viewedImage();
+            switch (image->rank()) {
+            case ImageRank::_1D: {
+                if (image->layerCount() > 1) {
+                    desc.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE1DARRAY;
+                    desc.Texture1DArray.FirstArraySlice = d3dImageView->layerStart();
+                    desc.Texture1DArray.ArraySize = d3dImageView->layerCount();
+                    desc.Texture1DArray.MipSlice = d3dImageView->mipLevelStart();
+                }
+                else {
+                    desc.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE1D;
+                    desc.Texture1D.MipSlice = d3dImageView->mipLevelStart();
+                }
+                break;
+            }
+            case ImageRank::_2D: {
+                if (image->layerCount() > 1) {
+                    desc.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2DARRAY;
+                    desc.Texture2DArray.FirstArraySlice = d3dImageView->layerStart();
+                    desc.Texture2DArray.ArraySize = d3dImageView->layerCount();
+                    desc.Texture2DArray.MipSlice = d3dImageView->mipLevelStart();
+                }
+                else {
+                    desc.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2D;
+                    desc.Texture2D.MipSlice = d3dImageView->mipLevelStart();
+                }
+                break;
+            }
+            default:
+                throw core::LogicError("D3d11: unknown image rank");
+                break;
+            }
+        }
+        device_->CreateDepthStencilView(d3dImageView->d3dViewedResource(), &desc, d3dImageView->dsv_.addressOf());
+    }
+}
+
+void D3d11Engine::initSamplerState_(SamplerState* state)
+{
+    D3d11SamplerState* d3dSamplerState = static_cast<D3d11SamplerState*>(state);
+    D3D11_SAMPLER_DESC desc = {};
+    UINT filter = 0;
+    if (d3dSamplerState->maxAnisotropy() >= 1) {
+        filter = D3D11_FILTER_ANISOTROPIC;
+    }
+    else {
+        if (d3dSamplerState->magFilter() == FilterMode::Linear) {
+            filter |= D3D11_FILTER_MIN_POINT_MAG_LINEAR_MIP_POINT;
+        }
+        if (d3dSamplerState->minFilter() == FilterMode::Linear) {
+            filter |= D3D11_FILTER_MIN_LINEAR_MAG_MIP_POINT;
+        }
+        if (d3dSamplerState->mipFilter() == FilterMode::Linear) {
+            filter |= D3D11_FILTER_MIN_MAG_POINT_MIP_LINEAR;
+        }
+    }
+    if (d3dSamplerState->comparisonFunction() != ComparisonFunction::Disabled) {
+        filter |= D3D11_FILTER_COMPARISON_MIN_MAG_MIP_POINT;
+    }
+    desc.Filter = static_cast<D3D11_FILTER>(filter);
+    desc.AddressU = imageWrapModeToD3DTextureAddressMode(d3dSamplerState->wrapModeU());
+    desc.AddressV = imageWrapModeToD3DTextureAddressMode(d3dSamplerState->wrapModeV());
+    desc.AddressW = imageWrapModeToD3DTextureAddressMode(d3dSamplerState->wrapModeW());
+    desc.MipLODBias = d3dSamplerState->mipLODBias();
+    desc.MaxAnisotropy = d3dSamplerState->maxAnisotropy();
+    desc.ComparisonFunc = comparisonFunctionToD3DComparisonFunc(d3dSamplerState->comparisonFunction());
+    // XXX add data() in vec4f
+    memcpy(desc.BorderColor, &d3dSamplerState->wrapColor(), 4 * sizeof(float));
+    desc.MinLOD = d3dSamplerState->minLOD();
+    desc.MaxLOD = d3dSamplerState->maxLOD();
+    device_->CreateSamplerState(&desc, d3dSamplerState->object_.addressOf());
+}
+
+void D3d11Engine::initGeometryView_(GeometryView* view)
+{
+    D3d11GeometryView* d3dGeometryView = static_cast<D3d11GeometryView*>(view);
+    // no-op ?
+}
+
+void D3d11Engine::initBlendState_(BlendState* state)
+{
+    D3d11BlendState* d3dBlendState = static_cast<D3d11BlendState*>(state);
+    D3D11_BLEND_DESC desc = {};
+    desc.AlphaToCoverageEnable = state->isAlphaToCoverageEnabled();
+    desc.IndependentBlendEnable = state->isIndependentBlendEnabled();
+    for (Int i = 0; i < 8; ++i) {
+        const TargetBlendState& subState = state->targetBlendState(i);
+        D3D11_RENDER_TARGET_BLEND_DESC& subDesc = desc.RenderTarget[i];
+        subDesc.BlendEnable = subState.isEnabled();
+        subDesc.SrcBlend = blendFactorToD3DBlend(subState.equationRGB().sourceFactor());
+        subDesc.DestBlend = blendFactorToD3DBlend(subState.equationRGB().targetFactor());
+        subDesc.BlendOp = blendOpToD3DBlendOp(subState.equationRGB().operation());
+        subDesc.SrcBlendAlpha = blendFactorToD3DBlend(subState.equationAlpha().sourceFactor());
+        subDesc.DestBlendAlpha = blendFactorToD3DBlend(subState.equationAlpha().targetFactor());
+        subDesc.BlendOpAlpha = blendOpToD3DBlendOp(subState.equationAlpha().operation());
+        subDesc.RenderTargetWriteMask = 0;
+        if (!!(subState.writeMask() & BlendWriteMask::R)) {
+            subDesc.RenderTargetWriteMask |= D3D11_COLOR_WRITE_ENABLE_RED;
+        }
+        if (!!(subState.writeMask() & BlendWriteMask::G)) {
+            subDesc.RenderTargetWriteMask |= D3D11_COLOR_WRITE_ENABLE_GREEN;
+        }
+        if (!!(subState.writeMask() & BlendWriteMask::B)) {
+            subDesc.RenderTargetWriteMask |= D3D11_COLOR_WRITE_ENABLE_BLUE;
+        }
+        if (!!(subState.writeMask() & BlendWriteMask::A)) {
+            subDesc.RenderTargetWriteMask |= D3D11_COLOR_WRITE_ENABLE_ALPHA;
+        }
+    }
+    device_->CreateBlendState(&desc, d3dBlendState->object_.addressOf());
+}
+
+void D3d11Engine::initRasterizerState_(RasterizerState* state)
+{
+    D3d11RasterizerState* d3dRasterizerState = static_cast<D3d11RasterizerState*>(state);
+    D3D11_RASTERIZER_DESC desc = {};
+    desc.FillMode = fillModeToD3DFilleMode(state->fillMode());
+    desc.CullMode = cullModeToD3DCulleMode(state->cullMode());
+    desc.FrontCounterClockwise = state->isFrontCounterClockwise();
+    //desc.DepthBias;
+    //desc.DepthBiasClamp;
+    //desc.SlopeScaledDepthBias;
+    desc.DepthClipEnable = state->isDepthClippingEnabled();
+    desc.ScissorEnable = state->isScissoringEnabled();
+    desc.MultisampleEnable = state->isMultisamplingEnabled();
+    desc.AntialiasedLineEnable = state->isLineAntialiasingEnabled();
+    device_->CreateRasterizerState(&desc, d3dRasterizerState->object_.addressOf());
+}
+
+
 
 void D3d11Engine::setSwapChain_(SwapChain* swapChain)
 {
@@ -850,93 +1385,20 @@ void D3d11Engine::setSwapChain_(SwapChain* swapChain)
     setFramebuffer_(d3dSwapChain->d3dDefaultFrameBuffer());
     const float blend_factor[4] = { 0.f, 0.f, 0.f, 0.f };
     deviceCtx_->OMSetDepthStencilState(depthStencilState_.get(), 0);
-
-    //deviceCtx_->OMSetBlendState(blendState_.get(), blend_factor, 0xffffffff);
-    //deviceCtx_->RSSetState(rasterizerState_.get());
+    deviceCtx_->HSSetShader(NULL, NULL, 0);
+    deviceCtx_->DSSetShader(NULL, NULL, 0);
+    deviceCtx_->CSSetShader(NULL, NULL, 0);
 }
 
-UInt64 D3d11Engine::present_(SwapChain* swapChain, UInt32 syncInterval, PresentFlags /*flags*/)
-{
-    D3d11SwapChain* d3dSwapChain = static_cast<D3d11SwapChain*>(swapChain);
-    d3dSwapChain->dxgiSwapChain()->Present(syncInterval, 0);
-    return std::chrono::nanoseconds(std::chrono::steady_clock::now() - startTime_).count();
-}
-
-
-void D3d11Engine::initFramebuffer_(Framebuffer* framebuffer)
-{
-    // no-op
-}
-
-void D3d11Engine::initBuffer_(Buffer* buffer, const void* data, Int initialLengthInBytes)
-{
-    D3d11Buffer* d3dBuffer = static_cast<D3d11Buffer*>(buffer);
-    if (initialLengthInBytes) {
-        loadBuffer_(d3dBuffer->objectAddress(), d3dBuffer->descAddress(), data, initialLengthInBytes);
-    }
-    d3dBuffer->lengthInBytes_ = initialLengthInBytes;
-}
-
-void D3d11Engine::initImage_(Image* image, const void* data)
-{
-    D3d11Image* d3dImage = static_cast<D3d11Image*>(image);
-    if (d3dImage->rank() == ImageRank::_1D) {
-        D3D11_TEXTURE1D_DESC desc = {};
-        desc.Width = d3dImage->width();
-        desc.MipLevels = d3dImage->mipLevelCount();
-        desc.ArraySize = d3dImage->layerCount();
-        desc.Format = d3dImage->dxgiFormat();
-        desc.Usage = usageToD3DUsage(d3dImage->usage());
-        desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
-        if (d3dImage->isRenderTargetable()) {
-            desc.BindFlags |= D3D11_BIND_RENDER_TARGET;
-        }
-        desc.CPUAccessFlags = d3dImage->cpuAccessFlags();
-        desc.MiscFlags = d3dImage->resourceMiscFlags();
-    }
-    else {
-        VGC_CORE_ASSERT(d3dImage->rank() == ImageRank::_2D);
-        D3D11_TEXTURE2D_DESC desc = {};
-
-    }
-}
-
-void D3d11Engine::initImageView_(ImageView* view)
-{
-    D3d11ImageView* d3dImageView = static_cast<D3d11ImageView*>(view);
-
-}
-
-void D3d11Engine::initGeometryView_(GeometryView* view)
-{
-    D3d11GeometryView* d3dGeometryView = static_cast<D3d11GeometryView*>(view);
-
-}
-
-void D3d11Engine::initBlendState_(BlendState* state)
-{
-    D3d11BlendState* d3dBlendState = static_cast<D3d11BlendState*>(state);
-
-}
-
-void D3d11Engine::initRasterizerState_(RasterizerState* state)
-{
-    D3d11RasterizerState* d3dRasterizerState = static_cast<D3d11RasterizerState*>(state);
-
-}
-
-
-
-
-void D3d11Engine::bindFramebuffer_(Framebuffer* framebuffer)
+void D3d11Engine::setFramebuffer_(Framebuffer* framebuffer)
 {
     if (!framebuffer) {
         deviceCtx_->OMSetRenderTargets(0, NULL, NULL);
         return;
     }
     D3d11Framebuffer* d3dFramebuffer = static_cast<D3d11Framebuffer*>(framebuffer);
-    ID3D11RenderTargetView* rtvArray[1] = { d3dFramebuffer->colorView() };
-    deviceCtx_->OMSetRenderTargets(1, rtvArray, d3dFramebuffer->depthStencilView());
+    ID3D11RenderTargetView* rtvArray[1] = { d3dFramebuffer->rtvObject() };
+    deviceCtx_->OMSetRenderTargets(1, rtvArray, d3dFramebuffer->dsvObject());
 }
 
 void D3d11Engine::setViewport_(Int x, Int y, Int width, Int height)
@@ -951,6 +1413,90 @@ void D3d11Engine::setViewport_(Int x, Int y, Int width, Int height)
     deviceCtx_->RSSetViewports(1, &vp);
 }
 
+void D3d11Engine::setProgram_(Program* program)
+{
+    D3d11Program* d3dProgram = static_cast<D3d11Program*>(program);
+    deviceCtx_->VSSetShader(d3dProgram->vertexShader_.get(), NULL, 0);
+    deviceCtx_->PSSetShader(d3dProgram->pixelShader_.get(), NULL, 0);
+    deviceCtx_->GSSetShader(d3dProgram->geometryShader_.get(), NULL, 0);
+    //deviceCtx_->VSSetConstantBuffers(0, 1, &vertexConstantBuffer_);
+    //deviceCtx_->IASetInputLayout(inputLayout_.get());
+}
+
+void D3d11Engine::setBlendState_(BlendState* state, const geometry::Vec4f& blendFactor)
+{
+    D3d11BlendState* d3dBlendState = static_cast<D3d11BlendState*>(state);
+    // XXX blendFactor.data()
+    deviceCtx_->OMSetBlendState(d3dBlendState->object(), (float*)&blendFactor, 0xFFFFFFFF);
+}
+
+
+// XXX left todo:
+/*
+void setRasterizerState_(RasterizerState* state) override;
+void setStageConstantBuffers_(Buffer* const* buffers, Int startIndex, Int count, ShaderStage shaderStage) override;
+void setStageImageViews_(ImageView* const* views, Int startIndex, Int count, ShaderStage shaderStage) override;
+void setStageSamplers_(SamplerState* const* states, Int startIndex, Int count, ShaderStage shaderStage) override;
+*/
+
+
+
+//deviceCtx_->RSSetState(rasterizerState_.get());
+//deviceCtx_->VSSetConstantBuffers(0, 1, &vertexConstantBuffer_);
+//deviceCtx_->IASetInputLayout(inputLayout_.get());
+
+
+void D3d11Engine::resizeSwapChain_(SwapChain* swapChain, UInt32 width, UInt32 height)
+{
+    D3d11SwapChain* d3dSwapChain = static_cast<D3d11SwapChain*>(swapChain);
+    IDXGISwapChain* dxgiSwapChain = d3dSwapChain->dxgiSwapChain();
+
+    d3dSwapChain->clearDefaultFramebuffer();
+
+    HRESULT hres = dxgiSwapChain->ResizeBuffers(
+        0, width, height, DXGI_FORMAT_UNKNOWN, 0);
+    if (hres < 0) {
+        throw core::LogicError("D3d11Engine: could not resize swap chain buffers");
+    }
+
+    ComPtr<ID3D11Texture2D> backBuffer;
+    dxgiSwapChain->GetBuffer(0, IID_PPV_ARGS(backBuffer.addressOf()));
+
+    D3D11_TEXTURE2D_DESC backBufferDesc = {};
+    backBuffer->GetDesc(&backBufferDesc);
+
+    ImageCreateInfo imageCreateInfo = {};
+    imageCreateInfo.setRank(ImageRank::_2D);
+    // XXX fill it using backBufferDesc
+
+    D3d11ImagePtr backBufferImage(new D3d11Image(gcResourceList_, imageCreateInfo));
+    backBufferImage->object_ = backBuffer;
+
+    ImageViewCreateInfo viewCreateInfo = {};
+    viewCreateInfo.setBindFlags(ImageBindFlags::RenderTarget);
+    D3d11ImageViewPtr colorView(new D3d11ImageView(gcResourceList_, viewCreateInfo, backBufferImage, d3dSwapChain->backBufferFormat(), 0));
+
+    ComPtr<ID3D11RenderTargetView> backBufferView;
+    device_->CreateRenderTargetView(backBuffer.get(), NULL, backBufferView.addressOf());
+    colorView->rtv_ = backBufferView.get();
+
+    D3d11FramebufferPtr newFramebuffer(
+        new D3d11Framebuffer(
+            gcResourceList_,
+            colorView,
+            D3d11ImageViewPtr(),
+            true));
+
+    d3dSwapChain->setDefaultFramebuffer(newFramebuffer);
+}
+
+void D3d11Engine::updateBufferData_(Buffer* buffer, const void* data, Int lengthInBytes)
+{
+    D3d11Buffer* d3dBuffer = static_cast<D3d11Buffer*>(buffer);
+    loadBuffer_(d3dBuffer->objectAddress(), d3dBuffer->descAddress(), data, lengthInBytes);
+    d3dBuffer->lengthInBytes_ = lengthInBytes;
+}
+
 void D3d11Engine::clear_(const core::Color& color)
 {
     ComPtr<ID3D11RenderTargetView> rtv;
@@ -963,84 +1509,76 @@ void D3d11Engine::clear_(const core::Color& color)
     deviceCtx_->ClearRenderTargetView(rtv.get(), c.data());
 }
 
-void D3d11Engine::setProjectionMatrix_(const geometry::Mat4f& m)
+UInt64 D3d11Engine::present_(SwapChain* swapChain, UInt32 syncInterval, PresentFlags /*flags*/)
 {
-    paintVertexShaderConstantBuffer_.projMatrix = m;
-    writeBufferReserved_(
-        vertexConstantBuffer_.get(), &paintVertexShaderConstantBuffer_,
-        sizeof(PaintVertexShaderConstantBuffer));
-}
-
-void D3d11Engine::setViewMatrix_(const geometry::Mat4f& m)
-{
-    paintVertexShaderConstantBuffer_.viewMatrix = m;
-    writeBufferReserved_(
-        vertexConstantBuffer_.get(), &paintVertexShaderConstantBuffer_,
-        sizeof(PaintVertexShaderConstantBuffer));
+    D3d11SwapChain* d3dSwapChain = static_cast<D3d11SwapChain*>(swapChain);
+    d3dSwapChain->dxgiSwapChain()->Present(syncInterval, 0);
+    return std::chrono::nanoseconds(std::chrono::steady_clock::now() - startTime_).count();
 }
 
 
+//void D3d11Engine::setProjectionMatrix_(const geometry::Mat4f& m)
+//{
+//    paintVertexShaderConstantBuffer_.projMatrix = m;
+//    writeBufferReserved_(
+//        vertexConstantBuffer_.get(), &paintVertexShaderConstantBuffer_,
+//        sizeof(PaintVertexShaderConstantBuffer));
+//}
+//
+//void D3d11Engine::setViewMatrix_(const geometry::Mat4f& m)
+//{
+//    paintVertexShaderConstantBuffer_.viewMatrix = m;
+//    writeBufferReserved_(
+//        vertexConstantBuffer_.get(), &paintVertexShaderConstantBuffer_,
+//        sizeof(PaintVertexShaderConstantBuffer));
+//}
 
-void D3d11Engine::updateBufferData_(Buffer* buffer, const void* data, Int lengthInBytes)
-{
-    D3d11Buffer* d3dBuffer = static_cast<D3d11Buffer*>(buffer);
-    loadBuffer_(d3dBuffer->objectAddress(), d3dBuffer->descAddress(), data, lengthInBytes);
-    d3dBuffer->lengthInBytes_ = lengthInBytes;
-}
 
-void D3d11Engine::setupVertexBufferForPaintShader_(Buffer* /*buffer*/)
-{
-    // no-op
-}
 
-void D3d11Engine::drawPrimitives_(Buffer* buffer, PrimitiveType type)
-{
-    D3d11Buffer* d3dBuffer = static_cast<D3d11Buffer*>(buffer);
-    ID3D11Buffer* object = d3dBuffer->object();
-    if (!object) return;
 
-    D3D_PRIMITIVE_TOPOLOGY d3dTopology = {};
-    switch (type) {
-    case PrimitiveType::Point:
-        d3dTopology = D3D_PRIMITIVE_TOPOLOGY::D3D11_PRIMITIVE_TOPOLOGY_POINTLIST; break;
-    case PrimitiveType::LineList:
-        d3dTopology = D3D_PRIMITIVE_TOPOLOGY::D3D11_PRIMITIVE_TOPOLOGY_LINELIST; break;
-    case PrimitiveType::LineStrip:
-        d3dTopology = D3D_PRIMITIVE_TOPOLOGY::D3D11_PRIMITIVE_TOPOLOGY_LINESTRIP; break;
-    case PrimitiveType::TriangleList:
-        d3dTopology = D3D_PRIMITIVE_TOPOLOGY::D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST; break;
-    case PrimitiveType::TriangleStrip:
-        d3dTopology = D3D_PRIMITIVE_TOPOLOGY::D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP; break;
-    default:
-        throw core::LogicError("D3d11Buffer: unsupported primitive type");
-    }
+//void D3d11Engine::setupVertexBufferForPaintShader_(Buffer* /*buffer*/)
+//{
+//    // no-op
+//}
 
-    Int numVertices = d3dBuffer->lengthInBytes_ / sizeof(XYRGBVertex);
-    unsigned int stride = sizeof(XYRGBVertex);
-    unsigned int offset = 0;
-    deviceCtx_->IASetVertexBuffers(0, 1, &object, &stride, &offset);
-    deviceCtx_->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-    deviceCtx_->Draw(core::int_cast<UINT>(numVertices), 0);
-}
+//void D3d11Engine::drawPrimitives_(Buffer* buffer, PrimitiveType type)
+//{
+//    D3d11Buffer* d3dBuffer = static_cast<D3d11Buffer*>(buffer);
+//    ID3D11Buffer* object = d3dBuffer->object();
+//    if (!object) return;
+//
+//    D3D_PRIMITIVE_TOPOLOGY d3dTopology = {};
+//    switch (type) {
+//    case PrimitiveType::Point:
+//        d3dTopology = D3D_PRIMITIVE_TOPOLOGY::D3D11_PRIMITIVE_TOPOLOGY_POINTLIST; break;
+//    case PrimitiveType::LineList:
+//        d3dTopology = D3D_PRIMITIVE_TOPOLOGY::D3D11_PRIMITIVE_TOPOLOGY_LINELIST; break;
+//    case PrimitiveType::LineStrip:
+//        d3dTopology = D3D_PRIMITIVE_TOPOLOGY::D3D11_PRIMITIVE_TOPOLOGY_LINESTRIP; break;
+//    case PrimitiveType::TriangleList:
+//        d3dTopology = D3D_PRIMITIVE_TOPOLOGY::D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST; break;
+//    case PrimitiveType::TriangleStrip:
+//        d3dTopology = D3D_PRIMITIVE_TOPOLOGY::D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP; break;
+//    default:
+//        throw core::LogicError("D3d11Buffer: unsupported primitive type");
+//    }
+//
+//    Int numVertices = d3dBuffer->lengthInBytes_ / sizeof(XYRGBVertex);
+//    unsigned int stride = sizeof(XYRGBVertex);
+//    unsigned int offset = 0;
+//    deviceCtx_->IASetVertexBuffers(0, 1, &object, &stride, &offset);
+//    deviceCtx_->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+//    deviceCtx_->Draw(core::int_cast<UINT>(numVertices), 0);
+//}
 
-void D3d11Engine::bindPaintShader_()
-{
-    deviceCtx_->IASetInputLayout(inputLayout_.get());
-    deviceCtx_->VSSetShader(vertexShader_.get(), NULL, 0);
-    deviceCtx_->VSSetConstantBuffers(0, 1, &vertexConstantBuffer_);
-    deviceCtx_->PSSetShader(pixelShader_.get(), NULL, 0);
-    deviceCtx_->GSSetShader(NULL, NULL, 0);
-    deviceCtx_->HSSetShader(NULL, NULL, 0);
-    deviceCtx_->DSSetShader(NULL, NULL, 0);
-    deviceCtx_->CSSetShader(NULL, NULL, 0);
-}
 
-void D3d11Engine::releasePaintShader_()
-{
-    deviceCtx_->VSSetShader(NULL, NULL, 0);
-    deviceCtx_->VSSetConstantBuffers(0, 0, NULL);
-    deviceCtx_->PSSetShader(NULL, NULL, 0);
-}
+
+//void D3d11Engine::releasePaintShader_()
+//{
+//    deviceCtx_->VSSetShader(NULL, NULL, 0);
+//    deviceCtx_->VSSetConstantBuffers(0, 0, NULL);
+//    deviceCtx_->PSSetShader(NULL, NULL, 0);
+//}
 
 // Private methods
 
@@ -1073,15 +1611,15 @@ bool D3d11Engine::writeBufferReserved_(ID3D11Buffer* buffer, const void* data, I
     return true;
 }
 
-void D3d11Engine::updatePaintVertexShaderConstantBuffer_()
-{
-    PaintVertexShaderConstantBuffer buffer = {};
-    memcpy(buffer.projMatrix.data(), projMatrix_.data(), 16 * sizeof(float));
-    memcpy(buffer.viewMatrix.data(), viewMatrix_.data(), 16 * sizeof(float));
-    writeBufferReserved_(
-        vertexConstantBuffer_.get(), &buffer,
-        sizeof(PaintVertexShaderConstantBuffer));
-}
+//void D3d11Engine::updatePaintVertexShaderConstantBuffer_()
+//{
+//    PaintVertexShaderConstantBuffer buffer = {};
+//    memcpy(buffer.projMatrix.data(), projMatrix_.data(), 16 * sizeof(float));
+//    memcpy(buffer.viewMatrix.data(), viewMatrix_.data(), 16 * sizeof(float));
+//    writeBufferReserved_(
+//        vertexConstantBuffer_.get(), &buffer,
+//        sizeof(PaintVertexShaderConstantBuffer));
+//}
 
 
 

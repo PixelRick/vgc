@@ -165,6 +165,21 @@ inline ResourceList::~ResourceList()
 ///
 template<typename T>
 class ResourcePtr {
+protected:
+    template<typename S, typename U>
+    friend ResourcePtr<S> static_pointer_cast(const ResourcePtr<U>& r) noexcept;
+
+    struct CastTag {};
+
+    // For casts
+    ResourcePtr(T* obj, CastTag)
+        : p_(p)
+    {
+        if (p_) {
+            p_->incRef_();
+        }
+    }
+
 public:
     template<typename U>
     friend class ResourcePtr;
@@ -225,36 +240,40 @@ public:
     }
 
     template<typename U>
-    ResourcePtr& operator=(const ResourcePtr<U>& other) {
-        if (p_ == other.p_) {
-            return *this;
+    ResourcePtr& operator=(const ResourcePtr<U>& other)
+    {
+        if (p_ != other.p_) {
+            if (other.p_) {
+                other.p_->incRef_();
+            }
+            if (p_) {
+                p_->decRef_();
+            }
+            p_ = other.p_;
         }
-        if (other.p_) {
-            other.p_->incRef_();
-        }
-        if (p_) {
-            p_->decRef_();
-        }
-        p_ = other.p_;
         return *this;
     }
 
-    template<typename U>
-    ResourcePtr& operator=(ResourcePtr<U>&& other) {
-        std::swap(p_, other.p_);
-        return *this;
-    }
-
-    ResourcePtr& operator=(const ResourcePtr& other) {
+    ResourcePtr& operator=(const ResourcePtr& other)
+    {
         return operator=<T>(other);
     }
 
-    ResourcePtr& operator=(ResourcePtr&& other) {
+    template<typename U>
+    ResourcePtr& operator=(ResourcePtr<U>&& other)
+    {
         std::swap(p_, other.p_);
         return *this;
     }
 
-    void reset() {
+    ResourcePtr& operator=(ResourcePtr&& other)
+    {
+        std::swap(p_, other.p_);
+        return *this;
+    }
+
+    void reset()
+    {
         if (p_) {
             p_->decRef_();
 #ifdef VGC_DEBUG
@@ -263,7 +282,8 @@ public:
         }
     }
 
-    void reset(T* p) {
+    void reset(T* p)
+    {
         if (p) {
             p->initRef_();
         }
@@ -273,29 +293,40 @@ public:
         p_ = p;
     }
 
-    T* get() const {
+    T* get() const
+    {
         return p_;
     }
 
-    Int64 useCount() const {
+    Int64 useCount() const
+    {
         return p_ ? p_->refCount_ : 0;
     }
 
-    explicit operator bool() const noexcept {
+    explicit operator bool() const noexcept
+    {
         return p_ != nullptr;
     }
 
-    T& operator*() const noexcept {
+    T& operator*() const noexcept
+    {
         return *p_;
     }
 
-    T* operator->() const noexcept {
+    T* operator->() const noexcept
+    {
         return p_;
     }
 
 private:
     T* p_ = nullptr;
 };
+
+template<typename T, typename U>
+ResourcePtr<T> static_pointer_cast(const ResourcePtr<U>& r) noexcept
+{
+    return ResourcePtr<T>(static_cast<T*>(r.get()));
+}
 
 } // namespace vgc::graphics
 

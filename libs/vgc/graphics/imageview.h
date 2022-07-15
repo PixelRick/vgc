@@ -169,11 +169,6 @@ public:
         return info_.bindFlags();
     }
 
-    const ResourcePtr<Resource>& viewedResource() const
-    {
-        return viewedResource_;
-    }
-
     ImageFormat format() const
     {
         return format_;
@@ -187,6 +182,16 @@ public:
     bool isBuffer() const
     {
         return bufferElementsCount_ > 0;
+    }
+
+    ResourcePtr<Buffer> viewedBuffer() const
+    {
+        return isBuffer() ? static_pointer_cast<Buffer>(viewedResource_) : nullptr;
+    }
+
+    ResourcePtr<Image> viewedImage() const
+    {
+        return isBuffer() ? nullptr : static_pointer_cast<Image>(viewedResource_);
     }
 
 private:

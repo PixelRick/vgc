@@ -62,56 +62,58 @@ public:
 protected:
     // Implementation of Engine API
 
-    // USER THREAD pimpl functions
+    // -- USER THREAD implementation functions --
 
-    SwapChain* createSwapChain_(const SwapChainCreateInfo& createInfo) override;
+    void createBuiltinShaders_() override;
+
+    SwapChainPtr createSwapChain_(const SwapChainCreateInfo& createInfo) override;
+    FramebufferPtr createFramebuffer_(const ImageViewPtr& colorImageView) override;
+    BufferPtr createBuffer_(const BufferCreateInfo& createInfo) override;
+    ImagePtr createImage_(const ImageCreateInfo& createInfo) override;
+    ImageViewPtr createImageView_(const ImageViewCreateInfo& createInfo, const ImagePtr& image) override;
+    ImageViewPtr createImageView_(const ImageViewCreateInfo& createInfo, const BufferPtr& buffer, ImageFormat format, UInt32 elementsCount) override;
+    SamplerStatePtr createSamplerState_(const SamplerStateCreateInfo& createInfo) override;
+    GeometryViewPtr createGeometryView_(const GeometryViewCreateInfo& createInfo) override;
+    BlendStatePtr createBlendState_(const BlendStateCreateInfo& createInfo) override;
+    RasterizerStatePtr createRasterizerState_(const RasterizerStateCreateInfo& createInfo) override;
+
     void resizeSwapChain_(SwapChain* swapChain, UInt32 width, UInt32 height) override;
 
-    Buffer* createBuffer_(const BufferCreateInfo& createInfo) override;
-    Image* createImage_(const ImageCreateInfo& createInfo) override;
-    ImageView* createImageView_(const ImageViewCreateInfo& createInfo, const ImagePtr& image) override;
-    ImageView* createImageView_(const ImageViewCreateInfo& createInfo, const BufferPtr& buffer, ImageFormat format, UInt32 elementsCount) override;
-    GeometryView* createGeometryView_(const GeometryViewCreateInfo& createInfo) override;
-    BlendState* createBlendState_(const BlendStateCreateInfo& createInfo) override;
-    RasterizerState* createRasterizerState_(const RasterizerStateCreateInfo& createInfo) override;
-    Framebuffer* createFramebuffer_(const ImageViewPtr& colorImageView) override;
+    //--  RENDER THREAD implementation functions --
 
-    // RENDER THREAD functions
-
-    void setSwapChain_(SwapChain* swapChain) override;
-    UInt64 present_(SwapChain* swapChain, UInt32 syncInterval, PresentFlags flags) override;
+    void initBuiltinShaders_() override;
 
     void initFramebuffer_(Framebuffer* framebuffer) override;
-    void initBuffer_(Buffer* buffer, const void* data, Int initialLengthInBytes) override;
-    void initImage_(Image* image, const void* data) override;
+    void initBuffer_(Buffer* buffer, const Span<const char>* dataSpan, Int initialLengthInBytes) override;
+    void initImage_(Image* image, const Span<const Span<const char>>* dataSpanSpan) override;
     void initImageView_(ImageView* view) override;
+    void initSamplerState_(SamplerState* state) override;
     void initGeometryView_(GeometryView* view) override;
     void initBlendState_(BlendState* state) override;
     void initRasterizerState_(RasterizerState* state) override;
 
+    void setSwapChain_(SwapChain* swapChain) override;
+    void setFramebuffer_(Framebuffer* framebuffer) override;
     void setViewport_(Int x, Int y, Int width, Int height) override;
     void setProgram_(Program* program) override;
-    void setBlendState_(BlendState* state) override;
+    void setBlendState_(BlendState* state, const geometry::Vec4f& blendFactor) override;
     void setRasterizerState_(RasterizerState* state) override;
     void setStageConstantBuffers_(Buffer* const* buffers, Int startIndex, Int count, ShaderStage shaderStage) override;
     void setStageImageViews_(ImageView* const* views, Int startIndex, Int count, ShaderStage shaderStage) override;
     void setStageSamplers_(SamplerState* const* states, Int startIndex, Int count, ShaderStage shaderStage) override;
-    void setFramebuffer_(Framebuffer* framebuffer) override;
 
     void updateBufferData_(Buffer* buffer, const void* data, Int lengthInBytes) override;
 
-    void draw_(GeometryView* view) override;
+    void draw_(GeometryView* view, UInt primitiveCount, UInt instanceCount) override;
     void clear_(const core::Color& color) override;
+
+    UInt64 present_(SwapChain* swapChain, UInt32 syncInterval, PresentFlags flags) override;
 
 private:
     ComPtr<IDXGIFactory> factory_;
     ComPtr<ID3D11Device> device_;
     ComPtr<ID3D11DeviceContext> deviceCtx_;
     ComPtr<ID3D11DepthStencilState> depthStencilState_;
-
-    //ComPtr<ID3D11InputLayout> inputLayout_;
-
-    std::chrono::steady_clock::time_point startTime_;
 
     bool loadBuffer_(ID3D11Buffer** bufferPtr, D3D11_BUFFER_DESC* desc, const void* data, Int dataSize);
     bool writeBufferReserved_(ID3D11Buffer* buffer, const void* data, Int dataSize);

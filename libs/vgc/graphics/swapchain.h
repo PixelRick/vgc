@@ -144,15 +144,20 @@ class VGC_GRAPHICS_API SwapChain : public Resource {
 protected:
     using Resource::Resource;
 
-    SwapChain(ResourceList* gcList, const SwapChainCreateInfo& desc)
-        : Resource(gcList), desc_(desc)
+    SwapChain(ResourceList* gcList, const SwapChainCreateInfo& createInfo)
+        : Resource(gcList), info_(createInfo)
     {
     }
 
 public:
     const SwapChainCreateInfo& desc() const
     {
-        return desc_;
+        return info_;
+    }
+
+    ImageFormat backBufferFormat() const
+    {
+        return swapChainTargetFormatToImageFormat(info_.format());
     }
 
     UInt32 pendingPresentCount() const
@@ -176,7 +181,7 @@ protected:
     FramebufferPtr defaultFrameBuffer_;
 
 private:
-    SwapChainCreateInfo desc_;
+    SwapChainCreateInfo info_;
     std::atomic_uint32_t pendingPresentCount_ = 0; // to limit queuing in the Engine.
 };
 using SwapChainPtr = ResourcePtr<SwapChain>;

@@ -105,12 +105,12 @@ public:
         wrapModeW_ = wrapModeW;
     }
 
-    SamplerComparisonFunction comparisonFunction() const
+    ComparisonFunction comparisonFunction() const
     {
         return comparisonFunction_;
     }
 
-    void setComparisonFunction(SamplerComparisonFunction comparisonFunction)
+    void setComparisonFunction(ComparisonFunction comparisonFunction)
     {
         comparisonFunction_ = comparisonFunction;
     }
@@ -165,7 +165,7 @@ private:
     ImageWrapMode wrapModeU_ = ImageWrapMode::ConstantColor;
     ImageWrapMode wrapModeV_ = ImageWrapMode::ConstantColor;
     ImageWrapMode wrapModeW_ = ImageWrapMode::ConstantColor;
-    SamplerComparisonFunction comparisonFunction_ = SamplerComparisonFunction::Disabled;
+    ComparisonFunction comparisonFunction_ = ComparisonFunction::Disabled;
     // enables comparison filtering if != None
     geometry::Vec4f wrapColor_ = {0.f, 0.f, 0.f, 0.f};
     float mipLODBias_ = 0.f;
@@ -219,7 +219,7 @@ public:
         return info_.wrapModeW();
     }
 
-    SamplerComparisonFunction comparisonFunction() const
+    ComparisonFunction comparisonFunction() const
     {
         return info_.comparisonFunction();
     }
