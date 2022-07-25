@@ -84,7 +84,7 @@ protected:
     void initBuiltinShaders_() override;
 
     void initFramebuffer_(Framebuffer* framebuffer) override;
-    void initBuffer_(Buffer* buffer, const Span<const char>* dataSpan, Int initialLengthInBytes) override;
+    void initBuffer_(Buffer* buffer, const char* data, Int lengthInBytes) override;
     void initImage_(Image* image, const Span<const Span<const char>>* dataSpanSpan) override;
     void initImageView_(ImageView* view) override;
     void initSamplerState_(SamplerState* state) override;
@@ -104,7 +104,7 @@ protected:
 
     void updateBufferData_(Buffer* buffer, const void* data, Int lengthInBytes) override;
 
-    void draw_(GeometryView* view, UInt primitiveCount, UInt instanceCount) override;
+    void draw_(GeometryView* view, UInt indexCount, UInt instanceCount) override;
     void clear_(const core::Color& color) override;
 
     UInt64 present_(SwapChain* swapChain, UInt32 syncInterval, PresentFlags flags) override;
@@ -114,9 +114,16 @@ private:
     ComPtr<ID3D11Device> device_;
     ComPtr<ID3D11DeviceContext> deviceCtx_;
     ComPtr<ID3D11DepthStencilState> depthStencilState_;
+    std::array<ComPtr<ID3D11InputLayout>, core::toUnderlying(BuiltinGeometryLayout::Max_) + 1> builtinLayouts_;
+    ID3D11InputLayout* layout_;
 
     bool loadBuffer_(ID3D11Buffer** bufferPtr, D3D11_BUFFER_DESC* desc, const void* data, Int dataSize);
     bool writeBufferReserved_(ID3D11Buffer* buffer, const void* data, Int dataSize);
+
+    template<typename T, typename... Args>
+    _NODISCARD std::unique_ptr<T> makeUnique(Args&&... args) {
+        return std::unique_ptr<T>(new T(std::forward<Args>(args)...));
+    }
 };
 
 } // namespace vgc::graphics

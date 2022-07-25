@@ -71,9 +71,9 @@ struct Span {
         return data_;
     }
 
-    size_t size() const
+    Int length() const
     {
-        return size_;
+        return length_;
     }
 
     T* begin() const
@@ -87,39 +87,7 @@ struct Span {
     }
 
     T* data_;
-    size_t size_;
-};
-
-/// \class vgc::graphics::BufferDataHolder
-/// \brief Used hold buffer staging data.
-///
-class VGC_GRAPHICS_API BufferDataHolder {
-public:
-    virtual ~BufferDataHolder() = default;
-
-    const Span<const char>& span() const
-    {
-        return span_;
-    }
-
-protected:
-    Span<const char> span_;
-};
-
-/// \class vgc::graphics::ImageDataHolder
-/// \brief Used hold image staging data.
-///
-class VGC_GRAPHICS_API ImageDataHolder {
-public:
-    virtual ~ImageDataHolder() = default;
-
-    const Span<const Span<const char>>& spanSpan() const
-    {
-        return spanSpan_;
-    }
-
-protected:
-    Span<const Span<const char>> spanSpan_;
+    Int length_;
 };
 
 // XXX add something to limit the number of pending frames for each swapchain..
@@ -166,7 +134,10 @@ public:
 
     FramebufferPtr createFramebuffer(const ImageViewPtr& colorImageView);
 
-    BufferPtr createBuffer(const BufferCreateInfo& createInfo, std::unique_ptr<BufferDataHolder> initialDataHolder, Int initialLengthInBytes);
+    BufferPtr createBuffer(const BufferCreateInfo& createInfo, Int initialLengthInBytes);
+
+    template<typename T>
+    BufferPtr createBuffer(const BufferCreateInfo& createInfo, core::Array<T> initialData);
 
     // XXX fix comment
     /// Creates a resource for storing primitives data, and returns a shared
@@ -183,9 +154,16 @@ public:
     // specifying the vertex format (i.e., XYRGB, XYZRGBA, etc.), but for now
     // the format is fixed (XYRGB).
     //
-    BufferPtr createVertexBuffer(std::unique_ptr<BufferDataHolder> initialDataHolder, Int initialLengthInBytes, bool dynamic);
+    BufferPtr createVertexBuffer(Int initialLengthInBytes);
 
-    ImagePtr createImage(const ImageCreateInfo& createInfo, std::unique_ptr<ImageDataHolder> initialDataHolder);
+    template<typename T>
+    BufferPtr createVertexBuffer(core::Array<T> initialData, bool dynamic);
+
+    GeometryViewPtr createDynamicTriangleListView(BuiltinGeometryLayout vertexLayout);
+    
+    ImagePtr createImage(const ImageCreateInfo& createInfo);
+
+    ImagePtr createImage(const ImageCreateInfo& createInfo, core::Array<char> initialData);
 
     ImageViewPtr createImageView(const ImageViewCreateInfo& createInfo, const ImagePtr& image);
 
@@ -265,12 +243,15 @@ public:
 
     FramebufferPtr getDefaultFramebuffer();
 
-    void resizeSwapChain(SwapChain* swapChain, UInt32 width, UInt32 height);
+    void resizeSwapChain(const SwapChainPtr& swapChain, UInt32 width, UInt32 height);
 
-    template<typename DataGetter>
-    void updateBufferData(Buffer* buffer, DataGetter&& initialDataGetter, Int lengthInBytes);
+    template<typename T>
+    void updateBufferData(const BufferPtr& buffer, core::Array<T> data);
 
-    void draw(const GeometryViewPtr& geometryView, UInt primitiveCount, UInt instanceCount);
+    template<typename T>
+    void updateVertexBufferData(const GeometryViewPtr& geometry, core::Array<T> data);
+
+    void draw(const GeometryViewPtr& geometryView, Int indexCount, UInt instanceCount);
 
     /// Clears the whole render area with the given color.
     ///
@@ -294,6 +275,11 @@ public:
     void present(UInt32 syncInterval,
                  std::function<void(UInt64 /*timestamp*/)>&& presentedCallback,
                  PresentFlags flags = PresentFlags::None);
+
+    std::chrono::steady_clock::time_point engineStartTime() const
+    {
+        return engineStartTime_;
+    }
 
 protected:
     // -- USER THREAD implementation functions --
@@ -320,7 +306,7 @@ protected:
     virtual void initBuiltinShaders_() = 0;
 
     virtual void initFramebuffer_(Framebuffer* framebuffer) = 0;
-    virtual void initBuffer_(Buffer* buffer, const Span<const char>* dataSpan, Int initialLengthInBytes) = 0;
+    virtual void initBuffer_(Buffer* buffer, const char* data, Int lengthInBytes) = 0;
     virtual void initImage_(Image* image, const Span<const Span<const char>>* dataSpanSpan) = 0;
     virtual void initImageView_(ImageView* view) = 0;
     virtual void initSamplerState_(SamplerState* state) = 0;
@@ -402,6 +388,13 @@ protected:
             new detail::LambdaCommandWithParameters<Data, std::decay_t<Lambda>>(name, std::forward<Lambda>(lambda), std::forward<Args>(args)...));
     };
 
+    static constexpr size_t shaderStageToIndex_(ShaderStage stage)
+    {
+        return core::toUnderlying(stage);
+    }
+
+    static constexpr Int stageEndIndex_ = core::toUnderlying(ShaderStage::Max_) + 1;
+
 private:
     // -- pipeline state on the user thread --
 
@@ -415,24 +408,17 @@ private:
     core::Array<geometry::Vec4f> blendConstantFactorStack_;
     core::Array<RasterizerStatePtr> rasterizerStateStack_;
 
-    static constexpr size_t shaderStageToIndex_(ShaderStage stage)
-    {
-        return core::toUnderlying(stage);
-    }
-
-    static constexpr Int stageEndIndex = core::toUnderlying(ShaderStage::Max_) + 1;
-
     using StageConstantBuffers = std::array<BufferPtr, maxConstantBufferCountPerStage>;
     using StageConstantBuffersStack = core::Array<StageConstantBuffers>;
-    std::array<StageConstantBuffersStack, stageEndIndex> constantBuffersStacks_;
+    std::array<StageConstantBuffersStack, stageEndIndex_> constantBuffersStacks_;
 
     using StageImageViews = std::array<ImageViewPtr, maxImageViewCountPerStage>;
     using StageImageViewsStack = core::Array<StageImageViews>;
-    std::array<StageImageViewsStack, stageEndIndex> imageViewsStacks_;
+    std::array<StageImageViewsStack, stageEndIndex_> imageViewsStacks_;
 
     using StageSamplers = std::array<SamplerStatePtr, maxSamplerCountPerStage>;
     using StageSamplersStack = core::Array<StageSamplers>;
-    std::array<StageSamplersStack, stageEndIndex> samplersStacks_;
+    std::array<StageSamplersStack, stageEndIndex_> samplersStacks_;
 
     PipelineParameters dirtyPipelineParameters_ = PipelineParameters::None;
 
@@ -566,33 +552,68 @@ inline FramebufferPtr Engine::getDefaultFramebuffer()
     return swapChain ? swapChain->defaultFrameBuffer_ : FramebufferPtr();
 }
 
-template<typename DataGetter>
-inline void Engine::updateBufferData(Buffer* buffer, DataGetter&& initialDataGetter, Int lengthInBytes)
+template<typename T>
+inline BufferPtr Engine::createBuffer(const BufferCreateInfo& createInfo, core::Array<T> initialData)
 {
-    if (lengthInBytes < 0) {
-        throw core::NegativeIntegerError(core::format(
-            "Negative lengthInBytes ({}) provided to vgc::graphics::Engine::updateBufferData()", lengthInBytes));
-    }
+    BufferPtr buffer(createBuffer_(createInfo));
+    buffer->lengthInBytes_ = initialData.length();
 
-    if (!checkResourceIsValid_(buffer)) {
+    struct CommandParameters {
+        Buffer* buffer;
+        core::Array<T> initialData;
+    };
+    queueLambdaCommandWithParameters_<CommandParameters>(
+        "initBuffer",
+        [](Engine* engine, const CommandParameters& p) {
+            engine->initBuffer_(p.buffer, p.initialData.data(), p.initialData.length() * sizeof(T));
+        },
+        buffer.get(), std::move(initialData));
+    return buffer;
+}
+
+template<typename T>
+inline BufferPtr Engine::createVertexBuffer(core::Array<T> initialData, bool dynamic)
+{
+    BufferCreateInfo createInfo = {};
+    createInfo.setUsage(dynamic ? Usage::Dynamic : Usage::Immutable);
+    createInfo.setBindFlags(BindFlags::VertexBuffer);
+    createInfo.setCpuAccessFlags(dynamic ? CpuAccessFlags::Write : CpuAccessFlags::None);
+    createInfo.setResourceMiscFlags(ResourceMiscFlags::None);
+    return createBuffer(createInfo, std::move(initialData));
+}
+
+template<typename T>
+inline void Engine::updateBufferData(const BufferPtr& buffer, core::Array<T> data)
+{
+    Buffer* buf = buffer.get();
+    if (!checkResourceIsValid_(buf)) {
         return;
     }
 
-    if (!(buffer->cpuAccessFlags() & CpuAccessFlags::Write)) {
+    if (!(buf->cpuAccessFlags() & CpuAccessFlags::Write)) {
         VGC_ERROR(LogVgcGraphics, "cpu does not have write access on buffer");
     }
 
     struct CommandParameters {
         Buffer* buffer;
-        std::decay_t<DataGetter> initialDataGetter;
-        Int lengthInBytes;
+        core::Array<T> data;
     };
     queueLambdaCommandWithParameters_<CommandParameters>(
         "updateBufferData",
         [](Engine* engine, const CommandParameters& p) {
-            engine->updateBufferData_(p.buffer, p.initialDataGetter(), p.lengthInBytes);
+            engine->updateBufferData_(p.buffer, p.data.data(), p.data.length());
         },
-        buffer, std::move(initialDataGetter), lengthInBytes);
+        buf, std::move(data));
+}
+
+template<typename T>
+inline void Engine::updateVertexBufferData(const GeometryViewPtr& geometry, core::Array<T> data)
+{
+    GeometryView* geom = geometry.get();
+    if (!checkResourceIsValid_(geom)) {
+        return;
+    }
+    updateBufferData(geom->vertexBuffer(0), std::move(data));
 }
 
 inline UInt Engine::flush()

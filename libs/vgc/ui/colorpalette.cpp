@@ -119,7 +119,7 @@ void ColorPalette::setSelectedColor(const core::Color& color)
 
 void ColorPalette::onPaintCreate(graphics::Engine* engine)
 {
-    triangles_ = engine->createDynamicPrimitiveBuffer();
+    triangles_ = engine->createDynamicTriangleListView(graphics::BuiltinGeometryLayout::XYRGB);
 }
 
 namespace {
@@ -171,7 +171,7 @@ void ColorPalette::onPaintDraw(graphics::Engine* engine, PaintFlags /*flags*/)
         reload_ = false;
         oldWidth_ = width();
         oldHeight_ = height();
-        std::unique_ptr<core::FloatArray> a = std::make_unique<core::FloatArray>();
+        core::FloatArray a = {};
 
         // Draw saturation/lightness selector
         // Terminology:
@@ -190,7 +190,7 @@ void ColorPalette::onPaintDraw(graphics::Engine* engine, PaintFlags /*flags*/)
         float dy = std::round(dx);
         float h = startOffset + endOffset + dy * numSaturationSteps_;
         if (cellBorderWidth_ > 0 || selectorBorderWidth_ > 0) {
-            internal::insertRect(*a, borderColor_, x0, y0, x0+w, y0+h);
+            internal::insertRect(a, borderColor_, x0, y0, x0+w, y0+h);
         }
         double dhue = 360.0 / numHueSteps_;
         double hue = selectedHueIndex_ * dhue;
@@ -209,11 +209,11 @@ void ColorPalette::onPaintDraw(graphics::Engine* engine, PaintFlags /*flags*/)
                     auto c2 = core::Color::hsl(hue, s, l+dl);
                     auto c3 = core::Color::hsl(hue, s+ds, l);
                     auto c4 = core::Color::hsl(hue, s+ds, l+dl);
-                    insertSmoothRect(*a, c1, c2, c3, c4, x1, y1, x2, y2);
+                    insertSmoothRect(a, c1, c2, c3, c4, x1, y1, x2, y2);
                 }
                 else {
                     auto c = core::Color::hsl(hue, s, l);
-                    internal::insertRect(*a, c, x1, y1, x2, y2);
+                    internal::insertRect(a, c, x1, y1, x2, y2);
                 }
             }
         }
@@ -229,7 +229,7 @@ void ColorPalette::onPaintDraw(graphics::Engine* engine, PaintFlags /*flags*/)
             double l = i*dl;
             double s = j*ds;
             auto c = core::Color::hsl(hue, s, l);
-            insertCellHighlight(*a, c, x1, y1, x2, y2);
+            insertCellHighlight(a, c, x1, y1, x2, y2);
         }
         if (hoveredLightnessIndex_ != -1) {
             Int i = hoveredLightnessIndex_;
@@ -241,7 +241,7 @@ void ColorPalette::onPaintDraw(graphics::Engine* engine, PaintFlags /*flags*/)
             double l = i*dl;
             double s = j*ds;
             auto c = core::Color::hsl(hue, s, l);
-            insertCellHighlight(*a, c, x1, y1, x2, y2);
+            insertCellHighlight(a, c, x1, y1, x2, y2);
         }
 
         // Draw hue selector
@@ -251,7 +251,7 @@ void ColorPalette::onPaintDraw(graphics::Engine* engine, PaintFlags /*flags*/)
         dy = std::round(dx);
         h = startOffset + endOffset + dy * 2;
         if (cellBorderWidth_ > 0 || selectorBorderWidth_ > 0) {
-            internal::insertRect(*a, borderColor_, x0, y0, x0+w, y0+h);
+            internal::insertRect(a, borderColor_, x0, y0, x0+w, y0+h);
         }
         double l = oldLightnessIndex_*dl;
         double s = oldSaturationIndex_*ds;
@@ -276,11 +276,11 @@ void ColorPalette::onPaintDraw(graphics::Engine* engine, PaintFlags /*flags*/)
             if (isContinuous_) {
                 auto c1 = core::Color::hsl(hue1, s, l);
                 auto c2 = core::Color::hsl(hue2, s, l);
-                insertSmoothRect(*a, c1, c2, c1, c2, x1, y1, x2, y2);
+                insertSmoothRect(a, c1, c2, c1, c2, x1, y1, x2, y2);
             }
             else {
                 auto c = core::Color::hsl(hue1, s, l);
-                internal::insertRect(*a, c, x1, y1, x2, y2);
+                internal::insertRect(a, c, x1, y1, x2, y2);
             }
         }
         if (isSelectedColorExact_) {
@@ -300,7 +300,7 @@ void ColorPalette::onPaintDraw(graphics::Engine* engine, PaintFlags /*flags*/)
                 y2 = y1 + dy - cellOffset;
             }
             auto c = core::Color::hsl(shue, s, l);
-            insertCellHighlight(*a, c, x1, y1, x2, y2);
+            insertCellHighlight(a, c, x1, y1, x2, y2);
         }
         if (hoveredHueIndex_ != -1) {
             Int i = hoveredHueIndex_;
@@ -319,14 +319,15 @@ void ColorPalette::onPaintDraw(graphics::Engine* engine, PaintFlags /*flags*/)
                 y2 = y1 + dy - cellOffset;
             }
             auto c = core::Color::hsl(hhue, s, l);
-            insertCellHighlight(*a, c, x1, y1, x2, y2);
+            insertCellHighlight(a, c, x1, y1, x2, y2);
         }
 
         // Load triangles
-        engine->updateBufferData(triangles_.get(), [a = std::move(a)](){ return a.get()->data(); }, a->length() * 4);
+        engine->updateVertexBufferData(triangles_, std::move(a));
     }
     engine->clear(core::Color(0.337, 0.345, 0.353));
-    engine->drawPrimitives(triangles_.get(), graphics::PrimitiveType::TriangleList);
+    engine->setProgram(graphics::BuiltinProgram::Simple);
+    engine->draw(triangles_, -1, 0);
 }
 
 void ColorPalette::onPaintDestroy(graphics::Engine*)

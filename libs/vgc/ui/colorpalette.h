@@ -79,7 +79,7 @@ private:
     Int hoveredHue_(const geometry::Vec2f& p);
     bool selectColorFromHovered_();
     core::Color selectedColor_;
-    graphics::BufferPtr triangles_;
+    graphics::GeometryViewPtr triangles_;
     float oldWidth_;
     float oldHeight_;
     bool reload_;

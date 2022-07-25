@@ -48,7 +48,7 @@ public:
     }
 
     ComPtr(const ComPtr& other)
-        : p_(other.p)
+        : p_(other.p_)
     {
         if (p_) {
             p_->AddRef();
@@ -150,6 +150,9 @@ public:
     }
 
 private:
+    template<typename U>
+    friend class ComPtr;
+
     T* p_ = nullptr;
 };
 

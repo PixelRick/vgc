@@ -59,14 +59,14 @@ void Button::onResize()
 
 void Button::onPaintCreate(graphics::Engine* engine)
 {
-    triangles_ = engine->createDynamicPrimitiveBuffer();
+    triangles_ = engine->createDynamicTriangleListView(graphics::BuiltinGeometryLayout::XYRGB);
 }
 
 void Button::onPaintDraw(graphics::Engine* engine, PaintFlags /*flags*/)
 {
     if (reload_) {
         reload_ = false;
-        std::unique_ptr<core::FloatArray> a = std::make_unique<core::FloatArray>();
+        core::FloatArray a = {};
         core::Color backgroundColor = internal::getColor(this, isHovered_ ?
                         strings::background_color_on_hover :
                         strings::background_color);
@@ -77,11 +77,12 @@ void Button::onPaintDraw(graphics::Engine* engine, PaintFlags /*flags*/)
                     graphics::TextVerticalAlign::Middle);
         graphics::TextCursor textCursor;
         bool hinting = style(strings::pixel_hinting) == strings::normal;
-        internal::insertRect(*a, backgroundColor, 0, 0, width(), height(), borderRadius);
-        internal::insertText(*a, textColor, 0, 0, width(), height(), 0, 0, 0, 0, text_, textProperties, textCursor, hinting);
-        engine->updateBufferData(triangles_.get(), [a = std::move(a)](){ return a.get()->data(); }, a->length() * 4);
+        internal::insertRect(a, backgroundColor, 0, 0, width(), height(), borderRadius);
+        internal::insertText(a, textColor, 0, 0, width(), height(), 0, 0, 0, 0, text_, textProperties, textCursor, hinting);
+        engine->updateVertexBufferData(triangles_, std::move(a));
     }
-    engine->drawPrimitives(triangles_.get(), graphics::PrimitiveType::TriangleList);
+    engine->setProgram(graphics::BuiltinProgram::Simple);
+    engine->draw(triangles_, -1, 0);
 }
 
 void Button::onPaintDestroy(graphics::Engine*)

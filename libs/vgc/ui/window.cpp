@@ -295,35 +295,35 @@ void Window::paint(bool sync) {
     }
     updateDeferred_ = false;
 
-    engine_->bindSwapChain(swapChain_);
+    engine_->setSwapChain(swapChain_);
     engine_->setViewport(0, 0, width_, height_);
     engine_->clear(clearColor_);
 
-    engine_->bindPaintShader();
+    engine_->setProgram(graphics::BuiltinProgram::Simple);
     engine_->setProjectionMatrix(proj_);
     engine_->setViewMatrix(geometry::Mat4f::identity);
 
-    static float triangle[15] = {
+    /*static float triangle[15] = {
          20.f,  20.f, 1.f, 0.f, 0.f,
         160.f,  50.f, 0.f, 1.f, 0.f,
          50.f, 160.f, 0.f, 0.f, 1.f,
     };
     static auto bptr = engine_->createPrimitiveBuffer([]{ return triangle; }, 15*4, false);
-    engine_->drawPrimitives(bptr.get(), graphics::PrimitiveType::TriangleList);
+    engine_->drawPrimitives(bptr.get(), graphics::PrimitiveType::TriangleList);*/
 
-    static int i = 0;
-    static graphics::ShapedText shapedText(graphics::fontLibrary()->defaultFace(), "text");
+    /*static int i = 0;
+    static graphics::ShapedText shapedText(graphics::fontLibrary()->defaultFont()->getSizedFont(), "text");
     std::string s = core::format("{:d} {:04d} {:04d}x{:04d} {:04d}x{:04d}", swapChain_->pendingPresentCount(), ++i, width_, height_, width(), height());
     shapedText.setText(s);
     VGC_DEBUG(LogVgcUi, s);
     core::Array<float> a;
     shapedText.fill(a, geometry::Vec2f(60.f, 60.f), 0.f, 0.f, 0.f, 0.f, 1000.f, 0.f, 1000.f);
-    static auto textBuf = engine_->createDynamicPrimitiveBuffer();
+    static auto textBuf = engine_->createDynamicTriangleListView(graphics::BuiltinGeometryLayout::XYRGB);
     engine_->updateBufferData(textBuf.get(), [a = std::move(a)](){ return a.data(); }, a.length() * 4);
-    engine_->drawPrimitives(textBuf.get(), graphics::PrimitiveType::TriangleList);
+    engine_->drawPrimitives(textBuf.get(), graphics::PrimitiveType::TriangleList);*/
 
-    //widget_->paint(engine_.get());
-    engine_->releasePaintShader();
+    widget_->paint(engine_.get());
+
 
 #ifdef VGC_QOPENGL_EXPERIMENT
     static int frameIdx = 0;
@@ -410,7 +410,7 @@ bool Window::nativeEvent(const QByteArray& eventType, void* message, NativeEvent
 
             //widget_->setGeometry(0, 0, static_cast<float>(w), static_cast<float>(h));
             if (engine_ && swapChain_) {
-                engine_->resizeSwapChain(swapChain_.get(), w, h);
+                engine_->resizeSwapChain(swapChain_, w, h);
                 //Sleep(50);
                 paint(true);
                 //qDebug() << "painted";

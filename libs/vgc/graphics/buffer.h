@@ -144,9 +144,12 @@ public:
     }
 
 protected:
-    Int lengthInBytes_ = 0;
+    friend Engine;
+
+    Int gpuLengthInBytes_ = 0;
 
 private:
+    Int lengthInBytes_ = 0;
     BufferCreateInfo info_;
 };
 using BufferPtr = ResourcePtr<Buffer>;

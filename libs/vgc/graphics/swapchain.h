@@ -125,16 +125,16 @@ public:
     }
 
 private:
-    UInt32 width_;
-    UInt32 height_;
-    SwapChainTargetFormat format_;
+    UInt32 width_ = 100;
+    UInt32 height_ = 100;
+    SwapChainTargetFormat format_ = SwapChainTargetFormat::RGBA_8_UNORM;
     // XXX add support for sample quality ?
-    void* windowNativeHandle_;
-    WindowNativeHandleType windowNativeHandleType_;
-    bool windowed_;
-    UInt8 sampleCount_;
-    UInt8 bufferCount_;
-    UInt flags_;
+    void* windowNativeHandle_ = nullptr;
+    WindowNativeHandleType windowNativeHandleType_ = WindowNativeHandleType::None;
+    bool windowed_ = true;
+    UInt8 sampleCount_ = 1;
+    UInt8 bufferCount_ = 2;
+    UInt flags_ = 0;
 };
 
 /// \class vgc::graphics::SwapChain

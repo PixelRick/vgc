@@ -326,10 +326,10 @@ enum class ComparisonFunction : UInt8 {
 enum class ShaderStage : Int8 {
     None = -1,
     Vertex = 0,
+    Geometry = 1,
+    Pixel = 2,
     //Hull,
     //Domain,
-    Geometry,
-    Pixel,
     //Compute,
     Max_ = Pixel
 };
@@ -345,8 +345,8 @@ enum class BuiltinProgram : UInt8 {
 enum class BuiltinGeometryLayout : Int8 {
     None = -1,
     XY = 0,
-    XYRGB,
-    XYZ,
+    XYRGB = 1,
+    XYZ = 2,
     Max_ = XYZ
 };
 

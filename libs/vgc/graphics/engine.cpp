@@ -80,72 +80,89 @@ FramebufferPtr Engine::createFramebuffer(const ImageViewPtr& colorImageView)
     return framebuffer;
 }
 
-inline BufferPtr Engine::createBuffer(const BufferCreateInfo& createInfo, std::unique_ptr<BufferDataHolder> initialDataHolder, Int initialLengthInBytes)
+BufferPtr Engine::createBuffer(const BufferCreateInfo& createInfo, Int initialLengthInBytes)
 {
     if (initialLengthInBytes < 0) {
         throw core::NegativeIntegerError(core::format(
             "Negative initialLengthInBytes ({}) provided to Engine::createBuffer()", initialLengthInBytes));
-    }
-
-    if (initialDataHolder && initialDataHolder->span().size() != initialLengthInBytes) {
-        throw core::LogicError("initialLengthInBytes does not match initialDataHolder->span().size()");
     }
 
     BufferPtr buffer(createBuffer_(createInfo));
+    buffer->lengthInBytes_ = initialLengthInBytes;
 
     struct CommandParameters {
         Buffer* buffer;
-        std::unique_ptr<BufferDataHolder> initialDataHolder;
         Int initialLengthInBytes;
     };
     queueLambdaCommandWithParameters_<CommandParameters>(
-        "initBuffer",
+        "initBufferZeroed",
         [](Engine* engine, const CommandParameters& p) {
-            engine->initBuffer_(p.buffer, p.initialDataHolder ? &(p.initialDataHolder->span()) : nullptr, p.initialLengthInBytes);
+            engine->initBuffer_(p.buffer, nullptr, p.initialLengthInBytes);
         },
-        buffer.get(), std::move(initialDataHolder), initialLengthInBytes);
+        buffer.get(), initialLengthInBytes);
     return buffer;
 }
 
-inline BufferPtr Engine::createVertexBuffer(std::unique_ptr<BufferDataHolder> initialDataHolder, Int initialLengthInBytes, bool dynamic)
+BufferPtr Engine::createVertexBuffer(Int initialLengthInBytes)
 {
     if (initialLengthInBytes < 0) {
         throw core::NegativeIntegerError(core::format(
             "Negative initialLengthInBytes ({}) provided to Engine::createBuffer()", initialLengthInBytes));
     }
 
-    if (initialDataHolder && initialDataHolder->span().size() != initialLengthInBytes) {
-        throw core::LogicError("The value of initialLengthInBytes does not match initialDataHolder->span().size()");
-    }
-
-    if (!initialDataHolder && !dynamic) {
-        throw core::LogicError("Creating an immutable buffer requires initial data");
-    }
-
     BufferCreateInfo createInfo = {};
-    createInfo.setUsage(dynamic ? Usage::Dynamic : Usage::Immutable);
+    createInfo.setUsage(Usage::Dynamic);
     createInfo.setBindFlags(BindFlags::VertexBuffer);
-    createInfo.setCpuAccessFlags(dynamic ? CpuAccessFlags::Write : CpuAccessFlags::None);
+    createInfo.setCpuAccessFlags(CpuAccessFlags::Write);
     createInfo.setResourceMiscFlags(ResourceMiscFlags::None);
-    return createBuffer(createInfo, std::move(initialDataHolder), initialLengthInBytes);
+    return createBuffer(createInfo, initialLengthInBytes);
 }
 
-inline ImagePtr Engine::createImage(const ImageCreateInfo& createInfo, std::unique_ptr<ImageDataHolder> initialDataHolder)
+GeometryViewPtr Engine::createDynamicTriangleListView(BuiltinGeometryLayout vertexLayout)
 {
-    // XXX check span sizes !!!
+    BufferPtr vertexBuffer = createVertexBuffer(0);
+    GeometryViewCreateInfo createInfo = {};
+    createInfo.setBuiltinGeometryLayout(vertexLayout);
+    createInfo.setPrimitiveType(PrimitiveType::TriangleList);
+    createInfo.setVertexBuffer(0, vertexBuffer);
+    return createGeometryView(createInfo);
+}
 
+//ImagePtr Engine::createImage(const ImageCreateInfo& createInfo)
+//ImagePtr Engine::createImage(const ImageCreateInfo& createInfo, core::Array<char> initialData)
+
+ImagePtr Engine::createImage(const ImageCreateInfo& createInfo)
+{
     ImagePtr image(createImage_(createInfo));
 
     struct CommandParameters {
         Image* image;
-        std::unique_ptr<ImageDataHolder> initialDataHolder;
     };
     queueLambdaCommandWithParameters_<CommandParameters>(
         "initImage",
         [](Engine* engine, const CommandParameters& p) {
-            engine->initImage_(p.image, p.initialDataHolder ? &(p.initialDataHolder->spanSpan()) : nullptr);
+            engine->initImage_(p.image, nullptr);
         },
-        image.get(), std::move(initialDataHolder));
+        image.get());
+    return image;
+}
+
+ImagePtr Engine::createImage(const ImageCreateInfo& createInfo, core::Array<char> initialData)
+{
+    ImagePtr image(createImage_(createInfo));
+
+    struct CommandParameters {
+        Image* image;
+        core::Array<char> initialData;
+    };
+    queueLambdaCommandWithParameters_<CommandParameters>(
+        "initImage",
+        [](Engine* engine, const CommandParameters& p) {
+            Span<const char> l0m0 = { p.initialData.data(), p.initialData.length() };
+            Span<const Span<const char>> imgs = { &l0m0, 1 };
+            engine->initImage_(p.image, &imgs);
+        },
+        image.get(), std::move(initialData));
     return image;
 }
 
@@ -154,7 +171,7 @@ ImageViewPtr Engine::createImageView(const ImageViewCreateInfo& createInfo, cons
     // XXX should check bind flags compatibility here
 
     ImageViewPtr imageView = createImageView_(createInfo, image);
-    queueLambdaCommandWithParameters_<SamplerState*>(
+    queueLambdaCommandWithParameters_<ImageView*>(
         "initImageView",
         [](Engine* engine, ImageView* p) {
             engine->initImageView_(p);
@@ -168,7 +185,7 @@ ImageViewPtr Engine::createImageView(const ImageViewCreateInfo& createInfo, cons
     // XXX should check bind flags compatibility here
 
     ImageViewPtr imageView = createImageView_(createInfo, buffer, format, elementsCount);
-    queueLambdaCommandWithParameters_<SamplerState*>(
+    queueLambdaCommandWithParameters_<ImageView*>(
         "initBufferImageView",
         [](Engine* engine, ImageView* p) {
             engine->initImageView_(p);
@@ -290,7 +307,10 @@ void Engine::setStageConstantBuffers(const BufferPtr* buffers, Int startIndex, I
 {
     size_t stageIndex = shaderStageToIndex_(shaderStage);
     StageConstantBuffersStack& constantBuffersStack = constantBuffersStacks_[stageIndex];
-    constantBuffersStack.emplaceLast(buffers + startIndex, buffers + startIndex + count);
+    StageConstantBuffers& constantBuffers = constantBuffersStack.emplaceLast();
+    for (Int i = 0; i < count; ++i) {
+        constantBuffers[startIndex + i] = buffers[i];
+    }
     dirtyPipelineParameters_ = std::array{
         PipelineParameters::VertexShaderConstantBuffers,
         PipelineParameters::GeometryShaderConstantBuffers,
@@ -302,7 +322,10 @@ void Engine::setStageImageViews(const ImageViewPtr* views, Int startIndex, Int c
 {
     size_t stageIndex = shaderStageToIndex_(shaderStage);
     StageImageViewsStack& imageViewsStack = imageViewsStacks_[stageIndex];
-    imageViewsStack.emplaceLast(views + startIndex, views + startIndex + count);
+    StageImageViews& imageViews = imageViewsStack.emplaceLast();
+    for (Int i = 0; i < count; ++i) {
+        imageViews[startIndex + i] = views[i];
+    }
     dirtyPipelineParameters_ = std::array{
         PipelineParameters::VertexShaderImageViews,
         PipelineParameters::GeometryShaderImageViews,
@@ -314,7 +337,10 @@ void Engine::setStageSamplers(const SamplerStatePtr* states, Int startIndex, Int
 {
     size_t stageIndex = shaderStageToIndex_(shaderStage);
     StageSamplersStack& samplersStack = samplersStacks_[stageIndex];
-    samplersStack.emplaceLast(states + startIndex, states + startIndex + count);
+    StageSamplers& samplers = samplersStack.emplaceLast();
+    for (Int i = 0; i < count; ++i) {
+        samplers[startIndex + i] = states[i];
+    }
     dirtyPipelineParameters_ = std::array{
         PipelineParameters::VertexShaderSamplers,
         PipelineParameters::GeometryShaderSamplers,
@@ -484,8 +510,8 @@ void Engine::syncState_()
         BuiltinConstants constants = {};
         constants.projMatrix = projectionMatrixStack_.last();
         constants.viewMatrix = viewMatrixStack_.last();
-        constants.frameStartTimeInMs = std::chrono::duration_cast<std::chrono::milliseconds>(
-            frameStartTime_ - engineStartTime_).count();
+        constants.frameStartTimeInMs = core::int_cast<UInt32>(std::chrono::duration_cast<std::chrono::milliseconds>(
+            frameStartTime_ - engineStartTime_).count());
         struct CommandParameters {
             Buffer* buffer;
             BuiltinConstants constants;
@@ -649,26 +675,30 @@ void Engine::syncStageSamplers_(ShaderStage shaderStage)
         parameters);
 }
 
-void Engine::resizeSwapChain(SwapChain* swapChain, UInt32 width, UInt32 height)
+void Engine::resizeSwapChain(const SwapChainPtr& swapChain, UInt32 width, UInt32 height)
 {
     if (swapChain->gcList_ != gcResourceList_) {
         // XXX error, using a resource from another engine..
         return;
     }
     finish();
-    resizeSwapChain_(swapChain, width, height);
+    resizeSwapChain_(swapChain.get(), width, height);
 }
 
-void Engine::draw(const GeometryViewPtr& geometryView, UInt primitiveCount, UInt instanceCount)
+void Engine::draw(const GeometryViewPtr& geometryView, Int indexCount, UInt instanceCount)
 {
     if (!checkResourceIsValid_(geometryView.get())) {
+        return;
+    }
+    if (indexCount == 0) {
         return;
     }
     syncState_();
     queueLambdaCommandWithParameters_<GeometryView*>(
         "draw",
         [=](Engine* engine, GeometryView* gv) {
-            engine->draw_(gv, primitiveCount, instanceCount);
+            Int n = (indexCount >= 0) ? indexCount : gv->vertexCount();
+            engine->draw_(gv, static_cast<UInt>(n), instanceCount);
         },
         geometryView.get());
 }
@@ -686,7 +716,7 @@ void Engine::clear(const core::Color& color)
 
 void Engine::present(UInt32 syncInterval,
                      std::function<void(UInt64 /*timestamp*/)>&& presentedCallback,
-                     PresentFlags flags = PresentFlags::None)
+                     PresentFlags flags)
 {
     ++swapChain_->pendingPresentCount_;
     bool shouldSync = syncInterval > 0;
@@ -728,6 +758,12 @@ void Engine::createBuiltinResources_()
 {
     createBuiltinShaders_();
 
+    BufferCreateInfo createInfo = {};
+
+    createInfo.setUsage(Usage::Dynamic);
+    createInfo.setBindFlags(BindFlags::ConstantBuffer);
+    createInfo.setCpuAccessFlags(CpuAccessFlags::Write);
+    builtinConstantsBuffer_ = createBuffer_(createInfo);
 }
 
 void Engine::initBuiltinResources_()
@@ -737,6 +773,15 @@ void Engine::initBuiltinResources_()
         [](Engine* engine) {
             engine->initBuiltinShaders_();
         });
+
+    Buffer* builtinConstantsBuffer = builtinConstantsBuffer_.get();
+    queueLambdaCommand_(
+        "initBuiltinConstantsBuffer",
+        [=](Engine* engine) {
+            engine->initBuffer_(builtinConstantsBuffer, nullptr, sizeof(BuiltinConstants));
+        });
+
+
     areBuiltinResourcesInited_ = true;
 }
 

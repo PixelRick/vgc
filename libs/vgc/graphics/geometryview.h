@@ -32,6 +32,8 @@ class GeometryView;
 inline constexpr size_t maxAttachedVertexBufferCount = 4;
 
 using VertexBufferArray = std::array<BufferPtr, maxAttachedVertexBufferCount>;
+using VertexBufferStridesArray = std::array<UInt32, maxAttachedVertexBufferCount>;
+using VertexBufferOffsetsArray = std::array<UInt32, maxAttachedVertexBufferCount>;
 
 /// \class vgc::graphics::GeometryViewCreateInfo
 /// \brief Parameters for geometry view creation.
@@ -75,6 +77,11 @@ public:
         return vertexBuffers_;
     }
 
+    const BufferPtr& vertexBuffer(Int i) const
+    {
+        return vertexBuffers_[i];
+    }
+
     void setVertexBuffer(Int i, const BufferPtr& vertexBuffer)
     {
         size_t idx = core::int_cast<size_t>(i);
@@ -85,6 +92,36 @@ public:
         vertexBuffers_[idx] = vertexBuffer;
     }
 
+    const VertexBufferStridesArray& strides() const
+    {
+        return strides_;
+    }
+
+    void setStride(Int i, UInt32 stride)
+    {
+        size_t idx = core::int_cast<size_t>(i);
+        if (idx >= strides_.size()) {
+            throw core::IndexError(core::format(
+                "Stride index {} is out of range [0, {}]", i, strides_.size() - 1));
+        }
+        strides_[idx] = stride;
+    }
+
+    const VertexBufferOffsetsArray& offsets() const
+    {
+        return offsets_;
+    }
+
+    void setOffset(Int i, UInt32 offset)
+    {
+        size_t idx = core::int_cast<size_t>(i);
+        if (idx >= offsets_.size()) {
+            throw core::IndexError(core::format(
+                "Offset index {} is out of range [0, {}]", i, offsets_.size() - 1));
+        }
+        offsets_[idx] = offset;
+    }
+
 private:
     friend GeometryView; // to reset resource pointers
 
@@ -92,6 +129,8 @@ private:
     BuiltinGeometryLayout builtinGeometryLayout_ = BuiltinGeometryLayout::None;
     BufferPtr indexBuffer_ = {};
     VertexBufferArray vertexBuffers_ = {};
+    VertexBufferStridesArray strides_ = {};
+    VertexBufferOffsetsArray offsets_ = {};
 };
 
 /// \class vgc::graphics::GeometryView
@@ -119,6 +158,18 @@ protected:
         if (ib && !(ib->bindFlags() & BindFlags::IndexBuffer)) {
             throw core::LogicError("Buffer needs BindFlags::IndexBuffer flag to be used as an index buffer");
         }
+
+        BuiltinGeometryLayout builtinLayout = info.builtinGeometryLayout();
+        if (builtinLayout != BuiltinGeometryLayout::None) {
+            Int layoutIndex = core::toUnderlying(builtinLayout);
+            if (info_.strides_[0] == 0) {
+                info_.strides_[0] = std::array{
+                    2, // XY
+                    5, // XYRGB
+                    3, // XYZ
+                }[layoutIndex];
+            }
+        }
     }
 
 public:
@@ -140,6 +191,43 @@ public:
     const VertexBufferArray& vertexBuffers() const
     {
         return info_.vertexBuffers();
+    }
+
+    const BufferPtr& vertexBuffer(Int i) const
+    {
+        return info_.vertexBuffer(i);
+    }
+
+    const VertexBufferStridesArray& strides() const
+    {
+        return info_.strides();
+    }
+
+    const VertexBufferOffsetsArray& offsets() const
+    {
+        return info_.offsets();
+    }
+
+    const Int vertexSizeInBuffer(Int i) const
+    {
+        BuiltinGeometryLayout builtinLayout = info_.builtinGeometryLayout();
+        if (builtinLayout != BuiltinGeometryLayout::None) {
+            Int layoutIndex = core::toUnderlying(info_.builtinGeometryLayout());
+            if (i == 0) {
+                return std::array{
+                    2, // XY
+                    5, // XYRGB
+                    3, // XYZ
+                }[layoutIndex];
+            }
+            return 0;
+        }
+        return -1;
+    }
+
+    const Int vertexCount() const {
+        Int elementSize = vertexSizeInBuffer(0);
+        return info_.vertexBuffers()[0]->lengthInBytes() / elementSize;
     }
 
 private:

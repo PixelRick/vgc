@@ -89,7 +89,7 @@ protected:
     // Called in the rendering thread.
     // Override this to release the actual resource.
     //
-    virtual void release_(Engine*) = 0;
+    virtual void release_(Engine*) {};
 
     // Called in the user thread (by decRef_).
     // Override this to reset all inner ResourcePtr.
@@ -105,7 +105,7 @@ private:
             refCount_ = 1;
         }
         else {
-            throw core::LogicError("ResourcePtr: reference count already initialized.");
+            throw core::LogicError("Resource: reference count already initialized.");
         }
     }
 
@@ -114,7 +114,7 @@ private:
         int64_t newCount = ++refCount_;
 #ifdef VGC_DEBUG
         if (newCount <= 1) {
-            throw core::LogicError("ResourcePtr: trying to take shared ownership of an already garbaged resource.");
+            throw core::LogicError("Resource: trying to take shared ownership of an already garbaged resource.");
         }
 #endif
     }
@@ -172,7 +172,7 @@ protected:
     struct CastTag {};
 
     // For casts
-    ResourcePtr(T* obj, CastTag)
+    ResourcePtr(T* p, CastTag)
         : p_(p)
     {
         if (p_) {
@@ -325,7 +325,7 @@ private:
 template<typename T, typename U>
 ResourcePtr<T> static_pointer_cast(const ResourcePtr<U>& r) noexcept
 {
-    return ResourcePtr<T>(static_cast<T*>(r.get()));
+    return ResourcePtr<T>(static_cast<T*>(r.get()), typename ResourcePtr<T>::CastTag{});
 }
 
 } // namespace vgc::graphics

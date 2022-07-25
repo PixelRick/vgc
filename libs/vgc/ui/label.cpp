@@ -63,24 +63,25 @@ void Label::setText(const std::string& text)
 
 void Label::onPaintCreate(graphics::Engine* engine)
 {
-    triangles_ = engine->createDynamicPrimitiveBuffer();
+    triangles_ = engine->createDynamicTriangleListView(graphics::BuiltinGeometryLayout::XYRGB);
 }
 
 void Label::onPaintDraw(graphics::Engine* engine, PaintFlags /*flags*/)
 {
     if (reload_) {
         reload_ = false;
-        std::unique_ptr<core::FloatArray> a = std::make_unique<core::FloatArray>();
+        core::FloatArray a = {};
         core::Color textColor = internal::getColor(this, strings::text_color);
         graphics::TextProperties textProperties(
                     graphics::TextHorizontalAlign::Center,
                     graphics::TextVerticalAlign::Middle);
         graphics::TextCursor textCursor;
         bool hinting = style(strings::pixel_hinting) == strings::normal;
-        internal::insertText(*a, textColor, 0, 0, width(), height(), 0, 0, 0, 0, text_, textProperties, textCursor, hinting);
-        engine->updateBufferData(triangles_.get(), [a = std::move(a)](){ return a.get()->data(); }, a->length() * 4);
+        internal::insertText(a, textColor, 0, 0, width(), height(), 0, 0, 0, 0, text_, textProperties, textCursor, hinting);
+        engine->updateVertexBufferData(triangles_, std::move(a));
     }
-    engine->drawPrimitives(triangles_.get(), graphics::PrimitiveType::TriangleList);
+    engine->setProgram(graphics::BuiltinProgram::Simple);
+    engine->draw(triangles_, -1, 0);
 }
 
 void Label::onPaintDestroy(graphics::Engine*)

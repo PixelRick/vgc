@@ -93,7 +93,7 @@ void LineEdit::onResize()
 
 void LineEdit::onPaintCreate(graphics::Engine* engine)
 {
-    triangles_ = engine->createDynamicPrimitiveBuffer();
+    triangles_ = engine->createDynamicTriangleListView(graphics::BuiltinGeometryLayout::XYRGB);
 }
 
 void LineEdit::onPaintDraw(graphics::Engine* engine, PaintFlags /*flags*/)
@@ -120,7 +120,8 @@ void LineEdit::onPaintDraw(graphics::Engine* engine, PaintFlags /*flags*/)
         // Load triangles data
         engine->updateBufferData(triangles_.get(), [a = std::move(a)](){ return a.get()->data(); }, a->length() * 4);
     }
-    engine->drawPrimitives(triangles_.get(), graphics::PrimitiveType::TriangleList);
+    engine->setProgram(graphics::BuiltinProgram::Simple);
+    engine->draw(triangles_, -1, 0);
 }
 
 void LineEdit::onPaintDestroy(graphics::Engine*)

@@ -43,202 +43,202 @@ struct XYRGBVertex {
 
 } // namespace
 
-namespace {
-
-class OpenglBuffer : public graphics::Buffer {
-public:
-    OpenglBuffer(
-        ResourceList* gcList,
-        graphics::Usage usage,
-        graphics::BindFlags bindFlags,
-        graphics::ResourceMiscFlags resourceMiscFlags,
-        graphics::CpuAccessFlags cpuAccessFlags);
-
-    void init(const void* data, Int length)
-    {
-        if (!vao_) {
-            QOpenGLBuffer::Type t = {};
-            switch (bindFlags()) {
-            case graphics::BindFlags::IndexBuffer:
-                t = QOpenGLBuffer::Type::IndexBuffer; break;
-            case graphics::BindFlags::VertexBuffer:
-                t = QOpenGLBuffer::Type::VertexBuffer; break;
-            default:
-                throw core::LogicError("QOpenglBuffer: unsupported bind flags");
-            }
-
-            bool cpuWrites = !!(cpuAccessFlags() & graphics::CpuAccessFlags::Write);
-            QOpenGLBuffer::UsagePattern u = QOpenGLBuffer::StaticDraw;
-            switch (usage()) {
-            case graphics::Usage::Immutable: // no equivalent
-                u = QOpenGLBuffer::UsagePattern::StaticDraw; break;
-            case graphics::Usage::Dynamic:
-                u = QOpenGLBuffer::UsagePattern::DynamicDraw; break;
-            case graphics::Usage::Staging:
-                u = cpuWrites
-                    ? QOpenGLBuffer::UsagePattern::DynamicCopy
-                    : QOpenGLBuffer::UsagePattern::StaticCopy; break;
-            default:
-                break;
-            }
-
-            vbo_ = new QOpenGLBuffer(t);
-            vbo_->setUsagePattern(u);
-            vbo_->create();
-
-            vao_ = new QOpenGLVertexArrayObject();
-            vao_->create();
-
-            numVertices_ = length / sizeof(XYRGBVertex);
-            Int dataSize = numVertices_ * sizeof(XYRGBVertex);
-            static_assert(sizeof(XYRGBVertex) == 5 * sizeof(float));
-
-            if (dataSize) {
-                vbo_->bind();
-                if (data) {
-                    vbo_->allocate(data, length);
-                }
-                else {
-                    vbo_->allocate(length);
-                }
-                allocSize_ = length;
-                vbo_->release();
-            }
-        }
-    }
-
-    void bind()
-    {
-        if (vao_) {
-            vao_->bind();
-            vbo_->bind();
-        }
-    }
-
-    void unbind()
-    {
-        if (vao_) {
-            vbo_->release();
-            vao_->release();
-        }
-    }
-
-    void load(const void* data, Int length)
-    {
-        if (!vao_) return;
-        if (length < 0) {
-            throw core::NegativeIntegerError(core::format(
-                "Negative length ({}) provided to QOpenglBuffer::load()", length));
-        }
-
-        numVertices_ = length / sizeof(XYRGBVertex);
-        Int dataSize = numVertices_ * sizeof(XYRGBVertex);
-        static_assert(sizeof(XYRGBVertex) == 5 * sizeof(float));
-
-        vbo_->bind();
-        if (dataSize > allocSize_) {
-            vbo_->allocate(data, dataSize);
-            allocSize_ = dataSize;
-        }
-        else if (dataSize * 2 < allocSize_) {
-            vbo_->allocate(data, dataSize);
-            allocSize_ = dataSize;
-        }
-        else {
-            vbo_->write(0, data, dataSize);
-        }
-        vbo_->release();
-    }
-
-    void draw(QOpenglEngine* engine, GLenum mode)
-    {
-        if (!allocated_) return;
-        vao_->bind();
-        auto api = engine->api();
-        api->glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-        api->glDrawArrays(mode, 0, numVertices_);
-        vao_->release();
-    }
-
-protected:
-    void release_(graphics::Engine* engine) override
-    {
-        if (!allocated_) return;
-        auto oglApi = static_cast<QOpenglEngine*>(engine)->api();
-        oglApi->glDeleteVertexArrays(1, &cacheVao_);
-        oglApi->glDeleteBuffers(1, &vbo_);
-
-        inited_ = false;
-        vao_->destroy();
-        delete vao_;
-        vao_ = nullptr;
-        vbo_->destroy();
-        delete vbo_;
-        vbo_ = nullptr;
-    }
-
-private:
-    friend QOpenglEngine;
-
-    bool allocated_ = false;
-    GLuint vbo_;
-    GLuint cachedVao_;
-    void* cachedVaoLayoutId_ = nullptr;
-};
-
-class QOpenglFramebuffer : public graphics::Framebuffer {
-public:
-    QOpenglFramebuffer(ResourceList* gcList, bool isDefault = false)
-        : Framebuffer(gcList)
-        , isDefault_(isDefault)
-    {
-    }
-
-    bool isDefault() const
-    {
-        return isDefault_;
-    }
-
-protected:
-    void release_(graphics::Engine* engine) override
-    {
-        if (!isDefault_) {
-            static_cast<QOpenglEngine*>(engine)->api()->glDeleteFramebuffers(1, &object_);
-        }
-    }
-
-private:
-    friend QOpenglEngine;
-
-    GLuint object_ = 0;
-    bool isDefault_ = false;
-};
-
-class QOpenglSwapChain : public graphics::SwapChain {
-public:
-    QOpenglSwapChain(ResourceList* gcList, const graphics::SwapChainCreateInfo& desc, QSurface* surface)
-        : SwapChain(gcList, desc)
-        , surface_(surface)
-    {
-        defaultFrameBuffer_.reset(new QOpenglFramebuffer(gcList, true));
-    }
-
-    QSurface* surface() const
-    {
-        return surface_;
-    }
-
-protected:
-    void release_(graphics::Engine* /*engine*/) override
-    {
-        // no-op..
-    }
-
-private:
-    QSurface* surface_;
-};
-
-} // namespace
+//namespace {
+//
+//class OpenglBuffer : public graphics::Buffer {
+//public:
+//    OpenglBuffer(
+//        ResourceList* gcList,
+//        graphics::Usage usage,
+//        graphics::BindFlags bindFlags,
+//        graphics::ResourceMiscFlags resourceMiscFlags,
+//        graphics::CpuAccessFlags cpuAccessFlags);
+//
+//    void init(const void* data, Int length)
+//    {
+//        if (!vao_) {
+//            QOpenGLBuffer::Type t = {};
+//            switch (bindFlags()) {
+//            case graphics::BindFlags::IndexBuffer:
+//                t = QOpenGLBuffer::Type::IndexBuffer; break;
+//            case graphics::BindFlags::VertexBuffer:
+//                t = QOpenGLBuffer::Type::VertexBuffer; break;
+//            default:
+//                throw core::LogicError("QOpenglBuffer: unsupported bind flags");
+//            }
+//
+//            bool cpuWrites = !!(cpuAccessFlags() & graphics::CpuAccessFlags::Write);
+//            QOpenGLBuffer::UsagePattern u = QOpenGLBuffer::StaticDraw;
+//            switch (usage()) {
+//            case graphics::Usage::Immutable: // no equivalent
+//                u = QOpenGLBuffer::UsagePattern::StaticDraw; break;
+//            case graphics::Usage::Dynamic:
+//                u = QOpenGLBuffer::UsagePattern::DynamicDraw; break;
+//            case graphics::Usage::Staging:
+//                u = cpuWrites
+//                    ? QOpenGLBuffer::UsagePattern::DynamicCopy
+//                    : QOpenGLBuffer::UsagePattern::StaticCopy; break;
+//            default:
+//                break;
+//            }
+//
+//            vbo_ = new QOpenGLBuffer(t);
+//            vbo_->setUsagePattern(u);
+//            vbo_->create();
+//
+//            vao_ = new QOpenGLVertexArrayObject();
+//            vao_->create();
+//
+//            numVertices_ = length / sizeof(XYRGBVertex);
+//            Int dataSize = numVertices_ * sizeof(XYRGBVertex);
+//            static_assert(sizeof(XYRGBVertex) == 5 * sizeof(float));
+//
+//            if (dataSize) {
+//                vbo_->bind();
+//                if (data) {
+//                    vbo_->allocate(data, length);
+//                }
+//                else {
+//                    vbo_->allocate(length);
+//                }
+//                allocSize_ = length;
+//                vbo_->release();
+//            }
+//        }
+//    }
+//
+//    void bind()
+//    {
+//        if (vao_) {
+//            vao_->bind();
+//            vbo_->bind();
+//        }
+//    }
+//
+//    void unbind()
+//    {
+//        if (vao_) {
+//            vbo_->release();
+//            vao_->release();
+//        }
+//    }
+//
+//    void load(const void* data, Int length)
+//    {
+//        if (!vao_) return;
+//        if (length < 0) {
+//            throw core::NegativeIntegerError(core::format(
+//                "Negative length ({}) provided to QOpenglBuffer::load()", length));
+//        }
+//
+//        numVertices_ = length / sizeof(XYRGBVertex);
+//        Int dataSize = numVertices_ * sizeof(XYRGBVertex);
+//        static_assert(sizeof(XYRGBVertex) == 5 * sizeof(float));
+//
+//        vbo_->bind();
+//        if (dataSize > allocSize_) {
+//            vbo_->allocate(data, dataSize);
+//            allocSize_ = dataSize;
+//        }
+//        else if (dataSize * 2 < allocSize_) {
+//            vbo_->allocate(data, dataSize);
+//            allocSize_ = dataSize;
+//        }
+//        else {
+//            vbo_->write(0, data, dataSize);
+//        }
+//        vbo_->release();
+//    }
+//
+//    void draw(QOpenglEngine* engine, GLenum mode)
+//    {
+//        if (!allocated_) return;
+//        vao_->bind();
+//        auto api = engine->api();
+//        api->glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+//        api->glDrawArrays(mode, 0, numVertices_);
+//        vao_->release();
+//    }
+//
+//protected:
+//    void release_(graphics::Engine* engine) override
+//    {
+//        if (!allocated_) return;
+//        auto oglApi = static_cast<QOpenglEngine*>(engine)->api();
+//        oglApi->glDeleteVertexArrays(1, &cacheVao_);
+//        oglApi->glDeleteBuffers(1, &vbo_);
+//
+//        inited_ = false;
+//        vao_->destroy();
+//        delete vao_;
+//        vao_ = nullptr;
+//        vbo_->destroy();
+//        delete vbo_;
+//        vbo_ = nullptr;
+//    }
+//
+//private:
+//    friend QOpenglEngine;
+//
+//    bool allocated_ = false;
+//    GLuint vbo_;
+//    GLuint cachedVao_;
+//    void* cachedVaoLayoutId_ = nullptr;
+//};
+//
+//class QOpenglFramebuffer : public graphics::Framebuffer {
+//public:
+//    QOpenglFramebuffer(ResourceList* gcList, bool isDefault = false)
+//        : Framebuffer(gcList)
+//        , isDefault_(isDefault)
+//    {
+//    }
+//
+//    bool isDefault() const
+//    {
+//        return isDefault_;
+//    }
+//
+//protected:
+//    void release_(graphics::Engine* engine) override
+//    {
+//        if (!isDefault_) {
+//            static_cast<QOpenglEngine*>(engine)->api()->glDeleteFramebuffers(1, &object_);
+//        }
+//    }
+//
+//private:
+//    friend QOpenglEngine;
+//
+//    GLuint object_ = 0;
+//    bool isDefault_ = false;
+//};
+//
+//class QOpenglSwapChain : public graphics::SwapChain {
+//public:
+//    QOpenglSwapChain(ResourceList* gcList, const graphics::SwapChainCreateInfo& desc, QSurface* surface)
+//        : SwapChain(gcList, desc)
+//        , surface_(surface)
+//    {
+//        defaultFrameBuffer_.reset(new QOpenglFramebuffer(gcList, true));
+//    }
+//
+//    QSurface* surface() const
+//    {
+//        return surface_;
+//    }
+//
+//protected:
+//    void release_(graphics::Engine* /*engine*/) override
+//    {
+//        // no-op..
+//    }
+//
+//private:
+//    QSurface* surface_;
+//};
+//
+//} // namespace
 
 QOpenglEngine::QOpenglEngine() :
     QOpenglEngine(nullptr, false)
@@ -300,155 +300,201 @@ void QOpenglEngine::setupContext()
     api_->initializeOpenGLFunctions();
 }
 
+// -- USER THREAD implementation functions --
 
-// USER THREAD pimpl functions
+void QOpenglEngine::createBuiltinShaders_() {}
 
-graphics::SwapChain* QOpenglEngine::createSwapChain_(const graphics::SwapChainCreateInfo& desc)
-{
-    //if (ctx_ == nullptr) {
-    //    throw core::LogicError("ctx_ is null.");
-    //}
+graphics::SwapChainPtr QOpenglEngine::createSwapChain_(const graphics::SwapChainCreateInfo& /*createInfo*/) { return nullptr; }
+graphics::FramebufferPtr QOpenglEngine::createFramebuffer_(const graphics::ImageViewPtr& /*colorImageView*/) { return nullptr; }
+graphics::BufferPtr QOpenglEngine::createBuffer_(const graphics::BufferCreateInfo& /*createInfo*/) { return nullptr; }
+graphics::ImagePtr QOpenglEngine::createImage_(const graphics::ImageCreateInfo& /*createInfo*/) { return nullptr; }
+graphics::ImageViewPtr QOpenglEngine::createImageView_(const graphics::ImageViewCreateInfo& /*createInfo*/, const graphics::ImagePtr& /*image*/) { return nullptr; }
+graphics::ImageViewPtr QOpenglEngine::createImageView_(const graphics::ImageViewCreateInfo& /*createInfo*/, const graphics::BufferPtr& /*buffer*/, graphics::ImageFormat /*format*/, UInt32 /*elementsCount*/) { return nullptr; }
+graphics::SamplerStatePtr QOpenglEngine::createSamplerState_(const graphics::SamplerStateCreateInfo& /*createInfo*/) { return nullptr; }
+graphics::GeometryViewPtr QOpenglEngine::createGeometryView_(const graphics::GeometryViewCreateInfo& /*createInfo*/) { return nullptr; }
+graphics::BlendStatePtr QOpenglEngine::createBlendState_(const graphics::BlendStateCreateInfo& /*createInfo*/) { return nullptr; }
+graphics::RasterizerStatePtr QOpenglEngine::createRasterizerState_(const graphics::RasterizerStateCreateInfo& /*createInfo*/) { return nullptr; }
 
-    if (desc.windowNativeHandleType() != graphics::WindowNativeHandleType::QOpenGLWindow) {
-        return nullptr;
-    }
+void QOpenglEngine::resizeSwapChain_(graphics::SwapChain* /*swapChain*/, UInt32 /*width*/, UInt32 /*height*/) {}
 
-    format_.setDepthBufferSize(24);
-    format_.setStencilBufferSize(8);
-    format_.setVersion(3, 2);
-    format_.setProfile(QSurfaceFormat::CoreProfile);
-    format_.setSamples(desc.sampleCount());
-    format_.setSwapInterval(0);
+//--  RENDER THREAD implementation functions --
 
-    QWindow* wnd = static_cast<QWindow*>(desc.windowNativeHandle());
-    wnd->setFormat(format_);
-    wnd->create();
+void QOpenglEngine::initBuiltinShaders_() {}
 
-    return new QOpenglSwapChain(gcResourceList_, desc, wnd);
-}
+void QOpenglEngine::initFramebuffer_(graphics::Framebuffer* /*framebuffer*/) {}
+void QOpenglEngine::initBuffer_(graphics::Buffer* /*buffer*/, const char* /*data*/, Int /*lengthInBytes*/) {}
+void QOpenglEngine::initImage_(graphics::Image* /*image*/, const graphics::Span<const graphics::Span<const char>>* /*dataSpanSpan*/) {}
+void QOpenglEngine::initImageView_(graphics::ImageView* /*view*/) {}
+void QOpenglEngine::initSamplerState_(graphics::SamplerState* /*state*/) {}
+void QOpenglEngine::initGeometryView_(graphics::GeometryView* /*view*/) {}
+void QOpenglEngine::initBlendState_(graphics::BlendState* /*state*/) {}
+void QOpenglEngine::initRasterizerState_(graphics::RasterizerState* /*state*/) {}
 
-void QOpenglEngine::resizeSwapChain_(graphics::SwapChain* /*swapChain*/, UInt32 /*width*/, UInt32 /*height*/)
-{
-    // no-op
-}
+void QOpenglEngine::setSwapChain_(graphics::SwapChain* /*swapChain*/) {}
+void QOpenglEngine::setFramebuffer_(graphics::Framebuffer* /*framebuffer*/) {}
+void QOpenglEngine::setViewport_(Int /*x*/, Int /*y*/, Int /*width*/, Int /*height*/) {}
+void QOpenglEngine::setProgram_(graphics::Program* /*program*/) {}
+void QOpenglEngine::setBlendState_(graphics::BlendState* /*state*/, const geometry::Vec4f& /*blendFactor*/) {}
+void QOpenglEngine::setRasterizerState_(graphics::RasterizerState* /*state*/) {}
+void QOpenglEngine::setStageConstantBuffers_(graphics::Buffer* const* /*buffers*/, Int /*startIndex*/, Int /*count*/, graphics::ShaderStage /*shaderStage*/) {}
+void QOpenglEngine::setStageImageViews_(graphics::ImageView* const* /*views*/, Int /*startIndex*/, Int /*count*/, graphics::ShaderStage /*shaderStage*/) {}
+void QOpenglEngine::setStageSamplers_(graphics::SamplerState* const* /*states*/, Int /*startIndex*/, Int /*count*/, graphics::ShaderStage /*shaderStage*/) {}
 
-graphics::Buffer* QOpenglEngine::createBuffer_(
-    graphics::Usage usage, graphics::BindFlags bindFlags,
-    graphics::ResourceMiscFlags resourceMiscFlags, graphics::CpuAccessFlags cpuAccessFlags)
-{
-    return new QOpenglBuffer(gcResourceList_, usage, bindFlags, resourceMiscFlags, cpuAccessFlags);
-}
+void QOpenglEngine::updateBufferData_(graphics::Buffer* /*buffer*/, const void* /*data*/, Int /*lengthInBytes*/) {}
 
-// RENDER THREAD functions
+void QOpenglEngine::draw_(graphics::GeometryView* /*view*/, UInt /*indexCount*/, UInt /*instanceCount*/) {}
+void QOpenglEngine::clear_(const core::Color& /*color*/) {}
 
-void QOpenglEngine::bindSwapChain_(graphics::SwapChain* swapChain)
-{
-    QOpenglSwapChain* oglChain = static_cast<QOpenglSwapChain*>(swapChain);
-    surface_ = oglChain->surface();
+UInt64 QOpenglEngine::present_(graphics::SwapChain* /*swapChain*/, UInt32 /*syncInterval*/, graphics::PresentFlags /*flags*/) { return 0; }
 
-    if (!ctx_) {
-        ctx_ = new QOpenGLContext();
-        ctx_->setFormat(format_);
-        ctx_->create();
-    }
-
-    ctx_->makeCurrent(surface_);
-    if (!api_) {
-        setupContext();
-    }
-}
-
-UInt64 QOpenglEngine::present_(graphics::SwapChain* swapChain, UInt32 /*syncInterval*/, graphics::PresentFlags /*flags*/)
-{
-    // XXX check valid ?
-    auto oglChain = static_cast<QOpenglSwapChain*>(swapChain);
-    ctx_->swapBuffers(oglChain->surface());
-    return std::chrono::nanoseconds(std::chrono::steady_clock::now() - startTime_).count();
-}
-
-void QOpenglEngine::bindFramebuffer_(graphics::Framebuffer* framebuffer)
-{
-    QOpenglFramebuffer* fb = static_cast<QOpenglFramebuffer*>(framebuffer);
-    GLuint fbo = fb->isDefault_ ? ctx_->defaultFramebufferObject() : fb->object_;
-    api_->glBindFramebuffer(GL_DRAW_FRAMEBUFFER, fbo);
-}
-
-void QOpenglEngine::setViewport_(Int x, Int y, Int width, Int height)
-{
-    api_->glViewport(x, y, width, height);
-}
-
-void QOpenglEngine::clear_(const core::Color& color)
-{
-    api_->glClearColor(
-        static_cast<float>(color.r()),
-        static_cast<float>(color.g()),
-        static_cast<float>(color.b()),
-        static_cast<float>(color.a()));
-    api_->glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-}
-
-void QOpenglEngine::setProjectionMatrix_(const geometry::Mat4f& m)
-{
-    paintShaderProgram_->setUniformValue(projLoc_, toQtMatrix(m));
-}
-
-void QOpenglEngine::setViewMatrix_(const geometry::Mat4f& m)
-{
-    paintShaderProgram_->setUniformValue(viewLoc_, toQtMatrix(m));
-}
-
-void QOpenglEngine::initBuffer_(graphics::Buffer* buffer, const void* data, Int initialLengthInBytes)
-{
-    QOpenglBuffer* oglBuffer = static_cast<QOpenglBuffer*>(buffer);
-    oglBuffer->init(data, initialLengthInBytes);
-}
-
-void QOpenglEngine::updateBufferData_(graphics::Buffer* buffer, const void* data, Int lengthInBytes)
-{
-    QOpenglBuffer* oglBuffer = static_cast<QOpenglBuffer*>(buffer);
-    oglBuffer->load(data, lengthInBytes);
-}
-
-void QOpenglEngine::setupVertexBufferForPaintShader_(graphics::Buffer* buffer)
-{
-    QOpenglBuffer* oglBuffer = static_cast<QOpenglBuffer*>(buffer);
-    GLsizei stride = sizeof(XYRGBVertex);
-    GLvoid* posPointer = reinterpret_cast<void*>(offsetof(XYRGBVertex, x));
-    GLvoid* colPointer = reinterpret_cast<void*>(offsetof(XYRGBVertex, r));
-    GLboolean normalized = GL_FALSE;
-    oglBuffer->bind();
-    api_->glEnableVertexAttribArray(posLoc_);
-    api_->glEnableVertexAttribArray(colLoc_);
-    api_->glVertexAttribPointer(posLoc_, 2, GL_FLOAT, normalized, stride, posPointer);
-    api_->glVertexAttribPointer(colLoc_, 3, GL_FLOAT, normalized, stride, colPointer);
-    oglBuffer->unbind();
-}
-
-void QOpenglEngine::drawPrimitives_(graphics::Buffer* buffer, graphics::PrimitiveType type)
-{
-    QOpenglBuffer* oglBuffer = static_cast<QOpenglBuffer*>(buffer);
-    GLenum mode = 0;
-    switch (type) {
-    case graphics::PrimitiveType::LineList: mode = GL_LINES; break;
-    case graphics::PrimitiveType::LineStrip: mode = GL_LINE_STRIP; break;
-    case graphics::PrimitiveType::TriangleList: mode = GL_TRIANGLES; break;
-    case graphics::PrimitiveType::TriangleStrip: mode = GL_TRIANGLE_STRIP; break;
-    default:
-        mode = GL_POINTS;
-        break;
-    }
-    oglBuffer->draw(this, mode);
-}
-
-void QOpenglEngine::bindPaintShader_()
-{
-    paintShaderProgram_->bind();
-}
-
-void QOpenglEngine::releasePaintShader_()
-{
-    paintShaderProgram_->release();
-}
+//// USER THREAD pimpl functions
+//
+//graphics::SwapChain* QOpenglEngine::createSwapChain_(const graphics::SwapChainCreateInfo& desc)
+//{
+//    //if (ctx_ == nullptr) {
+//    //    throw core::LogicError("ctx_ is null.");
+//    //}
+//
+//    if (desc.windowNativeHandleType() != graphics::WindowNativeHandleType::QOpenGLWindow) {
+//        return nullptr;
+//    }
+//
+//    format_.setDepthBufferSize(24);
+//    format_.setStencilBufferSize(8);
+//    format_.setVersion(3, 2);
+//    format_.setProfile(QSurfaceFormat::CoreProfile);
+//    format_.setSamples(desc.sampleCount());
+//    format_.setSwapInterval(0);
+//
+//    QWindow* wnd = static_cast<QWindow*>(desc.windowNativeHandle());
+//    wnd->setFormat(format_);
+//    wnd->create();
+//
+//    return new QOpenglSwapChain(gcResourceList_, desc, wnd);
+//}
+//
+//void QOpenglEngine::resizeSwapChain_(graphics::SwapChain* /*swapChain*/, UInt32 /*width*/, UInt32 /*height*/)
+//{
+//    // no-op
+//}
+//
+//graphics::Buffer* QOpenglEngine::createBuffer_(
+//    graphics::Usage usage, graphics::BindFlags bindFlags,
+//    graphics::ResourceMiscFlags resourceMiscFlags, graphics::CpuAccessFlags cpuAccessFlags)
+//{
+//    return new QOpenglBuffer(gcResourceList_, usage, bindFlags, resourceMiscFlags, cpuAccessFlags);
+//}
+//
+//// RENDER THREAD functions
+//
+//void QOpenglEngine::bindSwapChain_(graphics::SwapChain* swapChain)
+//{
+//    QOpenglSwapChain* oglChain = static_cast<QOpenglSwapChain*>(swapChain);
+//    surface_ = oglChain->surface();
+//
+//    if (!ctx_) {
+//        ctx_ = new QOpenGLContext();
+//        ctx_->setFormat(format_);
+//        ctx_->create();
+//    }
+//
+//    ctx_->makeCurrent(surface_);
+//    if (!api_) {
+//        setupContext();
+//    }
+//}
+//
+//UInt64 QOpenglEngine::present_(graphics::SwapChain* swapChain, UInt32 /*syncInterval*/, graphics::PresentFlags /*flags*/)
+//{
+//    // XXX check valid ?
+//    auto oglChain = static_cast<QOpenglSwapChain*>(swapChain);
+//    ctx_->swapBuffers(oglChain->surface());
+//    return std::chrono::nanoseconds(std::chrono::steady_clock::now() - startTime_).count();
+//}
+//
+//void QOpenglEngine::bindFramebuffer_(graphics::Framebuffer* framebuffer)
+//{
+//    QOpenglFramebuffer* fb = static_cast<QOpenglFramebuffer*>(framebuffer);
+//    GLuint fbo = fb->isDefault_ ? ctx_->defaultFramebufferObject() : fb->object_;
+//    api_->glBindFramebuffer(GL_DRAW_FRAMEBUFFER, fbo);
+//}
+//
+//void QOpenglEngine::setViewport_(Int x, Int y, Int width, Int height)
+//{
+//    api_->glViewport(x, y, width, height);
+//}
+//
+//void QOpenglEngine::clear_(const core::Color& color)
+//{
+//    api_->glClearColor(
+//        static_cast<float>(color.r()),
+//        static_cast<float>(color.g()),
+//        static_cast<float>(color.b()),
+//        static_cast<float>(color.a()));
+//    api_->glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+//}
+//
+//void QOpenglEngine::setProjectionMatrix_(const geometry::Mat4f& m)
+//{
+//    paintShaderProgram_->setUniformValue(projLoc_, toQtMatrix(m));
+//}
+//
+//void QOpenglEngine::setViewMatrix_(const geometry::Mat4f& m)
+//{
+//    paintShaderProgram_->setUniformValue(viewLoc_, toQtMatrix(m));
+//}
+//
+//void QOpenglEngine::initBuffer_(graphics::Buffer* buffer, const void* data, Int initialLengthInBytes)
+//{
+//    QOpenglBuffer* oglBuffer = static_cast<QOpenglBuffer*>(buffer);
+//    oglBuffer->init(data, initialLengthInBytes);
+//}
+//
+//void QOpenglEngine::updateBufferData_(graphics::Buffer* buffer, const void* data, Int lengthInBytes)
+//{
+//    QOpenglBuffer* oglBuffer = static_cast<QOpenglBuffer*>(buffer);
+//    oglBuffer->load(data, lengthInBytes);
+//}
+//
+//void QOpenglEngine::setupVertexBufferForPaintShader_(graphics::Buffer* buffer)
+//{
+//    QOpenglBuffer* oglBuffer = static_cast<QOpenglBuffer*>(buffer);
+//    GLsizei stride = sizeof(XYRGBVertex);
+//    GLvoid* posPointer = reinterpret_cast<void*>(offsetof(XYRGBVertex, x));
+//    GLvoid* colPointer = reinterpret_cast<void*>(offsetof(XYRGBVertex, r));
+//    GLboolean normalized = GL_FALSE;
+//    oglBuffer->bind();
+//    api_->glEnableVertexAttribArray(posLoc_);
+//    api_->glEnableVertexAttribArray(colLoc_);
+//    api_->glVertexAttribPointer(posLoc_, 2, GL_FLOAT, normalized, stride, posPointer);
+//    api_->glVertexAttribPointer(colLoc_, 3, GL_FLOAT, normalized, stride, colPointer);
+//    oglBuffer->unbind();
+//}
+//
+//void QOpenglEngine::drawPrimitives_(graphics::Buffer* buffer, graphics::PrimitiveType type)
+//{
+//    QOpenglBuffer* oglBuffer = static_cast<QOpenglBuffer*>(buffer);
+//    GLenum mode = 0;
+//    switch (type) {
+//    case graphics::PrimitiveType::LineList: mode = GL_LINES; break;
+//    case graphics::PrimitiveType::LineStrip: mode = GL_LINE_STRIP; break;
+//    case graphics::PrimitiveType::TriangleList: mode = GL_TRIANGLES; break;
+//    case graphics::PrimitiveType::TriangleStrip: mode = GL_TRIANGLE_STRIP; break;
+//    default:
+//        mode = GL_POINTS;
+//        break;
+//    }
+//    oglBuffer->draw(this, mode);
+//}
+//
+//void QOpenglEngine::bindPaintShader_()
+//{
+//    paintShaderProgram_->bind();
+//}
+//
+//void QOpenglEngine::releasePaintShader_()
+//{
+//    paintShaderProgram_->release();
+//}
 
 } // namespace vgc::ui::internal

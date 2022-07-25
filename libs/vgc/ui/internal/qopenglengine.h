@@ -1,16 +1,16 @@
-// Copyright 2022 The VGC Developers
-// See the COPYRIGHT file at the top-level directory of this distribution
-// and at https://github.com/vgc/vgc/blob/master/COPYRIGHT
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+//// Copyright 2022 The VGC Developers
+//// See the COPYRIGHT file at the top-level directory of this distribution
+//// and at https://github.com/vgc/vgc/blob/master/COPYRIGHT
+////
+//// Licensed under the Apache License, Version 2.0 (the "License");
+//// you may not use this file except in compliance with the License.
+//// You may obtain a copy of the License at
+////
+////     http://www.apache.org/licenses/LICENSE-2.0
+////
+//// Unless required by applicable law or agreed to in writing, software
+//// distributed under the License is distributed on an "AS IS" BASIS,
+//// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
@@ -124,39 +124,55 @@ public:
         return api_;
     }
 
-public:
-    // Implementation of graphics::Engine API
+protected:
+    // Implementation of Engine API
 
-    // USER THREAD pimpl functions
+    // -- USER THREAD implementation functions --
 
-    graphics::SwapChain* createSwapChain_(const graphics::SwapChainCreateInfo& desc) override;
+    void createBuiltinShaders_() override;
+
+    graphics::SwapChainPtr createSwapChain_(const graphics::SwapChainCreateInfo& createInfo) override;
+    graphics::FramebufferPtr createFramebuffer_(const graphics::ImageViewPtr& colorImageView) override;
+    graphics::BufferPtr createBuffer_(const graphics::BufferCreateInfo& createInfo) override;
+    graphics::ImagePtr createImage_(const graphics::ImageCreateInfo& createInfo) override;
+    graphics::ImageViewPtr createImageView_(const graphics::ImageViewCreateInfo& createInfo, const graphics::ImagePtr& image) override;
+    graphics::ImageViewPtr createImageView_(const graphics::ImageViewCreateInfo& createInfo, const graphics::BufferPtr& buffer, graphics::ImageFormat format, UInt32 elementsCount) override;
+    graphics::SamplerStatePtr createSamplerState_(const graphics::SamplerStateCreateInfo& createInfo) override;
+    graphics::GeometryViewPtr createGeometryView_(const graphics::GeometryViewCreateInfo& createInfo) override;
+    graphics::BlendStatePtr createBlendState_(const graphics::BlendStateCreateInfo& createInfo) override;
+    graphics::RasterizerStatePtr createRasterizerState_(const graphics::RasterizerStateCreateInfo& createInfo) override;
+
     void resizeSwapChain_(graphics::SwapChain* swapChain, UInt32 width, UInt32 height) override;
-    graphics::Buffer* createBuffer_(
-        graphics::Usage usage, graphics::BindFlags bindFlags,
-        graphics::ResourceMiscFlags resourceMiscFlags, graphics::CpuAccessFlags cpuAccessFlags) override;
 
-    // RENDER THREAD functions
+    //--  RENDER THREAD implementation functions --
 
-    void bindSwapChain_(graphics::SwapChain* swapChain) override;
-    UInt64 present_(graphics::SwapChain* swapChain, UInt32 syncInterval, graphics::PresentFlags flags) override;
-    void bindFramebuffer_(graphics::Framebuffer* framebuffer) override;
+    void initBuiltinShaders_() override;
+
+    void initFramebuffer_(graphics::Framebuffer* framebuffer) override;
+    void initBuffer_(graphics::Buffer* buffer, const char* data, Int lengthInBytes) override;
+    void initImage_(graphics::Image* image, const graphics::Span<const graphics::Span<const char>>* dataSpanSpan) override;
+    void initImageView_(graphics::ImageView* view) override;
+    void initSamplerState_(graphics::SamplerState* state) override;
+    void initGeometryView_(graphics::GeometryView* view) override;
+    void initBlendState_(graphics::BlendState* state) override;
+    void initRasterizerState_(graphics::RasterizerState* state) override;
+
+    void setSwapChain_(graphics::SwapChain* swapChain) override;
+    void setFramebuffer_(graphics::Framebuffer* framebuffer) override;
     void setViewport_(Int x, Int y, Int width, Int height) override;
-    void clear_(const core::Color& color) override;
-    void setProjectionMatrix_(const geometry::Mat4f& m) override;
-    void setViewMatrix_(const geometry::Mat4f& m) override;
+    void setProgram_(graphics::Program* program) override;
+    void setBlendState_(graphics::BlendState* state, const geometry::Vec4f& blendFactor) override;
+    void setRasterizerState_(graphics::RasterizerState* state) override;
+    void setStageConstantBuffers_(graphics::Buffer* const* buffers, Int startIndex, Int count, graphics::ShaderStage shaderStage) override;
+    void setStageImageViews_(graphics::ImageView* const* views, Int startIndex, Int count, graphics::ShaderStage shaderStage) override;
+    void setStageSamplers_(graphics::SamplerState* const* states, Int startIndex, Int count, graphics::ShaderStage shaderStage) override;
 
-    void initBuffer_(graphics::Buffer* buffer, const void* data, Int initialLengthInBytes) override;
     void updateBufferData_(graphics::Buffer* buffer, const void* data, Int lengthInBytes) override;
-    void setupVertexBufferForPaintShader_(graphics::Buffer* buffer) override;
-    void drawPrimitives_(graphics::Buffer* buffer, graphics::PrimitiveType type) override;
-    GL_DEPTH_COMPONENT16
-        GL_RGBA32I
-    //void bindPaintShader_() override;
-    //void releasePaintShader_() override;
-    //void bindAtlasGlyphShader_() override;
-    //void releaseAtlasGlyphShader_() override;
-    //void bindRoundedRectangleShader_() override;
-    //void releaseRoundedRectangleShader_() override;
+
+    void draw_(graphics::GeometryView* view, UInt indexCount, UInt instanceCount) override;
+    void clear_(const core::Color& color) override;
+
+    UInt64 present_(graphics::SwapChain* swapChain, UInt32 syncInterval, graphics::PresentFlags flags) override;
 
 private:
     // XXX keep only format of first chain and compare against new windows ?
