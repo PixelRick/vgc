@@ -88,6 +88,8 @@ private:
     ui::WidgetPtr widget_;
     graphics::EnginePtr engine_;
     graphics::SwapChainPtr swapChain_;
+    graphics::RasterizerStatePtr rasterizerState_;
+    graphics::BlendStatePtr blendState_;
     int width_ = 0;
     int height_ = 0;
     bool activeSizemove_ = false;

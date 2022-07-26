@@ -66,22 +66,20 @@ protected:
 
     void createBuiltinShaders_() override;
 
-    SwapChainPtr createSwapChain_(const SwapChainCreateInfo& createInfo) override;
-    FramebufferPtr createFramebuffer_(const ImageViewPtr& colorImageView) override;
-    BufferPtr createBuffer_(const BufferCreateInfo& createInfo) override;
-    ImagePtr createImage_(const ImageCreateInfo& createInfo) override;
-    ImageViewPtr createImageView_(const ImageViewCreateInfo& createInfo, const ImagePtr& image) override;
-    ImageViewPtr createImageView_(const ImageViewCreateInfo& createInfo, const BufferPtr& buffer, ImageFormat format, UInt32 elementsCount) override;
-    SamplerStatePtr createSamplerState_(const SamplerStateCreateInfo& createInfo) override;
-    GeometryViewPtr createGeometryView_(const GeometryViewCreateInfo& createInfo) override;
-    BlendStatePtr createBlendState_(const BlendStateCreateInfo& createInfo) override;
-    RasterizerStatePtr createRasterizerState_(const RasterizerStateCreateInfo& createInfo) override;
+    SwapChainPtr constructSwapChain_(const SwapChainCreateInfo& createInfo) override;
+    FramebufferPtr constructFramebuffer_(const ImageViewPtr& colorImageView) override;
+    BufferPtr constructBuffer_(const BufferCreateInfo& createInfo) override;
+    ImagePtr constructImage_(const ImageCreateInfo& createInfo) override;
+    ImageViewPtr constructImageView_(const ImageViewCreateInfo& createInfo, const ImagePtr& image) override;
+    ImageViewPtr constructImageView_(const ImageViewCreateInfo& createInfo, const BufferPtr& buffer, ImageFormat format, UInt32 elementsCount) override;
+    SamplerStatePtr constructSamplerState_(const SamplerStateCreateInfo& createInfo) override;
+    GeometryViewPtr constructGeometryView_(const GeometryViewCreateInfo& createInfo) override;
+    BlendStatePtr constructBlendState_(const BlendStateCreateInfo& createInfo) override;
+    RasterizerStatePtr constructRasterizerState_(const RasterizerStateCreateInfo& createInfo) override;
 
     void resizeSwapChain_(SwapChain* swapChain, UInt32 width, UInt32 height) override;
 
     //--  RENDER THREAD implementation functions --
-
-    void initBuiltinShaders_() override;
 
     void initFramebuffer_(Framebuffer* framebuffer) override;
     void initBuffer_(Buffer* buffer, const char* data, Int lengthInBytes) override;
@@ -117,7 +115,8 @@ private:
     std::array<ComPtr<ID3D11InputLayout>, core::toUnderlying(BuiltinGeometryLayout::Max_) + 1> builtinLayouts_;
     ID3D11InputLayout* layout_;
 
-    bool loadBuffer_(ID3D11Buffer** bufferPtr, D3D11_BUFFER_DESC* desc, const void* data, Int dataSize);
+    void initBuiltinShaders_();
+    bool loadBuffer_(ComPtr<ID3D11Buffer>& buffer, D3D11_BUFFER_DESC& desc, const void* data, Int dataSize);
     bool writeBufferReserved_(ID3D11Buffer* buffer, const void* data, Int dataSize);
 
     template<typename T, typename... Args>

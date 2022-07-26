@@ -23,6 +23,7 @@
 #include <QOpenGLBuffer>
 #include <QOpenGLContext>
 #include <QOpenGLFunctions_3_2_Core>
+#include <QOpenGLFunctions_3_3_Core>
 #include <QOpenGLFunctions>
 #include <QOpenGLShaderProgram>
 #include <QOpenGLVertexArrayObject>
@@ -90,7 +91,11 @@ inline geometry::Mat4f toMat4f(const geometry::Mat4d& m) {
         (float)m(3,0), (float)m(3,1), (float)m(3,2), (float)m(3,3));
 }
 
+namespace qopengl {
+
 VGC_DECLARE_OBJECT(QOpenglEngine);
+
+using namespace ::vgc::graphics;
 
 /// \class vgc::widget::QOpenglEngine
 /// \brief The QtOpenGL-based graphics::Engine.
@@ -98,9 +103,9 @@ VGC_DECLARE_OBJECT(QOpenglEngine);
 /// This class is an implementation of graphics::Engine using QOpenGLContext and
 /// OpenGL calls.
 ///
-class VGC_UI_API QOpenglEngine : public graphics::Engine {
+class VGC_UI_API QOpenglEngine : public Engine {
 private:
-    VGC_OBJECT(QOpenglEngine, graphics::Engine)
+    VGC_OBJECT(QOpenglEngine, Engine)
 
 protected:
     QOpenglEngine();
@@ -109,7 +114,7 @@ protected:
     void onDestroyed() override;
 
 public:
-    using OpenGLFunctions = QOpenGLFunctions_3_2_Core;
+    using OpenGLFunctions = QOpenGLFunctions_3_3_Core;
 
     /// Creates a new OpenglEngine.
     ///
@@ -131,55 +136,53 @@ protected:
 
     void createBuiltinShaders_() override;
 
-    graphics::SwapChainPtr createSwapChain_(const graphics::SwapChainCreateInfo& createInfo) override;
-    graphics::FramebufferPtr createFramebuffer_(const graphics::ImageViewPtr& colorImageView) override;
-    graphics::BufferPtr createBuffer_(const graphics::BufferCreateInfo& createInfo) override;
-    graphics::ImagePtr createImage_(const graphics::ImageCreateInfo& createInfo) override;
-    graphics::ImageViewPtr createImageView_(const graphics::ImageViewCreateInfo& createInfo, const graphics::ImagePtr& image) override;
-    graphics::ImageViewPtr createImageView_(const graphics::ImageViewCreateInfo& createInfo, const graphics::BufferPtr& buffer, graphics::ImageFormat format, UInt32 elementsCount) override;
-    graphics::SamplerStatePtr createSamplerState_(const graphics::SamplerStateCreateInfo& createInfo) override;
-    graphics::GeometryViewPtr createGeometryView_(const graphics::GeometryViewCreateInfo& createInfo) override;
-    graphics::BlendStatePtr createBlendState_(const graphics::BlendStateCreateInfo& createInfo) override;
-    graphics::RasterizerStatePtr createRasterizerState_(const graphics::RasterizerStateCreateInfo& createInfo) override;
+    SwapChainPtr constructSwapChain_(const SwapChainCreateInfo& createInfo) override;
+    FramebufferPtr constructFramebuffer_(const ImageViewPtr& colorImageView) override;
+    BufferPtr constructBuffer_(const BufferCreateInfo& createInfo) override;
+    ImagePtr constructImage_(const ImageCreateInfo& createInfo) override;
+    ImageViewPtr constructImageView_(const ImageViewCreateInfo& createInfo, const ImagePtr& image) override;
+    ImageViewPtr constructImageView_(const ImageViewCreateInfo& createInfo, const BufferPtr& buffer, ImageFormat format, UInt32 elementsCount) override;
+    SamplerStatePtr constructSamplerState_(const SamplerStateCreateInfo& createInfo) override;
+    GeometryViewPtr constructGeometryView_(const GeometryViewCreateInfo& createInfo) override;
+    BlendStatePtr constructBlendState_(const BlendStateCreateInfo& createInfo) override;
+    RasterizerStatePtr constructRasterizerState_(const RasterizerStateCreateInfo& createInfo) override;
 
-    void resizeSwapChain_(graphics::SwapChain* swapChain, UInt32 width, UInt32 height) override;
+    void resizeSwapChain_(SwapChain* swapChain, UInt32 width, UInt32 height) override;
 
     //--  RENDER THREAD implementation functions --
 
-    void initBuiltinShaders_() override;
+    void initFramebuffer_(Framebuffer* framebuffer) override;
+    void initBuffer_(Buffer* buffer, const char* data, Int lengthInBytes) override;
+    void initImage_(Image* image, const Span<const Span<const char>>* dataSpanSpan) override;
+    void initImageView_(ImageView* view) override;
+    void initSamplerState_(SamplerState* state) override;
+    void initGeometryView_(GeometryView* view) override;
+    void initBlendState_(BlendState* state) override;
+    void initRasterizerState_(RasterizerState* state) override;
 
-    void initFramebuffer_(graphics::Framebuffer* framebuffer) override;
-    void initBuffer_(graphics::Buffer* buffer, const char* data, Int lengthInBytes) override;
-    void initImage_(graphics::Image* image, const graphics::Span<const graphics::Span<const char>>* dataSpanSpan) override;
-    void initImageView_(graphics::ImageView* view) override;
-    void initSamplerState_(graphics::SamplerState* state) override;
-    void initGeometryView_(graphics::GeometryView* view) override;
-    void initBlendState_(graphics::BlendState* state) override;
-    void initRasterizerState_(graphics::RasterizerState* state) override;
-
-    void setSwapChain_(graphics::SwapChain* swapChain) override;
-    void setFramebuffer_(graphics::Framebuffer* framebuffer) override;
+    void setSwapChain_(SwapChain* swapChain) override;
+    void setFramebuffer_(Framebuffer* framebuffer) override;
     void setViewport_(Int x, Int y, Int width, Int height) override;
-    void setProgram_(graphics::Program* program) override;
-    void setBlendState_(graphics::BlendState* state, const geometry::Vec4f& blendFactor) override;
-    void setRasterizerState_(graphics::RasterizerState* state) override;
-    void setStageConstantBuffers_(graphics::Buffer* const* buffers, Int startIndex, Int count, graphics::ShaderStage shaderStage) override;
-    void setStageImageViews_(graphics::ImageView* const* views, Int startIndex, Int count, graphics::ShaderStage shaderStage) override;
-    void setStageSamplers_(graphics::SamplerState* const* states, Int startIndex, Int count, graphics::ShaderStage shaderStage) override;
+    void setProgram_(Program* program) override;
+    void setBlendState_(BlendState* state, const geometry::Vec4f& blendFactor) override;
+    void setRasterizerState_(RasterizerState* state) override;
+    void setStageConstantBuffers_(Buffer* const* buffers, Int startIndex, Int count, ShaderStage shaderStage) override;
+    void setStageImageViews_(ImageView* const* views, Int startIndex, Int count, ShaderStage shaderStage) override;
+    void setStageSamplers_(SamplerState* const* states, Int startIndex, Int count, ShaderStage shaderStage) override;
 
-    void updateBufferData_(graphics::Buffer* buffer, const void* data, Int lengthInBytes) override;
+    void updateBufferData_(Buffer* buffer, const void* data, Int lengthInBytes) override;
 
-    void draw_(graphics::GeometryView* view, UInt indexCount, UInt instanceCount) override;
+    void draw_(GeometryView* view, UInt indexCount, UInt instanceCount) override;
     void clear_(const core::Color& color) override;
 
-    UInt64 present_(graphics::SwapChain* swapChain, UInt32 syncInterval, graphics::PresentFlags flags) override;
+    UInt64 present_(SwapChain* swapChain, UInt32 syncInterval, PresentFlags flags) override;
 
 private:
     // XXX keep only format of first chain and compare against new windows ?
     QSurfaceFormat format_;
     QOpenGLContext* ctx_ = nullptr;
     bool isExternalCtx_ = false;
-    QOpenGLFunctions_3_2_Core* api_ = nullptr;
+    QOpenGLFunctions_3_3_Core* api_ = nullptr;
 
     QSurface* surface_ = nullptr;
 
@@ -192,6 +195,11 @@ private:
     int projLoc_ = -1;
     int viewLoc_ = -1;
 };
+
+} // namespace qopengl
+
+using QOpenglEngine = qopengl::QOpenglEngine;
+using QOpenglEnginePtr = qopengl::QOpenglEnginePtr;
 
 } // namespace vgc::ui::internal
 

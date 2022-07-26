@@ -266,7 +266,7 @@ public:
         return *this;
     }
 
-    ResourcePtr& operator=(ResourcePtr&& other)
+    ResourcePtr& operator=(ResourcePtr&& other) noexcept
     {
         std::swap(p_, other.p_);
         return *this;
@@ -321,6 +321,18 @@ public:
 private:
     T* p_ = nullptr;
 };
+
+template<typename T, typename U>
+bool operator==(const ResourcePtr<T>& lhs, const ResourcePtr<U>& rhs) noexcept
+{
+    return lhs.get() == rhs.get();
+}
+
+template<typename T, typename U>
+bool operator!=(const ResourcePtr<T>& lhs, const ResourcePtr<U>& rhs) noexcept
+{
+    return lhs.get() != rhs.get();
+}
 
 template<typename T, typename U>
 ResourcePtr<T> static_pointer_cast(const ResourcePtr<U>& r) noexcept

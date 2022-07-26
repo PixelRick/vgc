@@ -26,7 +26,7 @@
 #include <vgc/core/exceptions.h>
 #include <vgc/core/paths.h>
 
-namespace vgc::ui::internal {
+namespace vgc::ui::internal::qopengl {
 
 namespace {
 
@@ -45,36 +45,36 @@ struct XYRGBVertex {
 
 //namespace {
 //
-//class OpenglBuffer : public graphics::Buffer {
+//class OpenglBuffer : public Buffer {
 //public:
 //    OpenglBuffer(
 //        ResourceList* gcList,
-//        graphics::Usage usage,
-//        graphics::BindFlags bindFlags,
-//        graphics::ResourceMiscFlags resourceMiscFlags,
-//        graphics::CpuAccessFlags cpuAccessFlags);
+//        Usage usage,
+//        BindFlags bindFlags,
+//        ResourceMiscFlags resourceMiscFlags,
+//        CpuAccessFlags cpuAccessFlags);
 //
 //    void init(const void* data, Int length)
 //    {
 //        if (!vao_) {
 //            QOpenGLBuffer::Type t = {};
 //            switch (bindFlags()) {
-//            case graphics::BindFlags::IndexBuffer:
+//            case BindFlags::IndexBuffer:
 //                t = QOpenGLBuffer::Type::IndexBuffer; break;
-//            case graphics::BindFlags::VertexBuffer:
+//            case BindFlags::VertexBuffer:
 //                t = QOpenGLBuffer::Type::VertexBuffer; break;
 //            default:
 //                throw core::LogicError("QOpenglBuffer: unsupported bind flags");
 //            }
 //
-//            bool cpuWrites = !!(cpuAccessFlags() & graphics::CpuAccessFlags::Write);
+//            bool cpuWrites = !!(cpuAccessFlags() & CpuAccessFlags::Write);
 //            QOpenGLBuffer::UsagePattern u = QOpenGLBuffer::StaticDraw;
 //            switch (usage()) {
-//            case graphics::Usage::Immutable: // no equivalent
+//            case Usage::Immutable: // no equivalent
 //                u = QOpenGLBuffer::UsagePattern::StaticDraw; break;
-//            case graphics::Usage::Dynamic:
+//            case Usage::Dynamic:
 //                u = QOpenGLBuffer::UsagePattern::DynamicDraw; break;
-//            case graphics::Usage::Staging:
+//            case Usage::Staging:
 //                u = cpuWrites
 //                    ? QOpenGLBuffer::UsagePattern::DynamicCopy
 //                    : QOpenGLBuffer::UsagePattern::StaticCopy; break;
@@ -161,7 +161,7 @@ struct XYRGBVertex {
 //    }
 //
 //protected:
-//    void release_(graphics::Engine* engine) override
+//    void release_(Engine* engine) override
 //    {
 //        if (!allocated_) return;
 //        auto oglApi = static_cast<QOpenglEngine*>(engine)->api();
@@ -186,7 +186,7 @@ struct XYRGBVertex {
 //    void* cachedVaoLayoutId_ = nullptr;
 //};
 //
-//class QOpenglFramebuffer : public graphics::Framebuffer {
+//class QOpenglFramebuffer : public Framebuffer {
 //public:
 //    QOpenglFramebuffer(ResourceList* gcList, bool isDefault = false)
 //        : Framebuffer(gcList)
@@ -200,7 +200,7 @@ struct XYRGBVertex {
 //    }
 //
 //protected:
-//    void release_(graphics::Engine* engine) override
+//    void release_(Engine* engine) override
 //    {
 //        if (!isDefault_) {
 //            static_cast<QOpenglEngine*>(engine)->api()->glDeleteFramebuffers(1, &object_);
@@ -214,9 +214,9 @@ struct XYRGBVertex {
 //    bool isDefault_ = false;
 //};
 //
-//class QOpenglSwapChain : public graphics::SwapChain {
+//class QOpenglSwapChain : public SwapChain {
 //public:
-//    QOpenglSwapChain(ResourceList* gcList, const graphics::SwapChainCreateInfo& desc, QSurface* surface)
+//    QOpenglSwapChain(ResourceList* gcList, const SwapChainCreateInfo& desc, QSurface* surface)
 //        : SwapChain(gcList, desc)
 //        , surface_(surface)
 //    {
@@ -229,7 +229,7 @@ struct XYRGBVertex {
 //    }
 //
 //protected:
-//    void release_(graphics::Engine* /*engine*/) override
+//    void release_(Engine* /*engine*/) override
 //    {
 //        // no-op..
 //    }
@@ -246,7 +246,7 @@ QOpenglEngine::QOpenglEngine() :
 }
 
 QOpenglEngine::QOpenglEngine(QOpenGLContext* ctx, bool isExternalCtx) :
-    graphics::Engine(),
+    Engine(),
     ctx_(ctx),
     isExternalCtx_(isExternalCtx)
 {
@@ -291,9 +291,9 @@ void QOpenglEngine::setupContext()
 
     // Get API 3.2
 #if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
-    api_ = ctx_->versionFunctions<QOpenGLFunctions_3_2_Core>();
+    api_ = ctx_->versionFunctions<QOpenGLFunctions_3_3_Core>();
 #else
-    api_ = QOpenGLVersionFunctionsFactory::get<QOpenGLFunctions_3_2_Core>(ctx_);
+    api_ = QOpenGLVersionFunctionsFactory::get<QOpenGLFunctions_3_3_Core>(ctx_);
 #endif
     //
 
@@ -304,58 +304,56 @@ void QOpenglEngine::setupContext()
 
 void QOpenglEngine::createBuiltinShaders_() {}
 
-graphics::SwapChainPtr QOpenglEngine::createSwapChain_(const graphics::SwapChainCreateInfo& /*createInfo*/) { return nullptr; }
-graphics::FramebufferPtr QOpenglEngine::createFramebuffer_(const graphics::ImageViewPtr& /*colorImageView*/) { return nullptr; }
-graphics::BufferPtr QOpenglEngine::createBuffer_(const graphics::BufferCreateInfo& /*createInfo*/) { return nullptr; }
-graphics::ImagePtr QOpenglEngine::createImage_(const graphics::ImageCreateInfo& /*createInfo*/) { return nullptr; }
-graphics::ImageViewPtr QOpenglEngine::createImageView_(const graphics::ImageViewCreateInfo& /*createInfo*/, const graphics::ImagePtr& /*image*/) { return nullptr; }
-graphics::ImageViewPtr QOpenglEngine::createImageView_(const graphics::ImageViewCreateInfo& /*createInfo*/, const graphics::BufferPtr& /*buffer*/, graphics::ImageFormat /*format*/, UInt32 /*elementsCount*/) { return nullptr; }
-graphics::SamplerStatePtr QOpenglEngine::createSamplerState_(const graphics::SamplerStateCreateInfo& /*createInfo*/) { return nullptr; }
-graphics::GeometryViewPtr QOpenglEngine::createGeometryView_(const graphics::GeometryViewCreateInfo& /*createInfo*/) { return nullptr; }
-graphics::BlendStatePtr QOpenglEngine::createBlendState_(const graphics::BlendStateCreateInfo& /*createInfo*/) { return nullptr; }
-graphics::RasterizerStatePtr QOpenglEngine::createRasterizerState_(const graphics::RasterizerStateCreateInfo& /*createInfo*/) { return nullptr; }
+SwapChainPtr QOpenglEngine::constructSwapChain_(const SwapChainCreateInfo& /*createInfo*/) { return nullptr; }
+FramebufferPtr QOpenglEngine::constructFramebuffer_(const ImageViewPtr& /*colorImageView*/) { return nullptr; }
+BufferPtr QOpenglEngine::constructBuffer_(const BufferCreateInfo& /*createInfo*/) { return nullptr; }
+ImagePtr QOpenglEngine::constructImage_(const ImageCreateInfo& /*createInfo*/) { return nullptr; }
+ImageViewPtr QOpenglEngine::constructImageView_(const ImageViewCreateInfo& /*createInfo*/, const ImagePtr& /*image*/) { return nullptr; }
+ImageViewPtr QOpenglEngine::constructImageView_(const ImageViewCreateInfo& /*createInfo*/, const BufferPtr& /*buffer*/, ImageFormat /*format*/, UInt32 /*elementsCount*/) { return nullptr; }
+SamplerStatePtr QOpenglEngine::constructSamplerState_(const SamplerStateCreateInfo& /*createInfo*/) { return nullptr; }
+GeometryViewPtr QOpenglEngine::constructGeometryView_(const GeometryViewCreateInfo& /*createInfo*/) { return nullptr; }
+BlendStatePtr QOpenglEngine::constructBlendState_(const BlendStateCreateInfo& /*createInfo*/) { return nullptr; }
+RasterizerStatePtr QOpenglEngine::constructRasterizerState_(const RasterizerStateCreateInfo& /*createInfo*/) { return nullptr; }
 
-void QOpenglEngine::resizeSwapChain_(graphics::SwapChain* /*swapChain*/, UInt32 /*width*/, UInt32 /*height*/) {}
+void QOpenglEngine::resizeSwapChain_(SwapChain* /*swapChain*/, UInt32 /*width*/, UInt32 /*height*/) {}
 
 //--  RENDER THREAD implementation functions --
 
-void QOpenglEngine::initBuiltinShaders_() {}
+void QOpenglEngine::initFramebuffer_(Framebuffer* /*framebuffer*/) {}
+void QOpenglEngine::initBuffer_(Buffer* /*buffer*/, const char* /*data*/, Int /*lengthInBytes*/) {}
+void QOpenglEngine::initImage_(Image* /*image*/, const Span<const Span<const char>>* /*dataSpanSpan*/) {}
+void QOpenglEngine::initImageView_(ImageView* /*view*/) {}
+void QOpenglEngine::initSamplerState_(SamplerState* /*state*/) {}
+void QOpenglEngine::initGeometryView_(GeometryView* /*view*/) {}
+void QOpenglEngine::initBlendState_(BlendState* /*state*/) {}
+void QOpenglEngine::initRasterizerState_(RasterizerState* /*state*/) {}
 
-void QOpenglEngine::initFramebuffer_(graphics::Framebuffer* /*framebuffer*/) {}
-void QOpenglEngine::initBuffer_(graphics::Buffer* /*buffer*/, const char* /*data*/, Int /*lengthInBytes*/) {}
-void QOpenglEngine::initImage_(graphics::Image* /*image*/, const graphics::Span<const graphics::Span<const char>>* /*dataSpanSpan*/) {}
-void QOpenglEngine::initImageView_(graphics::ImageView* /*view*/) {}
-void QOpenglEngine::initSamplerState_(graphics::SamplerState* /*state*/) {}
-void QOpenglEngine::initGeometryView_(graphics::GeometryView* /*view*/) {}
-void QOpenglEngine::initBlendState_(graphics::BlendState* /*state*/) {}
-void QOpenglEngine::initRasterizerState_(graphics::RasterizerState* /*state*/) {}
-
-void QOpenglEngine::setSwapChain_(graphics::SwapChain* /*swapChain*/) {}
-void QOpenglEngine::setFramebuffer_(graphics::Framebuffer* /*framebuffer*/) {}
+void QOpenglEngine::setSwapChain_(SwapChain* /*swapChain*/) {}
+void QOpenglEngine::setFramebuffer_(Framebuffer* /*framebuffer*/) {}
 void QOpenglEngine::setViewport_(Int /*x*/, Int /*y*/, Int /*width*/, Int /*height*/) {}
-void QOpenglEngine::setProgram_(graphics::Program* /*program*/) {}
-void QOpenglEngine::setBlendState_(graphics::BlendState* /*state*/, const geometry::Vec4f& /*blendFactor*/) {}
-void QOpenglEngine::setRasterizerState_(graphics::RasterizerState* /*state*/) {}
-void QOpenglEngine::setStageConstantBuffers_(graphics::Buffer* const* /*buffers*/, Int /*startIndex*/, Int /*count*/, graphics::ShaderStage /*shaderStage*/) {}
-void QOpenglEngine::setStageImageViews_(graphics::ImageView* const* /*views*/, Int /*startIndex*/, Int /*count*/, graphics::ShaderStage /*shaderStage*/) {}
-void QOpenglEngine::setStageSamplers_(graphics::SamplerState* const* /*states*/, Int /*startIndex*/, Int /*count*/, graphics::ShaderStage /*shaderStage*/) {}
+void QOpenglEngine::setProgram_(Program* /*program*/) {}
+void QOpenglEngine::setBlendState_(BlendState* /*state*/, const geometry::Vec4f& /*blendFactor*/) {}
+void QOpenglEngine::setRasterizerState_(RasterizerState* /*state*/) {}
+void QOpenglEngine::setStageConstantBuffers_(Buffer* const* /*buffers*/, Int /*startIndex*/, Int /*count*/, ShaderStage /*shaderStage*/) {}
+void QOpenglEngine::setStageImageViews_(ImageView* const* /*views*/, Int /*startIndex*/, Int /*count*/, ShaderStage /*shaderStage*/) {}
+void QOpenglEngine::setStageSamplers_(SamplerState* const* /*states*/, Int /*startIndex*/, Int /*count*/, ShaderStage /*shaderStage*/) {}
 
-void QOpenglEngine::updateBufferData_(graphics::Buffer* /*buffer*/, const void* /*data*/, Int /*lengthInBytes*/) {}
+void QOpenglEngine::updateBufferData_(Buffer* /*buffer*/, const void* /*data*/, Int /*lengthInBytes*/) {}
 
-void QOpenglEngine::draw_(graphics::GeometryView* /*view*/, UInt /*indexCount*/, UInt /*instanceCount*/) {}
+void QOpenglEngine::draw_(GeometryView* /*view*/, UInt /*indexCount*/, UInt /*instanceCount*/) {}
 void QOpenglEngine::clear_(const core::Color& /*color*/) {}
 
-UInt64 QOpenglEngine::present_(graphics::SwapChain* /*swapChain*/, UInt32 /*syncInterval*/, graphics::PresentFlags /*flags*/) { return 0; }
+UInt64 QOpenglEngine::present_(SwapChain* /*swapChain*/, UInt32 /*syncInterval*/, PresentFlags /*flags*/) { return 0; }
 
 //// USER THREAD pimpl functions
 //
-//graphics::SwapChain* QOpenglEngine::createSwapChain_(const graphics::SwapChainCreateInfo& desc)
+//SwapChain* QOpenglEngine::createSwapChain_(const SwapChainCreateInfo& desc)
 //{
 //    //if (ctx_ == nullptr) {
 //    //    throw core::LogicError("ctx_ is null.");
 //    //}
 //
-//    if (desc.windowNativeHandleType() != graphics::WindowNativeHandleType::QOpenGLWindow) {
+//    if (desc.windowNativeHandleType() != WindowNativeHandleType::QOpenGLWindow) {
 //        return nullptr;
 //    }
 //
@@ -373,21 +371,21 @@ UInt64 QOpenglEngine::present_(graphics::SwapChain* /*swapChain*/, UInt32 /*sync
 //    return new QOpenglSwapChain(gcResourceList_, desc, wnd);
 //}
 //
-//void QOpenglEngine::resizeSwapChain_(graphics::SwapChain* /*swapChain*/, UInt32 /*width*/, UInt32 /*height*/)
+//void QOpenglEngine::resizeSwapChain_(SwapChain* /*swapChain*/, UInt32 /*width*/, UInt32 /*height*/)
 //{
 //    // no-op
 //}
 //
-//graphics::Buffer* QOpenglEngine::createBuffer_(
-//    graphics::Usage usage, graphics::BindFlags bindFlags,
-//    graphics::ResourceMiscFlags resourceMiscFlags, graphics::CpuAccessFlags cpuAccessFlags)
+//Buffer* QOpenglEngine::createBuffer_(
+//    Usage usage, BindFlags bindFlags,
+//    ResourceMiscFlags resourceMiscFlags, CpuAccessFlags cpuAccessFlags)
 //{
 //    return new QOpenglBuffer(gcResourceList_, usage, bindFlags, resourceMiscFlags, cpuAccessFlags);
 //}
 //
 //// RENDER THREAD functions
 //
-//void QOpenglEngine::bindSwapChain_(graphics::SwapChain* swapChain)
+//void QOpenglEngine::bindSwapChain_(SwapChain* swapChain)
 //{
 //    QOpenglSwapChain* oglChain = static_cast<QOpenglSwapChain*>(swapChain);
 //    surface_ = oglChain->surface();
@@ -404,7 +402,7 @@ UInt64 QOpenglEngine::present_(graphics::SwapChain* /*swapChain*/, UInt32 /*sync
 //    }
 //}
 //
-//UInt64 QOpenglEngine::present_(graphics::SwapChain* swapChain, UInt32 /*syncInterval*/, graphics::PresentFlags /*flags*/)
+//UInt64 QOpenglEngine::present_(SwapChain* swapChain, UInt32 /*syncInterval*/, PresentFlags /*flags*/)
 //{
 //    // XXX check valid ?
 //    auto oglChain = static_cast<QOpenglSwapChain*>(swapChain);
@@ -412,7 +410,7 @@ UInt64 QOpenglEngine::present_(graphics::SwapChain* /*swapChain*/, UInt32 /*sync
 //    return std::chrono::nanoseconds(std::chrono::steady_clock::now() - startTime_).count();
 //}
 //
-//void QOpenglEngine::bindFramebuffer_(graphics::Framebuffer* framebuffer)
+//void QOpenglEngine::bindFramebuffer_(Framebuffer* framebuffer)
 //{
 //    QOpenglFramebuffer* fb = static_cast<QOpenglFramebuffer*>(framebuffer);
 //    GLuint fbo = fb->isDefault_ ? ctx_->defaultFramebufferObject() : fb->object_;
@@ -444,19 +442,19 @@ UInt64 QOpenglEngine::present_(graphics::SwapChain* /*swapChain*/, UInt32 /*sync
 //    paintShaderProgram_->setUniformValue(viewLoc_, toQtMatrix(m));
 //}
 //
-//void QOpenglEngine::initBuffer_(graphics::Buffer* buffer, const void* data, Int initialLengthInBytes)
+//void QOpenglEngine::initBuffer_(Buffer* buffer, const void* data, Int initialLengthInBytes)
 //{
 //    QOpenglBuffer* oglBuffer = static_cast<QOpenglBuffer*>(buffer);
 //    oglBuffer->init(data, initialLengthInBytes);
 //}
 //
-//void QOpenglEngine::updateBufferData_(graphics::Buffer* buffer, const void* data, Int lengthInBytes)
+//void QOpenglEngine::updateBufferData_(Buffer* buffer, const void* data, Int lengthInBytes)
 //{
 //    QOpenglBuffer* oglBuffer = static_cast<QOpenglBuffer*>(buffer);
 //    oglBuffer->load(data, lengthInBytes);
 //}
 //
-//void QOpenglEngine::setupVertexBufferForPaintShader_(graphics::Buffer* buffer)
+//void QOpenglEngine::setupVertexBufferForPaintShader_(Buffer* buffer)
 //{
 //    QOpenglBuffer* oglBuffer = static_cast<QOpenglBuffer*>(buffer);
 //    GLsizei stride = sizeof(XYRGBVertex);
@@ -471,15 +469,15 @@ UInt64 QOpenglEngine::present_(graphics::SwapChain* /*swapChain*/, UInt32 /*sync
 //    oglBuffer->unbind();
 //}
 //
-//void QOpenglEngine::drawPrimitives_(graphics::Buffer* buffer, graphics::PrimitiveType type)
+//void QOpenglEngine::drawPrimitives_(Buffer* buffer, PrimitiveType type)
 //{
 //    QOpenglBuffer* oglBuffer = static_cast<QOpenglBuffer*>(buffer);
 //    GLenum mode = 0;
 //    switch (type) {
-//    case graphics::PrimitiveType::LineList: mode = GL_LINES; break;
-//    case graphics::PrimitiveType::LineStrip: mode = GL_LINE_STRIP; break;
-//    case graphics::PrimitiveType::TriangleList: mode = GL_TRIANGLES; break;
-//    case graphics::PrimitiveType::TriangleStrip: mode = GL_TRIANGLE_STRIP; break;
+//    case PrimitiveType::LineList: mode = GL_LINES; break;
+//    case PrimitiveType::LineStrip: mode = GL_LINE_STRIP; break;
+//    case PrimitiveType::TriangleList: mode = GL_TRIANGLES; break;
+//    case PrimitiveType::TriangleStrip: mode = GL_TRIANGLE_STRIP; break;
 //    default:
 //        mode = GL_POINTS;
 //        break;
@@ -497,4 +495,4 @@ UInt64 QOpenglEngine::present_(graphics::SwapChain* /*swapChain*/, UInt32 /*sync
 //    paintShaderProgram_->release();
 //}
 
-} // namespace vgc::ui::internal
+} // namespace vgc::ui::internal::qopengl

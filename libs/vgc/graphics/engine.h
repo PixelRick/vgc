@@ -124,6 +124,8 @@ protected:
     void onDestroyed() override;
 
 public:
+    using SwapChainCreateInfo = SwapChainCreateInfo;
+
     // !! public methods should be called on user thread !!
 
     void start();
@@ -157,7 +159,7 @@ public:
     BufferPtr createVertexBuffer(Int initialLengthInBytes);
 
     template<typename T>
-    BufferPtr createVertexBuffer(core::Array<T> initialData, bool dynamic);
+    BufferPtr createVertexBuffer(core::Array<T> initialData, bool isDynamic);
 
     GeometryViewPtr createDynamicTriangleListView(BuiltinGeometryLayout vertexLayout);
     
@@ -286,24 +288,22 @@ protected:
 
     virtual void createBuiltinShaders_() = 0;
 
-    virtual SwapChainPtr createSwapChain_(const SwapChainCreateInfo& createInfo) = 0;
-    virtual FramebufferPtr createFramebuffer_(const ImageViewPtr& colorImageView) = 0;
-    virtual BufferPtr createBuffer_(const BufferCreateInfo& createInfo) = 0;
-    virtual ImagePtr createImage_(const ImageCreateInfo& createInfo) = 0;
-    virtual ImageViewPtr createImageView_(const ImageViewCreateInfo& createInfo, const ImagePtr& image) = 0;
-    virtual ImageViewPtr createImageView_(const ImageViewCreateInfo& createInfo, const BufferPtr& buffer, ImageFormat format, UInt32 elementsCount) = 0;
-    virtual SamplerStatePtr createSamplerState_(const SamplerStateCreateInfo& createInfo) = 0;
-    virtual GeometryViewPtr createGeometryView_(const GeometryViewCreateInfo& createInfo) = 0;
-    virtual BlendStatePtr createBlendState_(const BlendStateCreateInfo& createInfo) = 0;
-    virtual RasterizerStatePtr createRasterizerState_(const RasterizerStateCreateInfo& createInfo) = 0;
+    virtual SwapChainPtr constructSwapChain_(const SwapChainCreateInfo& createInfo) = 0;
+    virtual FramebufferPtr constructFramebuffer_(const ImageViewPtr& colorImageView) = 0;
+    virtual BufferPtr constructBuffer_(const BufferCreateInfo& createInfo) = 0;
+    virtual ImagePtr constructImage_(const ImageCreateInfo& createInfo) = 0;
+    virtual ImageViewPtr constructImageView_(const ImageViewCreateInfo& createInfo, const ImagePtr& image) = 0;
+    virtual ImageViewPtr constructImageView_(const ImageViewCreateInfo& createInfo, const BufferPtr& buffer, ImageFormat format, UInt32 elementsCount) = 0;
+    virtual SamplerStatePtr constructSamplerState_(const SamplerStateCreateInfo& createInfo) = 0;
+    virtual GeometryViewPtr constructGeometryView_(const GeometryViewCreateInfo& createInfo) = 0;
+    virtual BlendStatePtr constructBlendState_(const BlendStateCreateInfo& createInfo) = 0;
+    virtual RasterizerStatePtr constructRasterizerState_(const RasterizerStateCreateInfo& createInfo) = 0;
 
     virtual void resizeSwapChain_(SwapChain* swapChain, UInt32 width, UInt32 height) = 0;
 
     virtual bool shouldPresentWaitFromSyncedUserThread_() { return false; }
 
     // -- RENDER THREAD implementation functions --
-
-    virtual void initBuiltinShaders_() = 0;
 
     virtual void initFramebuffer_(Framebuffer* framebuffer) = 0;
     virtual void initBuffer_(Buffer* buffer, const char* data, Int lengthInBytes) = 0;
@@ -341,10 +341,8 @@ protected:
     ProgramPtr simpleProgram_; // (created by api-specific engine implementations)
     BlendStatePtr defaultBlendState_;
     RasterizerStatePtr defaultRasterizerState_;
-    bool areBuiltinResourcesInited_ = false;
 
     void createBuiltinResources_();
-    void initBuiltinResources_();
 
     // -- builtin batching early impl --
 
@@ -555,8 +553,8 @@ inline FramebufferPtr Engine::getDefaultFramebuffer()
 template<typename T>
 inline BufferPtr Engine::createBuffer(const BufferCreateInfo& createInfo, core::Array<T> initialData)
 {
-    BufferPtr buffer(createBuffer_(createInfo));
-    buffer->lengthInBytes_ = initialData.length();
+    BufferPtr buffer(constructBuffer_(createInfo));
+    buffer->lengthInBytes_ = initialData.length() * sizeof(T);
 
     struct CommandParameters {
         Buffer* buffer;
@@ -572,12 +570,12 @@ inline BufferPtr Engine::createBuffer(const BufferCreateInfo& createInfo, core::
 }
 
 template<typename T>
-inline BufferPtr Engine::createVertexBuffer(core::Array<T> initialData, bool dynamic)
+inline BufferPtr Engine::createVertexBuffer(core::Array<T> initialData, bool isDynamic)
 {
     BufferCreateInfo createInfo = {};
-    createInfo.setUsage(dynamic ? Usage::Dynamic : Usage::Immutable);
+    createInfo.setUsage(isDynamic ? Usage::Dynamic : Usage::Immutable);
     createInfo.setBindFlags(BindFlags::VertexBuffer);
-    createInfo.setCpuAccessFlags(dynamic ? CpuAccessFlags::Write : CpuAccessFlags::None);
+    createInfo.setCpuAccessFlags(isDynamic ? CpuAccessFlags::Write : CpuAccessFlags::None);
     createInfo.setResourceMiscFlags(ResourceMiscFlags::None);
     return createBuffer(createInfo, std::move(initialData));
 }
@@ -594,6 +592,8 @@ inline void Engine::updateBufferData(const BufferPtr& buffer, core::Array<T> dat
         VGC_ERROR(LogVgcGraphics, "cpu does not have write access on buffer");
     }
 
+    buf->lengthInBytes_ = data.length() * sizeof(T);
+
     struct CommandParameters {
         Buffer* buffer;
         core::Array<T> data;
@@ -601,7 +601,7 @@ inline void Engine::updateBufferData(const BufferPtr& buffer, core::Array<T> dat
     queueLambdaCommandWithParameters_<CommandParameters>(
         "updateBufferData",
         [](Engine* engine, const CommandParameters& p) {
-            engine->updateBufferData_(p.buffer, p.data.data(), p.data.length());
+            engine->updateBufferData_(p.buffer, p.data.data(), p.data.length() * sizeof(T));
         },
         buf, std::move(data));
 }

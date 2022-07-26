@@ -25,16 +25,44 @@ Engine::Engine()
     : Object()
     , gcResourceList_(new detail::ResourceList())
 {
+    framebufferStack_.emplaceLast();
+
+    viewportStack_.emplaceLast(0, 0, 0, 0);
+    programStack_.emplaceLast();
+    blendStateStack_.emplaceLast();
+    blendConstantFactorStack_.emplaceLast();
+    rasterizerStateStack_.emplaceLast();
+
+    for (Int i = 0; i < stageEndIndex_; ++i) {
+        constantBuffersStacks_[i].emplaceLast();
+        imageViewsStacks_[i].emplaceLast();
+        samplersStacks_[i].emplaceLast();
+    }
+
     projectionMatrixStack_.emplaceLast(geometry::Mat4f::identity);
     viewMatrixStack_.emplaceLast(geometry::Mat4f::identity);
-    framebufferStack_.emplaceLast(nullptr);
 }
 
 void Engine::onDestroyed()
 {
     swapChain_.reset();
-    programStack_.clear();
+
     framebufferStack_.clear();
+
+    viewportStack_.clear();
+    programStack_.clear();
+    blendStateStack_.clear();
+    blendConstantFactorStack_.clear();
+    rasterizerStateStack_.clear();
+
+    for (Int i = 0; i < stageEndIndex_; ++i) {
+        constantBuffersStacks_[i].clear();
+        imageViewsStacks_[i].clear();
+        samplersStacks_[i].clear();
+    }
+
+    projectionMatrixStack_.clear();
+    viewMatrixStack_.clear();
 
     colorGradientsBuffer_; // 1D buffer
     colorGradientsBufferImageView_;
@@ -49,8 +77,6 @@ void Engine::onDestroyed()
 
     roundedRectangleProgram_.reset();
 
-    // XXX also clear state stacks !
-
     stopRenderThread_();
 }
 
@@ -63,14 +89,14 @@ void Engine::start()
 
 SwapChainPtr Engine::createSwapChain(const SwapChainCreateInfo& desc)
 {
-    return createSwapChain_(desc);
+    return constructSwapChain_(desc);
 }
 
 FramebufferPtr Engine::createFramebuffer(const ImageViewPtr& colorImageView)
 {
     // XXX should check bind flags compatibility here
 
-    FramebufferPtr framebuffer = createFramebuffer_(colorImageView);
+    FramebufferPtr framebuffer = constructFramebuffer_(colorImageView);
     queueLambdaCommandWithParameters_<Framebuffer*>(
         "initFramebuffer",
         [](Engine* engine, Framebuffer* p) {
@@ -87,7 +113,7 @@ BufferPtr Engine::createBuffer(const BufferCreateInfo& createInfo, Int initialLe
             "Negative initialLengthInBytes ({}) provided to Engine::createBuffer()", initialLengthInBytes));
     }
 
-    BufferPtr buffer(createBuffer_(createInfo));
+    BufferPtr buffer(constructBuffer_(createInfo));
     buffer->lengthInBytes_ = initialLengthInBytes;
 
     struct CommandParameters {
@@ -107,7 +133,7 @@ BufferPtr Engine::createVertexBuffer(Int initialLengthInBytes)
 {
     if (initialLengthInBytes < 0) {
         throw core::NegativeIntegerError(core::format(
-            "Negative initialLengthInBytes ({}) provided to Engine::createBuffer()", initialLengthInBytes));
+            "Negative initialLengthInBytes ({}) provided to Engine::createVertexBuffer()", initialLengthInBytes));
     }
 
     BufferCreateInfo createInfo = {};
@@ -133,7 +159,7 @@ GeometryViewPtr Engine::createDynamicTriangleListView(BuiltinGeometryLayout vert
 
 ImagePtr Engine::createImage(const ImageCreateInfo& createInfo)
 {
-    ImagePtr image(createImage_(createInfo));
+    ImagePtr image(constructImage_(createInfo));
 
     struct CommandParameters {
         Image* image;
@@ -149,7 +175,7 @@ ImagePtr Engine::createImage(const ImageCreateInfo& createInfo)
 
 ImagePtr Engine::createImage(const ImageCreateInfo& createInfo, core::Array<char> initialData)
 {
-    ImagePtr image(createImage_(createInfo));
+    ImagePtr image(constructImage_(createInfo));
 
     struct CommandParameters {
         Image* image;
@@ -170,7 +196,7 @@ ImageViewPtr Engine::createImageView(const ImageViewCreateInfo& createInfo, cons
 {
     // XXX should check bind flags compatibility here
 
-    ImageViewPtr imageView = createImageView_(createInfo, image);
+    ImageViewPtr imageView = constructImageView_(createInfo, image);
     queueLambdaCommandWithParameters_<ImageView*>(
         "initImageView",
         [](Engine* engine, ImageView* p) {
@@ -184,7 +210,7 @@ ImageViewPtr Engine::createImageView(const ImageViewCreateInfo& createInfo, cons
 {
     // XXX should check bind flags compatibility here
 
-    ImageViewPtr imageView = createImageView_(createInfo, buffer, format, elementsCount);
+    ImageViewPtr imageView = constructImageView_(createInfo, buffer, format, elementsCount);
     queueLambdaCommandWithParameters_<ImageView*>(
         "initBufferImageView",
         [](Engine* engine, ImageView* p) {
@@ -196,7 +222,7 @@ ImageViewPtr Engine::createImageView(const ImageViewCreateInfo& createInfo, cons
 
 SamplerStatePtr Engine::createSamplerState(const SamplerStateCreateInfo& createInfo)
 {
-    SamplerStatePtr samplerState = createSamplerState_(createInfo);
+    SamplerStatePtr samplerState = constructSamplerState_(createInfo);
     queueLambdaCommandWithParameters_<SamplerState*>(
         "initSamplerState",
         [](Engine* engine, SamplerState* p) {
@@ -208,7 +234,7 @@ SamplerStatePtr Engine::createSamplerState(const SamplerStateCreateInfo& createI
 
 GeometryViewPtr Engine::createGeometryView(const GeometryViewCreateInfo& createInfo)
 {
-    GeometryViewPtr geometryView = createGeometryView_(createInfo);
+    GeometryViewPtr geometryView = constructGeometryView_(createInfo);
     queueLambdaCommandWithParameters_<GeometryView*>(
         "initGeometryView",
         [](Engine* engine, GeometryView* p) {
@@ -220,7 +246,7 @@ GeometryViewPtr Engine::createGeometryView(const GeometryViewCreateInfo& createI
 
 BlendStatePtr Engine::createBlendState(const BlendStateCreateInfo& createInfo)
 {
-    BlendStatePtr blendState = createBlendState_(createInfo);
+    BlendStatePtr blendState = constructBlendState_(createInfo);
     queueLambdaCommandWithParameters_<BlendState*>(
         "initBlendState",
         [](Engine* engine, BlendState* p) {
@@ -232,7 +258,7 @@ BlendStatePtr Engine::createBlendState(const BlendStateCreateInfo& createInfo)
 
 RasterizerStatePtr Engine::createRasterizerState(const RasterizerStateCreateInfo& createInfo)
 {
-    RasterizerStatePtr rasterizerState = createRasterizerState_(createInfo);
+    RasterizerStatePtr rasterizerState = constructRasterizerState_(createInfo);
     queueLambdaCommandWithParameters_<RasterizerState*>(
         "initRasterizerState",
         [](Engine* engine, RasterizerState* p) {
@@ -257,9 +283,6 @@ void Engine::setSwapChain(const SwapChainPtr& swapChain)
             engine->setSwapChain_(swapChain);
         },
         swapChain.get());
-    if (!areBuiltinResourcesInited_) {
-        initBuiltinResources_();
-    }
 }
 
 void Engine::setFramebuffer(const FramebufferPtr& framebuffer)
@@ -267,13 +290,15 @@ void Engine::setFramebuffer(const FramebufferPtr& framebuffer)
     if (framebuffer && !checkResourceIsValid_(framebuffer.get())) {
         return;
     }
-    framebufferStack_.emplaceLast(framebuffer);
-    dirtyPipelineParameters_ |= PipelineParameters::Framebuffer;
+    if (framebufferStack_.last() != framebuffer) {
+        framebufferStack_.last() = framebuffer;
+        dirtyPipelineParameters_ |= PipelineParameters::Framebuffer;
+    }
 }
 
 void Engine::setViewport(Int x, Int y, Int width, Int height)
 {
-    viewportStack_.emplaceLast(x, y, width, height);
+    viewportStack_.last() = Viewport(x, y, width, height);
     dirtyPipelineParameters_ |= PipelineParameters::Viewport;
 }
 
@@ -286,21 +311,37 @@ void Engine::setProgram(BuiltinProgram builtinProgram)
         break;
     }
     }
-    programStack_.emplaceLast(program);
-    dirtyPipelineParameters_ |= PipelineParameters::Program;
+    if (programStack_.last() != program) {
+        programStack_.last() = program;
+        if (true /*program->usesBuiltinConstants()*/) {
+            BufferPtr& constantBufferRef = constantBuffersStacks_[shaderStageToIndex_(ShaderStage::Vertex)].last()[0];
+            if (constantBufferRef != builtinConstantsBuffer_) {
+                constantBufferRef = builtinConstantsBuffer_;
+                dirtyPipelineParameters_ |= PipelineParameters::VertexShaderConstantBuffers;
+            }
+        }
+        dirtyPipelineParameters_ |= PipelineParameters::Program;
+    }
 }
 
 void Engine::setBlendState(const BlendStatePtr& state, const geometry::Vec4f& blendConstantFactor)
 {
-    blendStateStack_.emplaceLast(state);
-    blendConstantFactorStack_.emplaceLast(blendConstantFactor);
-    dirtyPipelineParameters_ |= PipelineParameters::BlendState;
+    if (blendStateStack_.last() != state) {
+        blendStateStack_.last() = state;
+        dirtyPipelineParameters_ |= PipelineParameters::BlendState;
+    }
+    if (blendConstantFactorStack_.last() != blendConstantFactor) {
+        blendConstantFactorStack_.last() = blendConstantFactor;
+        dirtyPipelineParameters_ |= PipelineParameters::BlendState;
+    }
 }
 
 void Engine::setRasterizerState(const RasterizerStatePtr& state)
 {
-    rasterizerStateStack_.emplaceLast(state);
-    dirtyPipelineParameters_ |= PipelineParameters::RasterizerState;
+    if (rasterizerStateStack_.last() != state) {
+        rasterizerStateStack_.last() = state;
+        dirtyPipelineParameters_ |= PipelineParameters::RasterizerState;
+    }
 }
 
 void Engine::setStageConstantBuffers(const BufferPtr* buffers, Int startIndex, Int count, ShaderStage shaderStage)
@@ -311,7 +352,7 @@ void Engine::setStageConstantBuffers(const BufferPtr* buffers, Int startIndex, I
     for (Int i = 0; i < count; ++i) {
         constantBuffers[startIndex + i] = buffers[i];
     }
-    dirtyPipelineParameters_ = std::array{
+    dirtyPipelineParameters_ |= std::array{
         PipelineParameters::VertexShaderConstantBuffers,
         PipelineParameters::GeometryShaderConstantBuffers,
         PipelineParameters::PixelShaderConstantBuffers
@@ -326,7 +367,7 @@ void Engine::setStageImageViews(const ImageViewPtr* views, Int startIndex, Int c
     for (Int i = 0; i < count; ++i) {
         imageViews[startIndex + i] = views[i];
     }
-    dirtyPipelineParameters_ = std::array{
+    dirtyPipelineParameters_ |= std::array{
         PipelineParameters::VertexShaderImageViews,
         PipelineParameters::GeometryShaderImageViews,
         PipelineParameters::PixelShaderImageViews
@@ -341,7 +382,7 @@ void Engine::setStageSamplers(const SamplerStatePtr* states, Int startIndex, Int
     for (Int i = 0; i < count; ++i) {
         samplers[startIndex + i] = states[i];
     }
-    dirtyPipelineParameters_ = std::array{
+    dirtyPipelineParameters_ |= std::array{
         PipelineParameters::VertexShaderSamplers,
         PipelineParameters::GeometryShaderSamplers,
         PipelineParameters::PixelShaderSamplers
@@ -756,33 +797,15 @@ void Engine::present(UInt32 syncInterval,
 
 void Engine::createBuiltinResources_()
 {
+    {
+        BufferCreateInfo createInfo = {};
+        createInfo.setUsage(Usage::Dynamic);
+        createInfo.setBindFlags(BindFlags::ConstantBuffer);
+        createInfo.setCpuAccessFlags(CpuAccessFlags::Write);
+        builtinConstantsBuffer_ = createBuffer(createInfo, sizeof(BuiltinConstants));
+    }
+
     createBuiltinShaders_();
-
-    BufferCreateInfo createInfo = {};
-
-    createInfo.setUsage(Usage::Dynamic);
-    createInfo.setBindFlags(BindFlags::ConstantBuffer);
-    createInfo.setCpuAccessFlags(CpuAccessFlags::Write);
-    builtinConstantsBuffer_ = createBuffer_(createInfo);
-}
-
-void Engine::initBuiltinResources_()
-{
-    queueLambdaCommand_(
-        "initBuiltinShaders",
-        [](Engine* engine) {
-            engine->initBuiltinShaders_();
-        });
-
-    Buffer* builtinConstantsBuffer = builtinConstantsBuffer_.get();
-    queueLambdaCommand_(
-        "initBuiltinConstantsBuffer",
-        [=](Engine* engine) {
-            engine->initBuffer_(builtinConstantsBuffer, nullptr, sizeof(BuiltinConstants));
-        });
-
-
-    areBuiltinResourcesInited_ = true;
 }
 
 // -- render thread + sync --

@@ -53,19 +53,9 @@ public:
         return object_.get();
     }
 
-    ID3D11Buffer** objectAddress()
-    {
-        return object_.addressOf();
-    }
-
     const D3D11_BUFFER_DESC& desc() const
     {
         return desc_;
-    }
-
-    D3D11_BUFFER_DESC* descAddress()
-    {
-        return &desc_;
     }
 
 protected:
@@ -501,7 +491,7 @@ D3D11_USAGE usageToD3DUsage(Usage usage)
 
 UINT resourceMiscFlagsToD3DResourceMiscFlags(ResourceMiscFlags resourceMiscFlags)
 {
-    UINT x;
+    UINT x = 0;
     if (!!(resourceMiscFlags & ResourceMiscFlags::GenerateMips)) {
         x |= D3D11_RESOURCE_MISC_GENERATE_MIPS;
     }
@@ -681,16 +671,16 @@ D3d11Engine::D3d11Engine()
            // if we defer creation of buffers and swapchain.
         featureLevels, 1,
         D3D11_SDK_VERSION,
-        device_.addressOf(),
+        device_.releaseAndGetAddressOf(),
         NULL,
-        deviceCtx_.addressOf());
+        deviceCtx_.releaseAndGetAddressOf());
 
     // Retrieve DXGI factory from device.
     ComPtr<IDXGIDevice> dxgiDevice;
     ComPtr<IDXGIAdapter> dxgiAdapter;
-    device_->QueryInterface(IID_PPV_ARGS(dxgiDevice.addressOf()));
-    dxgiDevice->GetParent(IID_PPV_ARGS(dxgiAdapter.addressOf()));
-    dxgiAdapter->GetParent(IID_PPV_ARGS(factory_.addressOf()));
+    device_->QueryInterface(IID_PPV_ARGS(dxgiDevice.releaseAndGetAddressOf()));
+    dxgiDevice->GetParent(IID_PPV_ARGS(dxgiAdapter.releaseAndGetAddressOf()));
+    dxgiAdapter->GetParent(IID_PPV_ARGS(factory_.releaseAndGetAddressOf()));
 }
 
 void D3d11Engine::onDestroyed()
@@ -719,6 +709,7 @@ void D3d11Engine::createBuiltinShaders_()
             {
                 float4x4 projMatrix;
                 float4x4 viewMatrix;
+                unsigned int frameStartTimeInMs;
             };
             struct VS_INPUT
             {
@@ -747,7 +738,7 @@ void D3d11Engine::createBuiltinShaders_()
         if (0 > D3DCompile(
             vertexShaderSrc, strlen(vertexShaderSrc),
             NULL, NULL, NULL, "main", "vs_4_0", 0, 0,
-            vertexShaderBlob.addressOf(), errorBlob.addressOf()))
+            vertexShaderBlob.releaseAndGetAddressOf(), errorBlob.releaseAndGetAddressOf()))
         {
             const char* errString = static_cast<const char*>(errorBlob->GetBufferPointer());
             throw core::RuntimeError(errString);
@@ -757,7 +748,7 @@ void D3d11Engine::createBuiltinShaders_()
         ComPtr<ID3D11VertexShader> vertexShader;
         device_->CreateVertexShader(
             vertexShaderBlob->GetBufferPointer(), vertexShaderBlob->GetBufferSize(),
-            NULL, vertexShader.addressOf());
+            NULL, vertexShader.releaseAndGetAddressOf());
         simpleProgram->vertexShader_ = vertexShader;
 
         // Create the input layout
@@ -766,7 +757,9 @@ void D3d11Engine::createBuiltinShaders_()
             { "POSITION", 0, DXGI_FORMAT_R32G32_FLOAT,    0, (UINT)offsetof(XYRGBVertex, x), D3D11_INPUT_PER_VERTEX_DATA, 0 },
             { "COLOR",    0, DXGI_FORMAT_R32G32B32_FLOAT, 0, (UINT)offsetof(XYRGBVertex, r), D3D11_INPUT_PER_VERTEX_DATA, 0 },
         };
-        device_->CreateInputLayout(layout, 2, vertexShaderBlob->GetBufferPointer(), vertexShaderBlob->GetBufferSize(), inputLayout.addressOf());
+        device_->CreateInputLayout(
+            layout, 2, vertexShaderBlob->GetBufferPointer(),
+            vertexShaderBlob->GetBufferSize(), inputLayout.releaseAndGetAddressOf());
         simpleProgram->builtinLayouts_[core::toUnderlying(BuiltinGeometryLayout::XYRGB)] = inputLayout;
     }
 
@@ -791,7 +784,7 @@ void D3d11Engine::createBuiltinShaders_()
         if (0 > D3DCompile(
             pixelShaderSrc, strlen(pixelShaderSrc),
             NULL, NULL, NULL, "main", "ps_4_0", 0, 0,
-            pixelShaderBlob.addressOf(), errorBlob.addressOf()))
+            pixelShaderBlob.releaseAndGetAddressOf(), errorBlob.releaseAndGetAddressOf()))
         {
             const char* errString = static_cast<const char*>(errorBlob->GetBufferPointer());
             throw core::RuntimeError(errString);
@@ -801,12 +794,25 @@ void D3d11Engine::createBuiltinShaders_()
         ComPtr<ID3D11PixelShader> pixelShader;
         device_->CreatePixelShader(
             pixelShaderBlob->GetBufferPointer(), pixelShaderBlob->GetBufferSize(),
-            NULL, pixelShader.addressOf());
+            NULL, pixelShader.releaseAndGetAddressOf());
         simpleProgram->pixelShader_ = pixelShader;
+    }
+
+    // Create depth-stencil State
+    {
+        D3D11_DEPTH_STENCIL_DESC desc = {};
+        desc.DepthEnable = false;
+        desc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ALL;
+        desc.DepthFunc = D3D11_COMPARISON_ALWAYS;
+        desc.StencilEnable = false;
+        desc.FrontFace.StencilFailOp = desc.FrontFace.StencilDepthFailOp = desc.FrontFace.StencilPassOp = D3D11_STENCIL_OP_KEEP;
+        desc.FrontFace.StencilFunc = D3D11_COMPARISON_ALWAYS;
+        desc.BackFace = desc.FrontFace;
+        device_->CreateDepthStencilState(&desc, depthStencilState_.releaseAndGetAddressOf());
     }
 }
 
-SwapChainPtr D3d11Engine::createSwapChain_(const SwapChainCreateInfo& createInfo)
+SwapChainPtr D3d11Engine::constructSwapChain_(const SwapChainCreateInfo& createInfo)
 {
     if (!device_) {
         throw core::LogicError("device_ is null.");
@@ -851,12 +857,12 @@ SwapChainPtr D3d11Engine::createSwapChain_(const SwapChainCreateInfo& createInfo
     sd.SwapEffect = DXGI_SWAP_EFFECT_SEQUENTIAL;
 
     ComPtr<IDXGISwapChain> dxgiSwapChain;
-    if (factory_->CreateSwapChain(device_.get(), &sd, dxgiSwapChain.addressOf()) < 0) {
+    if (factory_->CreateSwapChain(device_.get(), &sd, dxgiSwapChain.releaseAndGetAddressOf()) < 0) {
         throw core::LogicError("D3d11Engine: could not create swap chain");
     }
 
     ComPtr<ID3D11Texture2D> backBuffer;
-    dxgiSwapChain->GetBuffer(0, IID_PPV_ARGS(backBuffer.addressOf()));
+    dxgiSwapChain->GetBuffer(0, IID_PPV_ARGS(backBuffer.releaseAndGetAddressOf()));
 
     D3D11_TEXTURE2D_DESC backBufferDesc = {};
     backBuffer->GetDesc(&backBufferDesc);
@@ -873,7 +879,7 @@ SwapChainPtr D3d11Engine::createSwapChain_(const SwapChainCreateInfo& createInfo
     D3d11ImageViewPtr colorView(new D3d11ImageView(gcResourceList_, viewCreateInfo, backBufferImage, colorViewFormat, 0));
 
     ComPtr<ID3D11RenderTargetView> backBufferView;
-    device_->CreateRenderTargetView(backBuffer.get(), NULL, backBufferView.addressOf());
+    device_->CreateRenderTargetView(backBuffer.get(), NULL, backBufferView.releaseAndGetAddressOf());
     colorView->rtv_ = backBufferView.get();
 
     D3d11FramebufferPtr newFramebuffer(
@@ -889,14 +895,14 @@ SwapChainPtr D3d11Engine::createSwapChain_(const SwapChainCreateInfo& createInfo
     return SwapChainPtr(swapChain.release());
 }
 
-FramebufferPtr D3d11Engine::createFramebuffer_(const ImageViewPtr& colorImageView)
+FramebufferPtr D3d11Engine::constructFramebuffer_(const ImageViewPtr& colorImageView)
 {
     auto framebuffer = makeUnique<D3d11Framebuffer>(
         gcResourceList_, static_pointer_cast<D3d11ImageView>(colorImageView), nullptr, false);
     return FramebufferPtr(framebuffer.release());
 }
 
-BufferPtr D3d11Engine::createBuffer_(const BufferCreateInfo& createInfo)
+BufferPtr D3d11Engine::constructBuffer_(const BufferCreateInfo& createInfo)
 {
     auto buffer = makeUnique<D3d11Buffer>(gcResourceList_, createInfo);
     D3D11_BUFFER_DESC& desc = buffer->desc_;
@@ -951,7 +957,7 @@ BufferPtr D3d11Engine::createBuffer_(const BufferCreateInfo& createInfo)
     return BufferPtr(buffer.release());
 }
 
-ImagePtr D3d11Engine::createImage_(const ImageCreateInfo& createInfo)
+ImagePtr D3d11Engine::constructImage_(const ImageCreateInfo& createInfo)
 {
     DXGI_FORMAT dxgiFormat = imageFormatToDxgiFormat(createInfo.format());
     if (dxgiFormat == DXGI_FORMAT_UNKNOWN) {
@@ -963,7 +969,7 @@ ImagePtr D3d11Engine::createImage_(const ImageCreateInfo& createInfo)
     return ImagePtr(image.release());
 }
 
-ImageViewPtr D3d11Engine::createImageView_(const ImageViewCreateInfo& createInfo, const ImagePtr& image)
+ImageViewPtr D3d11Engine::constructImageView_(const ImageViewCreateInfo& createInfo, const ImagePtr& image)
 {
     // XXX should check bind flags compatibility in abstract engine
 
@@ -972,7 +978,7 @@ ImageViewPtr D3d11Engine::createImageView_(const ImageViewCreateInfo& createInfo
     return ImageViewPtr(imageView.release());
 }
 
-ImageViewPtr D3d11Engine::createImageView_(const ImageViewCreateInfo& createInfo, const BufferPtr& buffer, ImageFormat format, UInt32 elementsCount)
+ImageViewPtr D3d11Engine::constructImageView_(const ImageViewCreateInfo& createInfo, const BufferPtr& buffer, ImageFormat format, UInt32 elementsCount)
 {
     // XXX should check bind flags compatibility in abstract engine
 
@@ -986,13 +992,13 @@ ImageViewPtr D3d11Engine::createImageView_(const ImageViewCreateInfo& createInfo
     return ImageViewPtr(view.release());
 }
 
-SamplerStatePtr D3d11Engine::createSamplerState_(const SamplerStateCreateInfo& createInfo)
+SamplerStatePtr D3d11Engine::constructSamplerState_(const SamplerStateCreateInfo& createInfo)
 {
     auto state = makeUnique<D3d11SamplerState>(gcResourceList_, createInfo);
     return SamplerStatePtr(state.release());
 }
 
-GeometryViewPtr D3d11Engine::createGeometryView_(const GeometryViewCreateInfo& createInfo)
+GeometryViewPtr D3d11Engine::constructGeometryView_(const GeometryViewCreateInfo& createInfo)
 {
     D3D_PRIMITIVE_TOPOLOGY topology = primitiveTypeToD3DPrimitiveTopology(createInfo.primitiveType());
     if (topology == D3D11_PRIMITIVE_TOPOLOGY_UNDEFINED) {
@@ -1004,13 +1010,13 @@ GeometryViewPtr D3d11Engine::createGeometryView_(const GeometryViewCreateInfo& c
     return GeometryViewPtr(view.release());
 }
 
-BlendStatePtr D3d11Engine::createBlendState_(const BlendStateCreateInfo& createInfo)
+BlendStatePtr D3d11Engine::constructBlendState_(const BlendStateCreateInfo& createInfo)
 {
     auto state = makeUnique<D3d11BlendState>(gcResourceList_, createInfo);
     return BlendStatePtr(state.release());
 }
 
-RasterizerStatePtr D3d11Engine::createRasterizerState_(const RasterizerStateCreateInfo& createInfo)
+RasterizerStatePtr D3d11Engine::constructRasterizerState_(const RasterizerStateCreateInfo& createInfo)
 {
     auto state = makeUnique<D3d11RasterizerState>(gcResourceList_, createInfo);
     return RasterizerStatePtr(state.release());
@@ -1030,7 +1036,7 @@ void D3d11Engine::resizeSwapChain_(SwapChain* swapChain, UInt32 width, UInt32 he
     }
 
     ComPtr<ID3D11Texture2D> backBuffer;
-    dxgiSwapChain->GetBuffer(0, IID_PPV_ARGS(backBuffer.addressOf()));
+    dxgiSwapChain->GetBuffer(0, IID_PPV_ARGS(backBuffer.releaseAndGetAddressOf()));
 
     D3D11_TEXTURE2D_DESC backBufferDesc = {};
     backBuffer->GetDesc(&backBufferDesc);
@@ -1047,7 +1053,7 @@ void D3d11Engine::resizeSwapChain_(SwapChain* swapChain, UInt32 width, UInt32 he
     D3d11ImageViewPtr colorView(new D3d11ImageView(gcResourceList_, viewCreateInfo, backBufferImage, d3dSwapChain->backBufferFormat(), 0));
 
     ComPtr<ID3D11RenderTargetView> backBufferView;
-    device_->CreateRenderTargetView(backBuffer.get(), NULL, backBufferView.addressOf());
+    device_->CreateRenderTargetView(backBuffer.get(), NULL, backBufferView.releaseAndGetAddressOf());
     colorView->rtv_ = backBufferView.get();
 
     D3d11FramebufferPtr newFramebuffer(
@@ -1062,11 +1068,6 @@ void D3d11Engine::resizeSwapChain_(SwapChain* swapChain, UInt32 width, UInt32 he
 
 // -- RENDER THREAD functions --
 
-void D3d11Engine::initBuiltinShaders_()
-{
-    // no-op, everything was done on create
-}
-
 void D3d11Engine::initFramebuffer_(Framebuffer* /*framebuffer*/)
 {
     // no-op
@@ -1076,8 +1077,8 @@ void D3d11Engine::initBuffer_(Buffer* buffer, const char* data, Int lengthInByte
 {
     D3d11Buffer* d3dBuffer = static_cast<D3d11Buffer*>(buffer);
     if (lengthInBytes) {
-        loadBuffer_(d3dBuffer->objectAddress(),
-                    d3dBuffer->descAddress(),
+        loadBuffer_(d3dBuffer->object_,
+                    d3dBuffer->desc_,
                     data,
                     lengthInBytes);
     }
@@ -1133,7 +1134,7 @@ void D3d11Engine::initImage_(Image* image, const Span<const Span<const char>>* d
         desc.MiscFlags = d3dMiscFlags;
 
         ComPtr<ID3D11Texture1D> texture;
-        device_->CreateTexture1D(&desc, initData.size() ? initData.data() : nullptr, texture.addressOf());
+        device_->CreateTexture1D(&desc, initData.size() ? initData.data() : nullptr, texture.releaseAndGetAddressOf());
         d3dImage->object_ = texture;
     }
     else {
@@ -1151,7 +1152,7 @@ void D3d11Engine::initImage_(Image* image, const Span<const Span<const char>>* d
         desc.MiscFlags = d3dMiscFlags;
 
         ComPtr<ID3D11Texture2D> texture;
-        device_->CreateTexture2D(&desc, initData.size() ? initData.data() : nullptr, texture.addressOf());
+        device_->CreateTexture2D(&desc, initData.size() ? initData.data() : nullptr, texture.releaseAndGetAddressOf());
         d3dImage->object_ = texture;
     }
 }
@@ -1206,7 +1207,7 @@ void D3d11Engine::initImageView_(ImageView* view)
                 break;
             }
         }
-        device_->CreateShaderResourceView(d3dImageView->d3dViewedResource(), &desc, d3dImageView->srv_.addressOf());
+        device_->CreateShaderResourceView(d3dImageView->d3dViewedResource(), &desc, d3dImageView->srv_.releaseAndGetAddressOf());
     }
     if (!!(d3dImageView->bindFlags() & ImageBindFlags::RenderTarget)) {
         D3D11_RENDER_TARGET_VIEW_DESC desc = {};
@@ -1251,7 +1252,7 @@ void D3d11Engine::initImageView_(ImageView* view)
                 break;
             }
         }
-        device_->CreateRenderTargetView(d3dImageView->d3dViewedResource(), &desc, d3dImageView->rtv_.addressOf());
+        device_->CreateRenderTargetView(d3dImageView->d3dViewedResource(), &desc, d3dImageView->rtv_.releaseAndGetAddressOf());
     }
     if (!!(d3dImageView->bindFlags() & ImageBindFlags::DepthStencil)) {
         D3D11_DEPTH_STENCIL_VIEW_DESC desc = {};
@@ -1293,7 +1294,7 @@ void D3d11Engine::initImageView_(ImageView* view)
                 break;
             }
         }
-        device_->CreateDepthStencilView(d3dImageView->d3dViewedResource(), &desc, d3dImageView->dsv_.addressOf());
+        device_->CreateDepthStencilView(d3dImageView->d3dViewedResource(), &desc, d3dImageView->dsv_.releaseAndGetAddressOf());
     }
 }
 
@@ -1330,7 +1331,7 @@ void D3d11Engine::initSamplerState_(SamplerState* state)
     memcpy(desc.BorderColor, &d3dSamplerState->wrapColor(), 4 * sizeof(float));
     desc.MinLOD = d3dSamplerState->minLOD();
     desc.MaxLOD = d3dSamplerState->maxLOD();
-    device_->CreateSamplerState(&desc, d3dSamplerState->object_.addressOf());
+    device_->CreateSamplerState(&desc, d3dSamplerState->object_.releaseAndGetAddressOf());
 }
 
 void D3d11Engine::initGeometryView_(GeometryView* /*view*/)
@@ -1369,7 +1370,7 @@ void D3d11Engine::initBlendState_(BlendState* state)
             subDesc.RenderTargetWriteMask |= D3D11_COLOR_WRITE_ENABLE_ALPHA;
         }
     }
-    device_->CreateBlendState(&desc, d3dBlendState->object_.addressOf());
+    device_->CreateBlendState(&desc, d3dBlendState->object_.releaseAndGetAddressOf());
 }
 
 void D3d11Engine::initRasterizerState_(RasterizerState* state)
@@ -1386,7 +1387,7 @@ void D3d11Engine::initRasterizerState_(RasterizerState* state)
     desc.ScissorEnable = state->isScissoringEnabled();
     desc.MultisampleEnable = state->isMultisamplingEnabled();
     desc.AntialiasedLineEnable = state->isLineAntialiasingEnabled();
-    device_->CreateRasterizerState(&desc, d3dRasterizerState->object_.addressOf());
+    device_->CreateRasterizerState(&desc, d3dRasterizerState->object_.releaseAndGetAddressOf());
 }
 
 void D3d11Engine::setSwapChain_(SwapChain* swapChain)
@@ -1504,12 +1505,19 @@ void D3d11Engine::setStageSamplers_(SamplerState* const* states, Int startIndex,
 void D3d11Engine::updateBufferData_(Buffer* buffer, const void* data, Int lengthInBytes)
 {
     D3d11Buffer* d3dBuffer = static_cast<D3d11Buffer*>(buffer);
-    loadBuffer_(d3dBuffer->objectAddress(), d3dBuffer->descAddress(), data, lengthInBytes);
+    loadBuffer_(d3dBuffer->object_, d3dBuffer->desc_, data, lengthInBytes);
     d3dBuffer->gpuLengthInBytes_ = lengthInBytes;
 }
 
 void D3d11Engine::draw_(GeometryView* view, UInt indexCount, UInt instanceCount)
 {
+    UINT nIdx = core::int_cast<UINT>(indexCount);
+    UINT nInst = core::int_cast<UINT>(instanceCount);
+
+    if (nIdx == 0) {
+        return;
+    }
+
     //PrimitiveType view->primitiveType()
     D3d11GeometryView* d3dGeometryView = static_cast<D3d11GeometryView*>(view);
 
@@ -1535,9 +1543,6 @@ void D3d11Engine::draw_(GeometryView* view, UInt indexCount, UInt instanceCount)
 
     D3d11Buffer* indexBuffer = static_cast<D3d11Buffer*>(view->indexBuffer().get());
 
-    UINT nIdx = core::int_cast<UINT>(indexCount);
-    UINT nInst = core::int_cast<UINT>(instanceCount);
-
     if (instanceCount == 0) {
         if (indexBuffer) {
             deviceCtx_->DrawIndexed(nIdx, 0, 0);
@@ -1559,7 +1564,7 @@ void D3d11Engine::draw_(GeometryView* view, UInt indexCount, UInt instanceCount)
 void D3d11Engine::clear_(const core::Color& color)
 {
     ComPtr<ID3D11RenderTargetView> rtv;
-    deviceCtx_->OMGetRenderTargets(1, rtv.addressOf(), NULL);
+    deviceCtx_->OMGetRenderTargets(1, rtv.releaseAndGetAddressOf(), NULL);
     std::array<float, 4> c = {
         static_cast<float>(color.r()),
         static_cast<float>(color.g()),
@@ -1641,22 +1646,40 @@ UInt64 D3d11Engine::present_(SwapChain* swapChain, UInt32 syncInterval, PresentF
 
 // Private methods
 
-bool D3d11Engine::loadBuffer_(ID3D11Buffer** bufferPtr, D3D11_BUFFER_DESC* desc, const void* data, Int dataSize)
+void D3d11Engine::initBuiltinShaders_()
+{
+    // no-op atm, everything was done on create
+}
+
+bool D3d11Engine::loadBuffer_(ComPtr<ID3D11Buffer>& buffer, D3D11_BUFFER_DESC& desc, const void* data, Int dataSize)
 {
     if (dataSize == 0) {
         return false;
     }
-    if ((dataSize > desc->ByteWidth) || (dataSize * 4 < desc->ByteWidth) || !*bufferPtr) {
-        desc->ByteWidth = core::int_cast<UINT>(dataSize);
-        D3D11_SUBRESOURCE_DATA srData = {};
-        srData.pSysMem = data;
-        if (device_->CreateBuffer(desc, (data ? &srData : NULL), bufferPtr) < 0) {
-            desc->ByteWidth = 0;
+    if ((dataSize > desc.ByteWidth) || (dataSize * 4 < desc.ByteWidth) || !buffer) {
+        UINT dataWidth = core::int_cast<UINT>(dataSize);
+        desc.ByteWidth = dataWidth;
+        if (desc.BindFlags & D3D11_BIND_CONSTANT_BUFFER) {
+            desc.ByteWidth = (desc.ByteWidth + 0xFu) & ~UINT(0xFu);
+        }
+        if (data && desc.ByteWidth == dataWidth) {
+            D3D11_SUBRESOURCE_DATA srData = {};
+            srData.pSysMem = data;
+            if (device_->CreateBuffer(&desc, &srData, buffer.releaseAndGetAddressOf()) < 0) {
+                desc.ByteWidth = 0;
+                return false;
+            }
+            return true;
+        }
+        if (device_->CreateBuffer(&desc, NULL, buffer.releaseAndGetAddressOf()) < 0) {
+            desc.ByteWidth = 0;
             return false;
         }
-        return true;
     }
-    return writeBufferReserved_(*bufferPtr, data, dataSize);
+    if (data) {
+        return writeBufferReserved_(buffer.get(), data, dataSize);
+    }
+    return true;
 }
 
 bool D3d11Engine::writeBufferReserved_(ID3D11Buffer* buffer, const void* data, Int dataSize)

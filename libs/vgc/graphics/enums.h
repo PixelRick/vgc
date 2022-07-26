@@ -283,7 +283,9 @@ enum class BlendWriteMask : UInt8 {
     G = 2,
     B = 4,
     A = 8,
-    All = R | G | B | A,
+    RGB = R | G | B,
+    RGBA = RGB | A,
+    All = RGBA,
 };
 VGC_DEFINE_SCOPED_ENUM_FLAGS_OPERATORS(BlendWriteMask)
 

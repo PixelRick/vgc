@@ -164,9 +164,9 @@ protected:
             Int layoutIndex = core::toUnderlying(builtinLayout);
             if (info_.strides_[0] == 0) {
                 info_.strides_[0] = std::array{
-                    2, // XY
-                    5, // XYRGB
-                    3, // XYZ
+                    2 * 4, // XY
+                    5 * 4, // XYRGB
+                    3 * 4, // XYZ
                 }[layoutIndex];
             }
         }

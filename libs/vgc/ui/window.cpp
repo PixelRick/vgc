@@ -87,6 +87,21 @@ Window::Window(ui::WidgetPtr widget) :
 #endif
 
     swapChain_ = engine_->createSwapChain(scd);
+
+    {
+        graphics::RasterizerStateCreateInfo createInfo = {};
+        rasterizerState_ = engine_->createRasterizerState(createInfo);
+    }
+
+    {
+        graphics::BlendStateCreateInfo createInfo = {};
+        createInfo.setTargetBlendEnabled(0, true);
+        createInfo.setTargetBlendEquationRGB(0, graphics::BlendOp::Add, graphics::BlendFactor::SourceAlpha, graphics::BlendFactor::OneMinusSourceAlpha);
+        createInfo.setTargetBlendEquationAlpha(0, graphics::BlendOp::Add, graphics::BlendFactor::One, graphics::BlendFactor::OneMinusSourceAlpha);
+        createInfo.setTargetBlendWriteMask(0, graphics::BlendWriteMask::All);
+        blendState_ = engine_->createBlendState(createInfo);
+    }
+
     engine_->start();
 
     // Handle dead keys and complex input methods.
@@ -296,6 +311,8 @@ void Window::paint(bool sync) {
     updateDeferred_ = false;
 
     engine_->setSwapChain(swapChain_);
+    engine_->setRasterizerState(rasterizerState_);
+    engine_->setBlendState(blendState_, geometry::Vec4f());
     engine_->setViewport(0, 0, width_, height_);
     engine_->clear(clearColor_);
 

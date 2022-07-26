@@ -123,7 +123,7 @@ public:
         }
     }
 
-    T** addressOf()
+    T** releaseAndGetAddressOf()
     {
         reset();
         return &p_;
