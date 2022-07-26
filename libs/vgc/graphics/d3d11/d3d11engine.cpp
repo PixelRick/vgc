@@ -42,6 +42,8 @@ struct XYRGBVertex {
 
 } // namespace
 
+class D3d11ImageView;
+
 class D3d11Buffer : public Buffer {
 protected:
     friend D3d11Engine;
@@ -68,6 +70,9 @@ protected:
 private:
     ComPtr<ID3D11Buffer> object_;
     D3D11_BUFFER_DESC desc_ = {};
+    // not enough if it is bound multiple times :/
+    PipelineParameters parametersToDirtyOnRebuild_ = {};
+    core::Array<D3d11ImageView*> dependentViews_;
 };
 using D3d11BufferPtr = ResourcePtr<D3d11Buffer>;
 
@@ -102,7 +107,7 @@ protected:
 
 private:
     ComPtr<ID3D11Resource> object_;
-    DXGI_FORMAT dxgiFormat_;
+    DXGI_FORMAT dxgiFormat_ = {};
 };
 using D3d11ImagePtr = ResourcePtr<D3d11Image>;
 
@@ -170,7 +175,9 @@ private:
     ComPtr<ID3D11ShaderResourceView> srv_;
     ComPtr<ID3D11RenderTargetView> rtv_;
     ComPtr<ID3D11DepthStencilView> dsv_;
-    DXGI_FORMAT dxgiFormat_;
+    DXGI_FORMAT dxgiFormat_ = {};
+    // not enough if it is bound multiple times :/
+    PipelineParameters parametersToDirtyOnRebuild_ = {};
 };
 using D3d11ImageViewPtr = ResourcePtr<D3d11ImageView>;
 
