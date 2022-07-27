@@ -314,15 +314,15 @@ protected:
     virtual void initBlendState_(BlendState* state) = 0;
     virtual void initRasterizerState_(RasterizerState* state) = 0;
 
-    virtual void setSwapChain_(SwapChain* swapChain) = 0;
-    virtual void setFramebuffer_(Framebuffer* framebuffer) = 0;
+    virtual void setSwapChain_(const SwapChainPtr& swapChain) = 0;
+    virtual void setFramebuffer_(const FramebufferPtr& framebuffer) = 0;
     virtual void setViewport_(Int x, Int y, Int width, Int height) = 0;
-    virtual void setProgram_(Program* program) = 0;
-    virtual void setBlendState_(BlendState* state, const geometry::Vec4f& blendConstantFactor) = 0;
-    virtual void setRasterizerState_(RasterizerState* state) = 0;
-    virtual void setStageConstantBuffers_(Buffer* const* buffers, Int startIndex, Int count, ShaderStage shaderStage) = 0;
-    virtual void setStageImageViews_(ImageView* const* views, Int startIndex, Int count, ShaderStage shaderStage) = 0;
-    virtual void setStageSamplers_(SamplerState* const* states, Int startIndex, Int count, ShaderStage shaderStage) = 0;
+    virtual void setProgram_(const ProgramPtr& program) = 0;
+    virtual void setBlendState_(const BlendStatePtr& state, const geometry::Vec4f& blendConstantFactor) = 0;
+    virtual void setRasterizerState_(const RasterizerStatePtr& state) = 0;
+    virtual void setStageConstantBuffers_(BufferPtr const* buffers, Int startIndex, Int count, ShaderStage shaderStage) = 0;
+    virtual void setStageImageViews_(ImageViewPtr const* views, Int startIndex, Int count, ShaderStage shaderStage) = 0;
+    virtual void setStageSamplers_(SamplerStatePtr const* states, Int startIndex, Int count, ShaderStage shaderStage) = 0;
 
     // XXX virtual void setSwapChainDefaultFramebuffer_(const SwapChainPtr& swapChain, const FramebufferPtr& framebuffer) = 0;
 
@@ -333,8 +333,10 @@ protected:
 
     virtual UInt64 present_(SwapChain* swapChain, UInt32 syncInterval, PresentFlags flags) = 0;
 
+    virtual void resetInternalPointers_();
+
 protected:
-    detail::ResourceList* gcResourceList_ = nullptr;
+    detail::ResourceRegistry* resourceRegistry_ = nullptr;
 
     // -- builtins --
 
@@ -362,7 +364,7 @@ protected:
 
     // -- QUEUING --
 
-    // cannot be flushed in out-of-order chunks unless garbagedResources is only sent with the last
+    // cannot be flushed in out-of-order chunks unless userGarbagedResources is only sent with the last
     std::list<CommandUPtr> pendingCommands_;
 
     template<typename TCommand, typename... Args>
@@ -406,17 +408,17 @@ private:
     core::Array<geometry::Vec4f> blendConstantFactorStack_;
     core::Array<RasterizerStatePtr> rasterizerStateStack_;
 
-    using StageConstantBuffers = std::array<BufferPtr, maxConstantBufferCountPerStage>;
-    using StageConstantBuffersStack = core::Array<StageConstantBuffers>;
-    std::array<StageConstantBuffersStack, stageEndIndex_> constantBuffersStacks_;
+    using StageConstantBufferArray = std::array<BufferPtr, maxConstantBufferCountPerStage>;
+    using StageConstantBufferArrayStack = core::Array<StageConstantBufferArray>;
+    std::array<StageConstantBufferArrayStack, stageEndIndex_> constantBufferArrayStacks_;
 
-    using StageImageViews = std::array<ImageViewPtr, maxImageViewCountPerStage>;
-    using StageImageViewsStack = core::Array<StageImageViews>;
-    std::array<StageImageViewsStack, stageEndIndex_> imageViewsStacks_;
+    using StageImageViewArray = std::array<ImageViewPtr, maxImageViewCountPerStage>;
+    using StageImageViewArrayStack = core::Array<StageImageViewArray>;
+    std::array<StageImageViewArrayStack, stageEndIndex_> imageViewArrayStacks_;
 
-    using StageSamplers = std::array<SamplerStatePtr, maxSamplerCountPerStage>;
-    using StageSamplersStack = core::Array<StageSamplers>;
-    std::array<StageSamplersStack, stageEndIndex_> samplersStacks_;
+    using StageSamplerStateArray = std::array<SamplerStatePtr, maxSamplerCountPerStage>;
+    using StageSamplerStateArrayStack = core::Array<StageSamplerStateArray>;
+    std::array<StageSamplerStateArrayStack, stageEndIndex_> samplerStateArrayStacks_;
 
     PipelineParameters dirtyPipelineParameters_ = PipelineParameters::None;
 
@@ -452,20 +454,12 @@ private:
     bool stopRequested_ = false;
 
     struct CommandList {
-        CommandList(std::list<CommandUPtr>&& commands,
-                    core::Array<Resource*>&& garbagedResources)
-            : commands(std::move(commands))
-            , garbagedResources(std::move(garbagedResources))
-        {
-        }
-
         CommandList(std::list<CommandUPtr>&& commands)
             : commands(std::move(commands))
         {
         }
 
         std::list<CommandUPtr> commands;
-        core::Array<Resource*> garbagedResources;
     };
     core::Array<CommandList> commandQueue_;
 
@@ -488,11 +482,11 @@ private:
             VGC_ERROR(LogVgcGraphics, "Unexpected null resource");
             return false;
         }
-        if (!resource->gcList_) {
+        if (!resource->registry_) {
             VGC_ERROR(LogVgcGraphics, "Trying to use a resource from a stopped engine");
             return false;
         }
-        if (resource->gcList_ != gcResourceList_) {
+        if (resource->registry_ != resourceRegistry_) {
             VGC_ERROR(LogVgcGraphics, "Trying to use a geometry view from an other engine");
             return false;
         }

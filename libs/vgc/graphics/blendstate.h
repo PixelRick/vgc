@@ -201,8 +201,8 @@ private:
 ///
 class VGC_GRAPHICS_API BlendState : public Resource {
 protected:
-    BlendState(ResourceList* gcList, const BlendStateCreateInfo& info)
-        : Resource(gcList), info_(info)
+    BlendState(ResourceRegistry* registry, const BlendStateCreateInfo& info)
+        : Resource(registry), info_(info)
     {
     }
 

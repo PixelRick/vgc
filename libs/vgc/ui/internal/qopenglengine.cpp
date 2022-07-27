@@ -48,7 +48,7 @@ struct XYRGBVertex {
 //class OpenglBuffer : public Buffer {
 //public:
 //    OpenglBuffer(
-//        ResourceList* gcList,
+//        ResourceRegistry* registry,
 //        Usage usage,
 //        BindFlags bindFlags,
 //        ResourceMiscFlags resourceMiscFlags,
@@ -188,8 +188,8 @@ struct XYRGBVertex {
 //
 //class QOpenglFramebuffer : public Framebuffer {
 //public:
-//    QOpenglFramebuffer(ResourceList* gcList, bool isDefault = false)
-//        : Framebuffer(gcList)
+//    QOpenglFramebuffer(ResourceRegistry* registry, bool isDefault = false)
+//        : Framebuffer(registry)
 //        , isDefault_(isDefault)
 //    {
 //    }
@@ -216,11 +216,11 @@ struct XYRGBVertex {
 //
 //class QOpenglSwapChain : public SwapChain {
 //public:
-//    QOpenglSwapChain(ResourceList* gcList, const SwapChainCreateInfo& desc, QSurface* surface)
-//        : SwapChain(gcList, desc)
+//    QOpenglSwapChain(ResourceRegistry* registry, const SwapChainCreateInfo& desc, QSurface* surface)
+//        : SwapChain(registry, desc)
 //        , surface_(surface)
 //    {
-//        defaultFrameBuffer_.reset(new QOpenglFramebuffer(gcList, true));
+//        defaultFrameBuffer_.reset(new QOpenglFramebuffer(registry, true));
 //    }
 //
 //    QSurface* surface() const
@@ -368,7 +368,7 @@ UInt64 QOpenglEngine::present_(SwapChain* /*swapChain*/, UInt32 /*syncInterval*/
 //    wnd->setFormat(format_);
 //    wnd->create();
 //
-//    return new QOpenglSwapChain(gcResourceList_, desc, wnd);
+//    return new QOpenglSwapChain(resourceRegistry_, desc, wnd);
 //}
 //
 //void QOpenglEngine::resizeSwapChain_(SwapChain* /*swapChain*/, UInt32 /*width*/, UInt32 /*height*/)
@@ -380,7 +380,7 @@ UInt64 QOpenglEngine::present_(SwapChain* /*swapChain*/, UInt32 /*syncInterval*/
 //    Usage usage, BindFlags bindFlags,
 //    ResourceMiscFlags resourceMiscFlags, CpuAccessFlags cpuAccessFlags)
 //{
-//    return new QOpenglBuffer(gcResourceList_, usage, bindFlags, resourceMiscFlags, cpuAccessFlags);
+//    return new QOpenglBuffer(resourceRegistry_, usage, bindFlags, resourceMiscFlags, cpuAccessFlags);
 //}
 //
 //// RENDER THREAD functions

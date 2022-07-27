@@ -144,8 +144,8 @@ private:
 ///
 class VGC_GRAPHICS_API GeometryView : public Resource {
 protected:
-    GeometryView(ResourceList* gcList, const GeometryViewCreateInfo& info)
-        : Resource(gcList), info_(info)
+    GeometryView(ResourceRegistry* registry, const GeometryViewCreateInfo& info)
+        : Resource(registry), info_(info)
     {
         // XXX check buffers against layout (slots, alignment, ..)
 
@@ -233,7 +233,7 @@ public:
 private:
     friend Engine;
 
-    void clearSubResources_() override
+    void releaseSubResources_() override
     {
         for (BufferPtr& vb : info_.vertexBuffers_) {
             vb.reset();

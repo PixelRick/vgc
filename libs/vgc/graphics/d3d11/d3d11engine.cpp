@@ -70,7 +70,6 @@ protected:
 private:
     ComPtr<ID3D11Buffer> object_;
     D3D11_BUFFER_DESC desc_ = {};
-    // not enough if it is bound multiple times :/
     PipelineParameters parametersToDirtyOnRebuild_ = {};
     core::Array<D3d11ImageView*> dependentViews_;
 };
@@ -302,11 +301,11 @@ using D3d11RasterizerStatePtr = ResourcePtr<D3d11RasterizerState>;
 class D3d11Framebuffer : public Framebuffer {
 public:
     D3d11Framebuffer(
-        ResourceList* gcList,
+        ResourceRegistry* registry,
         const D3d11ImageViewPtr& colorView,
         const D3d11ImageViewPtr& depthStencilView,
         bool isDefault)
-        : Framebuffer(gcList)
+        : Framebuffer(registry)
         , colorView_(colorView)
         , depthStencilView_(depthStencilView)
         , isDefault_(isDefault)
@@ -337,7 +336,7 @@ public:
     }
 
 protected:
-    void clearSubResources_() override
+    void releaseSubResources_() override
     {
         colorView_.reset();
         depthStencilView_.reset();
@@ -360,10 +359,10 @@ using D3d11FramebufferPtr = ResourcePtr<D3d11Framebuffer>;
 
 class D3d11SwapChain : public SwapChain {
 public:
-    D3d11SwapChain(ResourceList* gcList,
+    D3d11SwapChain(ResourceRegistry* registry,
                    const SwapChainCreateInfo& desc,
                    IDXGISwapChain* dxgiSwapChain)
-        : SwapChain(gcList, desc)
+        : SwapChain(registry, desc)
         , dxgiSwapChain_(dxgiSwapChain) {
     }
 
@@ -705,7 +704,7 @@ D3d11EnginePtr D3d11Engine::create()
 
 void D3d11Engine::createBuiltinShaders_()
 {
-    D3d11ProgramPtr simpleProgram(new D3d11Program(gcResourceList_));
+    D3d11ProgramPtr simpleProgram(new D3d11Program(resourceRegistry_));
     simpleProgram_ = simpleProgram;
 
     // Create the simple shader
@@ -878,12 +877,12 @@ SwapChainPtr D3d11Engine::constructSwapChain_(const SwapChainCreateInfo& createI
     imageCreateInfo.setRank(ImageRank::_2D);
     // XXX fill it using backBufferDesc
 
-    D3d11ImagePtr backBufferImage(new D3d11Image(gcResourceList_, imageCreateInfo));
+    D3d11ImagePtr backBufferImage(new D3d11Image(resourceRegistry_, imageCreateInfo));
     backBufferImage->object_ = backBuffer;
 
     ImageViewCreateInfo viewCreateInfo = {};
     viewCreateInfo.setBindFlags(ImageBindFlags::RenderTarget);
-    D3d11ImageViewPtr colorView(new D3d11ImageView(gcResourceList_, viewCreateInfo, backBufferImage, colorViewFormat, 0));
+    D3d11ImageViewPtr colorView(new D3d11ImageView(resourceRegistry_, viewCreateInfo, backBufferImage, colorViewFormat, 0));
 
     ComPtr<ID3D11RenderTargetView> backBufferView;
     device_->CreateRenderTargetView(backBuffer.get(), NULL, backBufferView.releaseAndGetAddressOf());
@@ -891,12 +890,12 @@ SwapChainPtr D3d11Engine::constructSwapChain_(const SwapChainCreateInfo& createI
 
     D3d11FramebufferPtr newFramebuffer(
         new D3d11Framebuffer(
-            gcResourceList_,
+            resourceRegistry_,
             colorView,
             D3d11ImageViewPtr(),
             true));
 
-    auto swapChain = makeUnique<D3d11SwapChain>(gcResourceList_, createInfo, dxgiSwapChain.get());
+    auto swapChain = makeUnique<D3d11SwapChain>(resourceRegistry_, createInfo, dxgiSwapChain.get());
     swapChain->setDefaultFramebuffer(newFramebuffer);
 
     return SwapChainPtr(swapChain.release());
@@ -905,13 +904,13 @@ SwapChainPtr D3d11Engine::constructSwapChain_(const SwapChainCreateInfo& createI
 FramebufferPtr D3d11Engine::constructFramebuffer_(const ImageViewPtr& colorImageView)
 {
     auto framebuffer = makeUnique<D3d11Framebuffer>(
-        gcResourceList_, static_pointer_cast<D3d11ImageView>(colorImageView), nullptr, false);
+        resourceRegistry_, static_pointer_cast<D3d11ImageView>(colorImageView), nullptr, false);
     return FramebufferPtr(framebuffer.release());
 }
 
 BufferPtr D3d11Engine::constructBuffer_(const BufferCreateInfo& createInfo)
 {
-    auto buffer = makeUnique<D3d11Buffer>(gcResourceList_, createInfo);
+    auto buffer = makeUnique<D3d11Buffer>(resourceRegistry_, createInfo);
     D3D11_BUFFER_DESC& desc = buffer->desc_;
 
     desc.Usage = usageToD3DUsage(createInfo.usage());
@@ -971,7 +970,7 @@ ImagePtr D3d11Engine::constructImage_(const ImageCreateInfo& createInfo)
         throw core::LogicError("D3d11: unknown image format");
     }
 
-    auto image = makeUnique<D3d11Image>(gcResourceList_, createInfo);
+    auto image = makeUnique<D3d11Image>(resourceRegistry_, createInfo);
     image->dxgiFormat_ = dxgiFormat;
     return ImagePtr(image.release());
 }
@@ -980,7 +979,7 @@ ImageViewPtr D3d11Engine::constructImageView_(const ImageViewCreateInfo& createI
 {
     // XXX should check bind flags compatibility in abstract engine
 
-    auto imageView = makeUnique<D3d11ImageView>(gcResourceList_, createInfo, image, image->format(), 0);
+    auto imageView = makeUnique<D3d11ImageView>(resourceRegistry_, createInfo, image, image->format(), 0);
     imageView->dxgiFormat_ = static_cast<D3d11Image*>(image.get())->dxgiFormat();
     return ImageViewPtr(imageView.release());
 }
@@ -994,14 +993,14 @@ ImageViewPtr D3d11Engine::constructImageView_(const ImageViewCreateInfo& createI
         throw core::LogicError("D3d11: unknown image format");
     }
 
-    auto view = makeUnique<D3d11ImageView>(gcResourceList_, createInfo, buffer, format, elementsCount);
+    auto view = makeUnique<D3d11ImageView>(resourceRegistry_, createInfo, buffer, format, elementsCount);
     view->dxgiFormat_ = dxgiFormat;
     return ImageViewPtr(view.release());
 }
 
 SamplerStatePtr D3d11Engine::constructSamplerState_(const SamplerStateCreateInfo& createInfo)
 {
-    auto state = makeUnique<D3d11SamplerState>(gcResourceList_, createInfo);
+    auto state = makeUnique<D3d11SamplerState>(resourceRegistry_, createInfo);
     return SamplerStatePtr(state.release());
 }
 
@@ -1012,20 +1011,20 @@ GeometryViewPtr D3d11Engine::constructGeometryView_(const GeometryViewCreateInfo
         throw core::LogicError("D3d11: unknown primitive type");
     }
 
-    auto view = makeUnique<D3d11GeometryView>(gcResourceList_, createInfo);
+    auto view = makeUnique<D3d11GeometryView>(resourceRegistry_, createInfo);
     view->topology_ = topology;
     return GeometryViewPtr(view.release());
 }
 
 BlendStatePtr D3d11Engine::constructBlendState_(const BlendStateCreateInfo& createInfo)
 {
-    auto state = makeUnique<D3d11BlendState>(gcResourceList_, createInfo);
+    auto state = makeUnique<D3d11BlendState>(resourceRegistry_, createInfo);
     return BlendStatePtr(state.release());
 }
 
 RasterizerStatePtr D3d11Engine::constructRasterizerState_(const RasterizerStateCreateInfo& createInfo)
 {
-    auto state = makeUnique<D3d11RasterizerState>(gcResourceList_, createInfo);
+    auto state = makeUnique<D3d11RasterizerState>(resourceRegistry_, createInfo);
     return RasterizerStatePtr(state.release());
 }
 
@@ -1052,12 +1051,12 @@ void D3d11Engine::resizeSwapChain_(SwapChain* swapChain, UInt32 width, UInt32 he
     imageCreateInfo.setRank(ImageRank::_2D);
     // XXX fill it using backBufferDesc
 
-    D3d11ImagePtr backBufferImage(new D3d11Image(gcResourceList_, imageCreateInfo));
+    D3d11ImagePtr backBufferImage(new D3d11Image(resourceRegistry_, imageCreateInfo));
     backBufferImage->object_ = backBuffer;
 
     ImageViewCreateInfo viewCreateInfo = {};
     viewCreateInfo.setBindFlags(ImageBindFlags::RenderTarget);
-    D3d11ImageViewPtr colorView(new D3d11ImageView(gcResourceList_, viewCreateInfo, backBufferImage, d3dSwapChain->backBufferFormat(), 0));
+    D3d11ImageViewPtr colorView(new D3d11ImageView(resourceRegistry_, viewCreateInfo, backBufferImage, d3dSwapChain->backBufferFormat(), 0));
 
     ComPtr<ID3D11RenderTargetView> backBufferView;
     device_->CreateRenderTargetView(backBuffer.get(), NULL, backBufferView.releaseAndGetAddressOf());
@@ -1065,7 +1064,7 @@ void D3d11Engine::resizeSwapChain_(SwapChain* swapChain, UInt32 width, UInt32 he
 
     D3d11FramebufferPtr newFramebuffer(
         new D3d11Framebuffer(
-            gcResourceList_,
+            resourceRegistry_,
             colorView,
             D3d11ImageViewPtr(),
             true));

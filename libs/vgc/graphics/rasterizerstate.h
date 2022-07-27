@@ -121,8 +121,8 @@ private:
 ///
 class VGC_GRAPHICS_API RasterizerState : public Resource {
 protected:
-    RasterizerState(ResourceList* gcList, const RasterizerStateCreateInfo& info)
-        : Resource(gcList), info_(info)
+    RasterizerState(ResourceRegistry* registry, const RasterizerStateCreateInfo& info)
+        : Resource(registry), info_(info)
     {
     }
 

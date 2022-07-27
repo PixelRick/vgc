@@ -178,8 +178,8 @@ private:
 ///
 class VGC_GRAPHICS_API SamplerState : public Resource {
 protected:
-    SamplerState(ResourceList* gcList, const SamplerStateCreateInfo& info)
-        : Resource(gcList), info_(info)
+    SamplerState(ResourceRegistry* registry, const SamplerStateCreateInfo& info)
+        : Resource(registry), info_(info)
     {
     }
 

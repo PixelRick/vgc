@@ -102,8 +102,8 @@ private:
 ///
 class VGC_GRAPHICS_API Buffer : public Resource {
 protected:
-    Buffer(ResourceList* gcList, const BufferCreateInfo& info)
-        : Resource(gcList) , lengthInBytes_(0) , info_(info)
+    Buffer(ResourceRegistry* registry, const BufferCreateInfo& info)
+        : Resource(registry) , lengthInBytes_(0) , info_(info)
     {
         // Limitation of D3D11 impl
         const BindFlags bindFlags = this->bindFlags();

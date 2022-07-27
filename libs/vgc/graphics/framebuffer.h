@@ -70,8 +70,8 @@ private:
 //
 class VGC_GRAPHICS_API Framebuffer : public Resource {
 protected:
-    Framebuffer(ResourceList* gcList)
-        : Resource(gcList) {}
+    Framebuffer(ResourceRegistry* registry)
+        : Resource(registry) {}
 
     using Resource::Resource;
 

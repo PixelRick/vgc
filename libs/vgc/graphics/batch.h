@@ -39,7 +39,7 @@ class VGC_GRAPHICS_API GeometryBatch : public Resource {
 protected:
     using Resource::Resource;
 
-    void clearSubResources_() override {
+    void releaseSubResources_() override {
         vertexBuffer_.reset();
         indexBuffer_.reset();
         view_.reset();

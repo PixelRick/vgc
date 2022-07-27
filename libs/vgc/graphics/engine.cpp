@@ -23,7 +23,7 @@ namespace graphics {
 
 Engine::Engine()
     : Object()
-    , gcResourceList_(new detail::ResourceList())
+    , resourceRegistry_(new detail::ResourceRegistry())
 {
     framebufferStack_.emplaceLast();
 
@@ -34,9 +34,9 @@ Engine::Engine()
     rasterizerStateStack_.emplaceLast();
 
     for (Int i = 0; i < stageEndIndex_; ++i) {
-        constantBuffersStacks_[i].emplaceLast();
-        imageViewsStacks_[i].emplaceLast();
-        samplersStacks_[i].emplaceLast();
+        constantBufferArrayStacks_[i].emplaceLast();
+        imageViewArrayStacks_[i].emplaceLast();
+        samplerStateArrayStacks_[i].emplaceLast();
     }
 
     projectionMatrixStack_.emplaceLast(geometry::Mat4f::identity);
@@ -56,9 +56,9 @@ void Engine::onDestroyed()
     rasterizerStateStack_.clear();
 
     for (Int i = 0; i < stageEndIndex_; ++i) {
-        constantBuffersStacks_[i].clear();
-        imageViewsStacks_[i].clear();
-        samplersStacks_[i].clear();
+        constantBufferArrayStacks_[i].clear();
+        imageViewArrayStacks_[i].clear();
+        samplerStateArrayStacks_[i].clear();
     }
 
     projectionMatrixStack_.clear();
@@ -270,16 +270,16 @@ RasterizerStatePtr Engine::createRasterizerState(const RasterizerStateCreateInfo
 
 void Engine::setSwapChain(const SwapChainPtr& swapChain)
 {
-    if (swapChain->gcList_ != gcResourceList_) {
+    if (swapChain->registry_ != resourceRegistry_) {
         // XXX error, using a resource from another engine..
         return;
     }
     swapChain_ = swapChain;
     frameStartTime_ = std::chrono::steady_clock::now();
     dirtyBuiltinConstantBuffer_ = true;
-    queueLambdaCommandWithParameters_<SwapChain*>(
+    queueLambdaCommandWithParameters_<SwapChainPtr>(
         "setSwapChain",
-        [](Engine* engine, SwapChain* swapChain) {
+        [](Engine* engine, const SwapChainPtr& swapChain) {
             engine->setSwapChain_(swapChain);
         },
         swapChain.get());
@@ -314,7 +314,7 @@ void Engine::setProgram(BuiltinProgram builtinProgram)
     if (programStack_.last() != program) {
         programStack_.last() = program;
         if (true /*program->usesBuiltinConstants()*/) {
-            BufferPtr& constantBufferRef = constantBuffersStacks_[shaderStageToIndex_(ShaderStage::Vertex)].last()[0];
+            BufferPtr& constantBufferRef = constantBufferArrayStacks_[shaderStageToIndex_(ShaderStage::Vertex)].last()[0];
             if (constantBufferRef != builtinConstantsBuffer_) {
                 constantBufferRef = builtinConstantsBuffer_;
                 dirtyPipelineParameters_ |= PipelineParameters::VertexShaderConstantBuffers;
@@ -347,10 +347,9 @@ void Engine::setRasterizerState(const RasterizerStatePtr& state)
 void Engine::setStageConstantBuffers(const BufferPtr* buffers, Int startIndex, Int count, ShaderStage shaderStage)
 {
     size_t stageIndex = shaderStageToIndex_(shaderStage);
-    StageConstantBuffersStack& constantBuffersStack = constantBuffersStacks_[stageIndex];
-    StageConstantBuffers& constantBuffers = constantBuffersStack.emplaceLast();
+    StageConstantBufferArray& constantBufferArray = constantBufferArrayStacks_[stageIndex].emplaceLast();
     for (Int i = 0; i < count; ++i) {
-        constantBuffers[startIndex + i] = buffers[i];
+        constantBufferArray[startIndex + i] = buffers[i];
     }
     dirtyPipelineParameters_ |= std::array{
         PipelineParameters::VertexShaderConstantBuffers,
@@ -362,10 +361,9 @@ void Engine::setStageConstantBuffers(const BufferPtr* buffers, Int startIndex, I
 void Engine::setStageImageViews(const ImageViewPtr* views, Int startIndex, Int count, ShaderStage shaderStage)
 {
     size_t stageIndex = shaderStageToIndex_(shaderStage);
-    StageImageViewsStack& imageViewsStack = imageViewsStacks_[stageIndex];
-    StageImageViews& imageViews = imageViewsStack.emplaceLast();
+    StageImageViewArray& imageViewArray = imageViewArrayStacks_[stageIndex].emplaceLast();
     for (Int i = 0; i < count; ++i) {
-        imageViews[startIndex + i] = views[i];
+        imageViewArray[startIndex + i] = views[i];
     }
     dirtyPipelineParameters_ |= std::array{
         PipelineParameters::VertexShaderImageViews,
@@ -377,10 +375,9 @@ void Engine::setStageImageViews(const ImageViewPtr* views, Int startIndex, Int c
 void Engine::setStageSamplers(const SamplerStatePtr* states, Int startIndex, Int count, ShaderStage shaderStage)
 {
     size_t stageIndex = shaderStageToIndex_(shaderStage);
-    StageSamplersStack& samplersStack = samplersStacks_[stageIndex];
-    StageSamplers& samplers = samplersStack.emplaceLast();
+    StageSamplerStateArray& samplerStateArray = samplerStateArrayStacks_[stageIndex].emplaceLast();
     for (Int i = 0; i < count; ++i) {
-        samplers[startIndex + i] = states[i];
+        samplerStateArray[startIndex + i] = states[i];
     }
     dirtyPipelineParameters_ |= std::array{
         PipelineParameters::VertexShaderSamplers,
@@ -411,49 +408,49 @@ void Engine::pushPipelineParameters(PipelineParameters parameters)
     }
     if (!!(parameters & PipelineParameters::AllShadersResources)) {
         if (!!(parameters & PipelineParameters::VertexShaderConstantBuffers)) {
-            StageConstantBuffersStack& constantBuffersStack =
-                constantBuffersStacks_[shaderStageToIndex_(ShaderStage::Vertex)];
-            constantBuffersStack.emplaceLast(constantBuffersStack.last());
+            StageConstantBufferArrayStack& constantBufferArrayStack =
+                constantBufferArrayStacks_[shaderStageToIndex_(ShaderStage::Vertex)];
+            constantBufferArrayStack.emplaceLast(constantBufferArrayStack.last());
         }
         if (!!(parameters & PipelineParameters::VertexShaderImageViews)) {
-            StageImageViewsStack& imageViewsStack =
-                imageViewsStacks_[shaderStageToIndex_(ShaderStage::Vertex)];
-            imageViewsStack.emplaceLast(imageViewsStack.last());
+            StageImageViewArrayStack& imageViewArrayStack =
+                imageViewArrayStacks_[shaderStageToIndex_(ShaderStage::Vertex)];
+            imageViewArrayStack.emplaceLast(imageViewArrayStack.last());
         }
         if (!!(parameters & PipelineParameters::VertexShaderSamplers)) {
-            StageSamplersStack& samplersStack =
-                samplersStacks_[shaderStageToIndex_(ShaderStage::Vertex)];
-            samplersStack.emplaceLast(samplersStack.last());
+            StageSamplerStateArrayStack& samplerStateArrayStack =
+                samplerStateArrayStacks_[shaderStageToIndex_(ShaderStage::Vertex)];
+            samplerStateArrayStack.emplaceLast(samplerStateArrayStack.last());
         }
         if (!!(parameters & PipelineParameters::GeometryShaderConstantBuffers)) {
-            StageConstantBuffersStack& constantBuffersStack =
-                constantBuffersStacks_[shaderStageToIndex_(ShaderStage::Geometry)];
-            constantBuffersStack.emplaceLast(constantBuffersStack.last());
+            StageConstantBufferArrayStack& constantBufferArrayStack =
+                constantBufferArrayStacks_[shaderStageToIndex_(ShaderStage::Geometry)];
+            constantBufferArrayStack.emplaceLast(constantBufferArrayStack.last());
         }
         if (!!(parameters & PipelineParameters::GeometryShaderImageViews)) {
-            StageImageViewsStack& imageViewsStack =
-                imageViewsStacks_[shaderStageToIndex_(ShaderStage::Geometry)];
-            imageViewsStack.emplaceLast(imageViewsStack.last());
+            StageImageViewArrayStack& imageViewArrayStack =
+                imageViewArrayStacks_[shaderStageToIndex_(ShaderStage::Geometry)];
+            imageViewArrayStack.emplaceLast(imageViewArrayStack.last());
         }
         if (!!(parameters & PipelineParameters::GeometryShaderSamplers)) {
-            StageSamplersStack& samplersStack =
-                samplersStacks_[shaderStageToIndex_(ShaderStage::Geometry)];
-            samplersStack.emplaceLast(samplersStack.last());
+            StageSamplerStateArrayStack& samplerStateArrayStack =
+                samplerStateArrayStacks_[shaderStageToIndex_(ShaderStage::Geometry)];
+            samplerStateArrayStack.emplaceLast(samplerStateArrayStack.last());
         }
         if (!!(parameters & PipelineParameters::PixelShaderConstantBuffers)) {
-            StageConstantBuffersStack& constantBuffersStack =
-                constantBuffersStacks_[shaderStageToIndex_(ShaderStage::Pixel)];
-            constantBuffersStack.emplaceLast(constantBuffersStack.last());
+            StageConstantBufferArrayStack& constantBufferArrayStack =
+                constantBufferArrayStacks_[shaderStageToIndex_(ShaderStage::Pixel)];
+            constantBufferArrayStack.emplaceLast(constantBufferArrayStack.last());
         }
         if (!!(parameters & PipelineParameters::PixelShaderImageViews)) {
-            StageImageViewsStack& imageViewsStack =
-                imageViewsStacks_[shaderStageToIndex_(ShaderStage::Pixel)];
-            imageViewsStack.emplaceLast(imageViewsStack.last());
+            StageImageViewArrayStack& imageViewArrayStack =
+                imageViewArrayStacks_[shaderStageToIndex_(ShaderStage::Pixel)];
+            imageViewArrayStack.emplaceLast(imageViewArrayStack.last());
         }
         if (!!(parameters & PipelineParameters::PixelShaderSamplers)) {
-            StageSamplersStack& samplersStack =
-                samplersStacks_[shaderStageToIndex_(ShaderStage::Pixel)];
-            samplersStack.emplaceLast(samplersStack.last());
+            StageSamplerStateArrayStack& samplerStateArrayStack =
+                samplerStateArrayStacks_[shaderStageToIndex_(ShaderStage::Pixel)];
+            samplerStateArrayStack.emplaceLast(samplerStateArrayStack.last());
         }
     }
 }
@@ -489,57 +486,57 @@ void Engine::popPipelineParameters(PipelineParameters parameters)
     }
     if (!!(parameters & PipelineParameters::AllShadersResources)) {
         if (!!(parameters & PipelineParameters::VertexShaderConstantBuffers)) {
-            StageConstantBuffersStack& constantBuffersStack =
-                constantBuffersStacks_[shaderStageToIndex_(ShaderStage::Vertex)];
-            constantBuffersStack.removeLast();
+            StageConstantBufferArrayStack& constantBufferArrayStack =
+                constantBufferArrayStacks_[shaderStageToIndex_(ShaderStage::Vertex)];
+            constantBufferArrayStack.removeLast();
             dirtyPipelineParameters_ |= PipelineParameters::VertexShaderConstantBuffers;
         }
         if (!!(parameters & PipelineParameters::VertexShaderImageViews)) {
-            StageImageViewsStack& imageViewsStack =
-                imageViewsStacks_[shaderStageToIndex_(ShaderStage::Vertex)];
-            imageViewsStack.removeLast();
+            StageImageViewArrayStack& imageViewArrayStack =
+                imageViewArrayStacks_[shaderStageToIndex_(ShaderStage::Vertex)];
+            imageViewArrayStack.removeLast();
             dirtyPipelineParameters_ |= PipelineParameters::VertexShaderImageViews;
         }
         if (!!(parameters & PipelineParameters::VertexShaderSamplers)) {
-            StageSamplersStack& samplersStack =
-                samplersStacks_[shaderStageToIndex_(ShaderStage::Vertex)];
-            samplersStack.removeLast();
+            StageSamplerStateArrayStack& samplerStateArrayStack =
+                samplerStateArrayStacks_[shaderStageToIndex_(ShaderStage::Vertex)];
+            samplerStateArrayStack.removeLast();
             dirtyPipelineParameters_ |= PipelineParameters::VertexShaderSamplers;
         }
         if (!!(parameters & PipelineParameters::GeometryShaderConstantBuffers)) {
-            StageConstantBuffersStack& constantBuffersStack =
-                constantBuffersStacks_[shaderStageToIndex_(ShaderStage::Geometry)];
-            constantBuffersStack.removeLast();
+            StageConstantBufferArrayStack& constantBufferArrayStack =
+                constantBufferArrayStacks_[shaderStageToIndex_(ShaderStage::Geometry)];
+            constantBufferArrayStack.removeLast();
             dirtyPipelineParameters_ |= PipelineParameters::GeometryShaderConstantBuffers;
         }
         if (!!(parameters & PipelineParameters::GeometryShaderImageViews)) {
-            StageImageViewsStack& imageViewsStack =
-                imageViewsStacks_[shaderStageToIndex_(ShaderStage::Geometry)];
-            imageViewsStack.removeLast();
+            StageImageViewArrayStack& imageViewArrayStack =
+                imageViewArrayStacks_[shaderStageToIndex_(ShaderStage::Geometry)];
+            imageViewArrayStack.removeLast();
             dirtyPipelineParameters_ |= PipelineParameters::GeometryShaderImageViews;
         }
         if (!!(parameters & PipelineParameters::GeometryShaderSamplers)) {
-            StageSamplersStack& samplersStack =
-                samplersStacks_[shaderStageToIndex_(ShaderStage::Geometry)];
-            samplersStack.removeLast();
+            StageSamplerStateArrayStack& samplerStateArrayStack =
+                samplerStateArrayStacks_[shaderStageToIndex_(ShaderStage::Geometry)];
+            samplerStateArrayStack.removeLast();
             dirtyPipelineParameters_ |= PipelineParameters::GeometryShaderSamplers;
         }
         if (!!(parameters & PipelineParameters::PixelShaderConstantBuffers)) {
-            StageConstantBuffersStack& constantBuffersStack =
-                constantBuffersStacks_[shaderStageToIndex_(ShaderStage::Pixel)];
-            constantBuffersStack.removeLast();
+            StageConstantBufferArrayStack& constantBufferArrayStack =
+                constantBufferArrayStacks_[shaderStageToIndex_(ShaderStage::Pixel)];
+            constantBufferArrayStack.removeLast();
             dirtyPipelineParameters_ |= PipelineParameters::PixelShaderConstantBuffers;
         }
         if (!!(parameters & PipelineParameters::PixelShaderImageViews)) {
-            StageImageViewsStack& imageViewsStack =
-                imageViewsStacks_[shaderStageToIndex_(ShaderStage::Pixel)];
-            imageViewsStack.removeLast();
+            StageImageViewArrayStack& imageViewArrayStack =
+                imageViewArrayStacks_[shaderStageToIndex_(ShaderStage::Pixel)];
+            imageViewArrayStack.removeLast();
             dirtyPipelineParameters_ |= PipelineParameters::PixelShaderImageViews;
         }
         if (!!(parameters & PipelineParameters::PixelShaderSamplers)) {
-            StageSamplersStack& samplersStack =
-                samplersStacks_[shaderStageToIndex_(ShaderStage::Pixel)];
-            samplersStack.removeLast();
+            StageSamplerStateArrayStack& samplerStateArrayStack =
+                samplerStateArrayStacks_[shaderStageToIndex_(ShaderStage::Pixel)];
+            samplerStateArrayStack.removeLast();
             dirtyPipelineParameters_ |= PipelineParameters::PixelShaderSamplers;
         }
     }
@@ -572,53 +569,56 @@ void Engine::syncState_()
     }
 
     if (!!(parameters & PipelineParameters::Framebuffer)) {
-        Framebuffer* framebuffer = framebufferStack_.last().get();
+        FramebufferPtr framebuffer = framebufferStack_.last();
         if (!framebuffer) {
-            framebuffer = getDefaultFramebuffer().get();
+            framebuffer = getDefaultFramebuffer();
         }
-        queueLambdaCommandWithParameters_<Framebuffer*>(
+        queueLambdaCommandWithParameters_<FramebufferPtr>(
             "setFramebuffer",
-            [](Engine* engine, Framebuffer* framebuffer) {
-                engine->setFramebuffer_(framebuffer);
+            [](Engine* engine, const FramebufferPtr& p) {
+                engine->setFramebuffer_(p);
             },
             framebuffer);
     }
     if (!!(parameters & PipelineParameters::Viewport)) {
-        const Viewport& vp = viewportStack_.last();
         queueLambdaCommandWithParameters_<Viewport>(
             "setViewport",
             [](Engine* engine, const Viewport& vp) {
                 engine->setViewport_(vp.x(), vp.y(), vp.width(), vp.height());
             },
-            vp);
+            viewportStack_.last());
     }
     if (!!(parameters & PipelineParameters::Program)) {
-        Program* p = programStack_.last().get();
-        queueLambdaCommand_(
+        queueLambdaCommandWithParameters_<ProgramPtr>(
             "setProgram",
-            [=](Engine* engine) {
+            [](Engine* engine, const ProgramPtr& p) {
                 engine->setProgram_(p);
-            });
+            },
+            programStack_.last());
     }
     if (!!(parameters & PipelineParameters::BlendState)) {
-        BlendState* p = blendStateStack_.last().get();
-        const geometry::Vec4f& blendConstantFactor = blendConstantFactorStack_.last();
-        queueLambdaCommand_(
+        struct CommandParameters {
+            BlendStatePtr blendState;
+            geometry::Vec4f blendConstantFactor;
+        };
+        queueLambdaCommandWithParameters_<CommandParameters>(
             "setBlendState",
-            [=](Engine* engine) {
-                engine->setBlendState_(p, blendConstantFactor);
-            });
+            [](Engine* engine, const CommandParameters& p) {
+                engine->setBlendState_(p.blendState, p.blendConstantFactor);
+            },
+            blendStateStack_.last(),
+            blendConstantFactorStack_.last());
     }
     if (!!(parameters & PipelineParameters::DepthStencilState)) {
         //dirtyPipelineParameters_ |= PipelineParameters::DepthStencilState;
     }
     if (!!(parameters & PipelineParameters::RasterizerState)) {
-        RasterizerState* p = rasterizerStateStack_.last().get();
-        queueLambdaCommand_(
+        queueLambdaCommandWithParameters_<RasterizerStatePtr>(
             "setRasterizerState",
-            [=](Engine* engine) {
+            [](Engine* engine, const RasterizerStatePtr& p) {
                 engine->setRasterizerState_(p);
-            });
+            },
+            rasterizerStateStack_.last());
     }
     if (!!(parameters & PipelineParameters::AllShadersResources)) {
         if (!!(parameters & PipelineParameters::VertexShaderConstantBuffers)) {
@@ -655,14 +655,14 @@ void Engine::syncState_()
 
 void Engine::syncStageConstantBuffers_(ShaderStage shaderStage)
 {
-    static constexpr Int count = static_cast<Int>(std::tuple_size_v<StageConstantBuffers>);
+    static constexpr Int count = static_cast<Int>(std::tuple_size_v<StageConstantBufferArray>);
     using Buffers = std::array<Buffer*, count>;
     struct CommandParameters {
         Buffers buffers;
         ShaderStage shaderStage;
     } parameters = {{}, shaderStage};
-    const StageConstantBuffers& constantBuffers =
-        constantBuffersStacks_[shaderStageToIndex_(shaderStage)].last();
+    const StageConstantBufferArray& constantBuffers =
+        constantBufferArrayStacks_[shaderStageToIndex_(shaderStage)].last();
     std::transform(
         constantBuffers.begin(), constantBuffers.end(),
         parameters.buffers.begin(), [](const BufferPtr& p){ return p.get(); });
@@ -676,14 +676,14 @@ void Engine::syncStageConstantBuffers_(ShaderStage shaderStage)
 
 void Engine::syncStageImageViews_(ShaderStage shaderStage)
 {
-    static constexpr Int count = static_cast<Int>(std::tuple_size_v<StageImageViews>);
+    static constexpr Int count = static_cast<Int>(std::tuple_size_v<StageImageViewArray>);
     using ImageViews = std::array<ImageView*, count>;
     struct CommandParameters {
         ImageViews views;
         ShaderStage shaderStage;
     } parameters = {{}, shaderStage};
-    const StageImageViews& imageViews =
-        imageViewsStacks_[shaderStageToIndex_(shaderStage)].last();
+    const StageImageViewArray& imageViews =
+        imageViewArrayStacks_[shaderStageToIndex_(shaderStage)].last();
     std::transform(
         imageViews.begin(), imageViews.end(),
         parameters.views.begin(), [](const ImageViewPtr& p){ return p.get(); });
@@ -697,16 +697,16 @@ void Engine::syncStageImageViews_(ShaderStage shaderStage)
 
 void Engine::syncStageSamplers_(ShaderStage shaderStage)
 {
-    static constexpr Int count = static_cast<Int>(std::tuple_size_v<StageSamplers>);
+    static constexpr Int count = static_cast<Int>(std::tuple_size_v<StageSamplerStateArray>);
     using Samplers = std::array<SamplerState*, count>;
     struct CommandParameters {
         Samplers samplers;
         ShaderStage shaderStage;
     } parameters = {{}, shaderStage};
-    const StageSamplers& samplers =
-        samplersStacks_[shaderStageToIndex_(shaderStage)].last();
+    const StageSamplerStateArray& samplerStates =
+        samplerStateArrayStacks_[shaderStageToIndex_(shaderStage)].last();
     std::transform(
-        samplers.begin(), samplers.end(),
+        samplerStates.begin(), samplerStates.end(),
         parameters.samplers.begin(), [](const SamplerStatePtr& p){ return p.get(); });
     queueLambdaCommandWithParameters_<CommandParameters>(
         "setStageSamplers",
@@ -718,7 +718,7 @@ void Engine::syncStageSamplers_(ShaderStage shaderStage)
 
 void Engine::resizeSwapChain(const SwapChainPtr& swapChain, UInt32 width, UInt32 height)
 {
-    if (swapChain->gcList_ != gcResourceList_) {
+    if (swapChain->registry_ != resourceRegistry_) {
         // XXX error, using a resource from another engine..
         return;
     }
@@ -820,27 +820,43 @@ void Engine::renderThreadProc_()
         // wait for work or stop request
         wakeRenderThreadConditionVariable_.wait(lock, [&]{ return !commandQueue_.isEmpty() || stopRequested_; });
 
+        // userResourcesToSetAsInternalOnly_
+
         // if requested, stop
         if (stopRequested_) {
             // cancel submitted lists
             for (const CommandList& l : commandQueue_) {
-                for (Resource* resource : l.garbagedResources) {
-                    resource->release_(this);
+                for (Resource* r : l.userResourcesToSetAsInternalOnly) {
+                    r->release_(this);
+                    delete r;
                 }
             }
             commandQueue_.clear();
             lastExecutedCommandListId_ = lastSubmittedCommandListId_;
             // release all resources..
-            for (Resource* r : gcResourceList_->danglingResources_) {
+            for (Resource* r : resourceRegistry_->userDanglingResources_) {
                 r->release_(this);
                 delete r;
             }
-            for (Resource* r : gcResourceList_->resources_) {
+            resourceRegistry_->userDanglingResources_.clear();
+            for (Resource* r : resourceRegistry_->userResources_) {
                 r->release_(this);
-                r->gcList_ = nullptr;
+                r->registry_ = nullptr;
+                // a ResourcePtr exists and will do the delete for us
             }
-            gcResourceList_->resources_.clear();
-            gcResourceList_->danglingResources_.clear();
+            resetInternalPointers_();
+            resourceRegistry_->userResources_.clear();
+            for (Resource* r : resourceRegistry_->internalDanglingResources_) {
+                r->release_(this);
+                delete r;
+            }
+            resourceRegistry_->internalDanglingResources_.clear();
+            for (Resource* r : resourceRegistry_->internalResources_) {
+                r->release_(this);
+                r->registry_ = nullptr;
+                delete r;
+            }
+            resourceRegistry_->internalResources_.clear();
             // notify
             lock.unlock();
             renderThreadEventConditionVariable_.notify_all();
@@ -864,11 +880,23 @@ void Engine::renderThreadProc_()
 
         renderThreadEventConditionVariable_.notify_all();
 
-        // release garbaged resources
-        for (Resource* r : commandList.garbagedResources) {
+        for (Resource* r : commandList.userResourcesToSetAsInternalOnly) {
+            if (r->internalUseCount() == 0) {
+                r->release_(this);
+                delete r;
+            } else {
+                r->setInternalOnly_();
+                resourceRegistry_->internalOnlyResources_.insert(r);
+            }
+        }
+        commandList.userResourcesToSetAsInternalOnly.clear();
+
+        for (Resource* r : resourceRegistry_->resourcesToDestroy_) {
+            resourceRegistry_->internalOnlyResources_.erase(r);
             r->release_(this);
             delete r;
         }
+        resourceRegistry_->resourcesToDestroy_.clear();
     }
 }
 
@@ -904,9 +932,9 @@ UInt Engine::submitPendingCommandList_(bool withGarbage)
     std::unique_lock<std::mutex> lock(mutex_);
     bool notifyRenderThread = commandQueue_.isEmpty();
     if (withGarbage) {
-        commandQueue_.emplaceLast(std::move(pendingCommands_), std::move(gcResourceList_->danglingResources_));
+        commandQueue_.emplaceLast(std::move(pendingCommands_), std::move(resourceRegistry_->danglingResources_));
         pendingCommands_.clear();
-        gcResourceList_->danglingResources_.clear();
+        resourceRegistry_->danglingResources_.clear();
     }
     else {
         commandQueue_.emplaceLast(std::move(pendingCommands_));

@@ -115,6 +115,12 @@ private:
     std::array<ComPtr<ID3D11InputLayout>, core::toUnderlying(BuiltinGeometryLayout::Max_) + 1> builtinLayouts_;
     ID3D11InputLayout* layout_;
 
+    using StageConstantBuffers_ = std::array<Buffer*, maxConstantBufferCountPerStage>;
+    std::array<StageConstantBuffers_, stageEndIndex_> boundConstantBuffers_;
+
+    using StageImageViews_ = std::array<ImageView*, maxImageViewCountPerStage>;
+    std::array<StageImageViews_, stageEndIndex_> boundImageViewsStacks_;
+
     void initBuiltinShaders_();
     bool loadBuffer_(ComPtr<ID3D11Buffer>& buffer, D3D11_BUFFER_DESC& desc, const void* data, Int dataSize);
     bool writeBufferReserved_(ID3D11Buffer* buffer, const void* data, Int dataSize);

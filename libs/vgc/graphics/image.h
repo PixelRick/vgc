@@ -166,9 +166,9 @@ private:
 ///
 class VGC_GRAPHICS_API Image : public Resource {
 protected:
-    Image(ResourceList* gcList,
+    Image(ResourceRegistry* registry,
           const ImageCreateInfo& info)
-        : Resource(gcList)
+        : Resource(registry)
         , info_(info)
     {
     }

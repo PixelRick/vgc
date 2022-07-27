@@ -34,27 +34,83 @@ VGC_DECLARE_OBJECT(Engine);
 
 class Resource;
 
+// XXX 
+/*
+
+Before a graphics::Resource can be deleted, its underlying-api-specific
+object must be released on the rendering thread.
+Some engine implementations need to extend the lifetime of resources and this
+implies concurrent reference counting. To minimize synchronization points we use
+two different counts, one for the user thread, and another for the
+rendering thread.
+
+When the engine is stopped we can release them all. It is important if the engine is a temporary
+wrapper (e.g. around Qt OpenGL), better not leak resources.
+
+*/
+
 namespace detail {
 
-// Used to list all resources so that when the engine is stopped we can release
-// them all. It is important if the engine is a temporary wrapper (e.g. around
-// Qt OpenGL), better not leak resources.
-//
-class VGC_GRAPHICS_API ResourceList {
-protected:
-    friend Engine;
+// ResourceRegistry is used for the garbage collection of resources.
+class VGC_GRAPHICS_API ResourceRegistry {
+public:
+    ResourceRegistry() = default;
+
+    // must be called from a thread in which we can release resources
+    void releaseGarbagedResources(Engine* engine);
+
+    // must be called from a thread in which we can release resources
+    void release(Engine* engine);
+
+private:
     friend Resource;
 
-    ResourceList() = default;
+    ~ResourceRegistry() = default;
 
-    ~ResourceList();
+    void registerResource_(Resource* resource)
+    {
+        VGC_CORE_ASSERT(releasedByEngine_ == false);
+        {
+            std::lock_guard<std::mutex> lg(mutex_);
+            resources_.insert(resource);
+        }
+        ++refCount_;
+    }
 
+    void garbageResource_(Resource* resource)
+    {
+        {
+            std::lock_guard<std::mutex> lg(mutex_);
+            if (!resources_.erase(resource)) {
+                return;
+            }
+            garbagedResources_.append(resource);
+        }
+        decRef_();
+    }
+
+    void addRef_()
+    {
+        ++refCount_;
+    }
+
+    // can end up deleting the registry
+    void decRef_();
+
+    // It is the list of all resources created by the engine that owns this
+    // registry and that are still referenced.
+    // XXX could use another container, intrusive list ?
+    //
     std::unordered_set<Resource*> resources_;
 
-    // Resources must be kept alive until all commands using them are executed.
-    // The engine is responsible for properly scheduling the release of these resources.
+    // It is a list of all resources that are no longer referenced and thus
+    // should be released, destroyed and deleted.
     //
-    core::Array<Resource*> danglingResources_;
+    core::Array<Resource*> garbagedResources_;
+
+    std::mutex mutex_;
+    std::atomic<Int64> refCount_ = 1;
+    std::atomic<bool> releasedByEngine_ = true;
 };
 
 } // namespace detail
@@ -64,44 +120,52 @@ protected:
 ///
 class VGC_GRAPHICS_API Resource {
 protected:
-    using ResourceList = detail::ResourceList;
+    using ResourceRegistry = detail::ResourceRegistry;
 
-    // should be called in the user thread, not the rendering thread.
-    explicit Resource(ResourceList* gcList)
-        : gcList_(gcList)
+    // Should be called in the user thread, not the rendering thread.
+    explicit Resource(ResourceRegistry* registry)
+        : registry_(registry)
     {
-        gcList_->resources_.insert(this);
+        registry->registerResource_(this);
     }
 
-public:
-    virtual ~Resource() {}
+    static constexpr Int64 uninitializedCountValue_ = core::Int64Min;
 
+    static_assert(uninitializedCountValue_ < 0);
+
+public:
     Resource(const Resource&) = delete;
     Resource& operator=(const Resource&) = delete;
 
+    // XXX needed ?
+    //template<typename T>
+    //ResourcePtr<T> sharedFromThis();
+
 protected:
-    friend detail::ResourceList;
+    friend detail::ResourceRegistry;
     friend class Engine;
 
     template<typename T>
     friend class ResourcePtr;
 
-    // Called in the rendering thread.
-    // Override this to release the actual resource.
+    // should only be called by the registry
+    virtual ~Resource() {}
+
+    // This function is called in the rendering thread only.
+    // You must override it to release the actual underlying data and objects.
     //
     virtual void release_(Engine*) {};
 
-    // Called in the user thread (by decRef_).
-    // Override this to reset all inner ResourcePtr.
-    // This is required because decRef_ is not thread safe, it keeps other
-    // things simpler.
-    virtual void clearSubResources_() {}
+    // This function is called when the resource is being garbaged.
+    // You must override it to reset all inner ResourcePtr.
+    //
+    virtual void releaseSubResources_() {}
 
 private:
     void initRef_()
     {
-        int64_t noCount = core::Int64Max;
-        if (refCount_ == noCount) {
+        int64_t uninitializedValue = uninitializedCountValue;
+        if (refCount_ == uninitializedValue) {
             refCount_ = 1;
         }
         else {
@@ -110,49 +174,121 @@ private:
     }
 
     void incRef_()
-    {
-        int64_t newCount = ++refCount_;
+    { 
 #ifdef VGC_DEBUG
-        if (newCount <= 1) {
-            throw core::LogicError("Resource: trying to take shared ownership of an already garbaged resource.");
+        if (refCount_ <= 0) {
+            throw core::LogicError(
+                "Resource: trying to take shared ownership of an already garbaged resource.");
         }
 #endif
+        ++refCount_;
     }
 
     void decRef_()
     {
         if (--refCount_ == 0) {
-            if (gcList_) {
-                gcList_->resources_.erase(this);
-                gcList_->danglingResources_.append(this);
-                clearSubResources_();
-            }
-            else {
-                delete this;
-            }
+            releaseSubResources_();
+            registry_->garbageResource_(this);
         }
     }
 
-    ResourceList* gcList_;
-    Int64 refCount_ = core::Int64Max;
-    // XXX make it optionally threadsafe with a second count and a bool to
-    // switch to using this tsafe count.
+    ResourceRegistry* registry_;
+    std::atomic<Int64> refCount_ = uninitializedCountValue;
+
+    // If this assert does not pass, we can use a boolean..
+    static_assert(std::atomic<Int64>::is_always_lock_free);
 };
 
 namespace detail {
 
-inline ResourceList::~ResourceList()
+inline void ResourceRegistry::releaseGarbagedResources(Engine* engine)
 {
-    if (!resources_.empty() || !danglingResources_.isEmpty()) {
-        VGC_ERROR(LogVgcGraphics, "Some resources were not released yet.");
-        for (Resource* res : resources_) {
-            res->gcList_ = nullptr;
-        }
-        for (Resource* res : danglingResources_) {
-            res->gcList_ = nullptr;
-            delete res;
-        }
+    std::lock_guard<std::mutex> lg(mutex_);
+    for (Resource* r : garbagedResources_) {
+        r->release_(engine);
+        delete r;
     }
+    garbagedResources_.clear();
+}
+
+inline void ResourceRegistry::release(Engine* engine)
+{
+    if (releasedByEngine_.exchange(true)) {
+        VGC_WARNING(LogVgcGraphics, "Trying to release a ResourceRegistry more than once.");
+        return;
+    }
+    {
+        std::lock_guard<std::mutex> lg(mutex_);
+        for (Resource* r : resources_) {
+            r->release_(engine);
+        }
+        for (Resource* r : garbagedResources_) {
+            r->release_(engine);
+            delete r;
+        }
+        garbagedResources_.clear();
+    }
+    decRef_();
+}
+
+inline void ResourceRegistry::decRef_()
+{
+    if (--refCount_ == 0) {
+        VGC_CORE_ASSERT(resources_.empty());
+        for (Resource* r : garbagedResources_) {
+            delete r;
+        }
+        delete this;
+    }
+}
+
+template<typename T>
+class SmartPtrBase_ {
+protected:
+    ~SmartPtrBase_() = default;
+
+public:
+    constexpr SmartPtrBase_() noexcept
+        : p_(nullptr) {
+    }
+
+    constexpr SmartPtrBase_(std::nullptr_t) noexcept
+        : p_(nullptr) {
+    }
+
+    T* get() const {
+        return p_;
+    }
+
+    explicit operator bool() const noexcept
+    {
+        return p_ != nullptr;
+    }
+
+    T& operator*() const noexcept
+    {
+        return *p_;
+    }
+
+    T* operator->() const noexcept
+    {
+        return p_;
+    }
+
+protected:
+    T* p_ = nullptr;
+};
+
+template<typename T, typename U>
+bool operator==(const SmartPtrBase_<T>& lhs, const SmartPtrBase_<U>& rhs) noexcept
+{
+    return lhs.get() == rhs.get();
+}
+
+template<typename T, typename U>
+bool operator!=(const SmartPtrBase_<T>& lhs, const SmartPtrBase_<U>& rhs) noexcept
+{
+    return lhs.get() != rhs.get();
 }
 
 } // namespace detail
@@ -164,8 +300,10 @@ inline ResourceList::~ResourceList()
 /// and destruction in the rendering thread by the Engine that created it.
 ///
 template<typename T>
-class ResourcePtr {
+class ResourcePtr : public detail::SmartPtrBase_<T> {
 protected:
+    using base = detail::SmartPtrBase_<T>;
+
     template<typename S, typename U>
     friend ResourcePtr<S> static_pointer_cast(const ResourcePtr<U>& r) noexcept;
 
@@ -186,15 +324,7 @@ public:
 
     static_assert(std::is_base_of_v<Resource, T>);
 
-    constexpr ResourcePtr() noexcept
-        : p_(nullptr)
-    {
-    }
-
-    constexpr ResourcePtr(std::nullptr_t) noexcept
-        : p_(nullptr)
-    {
-    }
+    using base::base;
 
     explicit ResourcePtr(T* p)
         : p_(p)
@@ -207,7 +337,6 @@ public:
     ~ResourcePtr() {
         reset();
     }
-
 
     template<typename U>
     ResourcePtr(const ResourcePtr<U>& other)
@@ -293,46 +422,11 @@ public:
         p_ = p;
     }
 
-    T* get() const
-    {
-        return p_;
-    }
-
     Int64 useCount() const
     {
-        return p_ ? p_->refCount_ : 0;
+        return p_ ? p_->useCount() : 0;
     }
-
-    explicit operator bool() const noexcept
-    {
-        return p_ != nullptr;
-    }
-
-    T& operator*() const noexcept
-    {
-        return *p_;
-    }
-
-    T* operator->() const noexcept
-    {
-        return p_;
-    }
-
-private:
-    T* p_ = nullptr;
 };
-
-template<typename T, typename U>
-bool operator==(const ResourcePtr<T>& lhs, const ResourcePtr<U>& rhs) noexcept
-{
-    return lhs.get() == rhs.get();
-}
-
-template<typename T, typename U>
-bool operator!=(const ResourcePtr<T>& lhs, const ResourcePtr<U>& rhs) noexcept
-{
-    return lhs.get() != rhs.get();
-}
 
 template<typename T, typename U>
 ResourcePtr<T> static_pointer_cast(const ResourcePtr<U>& r) noexcept

@@ -144,8 +144,8 @@ class VGC_GRAPHICS_API SwapChain : public Resource {
 protected:
     using Resource::Resource;
 
-    SwapChain(ResourceList* gcList, const SwapChainCreateInfo& createInfo)
-        : Resource(gcList), info_(createInfo)
+    SwapChain(ResourceRegistry* registry, const SwapChainCreateInfo& createInfo)
+        : Resource(registry), info_(createInfo)
     {
     }
 
@@ -173,7 +173,7 @@ public:
 protected:
     friend Engine;
 
-    void clearSubResources_() override
+    void releaseSubResources_() override
     {
         defaultFrameBuffer_.reset();
     }

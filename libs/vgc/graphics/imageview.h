@@ -120,12 +120,12 @@ private:
 //
 class VGC_GRAPHICS_API ImageView : public Resource {
 protected:
-    ImageView(ResourceList* gcList,
+    ImageView(ResourceRegistry* registry,
               const ImageViewCreateInfo& createInfo,
               const ResourcePtr<Resource>& viewedResource,
               ImageFormat format,
               UInt32 bufferElementsCount)
-        : Resource(gcList)
+        : Resource(registry)
         , info_(createInfo)
         , viewedResource_(viewedResource)
         , format_(format)
@@ -197,7 +197,7 @@ public:
 private:
     friend Engine;
 
-    void clearSubResources_() override
+    void releaseSubResources_() override
     {
         viewedResource_.reset();
     }
