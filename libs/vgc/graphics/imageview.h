@@ -34,56 +34,56 @@ class VGC_GRAPHICS_API ImageViewCreateInfo {
 public:
     constexpr ImageViewCreateInfo() noexcept = default;
 
-    UInt8 layerStart() const
+    UInt8 firstLayer() const
     {
-        return layerStart_;
+        return firstLayer_;
     }
 
-    void setLayerStart(UInt8 layerStart)
+    void setFirstLayer(UInt8 firstLayer)
     {
-        layerStart_ = layerStart;
+        firstLayer_ = firstLayer;
     }
 
-    UInt8 layerCount() const
+    UInt8 numLayers() const
     {
-        return layerCount_;
+        return numLayers_;
     }
 
-    void setLayerCount(UInt8 layerCount)
+    void setNumLayers(UInt8 numLayers)
     {
-        layerCount_ = layerCount;
+        numLayers_ = numLayers;
     }
 
-    UInt8 layerLast() const
+    UInt8 lastLayer() const
     {
-        return layerStart_ + layerCount_ - 1;
+        return firstLayer_ + numLayers_ - 1;
     }
 
-    UInt8 mipLevelStart() const
+    UInt8 firstMipLevel() const
     {
-        return mipLevelStart_;
+        return firstMipLevel_;
     }
 
-    void setMipLevelStart(UInt8 mipLevelStart)
+    void setFirstMipLevel(UInt8 firstMipLevel)
     {
-        mipLevelStart_ = mipLevelStart;
+        firstMipLevel_ = firstMipLevel;
     }
 
-    UInt8 mipLevelCount() const
+    UInt8 numMipLevels() const
     {
-        return mipLevelCount_;
+        return numMipLevels_;
     }
 
     /// Only effective when binding as a shader resource.
     ///
-    void setMipLevelCount(UInt8 mipLevelCount)
+    void setNumMipLevels(UInt8 numMipLevels)
     {
-        mipLevelCount_ = mipLevelCount;
+        numMipLevels_ = numMipLevels;
     }
 
-    UInt8 mipLevelLast() const
+    UInt8 lastMipLevel() const
     {
-        return mipLevelStart_ + mipLevelCount_ - 1;
+        return firstMipLevel_ + numMipLevels_ - 1;
     }
 
     ImageBindFlags bindFlags() const
@@ -97,10 +97,10 @@ public:
     }
 
 private:
-    UInt8 layerStart_ = 0;
-    UInt8 layerCount_ = 0;
-    UInt8 mipLevelStart_ = 0;
-    UInt8 mipLevelCount_ = 0;
+    UInt8 firstLayer_ = 0;
+    UInt8 numLayers_ = 0;
+    UInt8 firstMipLevel_ = 0;
+    UInt8 numMipLevels_ = 0;
 
     ImageBindFlags bindFlags_ = ImageBindFlags::None;
 };
@@ -120,48 +120,59 @@ private:
 //
 class VGC_GRAPHICS_API ImageView : public Resource {
 protected:
+    friend Engine;
+
     ImageView(ResourceRegistry* registry,
               const ImageViewCreateInfo& createInfo,
-              const ResourcePtr<Resource>& viewedResource,
-              ImageFormat format,
-              UInt32 bufferElementsCount)
+              const ImagePtr& image,
+              ImageFormat format)
         : Resource(registry)
         , info_(createInfo)
-        , viewedResource_(viewedResource)
+        , viewedResource_(image)
+        , format_(format) {
+    }
+
+    ImageView(ResourceRegistry* registry,
+              const ImageViewCreateInfo& createInfo,
+              const BufferPtr& buffer,
+              ImageFormat format,
+              UInt32 numBufferElements)
+        : Resource(registry)
+        , info_(createInfo)
+        , viewedResource_(buffer)
         , format_(format)
-        , bufferElementsCount_(bufferElementsCount)
-    {
+        , numBufferElements_(numBufferElements) {
     }
 
 public:
-    UInt8 layerStart() const
+    UInt8 firstLayer() const
     {
-        return info_.layerStart();
+        return info_.firstLayer();
     }
 
-    UInt8 layerCount() const
+    UInt8 numLayers() const
     {
-        return info_.layerCount();
+        return info_.numLayers();
     }
 
-    UInt8 layerLast() const
+    UInt8 lastLayer() const
     {
-        return info_.layerLast();
+        return info_.lastLayer();
     }
 
-    UInt8 mipLevelStart() const
+    UInt8 firstMipLevel() const
     {
-        return info_.mipLevelStart();
+        return info_.firstMipLevel();
     }
 
-    UInt8 mipLevelCount() const
+    UInt8 numMipLevels() const
     {
-        return info_.mipLevelCount();
+        return info_.numMipLevels();
     }
 
-    UInt8 mipLevelLast() const
+    UInt8 lastMipLevel() const
     {
-        return info_.mipLevelLast();
+        return info_.lastMipLevel();
     }
 
     ImageBindFlags bindFlags() const
@@ -174,14 +185,14 @@ public:
         return format_;
     }
 
-    UInt32 bufferElementsCount() const
+    UInt32 numBufferElements() const
     {
-        return bufferElementsCount_;
+        return numBufferElements_;
     }
 
     bool isBuffer() const
     {
-        return bufferElementsCount_ > 0;
+        return numBufferElements_ > 0;
     }
 
     ResourcePtr<Buffer> viewedBuffer() const
@@ -194,18 +205,17 @@ public:
         return isBuffer() ? nullptr : static_pointer_cast<Image>(viewedResource_);
     }
 
-private:
-    friend Engine;
-
+protected:
     void releaseSubResources_() override
     {
         viewedResource_.reset();
     }
 
+private:
     ImageViewCreateInfo info_;
     ResourcePtr<Resource> viewedResource_;
     ImageFormat format_;
-    UInt32 bufferElementsCount_ = 0;
+    UInt32 numBufferElements_ = 0;
 };
 using ImageViewPtr = ResourcePtr<ImageView>;
 

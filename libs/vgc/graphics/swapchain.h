@@ -94,24 +94,24 @@ public:
         windowed_ = windowed;
     }
 
-    UInt8 sampleCount() const
+    UInt8 numSamples() const
     {
-        return sampleCount_;
+        return numSamples_;
     }
 
-    void setSampleCount(UInt8 sampleCount)
+    void setNumSamples(UInt8 numSamples)
     {
-        sampleCount_ = sampleCount;
+        numSamples_ = numSamples;
     }
 
-    UInt8 bufferCount() const
+    UInt8 numBuffers() const
     {
-        return bufferCount_;
+        return numBuffers_;
     }
 
-    void setBufferCount(UInt8 bufferCount)
+    void setNumBuffers(UInt8 numBuffers)
     {
-        bufferCount_ = bufferCount;
+        numBuffers_ = numBuffers;
     }
 
     UInt flags() const
@@ -132,8 +132,8 @@ private:
     void* windowNativeHandle_ = nullptr;
     WindowNativeHandleType windowNativeHandleType_ = WindowNativeHandleType::None;
     bool windowed_ = true;
-    UInt8 sampleCount_ = 1;
-    UInt8 bufferCount_ = 2;
+    UInt8 numSamples_ = 1;
+    UInt8 numBuffers_ = 2;
     UInt flags_ = 0;
 };
 
@@ -142,6 +142,7 @@ private:
 ///
 class VGC_GRAPHICS_API SwapChain : public Resource {
 protected:
+    friend Engine;
     using Resource::Resource;
 
     SwapChain(ResourceRegistry* registry, const SwapChainCreateInfo& createInfo)
@@ -160,9 +161,9 @@ public:
         return swapChainTargetFormatToImageFormat(info_.format());
     }
 
-    UInt32 pendingPresentCount() const
+    UInt32 numPendingPresents() const
     {
-        return pendingPresentCount_.load();
+        return numPendingPresents_.load();
     }
 
     const FramebufferPtr& defaultFrameBuffer() const
@@ -171,8 +172,6 @@ public:
     }
 
 protected:
-    friend Engine;
-
     void releaseSubResources_() override
     {
         defaultFrameBuffer_.reset();
@@ -182,7 +181,7 @@ protected:
 
 private:
     SwapChainCreateInfo info_;
-    std::atomic_uint32_t pendingPresentCount_ = 0; // to limit queuing in the Engine.
+    std::atomic_uint32_t numPendingPresents_ = 0; // to limit queuing in the Engine.
 };
 using SwapChainPtr = ResourcePtr<SwapChain>;
 

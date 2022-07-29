@@ -71,7 +71,7 @@ protected:
     BufferPtr constructBuffer_(const BufferCreateInfo& createInfo) override;
     ImagePtr constructImage_(const ImageCreateInfo& createInfo) override;
     ImageViewPtr constructImageView_(const ImageViewCreateInfo& createInfo, const ImagePtr& image) override;
-    ImageViewPtr constructImageView_(const ImageViewCreateInfo& createInfo, const BufferPtr& buffer, ImageFormat format, UInt32 elementsCount) override;
+    ImageViewPtr constructImageView_(const ImageViewCreateInfo& createInfo, const BufferPtr& buffer, ImageFormat format, UInt32 numElements) override;
     SamplerStatePtr constructSamplerState_(const SamplerStateCreateInfo& createInfo) override;
     GeometryViewPtr constructGeometryView_(const GeometryViewCreateInfo& createInfo) override;
     BlendStatePtr constructBlendState_(const BlendStateCreateInfo& createInfo) override;
@@ -90,19 +90,19 @@ protected:
     void initBlendState_(BlendState* state) override;
     void initRasterizerState_(RasterizerState* state) override;
 
-    void setSwapChain_(SwapChain* swapChain) override;
-    void setFramebuffer_(Framebuffer* framebuffer) override;
+    void setSwapChain_(const SwapChainPtr& swapChain) override;
+    void setFramebuffer_(const FramebufferPtr& framebuffer) override;
     void setViewport_(Int x, Int y, Int width, Int height) override;
-    void setProgram_(Program* program) override;
-    void setBlendState_(BlendState* state, const geometry::Vec4f& blendFactor) override;
-    void setRasterizerState_(RasterizerState* state) override;
-    void setStageConstantBuffers_(Buffer* const* buffers, Int startIndex, Int count, ShaderStage shaderStage) override;
-    void setStageImageViews_(ImageView* const* views, Int startIndex, Int count, ShaderStage shaderStage) override;
-    void setStageSamplers_(SamplerState* const* states, Int startIndex, Int count, ShaderStage shaderStage) override;
+    void setProgram_(const ProgramPtr& program) override;
+    void setBlendState_(const BlendStatePtr& state, const geometry::Vec4f& blendFactor) override;
+    void setRasterizerState_(const RasterizerStatePtr& state) override;
+    void setStageConstantBuffers_(BufferPtr const* buffers, Int startIndex, Int count, ShaderStage shaderStage) override;
+    void setStageImageViews_(ImageViewPtr const* views, Int startIndex, Int count, ShaderStage shaderStage) override;
+    void setStageSamplers_(SamplerStatePtr const* states, Int startIndex, Int count, ShaderStage shaderStage) override;
 
     void updateBufferData_(Buffer* buffer, const void* data, Int lengthInBytes) override;
 
-    void draw_(GeometryView* view, UInt indexCount, UInt instanceCount) override;
+    void draw_(GeometryView* view, UInt numIndices, UInt numInstances) override;
     void clear_(const core::Color& color) override;
 
     UInt64 present_(SwapChain* swapChain, UInt32 syncInterval, PresentFlags flags) override;
@@ -115,11 +115,9 @@ private:
     std::array<ComPtr<ID3D11InputLayout>, core::toUnderlying(BuiltinGeometryLayout::Max_) + 1> builtinLayouts_;
     ID3D11InputLayout* layout_;
 
-    using StageConstantBuffers_ = std::array<Buffer*, maxConstantBufferCountPerStage>;
-    std::array<StageConstantBuffers_, stageEndIndex_> boundConstantBuffers_;
-
-    using StageImageViews_ = std::array<ImageView*, maxImageViewCountPerStage>;
-    std::array<StageImageViews_, stageEndIndex_> boundImageViewsStacks_;
+    std::array<StageConstantBufferArray, numShaderStages> boundConstantBufferArrays_;
+    std::array<StageImageViewArray, numShaderStages> boundImageViewArrays_;
+    FramebufferPtr boundFramebuffer_;
 
     void initBuiltinShaders_();
     bool loadBuffer_(ComPtr<ID3D11Buffer>& buffer, D3D11_BUFFER_DESC& desc, const void* data, Int dataSize);

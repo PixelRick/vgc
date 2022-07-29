@@ -33,7 +33,7 @@ Engine::Engine()
     blendConstantFactorStack_.emplaceLast();
     rasterizerStateStack_.emplaceLast();
 
-    for (Int i = 0; i < stageEndIndex_; ++i) {
+    for (Int i = 0; i < numShaderStages; ++i) {
         constantBufferArrayStacks_[i].emplaceLast();
         imageViewArrayStacks_[i].emplaceLast();
         samplerStateArrayStacks_[i].emplaceLast();
@@ -55,7 +55,7 @@ void Engine::onDestroyed()
     blendConstantFactorStack_.clear();
     rasterizerStateStack_.clear();
 
-    for (Int i = 0; i < stageEndIndex_; ++i) {
+    for (Int i = 0; i < numShaderStages; ++i) {
         constantBufferArrayStacks_[i].clear();
         imageViewArrayStacks_[i].clear();
         samplerStateArrayStacks_[i].clear();
@@ -206,11 +206,11 @@ ImageViewPtr Engine::createImageView(const ImageViewCreateInfo& createInfo, cons
     return imageView;
 }
 
-ImageViewPtr Engine::createImageView(const ImageViewCreateInfo& createInfo, const BufferPtr& buffer, ImageFormat format, UInt32 elementsCount)
+ImageViewPtr Engine::createImageView(const ImageViewCreateInfo& createInfo, const BufferPtr& buffer, ImageFormat format, UInt32 numElements)
 {
     // XXX should check bind flags compatibility here
 
-    ImageViewPtr imageView = constructImageView_(createInfo, buffer, format, elementsCount);
+    ImageViewPtr imageView = constructImageView_(createInfo, buffer, format, numElements);
     queueLambdaCommandWithParameters_<ImageView*>(
         "initBufferImageView",
         [](Engine* engine, ImageView* p) {
@@ -314,7 +314,7 @@ void Engine::setProgram(BuiltinProgram builtinProgram)
     if (programStack_.last() != program) {
         programStack_.last() = program;
         if (true /*program->usesBuiltinConstants()*/) {
-            BufferPtr& constantBufferRef = constantBufferArrayStacks_[shaderStageToIndex_(ShaderStage::Vertex)].last()[0];
+            BufferPtr& constantBufferRef = constantBufferArrayStacks_[toIndex_(ShaderStage::Vertex)].last()[0];
             if (constantBufferRef != builtinConstantsBuffer_) {
                 constantBufferRef = builtinConstantsBuffer_;
                 dirtyPipelineParameters_ |= PipelineParameters::VertexShaderConstantBuffers;
@@ -346,7 +346,7 @@ void Engine::setRasterizerState(const RasterizerStatePtr& state)
 
 void Engine::setStageConstantBuffers(const BufferPtr* buffers, Int startIndex, Int count, ShaderStage shaderStage)
 {
-    size_t stageIndex = shaderStageToIndex_(shaderStage);
+    size_t stageIndex = toIndex_(shaderStage);
     StageConstantBufferArray& constantBufferArray = constantBufferArrayStacks_[stageIndex].emplaceLast();
     for (Int i = 0; i < count; ++i) {
         constantBufferArray[startIndex + i] = buffers[i];
@@ -360,7 +360,7 @@ void Engine::setStageConstantBuffers(const BufferPtr* buffers, Int startIndex, I
 
 void Engine::setStageImageViews(const ImageViewPtr* views, Int startIndex, Int count, ShaderStage shaderStage)
 {
-    size_t stageIndex = shaderStageToIndex_(shaderStage);
+    size_t stageIndex = toIndex_(shaderStage);
     StageImageViewArray& imageViewArray = imageViewArrayStacks_[stageIndex].emplaceLast();
     for (Int i = 0; i < count; ++i) {
         imageViewArray[startIndex + i] = views[i];
@@ -374,7 +374,7 @@ void Engine::setStageImageViews(const ImageViewPtr* views, Int startIndex, Int c
 
 void Engine::setStageSamplers(const SamplerStatePtr* states, Int startIndex, Int count, ShaderStage shaderStage)
 {
-    size_t stageIndex = shaderStageToIndex_(shaderStage);
+    size_t stageIndex = toIndex_(shaderStage);
     StageSamplerStateArray& samplerStateArray = samplerStateArrayStacks_[stageIndex].emplaceLast();
     for (Int i = 0; i < count; ++i) {
         samplerStateArray[startIndex + i] = states[i];
@@ -409,47 +409,47 @@ void Engine::pushPipelineParameters(PipelineParameters parameters)
     if (!!(parameters & PipelineParameters::AllShadersResources)) {
         if (!!(parameters & PipelineParameters::VertexShaderConstantBuffers)) {
             StageConstantBufferArrayStack& constantBufferArrayStack =
-                constantBufferArrayStacks_[shaderStageToIndex_(ShaderStage::Vertex)];
+                constantBufferArrayStacks_[toIndex_(ShaderStage::Vertex)];
             constantBufferArrayStack.emplaceLast(constantBufferArrayStack.last());
         }
         if (!!(parameters & PipelineParameters::VertexShaderImageViews)) {
             StageImageViewArrayStack& imageViewArrayStack =
-                imageViewArrayStacks_[shaderStageToIndex_(ShaderStage::Vertex)];
+                imageViewArrayStacks_[toIndex_(ShaderStage::Vertex)];
             imageViewArrayStack.emplaceLast(imageViewArrayStack.last());
         }
         if (!!(parameters & PipelineParameters::VertexShaderSamplers)) {
             StageSamplerStateArrayStack& samplerStateArrayStack =
-                samplerStateArrayStacks_[shaderStageToIndex_(ShaderStage::Vertex)];
+                samplerStateArrayStacks_[toIndex_(ShaderStage::Vertex)];
             samplerStateArrayStack.emplaceLast(samplerStateArrayStack.last());
         }
         if (!!(parameters & PipelineParameters::GeometryShaderConstantBuffers)) {
             StageConstantBufferArrayStack& constantBufferArrayStack =
-                constantBufferArrayStacks_[shaderStageToIndex_(ShaderStage::Geometry)];
+                constantBufferArrayStacks_[toIndex_(ShaderStage::Geometry)];
             constantBufferArrayStack.emplaceLast(constantBufferArrayStack.last());
         }
         if (!!(parameters & PipelineParameters::GeometryShaderImageViews)) {
             StageImageViewArrayStack& imageViewArrayStack =
-                imageViewArrayStacks_[shaderStageToIndex_(ShaderStage::Geometry)];
+                imageViewArrayStacks_[toIndex_(ShaderStage::Geometry)];
             imageViewArrayStack.emplaceLast(imageViewArrayStack.last());
         }
         if (!!(parameters & PipelineParameters::GeometryShaderSamplers)) {
             StageSamplerStateArrayStack& samplerStateArrayStack =
-                samplerStateArrayStacks_[shaderStageToIndex_(ShaderStage::Geometry)];
+                samplerStateArrayStacks_[toIndex_(ShaderStage::Geometry)];
             samplerStateArrayStack.emplaceLast(samplerStateArrayStack.last());
         }
         if (!!(parameters & PipelineParameters::PixelShaderConstantBuffers)) {
             StageConstantBufferArrayStack& constantBufferArrayStack =
-                constantBufferArrayStacks_[shaderStageToIndex_(ShaderStage::Pixel)];
+                constantBufferArrayStacks_[toIndex_(ShaderStage::Pixel)];
             constantBufferArrayStack.emplaceLast(constantBufferArrayStack.last());
         }
         if (!!(parameters & PipelineParameters::PixelShaderImageViews)) {
             StageImageViewArrayStack& imageViewArrayStack =
-                imageViewArrayStacks_[shaderStageToIndex_(ShaderStage::Pixel)];
+                imageViewArrayStacks_[toIndex_(ShaderStage::Pixel)];
             imageViewArrayStack.emplaceLast(imageViewArrayStack.last());
         }
         if (!!(parameters & PipelineParameters::PixelShaderSamplers)) {
             StageSamplerStateArrayStack& samplerStateArrayStack =
-                samplerStateArrayStacks_[shaderStageToIndex_(ShaderStage::Pixel)];
+                samplerStateArrayStacks_[toIndex_(ShaderStage::Pixel)];
             samplerStateArrayStack.emplaceLast(samplerStateArrayStack.last());
         }
     }
@@ -487,55 +487,55 @@ void Engine::popPipelineParameters(PipelineParameters parameters)
     if (!!(parameters & PipelineParameters::AllShadersResources)) {
         if (!!(parameters & PipelineParameters::VertexShaderConstantBuffers)) {
             StageConstantBufferArrayStack& constantBufferArrayStack =
-                constantBufferArrayStacks_[shaderStageToIndex_(ShaderStage::Vertex)];
+                constantBufferArrayStacks_[toIndex_(ShaderStage::Vertex)];
             constantBufferArrayStack.removeLast();
             dirtyPipelineParameters_ |= PipelineParameters::VertexShaderConstantBuffers;
         }
         if (!!(parameters & PipelineParameters::VertexShaderImageViews)) {
             StageImageViewArrayStack& imageViewArrayStack =
-                imageViewArrayStacks_[shaderStageToIndex_(ShaderStage::Vertex)];
+                imageViewArrayStacks_[toIndex_(ShaderStage::Vertex)];
             imageViewArrayStack.removeLast();
             dirtyPipelineParameters_ |= PipelineParameters::VertexShaderImageViews;
         }
         if (!!(parameters & PipelineParameters::VertexShaderSamplers)) {
             StageSamplerStateArrayStack& samplerStateArrayStack =
-                samplerStateArrayStacks_[shaderStageToIndex_(ShaderStage::Vertex)];
+                samplerStateArrayStacks_[toIndex_(ShaderStage::Vertex)];
             samplerStateArrayStack.removeLast();
             dirtyPipelineParameters_ |= PipelineParameters::VertexShaderSamplers;
         }
         if (!!(parameters & PipelineParameters::GeometryShaderConstantBuffers)) {
             StageConstantBufferArrayStack& constantBufferArrayStack =
-                constantBufferArrayStacks_[shaderStageToIndex_(ShaderStage::Geometry)];
+                constantBufferArrayStacks_[toIndex_(ShaderStage::Geometry)];
             constantBufferArrayStack.removeLast();
             dirtyPipelineParameters_ |= PipelineParameters::GeometryShaderConstantBuffers;
         }
         if (!!(parameters & PipelineParameters::GeometryShaderImageViews)) {
             StageImageViewArrayStack& imageViewArrayStack =
-                imageViewArrayStacks_[shaderStageToIndex_(ShaderStage::Geometry)];
+                imageViewArrayStacks_[toIndex_(ShaderStage::Geometry)];
             imageViewArrayStack.removeLast();
             dirtyPipelineParameters_ |= PipelineParameters::GeometryShaderImageViews;
         }
         if (!!(parameters & PipelineParameters::GeometryShaderSamplers)) {
             StageSamplerStateArrayStack& samplerStateArrayStack =
-                samplerStateArrayStacks_[shaderStageToIndex_(ShaderStage::Geometry)];
+                samplerStateArrayStacks_[toIndex_(ShaderStage::Geometry)];
             samplerStateArrayStack.removeLast();
             dirtyPipelineParameters_ |= PipelineParameters::GeometryShaderSamplers;
         }
         if (!!(parameters & PipelineParameters::PixelShaderConstantBuffers)) {
             StageConstantBufferArrayStack& constantBufferArrayStack =
-                constantBufferArrayStacks_[shaderStageToIndex_(ShaderStage::Pixel)];
+                constantBufferArrayStacks_[toIndex_(ShaderStage::Pixel)];
             constantBufferArrayStack.removeLast();
             dirtyPipelineParameters_ |= PipelineParameters::PixelShaderConstantBuffers;
         }
         if (!!(parameters & PipelineParameters::PixelShaderImageViews)) {
             StageImageViewArrayStack& imageViewArrayStack =
-                imageViewArrayStacks_[shaderStageToIndex_(ShaderStage::Pixel)];
+                imageViewArrayStacks_[toIndex_(ShaderStage::Pixel)];
             imageViewArrayStack.removeLast();
             dirtyPipelineParameters_ |= PipelineParameters::PixelShaderImageViews;
         }
         if (!!(parameters & PipelineParameters::PixelShaderSamplers)) {
             StageSamplerStateArrayStack& samplerStateArrayStack =
-                samplerStateArrayStacks_[shaderStageToIndex_(ShaderStage::Pixel)];
+                samplerStateArrayStacks_[toIndex_(ShaderStage::Pixel)];
             samplerStateArrayStack.removeLast();
             dirtyPipelineParameters_ |= PipelineParameters::PixelShaderSamplers;
         }
@@ -655,65 +655,47 @@ void Engine::syncState_()
 
 void Engine::syncStageConstantBuffers_(ShaderStage shaderStage)
 {
-    static constexpr Int count = static_cast<Int>(std::tuple_size_v<StageConstantBufferArray>);
-    using Buffers = std::array<Buffer*, count>;
     struct CommandParameters {
-        Buffers buffers;
+        StageConstantBufferArray buffers;
         ShaderStage shaderStage;
-    } parameters = {{}, shaderStage};
-    const StageConstantBufferArray& constantBuffers =
-        constantBufferArrayStacks_[shaderStageToIndex_(shaderStage)].last();
-    std::transform(
-        constantBuffers.begin(), constantBuffers.end(),
-        parameters.buffers.begin(), [](const BufferPtr& p){ return p.get(); });
+    };
     queueLambdaCommandWithParameters_<CommandParameters>(
         "setStageConstantBuffers",
         [](Engine* engine, const CommandParameters& p) {
-            engine->setStageConstantBuffers_(p.buffers.data(), 0, count, p.shaderStage);
+            engine->setStageConstantBuffers_(p.buffers.data(), 0, p.buffers.size(), p.shaderStage);
         },
-        parameters);
+        constantBufferArrayStacks_[toIndex_(shaderStage)].last(),
+        shaderStage);
 }
 
 void Engine::syncStageImageViews_(ShaderStage shaderStage)
 {
-    static constexpr Int count = static_cast<Int>(std::tuple_size_v<StageImageViewArray>);
-    using ImageViews = std::array<ImageView*, count>;
     struct CommandParameters {
-        ImageViews views;
+        StageImageViewArray views;
         ShaderStage shaderStage;
-    } parameters = {{}, shaderStage};
-    const StageImageViewArray& imageViews =
-        imageViewArrayStacks_[shaderStageToIndex_(shaderStage)].last();
-    std::transform(
-        imageViews.begin(), imageViews.end(),
-        parameters.views.begin(), [](const ImageViewPtr& p){ return p.get(); });
+    };
     queueLambdaCommandWithParameters_<CommandParameters>(
         "setStageImageViews",
         [](Engine* engine, const CommandParameters& p) {
-            engine->setStageImageViews_(p.views.data(), 0, count, p.shaderStage);
+            engine->setStageImageViews_(p.views.data(), 0, p.views.size(), p.shaderStage);
         },
-        parameters);
+        imageViewArrayStacks_[toIndex_(shaderStage)].last(),
+        shaderStage);
 }
 
 void Engine::syncStageSamplers_(ShaderStage shaderStage)
 {
-    static constexpr Int count = static_cast<Int>(std::tuple_size_v<StageSamplerStateArray>);
-    using Samplers = std::array<SamplerState*, count>;
     struct CommandParameters {
-        Samplers samplers;
+        StageSamplerStateArray states;
         ShaderStage shaderStage;
-    } parameters = {{}, shaderStage};
-    const StageSamplerStateArray& samplerStates =
-        samplerStateArrayStacks_[shaderStageToIndex_(shaderStage)].last();
-    std::transform(
-        samplerStates.begin(), samplerStates.end(),
-        parameters.samplers.begin(), [](const SamplerStatePtr& p){ return p.get(); });
+    };
     queueLambdaCommandWithParameters_<CommandParameters>(
         "setStageSamplers",
         [](Engine* engine, const CommandParameters& p) {
-            engine->setStageSamplers_(p.samplers.data(), 0, count, p.shaderStage);
+            engine->setStageSamplers_(p.states.data(), 0, p.states.size(), p.shaderStage);
         },
-        parameters);
+        samplerStateArrayStacks_[toIndex_(shaderStage)].last(),
+        shaderStage);
 }
 
 void Engine::resizeSwapChain(const SwapChainPtr& swapChain, UInt32 width, UInt32 height)
@@ -726,20 +708,20 @@ void Engine::resizeSwapChain(const SwapChainPtr& swapChain, UInt32 width, UInt32
     resizeSwapChain_(swapChain.get(), width, height);
 }
 
-void Engine::draw(const GeometryViewPtr& geometryView, Int indexCount, UInt instanceCount)
+void Engine::draw(const GeometryViewPtr& geometryView, Int numIndices, UInt numInstances)
 {
     if (!checkResourceIsValid_(geometryView.get())) {
         return;
     }
-    if (indexCount == 0) {
+    if (numIndices == 0) {
         return;
     }
     syncState_();
     queueLambdaCommandWithParameters_<GeometryView*>(
         "draw",
         [=](Engine* engine, GeometryView* gv) {
-            Int n = (indexCount >= 0) ? indexCount : gv->vertexCount();
-            engine->draw_(gv, static_cast<UInt>(n), instanceCount);
+            Int n = (numIndices >= 0) ? numIndices : gv->numVertices();
+            engine->draw_(gv, static_cast<UInt>(n), numInstances);
         },
         geometryView.get());
 }
@@ -759,14 +741,14 @@ void Engine::present(UInt32 syncInterval,
                      std::function<void(UInt64 /*timestamp*/)>&& presentedCallback,
                      PresentFlags flags)
 {
-    ++swapChain_->pendingPresentCount_;
+    ++swapChain_->numPendingPresents_;
     bool shouldSync = syncInterval > 0;
     if (shouldSync && shouldPresentWaitFromSyncedUserThread_()) {
         // Preventing dead-locks
         // See https://docs.microsoft.com/en-us/windows/win32/api/DXGI1_2/nf-dxgi1_2-idxgiswapchain1-present1#remarks
         finish();
         UInt64 timestamp = present_(swapChain_.get(), syncInterval, flags);
-        --swapChain_->pendingPresentCount_;
+        --swapChain_->numPendingPresents_;
         presentedCallback(timestamp);
     }
     else {
@@ -780,7 +762,7 @@ void Engine::present(UInt32 syncInterval,
             "present",
             [](Engine* engine, const CommandParameters& p) {
                 UInt64 timestamp = engine->present_(p.swapChain, p.syncInterval, p.flags);
-                --p.swapChain->pendingPresentCount_;
+                --p.swapChain->numPendingPresents_;
                 p.presentedCallback(timestamp);
             },
             swapChain_.get(), syncInterval, flags, std::move(presentedCallback));
@@ -789,7 +771,7 @@ void Engine::present(UInt32 syncInterval,
             finish();
         }
         else {
-            submitPendingCommandList_(true);
+            submitPendingCommandList_();
         }
     }
 }
@@ -825,38 +807,10 @@ void Engine::renderThreadProc_()
         // if requested, stop
         if (stopRequested_) {
             // cancel submitted lists
-            for (const CommandList& l : commandQueue_) {
-                for (Resource* r : l.userResourcesToSetAsInternalOnly) {
-                    r->release_(this);
-                    delete r;
-                }
-            }
             commandQueue_.clear();
             lastExecutedCommandListId_ = lastSubmittedCommandListId_;
             // release all resources..
-            for (Resource* r : resourceRegistry_->userDanglingResources_) {
-                r->release_(this);
-                delete r;
-            }
-            resourceRegistry_->userDanglingResources_.clear();
-            for (Resource* r : resourceRegistry_->userResources_) {
-                r->release_(this);
-                r->registry_ = nullptr;
-                // a ResourcePtr exists and will do the delete for us
-            }
-            resetInternalPointers_();
-            resourceRegistry_->userResources_.clear();
-            for (Resource* r : resourceRegistry_->internalDanglingResources_) {
-                r->release_(this);
-                delete r;
-            }
-            resourceRegistry_->internalDanglingResources_.clear();
-            for (Resource* r : resourceRegistry_->internalResources_) {
-                r->release_(this);
-                r->registry_ = nullptr;
-                delete r;
-            }
-            resourceRegistry_->internalResources_.clear();
+            resourceRegistry_->release(this);
             // notify
             lock.unlock();
             renderThreadEventConditionVariable_.notify_all();
@@ -880,23 +834,8 @@ void Engine::renderThreadProc_()
 
         renderThreadEventConditionVariable_.notify_all();
 
-        for (Resource* r : commandList.userResourcesToSetAsInternalOnly) {
-            if (r->internalUseCount() == 0) {
-                r->release_(this);
-                delete r;
-            } else {
-                r->setInternalOnly_();
-                resourceRegistry_->internalOnlyResources_.insert(r);
-            }
-        }
-        commandList.userResourcesToSetAsInternalOnly.clear();
-
-        for (Resource* r : resourceRegistry_->resourcesToDestroy_) {
-            resourceRegistry_->internalOnlyResources_.erase(r);
-            r->release_(this);
-            delete r;
-        }
-        resourceRegistry_->resourcesToDestroy_.clear();
+        // release garbaged resources (locking)
+        resourceRegistry_->releaseGarbagedResources(this);
     }
 }
 
@@ -927,19 +866,12 @@ void Engine::stopRenderThread_()
     }
 }
 
-UInt Engine::submitPendingCommandList_(bool withGarbage)
+UInt Engine::submitPendingCommandList_()
 {
     std::unique_lock<std::mutex> lock(mutex_);
     bool notifyRenderThread = commandQueue_.isEmpty();
-    if (withGarbage) {
-        commandQueue_.emplaceLast(std::move(pendingCommands_), std::move(resourceRegistry_->danglingResources_));
-        pendingCommands_.clear();
-        resourceRegistry_->danglingResources_.clear();
-    }
-    else {
-        commandQueue_.emplaceLast(std::move(pendingCommands_));
-        pendingCommands_.clear();
-    }
+    commandQueue_.emplaceLast(std::move(pendingCommands_));
+    pendingCommands_.clear();
     UInt id = ++lastSubmittedCommandListId_;
     lock.unlock();
     if (notifyRenderThread) {

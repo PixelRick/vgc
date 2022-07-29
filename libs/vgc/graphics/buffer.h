@@ -24,6 +24,8 @@
 
 namespace vgc::graphics {
 
+class ImageView;
+
 //class BufferDataSpan {
 //    BufferDataSpan(const float* data, Int length)
 //        : data_(data), length_(length) {}

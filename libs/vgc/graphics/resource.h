@@ -151,15 +151,15 @@ protected:
     // should only be called by the registry
     virtual ~Resource() {}
 
-    // This function is called in the rendering thread only.
-    // You must override it to release the actual underlying data and objects.
-    //
-    virtual void release_(Engine*) {};
-
     // This function is called when the resource is being garbaged.
     // You must override it to reset all inner ResourcePtr.
     //
     virtual void releaseSubResources_() {}
+
+    // This function is called in the rendering thread only.
+    // You must override it to release the actual underlying data and objects.
+    //
+    virtual void release_(Engine*) {};
 
 private:
     void initRef_()

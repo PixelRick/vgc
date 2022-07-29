@@ -141,7 +141,7 @@ protected:
     BufferPtr constructBuffer_(const BufferCreateInfo& createInfo) override;
     ImagePtr constructImage_(const ImageCreateInfo& createInfo) override;
     ImageViewPtr constructImageView_(const ImageViewCreateInfo& createInfo, const ImagePtr& image) override;
-    ImageViewPtr constructImageView_(const ImageViewCreateInfo& createInfo, const BufferPtr& buffer, ImageFormat format, UInt32 elementsCount) override;
+    ImageViewPtr constructImageView_(const ImageViewCreateInfo& createInfo, const BufferPtr& buffer, ImageFormat format, UInt32 numElements) override;
     SamplerStatePtr constructSamplerState_(const SamplerStateCreateInfo& createInfo) override;
     GeometryViewPtr constructGeometryView_(const GeometryViewCreateInfo& createInfo) override;
     BlendStatePtr constructBlendState_(const BlendStateCreateInfo& createInfo) override;
@@ -172,7 +172,7 @@ protected:
 
     void updateBufferData_(Buffer* buffer, const void* data, Int lengthInBytes) override;
 
-    void draw_(GeometryView* view, UInt indexCount, UInt instanceCount) override;
+    void draw_(GeometryView* view, UInt numIndices, UInt numInstances) override;
     void clear_(const core::Color& color) override;
 
     UInt64 present_(SwapChain* swapChain, UInt32 syncInterval, PresentFlags flags) override;

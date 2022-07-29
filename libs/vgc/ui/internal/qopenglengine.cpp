@@ -309,7 +309,7 @@ FramebufferPtr QOpenglEngine::constructFramebuffer_(const ImageViewPtr& /*colorI
 BufferPtr QOpenglEngine::constructBuffer_(const BufferCreateInfo& /*createInfo*/) { return nullptr; }
 ImagePtr QOpenglEngine::constructImage_(const ImageCreateInfo& /*createInfo*/) { return nullptr; }
 ImageViewPtr QOpenglEngine::constructImageView_(const ImageViewCreateInfo& /*createInfo*/, const ImagePtr& /*image*/) { return nullptr; }
-ImageViewPtr QOpenglEngine::constructImageView_(const ImageViewCreateInfo& /*createInfo*/, const BufferPtr& /*buffer*/, ImageFormat /*format*/, UInt32 /*elementsCount*/) { return nullptr; }
+ImageViewPtr QOpenglEngine::constructImageView_(const ImageViewCreateInfo& /*createInfo*/, const BufferPtr& /*buffer*/, ImageFormat /*format*/, UInt32 /*numElements*/) { return nullptr; }
 SamplerStatePtr QOpenglEngine::constructSamplerState_(const SamplerStateCreateInfo& /*createInfo*/) { return nullptr; }
 GeometryViewPtr QOpenglEngine::constructGeometryView_(const GeometryViewCreateInfo& /*createInfo*/) { return nullptr; }
 BlendStatePtr QOpenglEngine::constructBlendState_(const BlendStateCreateInfo& /*createInfo*/) { return nullptr; }
@@ -340,7 +340,7 @@ void QOpenglEngine::setStageSamplers_(SamplerState* const* /*states*/, Int /*sta
 
 void QOpenglEngine::updateBufferData_(Buffer* /*buffer*/, const void* /*data*/, Int /*lengthInBytes*/) {}
 
-void QOpenglEngine::draw_(GeometryView* /*view*/, UInt /*indexCount*/, UInt /*instanceCount*/) {}
+void QOpenglEngine::draw_(GeometryView* /*view*/, UInt /*numIndices*/, UInt /*numInstances*/) {}
 void QOpenglEngine::clear_(const core::Color& /*color*/) {}
 
 UInt64 QOpenglEngine::present_(SwapChain* /*swapChain*/, UInt32 /*syncInterval*/, PresentFlags /*flags*/) { return 0; }
@@ -361,7 +361,7 @@ UInt64 QOpenglEngine::present_(SwapChain* /*swapChain*/, UInt32 /*syncInterval*/
 //    format_.setStencilBufferSize(8);
 //    format_.setVersion(3, 2);
 //    format_.setProfile(QSurfaceFormat::CoreProfile);
-//    format_.setSamples(desc.sampleCount());
+//    format_.setSamples(desc.numSamples());
 //    format_.setSwapInterval(0);
 //
 //    QWindow* wnd = static_cast<QWindow*>(desc.windowNativeHandle());

@@ -775,15 +775,15 @@ void OpenGLViewer::updateCurveGLResources_(CurveGLResources& r)
                                                static_cast<float>(v[1])));
     }
     r.vboTriangles.bind();
-    int count = core::int_cast<int>(r.numVerticesTriangles) * static_cast<int>(sizeof(geometry::Vec2f));
-    r.vboTriangles.allocate(glVerticesTriangles.data(), count);
+    int n = core::int_cast<int>(r.numVerticesTriangles) * static_cast<int>(sizeof(geometry::Vec2f));
+    r.vboTriangles.allocate(glVerticesTriangles.data(), n);
     r.vboTriangles.release();
 
     // Transfer control points vertex data to GPU
     r.numVerticesControlPoints = glVerticesControlPoints.length();
     r.vboControlPoints.bind();
-    count = core::int_cast<int>(r.numVerticesControlPoints) * static_cast<int>(sizeof(geometry::Vec2f));
-    r.vboControlPoints.allocate(glVerticesControlPoints.data(), count);
+    n = core::int_cast<int>(r.numVerticesControlPoints) * static_cast<int>(sizeof(geometry::Vec2f));
+    r.vboControlPoints.allocate(glVerticesControlPoints.data(), n);
     r.vboControlPoints.release();
 
     // Set color

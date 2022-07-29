@@ -108,7 +108,7 @@ struct Span {
 /// later), or the drawing operations may fail.
 ///
 class VGC_GRAPHICS_API Engine : public core::Object {
-private:
+protected:
     VGC_OBJECT(Engine, core::Object)
     VGC_PRIVATIZE_OBJECT_TREE_MUTATORS
 
@@ -169,7 +169,7 @@ public:
 
     ImageViewPtr createImageView(const ImageViewCreateInfo& createInfo, const ImagePtr& image);
 
-    ImageViewPtr createImageView(const ImageViewCreateInfo& createInfo, const BufferPtr& buffer, ImageFormat format, UInt32 elementsCount);
+    ImageViewPtr createImageView(const ImageViewCreateInfo& createInfo, const BufferPtr& buffer, ImageFormat format, UInt32 numElements);
 
     SamplerStatePtr createSamplerState(const SamplerStateCreateInfo& createInfo);
 
@@ -253,7 +253,7 @@ public:
     template<typename T>
     void updateVertexBufferData(const GeometryViewPtr& geometry, core::Array<T> data);
 
-    void draw(const GeometryViewPtr& geometryView, Int indexCount, UInt instanceCount);
+    void draw(const GeometryViewPtr& geometryView, Int numIndices, UInt numInstances);
 
     /// Clears the whole render area with the given color.
     ///
@@ -284,6 +284,10 @@ public:
     }
 
 protected:
+    using StageConstantBufferArray = std::array<BufferPtr, maxConstantBuffersPerStage>;
+    using StageImageViewArray = std::array<ImageViewPtr, maxImageViewsPerStage>;
+    using StageSamplerStateArray = std::array<SamplerStatePtr, maxSamplersPerStage>;
+
     // -- USER THREAD implementation functions --
 
     virtual void createBuiltinShaders_() = 0;
@@ -293,7 +297,7 @@ protected:
     virtual BufferPtr constructBuffer_(const BufferCreateInfo& createInfo) = 0;
     virtual ImagePtr constructImage_(const ImageCreateInfo& createInfo) = 0;
     virtual ImageViewPtr constructImageView_(const ImageViewCreateInfo& createInfo, const ImagePtr& image) = 0;
-    virtual ImageViewPtr constructImageView_(const ImageViewCreateInfo& createInfo, const BufferPtr& buffer, ImageFormat format, UInt32 elementsCount) = 0;
+    virtual ImageViewPtr constructImageView_(const ImageViewCreateInfo& createInfo, const BufferPtr& buffer, ImageFormat format, UInt32 numElements) = 0;
     virtual SamplerStatePtr constructSamplerState_(const SamplerStateCreateInfo& createInfo) = 0;
     virtual GeometryViewPtr constructGeometryView_(const GeometryViewCreateInfo& createInfo) = 0;
     virtual BlendStatePtr constructBlendState_(const BlendStateCreateInfo& createInfo) = 0;
@@ -328,12 +332,10 @@ protected:
 
     virtual void updateBufferData_(Buffer* buffer, const void* data, Int lengthInBytes) = 0;
 
-    virtual void draw_(GeometryView* view, UInt primitiveCount, UInt instanceCount) = 0;
+    virtual void draw_(GeometryView* view, UInt numPrimitives, UInt numInstances) = 0;
     virtual void clear_(const core::Color& color) = 0;
 
     virtual UInt64 present_(SwapChain* swapChain, UInt32 syncInterval, PresentFlags flags) = 0;
-
-    virtual void resetInternalPointers_();
 
 protected:
     detail::ResourceRegistry* resourceRegistry_ = nullptr;
@@ -388,12 +390,10 @@ protected:
             new detail::LambdaCommandWithParameters<Data, std::decay_t<Lambda>>(name, std::forward<Lambda>(lambda), std::forward<Args>(args)...));
     };
 
-    static constexpr size_t shaderStageToIndex_(ShaderStage stage)
+    static constexpr size_t toIndex_(ShaderStage stage)
     {
         return core::toUnderlying(stage);
     }
-
-    static constexpr Int stageEndIndex_ = core::toUnderlying(ShaderStage::Max_) + 1;
 
 private:
     // -- pipeline state on the user thread --
@@ -408,17 +408,14 @@ private:
     core::Array<geometry::Vec4f> blendConstantFactorStack_;
     core::Array<RasterizerStatePtr> rasterizerStateStack_;
 
-    using StageConstantBufferArray = std::array<BufferPtr, maxConstantBufferCountPerStage>;
     using StageConstantBufferArrayStack = core::Array<StageConstantBufferArray>;
-    std::array<StageConstantBufferArrayStack, stageEndIndex_> constantBufferArrayStacks_;
+    std::array<StageConstantBufferArrayStack, numShaderStages> constantBufferArrayStacks_;
 
-    using StageImageViewArray = std::array<ImageViewPtr, maxImageViewCountPerStage>;
     using StageImageViewArrayStack = core::Array<StageImageViewArray>;
-    std::array<StageImageViewArrayStack, stageEndIndex_> imageViewArrayStacks_;
+    std::array<StageImageViewArrayStack, numShaderStages> imageViewArrayStacks_;
 
-    using StageSamplerStateArray = std::array<SamplerStatePtr, maxSamplerCountPerStage>;
     using StageSamplerStateArrayStack = core::Array<StageSamplerStateArray>;
-    std::array<StageSamplerStateArrayStack, stageEndIndex_> samplerStateArrayStacks_;
+    std::array<StageSamplerStateArrayStack, numShaderStages> samplerStateArrayStacks_;
 
     PipelineParameters dirtyPipelineParameters_ = PipelineParameters::None;
 
@@ -469,7 +466,7 @@ private:
 
     // -- threads sync --
 
-    UInt submitPendingCommandList_(bool withGarbage);
+    UInt submitPendingCommandList_();
 
     // returns false if translation was cancelled by a stop request.
     void waitCommandListTranslationFinished_(UInt commandListId = 0);
@@ -612,12 +609,12 @@ inline void Engine::updateVertexBufferData(const GeometryViewPtr& geometry, core
 
 inline UInt Engine::flush()
 {
-    return submitPendingCommandList_(true);
+    return submitPendingCommandList_();
 }
 
 inline void Engine::finish()
 {
-    UInt id = submitPendingCommandList_(true);
+    UInt id = submitPendingCommandList_();
     waitCommandListTranslationFinished_(id);
 }
 

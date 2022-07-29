@@ -29,11 +29,11 @@ namespace vgc::graphics {
 
 class GeometryView;
 
-inline constexpr size_t maxAttachedVertexBufferCount = 4;
+inline constexpr size_t maxAttachedVertexBuffers = 4;
 
-using VertexBufferArray = std::array<BufferPtr, maxAttachedVertexBufferCount>;
-using VertexBufferStridesArray = std::array<UInt32, maxAttachedVertexBufferCount>;
-using VertexBufferOffsetsArray = std::array<UInt32, maxAttachedVertexBufferCount>;
+using VertexBufferArray = std::array<BufferPtr, maxAttachedVertexBuffers>;
+using VertexBufferStridesArray = std::array<UInt32, maxAttachedVertexBuffers>;
+using VertexBufferOffsetsArray = std::array<UInt32, maxAttachedVertexBuffers>;
 
 /// \class vgc::graphics::GeometryViewCreateInfo
 /// \brief Parameters for geometry view creation.
@@ -144,6 +144,8 @@ private:
 ///
 class VGC_GRAPHICS_API GeometryView : public Resource {
 protected:
+    friend Engine;
+
     GeometryView(ResourceRegistry* registry, const GeometryViewCreateInfo& info)
         : Resource(registry), info_(info)
     {
@@ -225,14 +227,12 @@ public:
         return -1;
     }
 
-    const Int vertexCount() const {
+    const Int numVertices() const {
         Int elementSize = vertexSizeInBuffer(0);
         return info_.vertexBuffers()[0]->lengthInBytes() / elementSize;
     }
 
-private:
-    friend Engine;
-
+protected:
     void releaseSubResources_() override
     {
         for (BufferPtr& vb : info_.vertexBuffers_) {
@@ -241,6 +241,7 @@ private:
         info_.indexBuffer_.reset();
     }
 
+private:
     GeometryViewCreateInfo info_;
 };
 using GeometryViewPtr = ResourcePtr<GeometryView>;

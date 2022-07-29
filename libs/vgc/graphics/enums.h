@@ -333,8 +333,10 @@ enum class ShaderStage : Int8 {
     //Hull,
     //Domain,
     //Compute,
-    Max_ = Pixel
+    Max_ = Pixel,
 };
+
+static constexpr UInt8 numShaderStages = core::toUnderlying(ShaderStage::Max_) + 1;
 
 enum class BuiltinProgram : UInt8 {
     Simple,
@@ -349,7 +351,7 @@ enum class BuiltinGeometryLayout : Int8 {
     XY = 0,
     XYRGB = 1,
     XYZ = 2,
-    Max_ = XYZ
+    Max_ = XYZ,
 };
 
 enum class PipelineParameters : UInt32 {

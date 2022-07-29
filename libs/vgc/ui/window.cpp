@@ -46,8 +46,8 @@ Window::Window(ui::WidgetPtr widget) :
     //widget_->focusRequested().connect([this](){ this->onFocusRequested(); });
 
     graphics::SwapChainCreateInfo scd = {};
-    scd.setBufferCount(2);
-    scd.setSampleCount(8);
+    scd.setNumBuffers(2);
+    scd.setNumSamples(8);
 
 #if defined(VGC_CORE_COMPILER_MSVC) && TRUE
     // RasterSurface looks ok since Qt seems to not automatically create a backing store.
@@ -303,7 +303,7 @@ void Window::paint(bool sync) {
         throw LogicError("engine_ is null.");
     }
 
-    if (swapChain_->pendingPresentCount() > 0 && !sync) {
+    if (swapChain_->numPendingPresents() > 0 && !sync) {
         // race condition possible but unlikely here.
         updateDeferred_ = true;
         return;
@@ -330,7 +330,7 @@ void Window::paint(bool sync) {
 
     /*static int i = 0;
     static graphics::ShapedText shapedText(graphics::fontLibrary()->defaultFont()->getSizedFont(), "text");
-    std::string s = core::format("{:d} {:04d} {:04d}x{:04d} {:04d}x{:04d}", swapChain_->pendingPresentCount(), ++i, width_, height_, width(), height());
+    std::string s = core::format("{:d} {:04d} {:04d}x{:04d} {:04d}x{:04d}", swapChain_->numPendingPresents(), ++i, width_, height_, width(), height());
     shapedText.setText(s);
     VGC_DEBUG(LogVgcUi, s);
     core::Array<float> a;

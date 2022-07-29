@@ -77,34 +77,34 @@ public:
         format_ = format;
     }
 
-    UInt8 layerCount() const
+    UInt8 numLayers() const
     {
-        return layerCount_;
+        return numLayers_;
     }
 
-    void setLayerCount(UInt8 layerCount)
+    void setNumLayers(UInt8 numLayers)
     {
-        layerCount_ = layerCount;
+        numLayers_ = numLayers;
     }
 
-    UInt8 mipLevelCount() const
+    UInt8 numMipLevels() const
     {
-        return mipLevelCount_;
+        return numMipLevels_;
     }
 
-    void setMipLevelCount(UInt8 mipLevelCount)
+    void setNumMipLevels(UInt8 numMipLevels)
     {
-        mipLevelCount_ = mipLevelCount;
+        numMipLevels_ = numMipLevels;
     }
 
-    UInt8 sampleCount() const
+    UInt8 numSamples() const
     {
-        return sampleCount_;
+        return numSamples_;
     }
 
-    void setSampleCount(UInt8 sampleCount)
+    void setNumSamples(UInt8 numSamples)
     {
-        sampleCount_ = sampleCount;
+        numSamples_ = numSamples;
     }
 
     Usage usage() const
@@ -152,9 +152,9 @@ private:
     UInt32 height_ = 0;
     ImageRank rank_ = ImageRank::_1D;
     ImageFormat format_ = ImageFormat::Unknown;
-    UInt8 layerCount_ = 1;
-    UInt8 mipLevelCount_ = 1;
-    UInt8 sampleCount_ = 1;
+    UInt8 numLayers_ = 1;
+    UInt8 numMipLevels_ = 1;
+    UInt8 numSamples_ = 1;
     Usage usage_ = Usage::Default;
     ImageBindFlags bindFlags_ = ImageBindFlags::ShaderResource;
     CpuAccessFlags cpuAccessFlags_ = CpuAccessFlags::None;
@@ -194,19 +194,19 @@ public:
         return info_.format();
     }
 
-    UInt8 layerCount() const
+    UInt8 numLayers() const
     {
-        return info_.layerCount();
+        return info_.numLayers();
     }
 
-    UInt8 mipLevelCount() const
+    UInt8 numMipLevels() const
     {
-        return info_.mipLevelCount();
+        return info_.numMipLevels();
     }
 
-    UInt8 sampleCount() const
+    UInt8 numSamples() const
     {
-        return info_.sampleCount();
+        return info_.numSamples();
     }
 
     Usage usage() const
