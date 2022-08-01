@@ -17,6 +17,7 @@
 #include <vgc/ui/internal/qopenglengine.h>
 
 #include <chrono>
+#include <limits>
 
 #if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
 #include <QOpenGLVersionFunctionsFactory>
@@ -43,6 +44,9 @@ struct XYRGBVertex {
 
 } // namespace
 
+inline constexpr GLuint badGLObject = std::numeric_limits<GLuint>::max();
+inline constexpr GLenum badGLenum = std::numeric_limits<GLenum>::max();
+
 class QglImageView;
 class QglFramebuffer;
 
@@ -65,7 +69,7 @@ protected:
     }
 
 private:
-    GLuint object_ = static_cast<GLuint>(-1);
+    GLuint object_ = badGLObject;
     GLenum target_ = 0;
 };
 using QglBufferPtr = ResourcePtr<QglBuffer>;
@@ -94,7 +98,7 @@ protected:
     }
 
 private:
-    GLuint object_ = static_cast<GLuint>(-1);
+    GLuint object_ = badGLObject;
     GLenum target_ = 0;
     GLint internalFormat_ = 0;
 };
@@ -229,7 +233,6 @@ private:
 };
 using QglRasterizerStatePtr = ResourcePtr<QglRasterizerState>;
 
-// -------- WIP ----------
 
 // no equivalent in D3D11, see OMSetRenderTargets
 class QglFramebuffer : public Framebuffer {
@@ -246,14 +249,6 @@ protected:
         , depthStencilView_(depthStencilView)
         , isDefault_(isDefault)
     {
-        if (colorView_) {
-            colorView_->dependentD3dFramebuffers_.append(this);
-            d3dColorView_ = colorView_.get();
-        }
-        if (depthStencilView_) {
-            depthStencilView_->dependentD3dFramebuffers_.append(this);
-            d3dDepthStencilView_ = depthStencilView_.get();
-        }
     }
 
 public:
@@ -262,22 +257,9 @@ public:
         return isDefault_;
     }
 
-    ID3D11RenderTargetView* rtvObject() const
+    GLuint object() const
     {
-        return colorView_ ?
-            static_cast<ID3D11RenderTargetView*>(colorView_->rtvObject()) : nullptr;
-    }
-
-    ID3D11DepthStencilView* dsvObject() const
-    {
-        return depthStencilView_ ?
-            static_cast<ID3D11DepthStencilView*>(depthStencilView_->dsvObject()) : nullptr;
-    }
-
-    // resizing a swap chain requires releasing all views to its back buffers.
-    void forceReleaseColorViewD3dObject()
-    {
-        colorView_->forceReleaseD3dObject();
+        return object_;
     }
 
 protected:
@@ -287,49 +269,32 @@ protected:
         depthStencilView_.reset();
     }
 
-    void release_(Engine* engine) override;
+    void release_(Engine* engine) override
+    {
+        Framebuffer::release_(engine);
+        static_cast<QglEngine*>(engine)->api()->glDeleteFramebuffers(1, &object_);
+    }
 
 private:
+    GLuint object_;
     QglImageViewPtr colorView_;
     QglImageViewPtr depthStencilView_;
 
     bool isDefault_ = false;
-
-    bool isBoundToD3D_ = false;
-
-    friend QglImageView;
-    QglImageView* d3dColorView_ = nullptr; // used to clear backpointer at release time
-    QglImageView* d3dDepthStencilView_ = nullptr; // used to clear backpointer at release time
 };
 using QglFramebufferPtr = ResourcePtr<QglFramebuffer>;
 
 class QglSwapChain : public SwapChain {
 public:
     QglSwapChain(ResourceRegistry* registry,
-                   const SwapChainCreateInfo& desc,
-                   IDXGISwapChain* dxgiSwapChain)
-        : SwapChain(registry, desc)
-        , dxgiSwapChain_(dxgiSwapChain) {
-    }
-
-    IDXGISwapChain* dxgiSwapChain() const
-    {
-        return dxgiSwapChain_.get();
+                 const SwapChainCreateInfo& desc)
+        : SwapChain(registry, desc) {
     }
 
     // can't be called from render thread
     void setDefaultFramebuffer(const QglFramebufferPtr& defaultFrameBuffer)
     {
         defaultFrameBuffer_ = defaultFrameBuffer;
-    }
-
-    // can't be called from render thread
-    void clearDefaultFramebuffer()
-    {
-        if (defaultFrameBuffer_) {
-            static_cast<QglFramebuffer*>(defaultFrameBuffer_.get())->forceReleaseColorViewD3dObject();
-            defaultFrameBuffer_.reset();
-        }
     }
 
 protected:
@@ -339,220 +304,200 @@ protected:
     }
 
 private:
-    ComPtr<IDXGISwapChain> dxgiSwapChain_;
+    // ..
 };
 
 // ENUM CONVERSIONS
 
-DXGI_FORMAT imageFormatToDxgiFormat(ImageFormat format)
+GLenum imageFormatToGLenum(ImageFormat format)
 {
     switch (format) {
         // Depth
-    case ImageFormat::D_16_UNORM:               return DXGI_FORMAT_D16_UNORM;
-    case ImageFormat::D_32_FLOAT:               return DXGI_FORMAT_D32_FLOAT;
+    case ImageFormat::D_16_UNORM:               return GL_DEPTH_COMPONENT16;
+    case ImageFormat::D_32_FLOAT:               return GL_DEPTH_COMPONENT32F;
         // Depth + Stencil
-    case ImageFormat::DS_24_UNORM_8_UINT:       return DXGI_FORMAT_D24_UNORM_S8_UINT;
-    case ImageFormat::DS_32_FLOAT_8_UINT_24_X:  return DXGI_FORMAT_D32_FLOAT_S8X24_UINT;
+    case ImageFormat::DS_24_UNORM_8_UINT:       return GL_DEPTH24_STENCIL8;
+    case ImageFormat::DS_32_FLOAT_8_UINT_24_X:  return GL_DEPTH32F_STENCIL8;
         // Red
-    case ImageFormat::R_8_UNORM:                return DXGI_FORMAT_R8_UNORM;
-    case ImageFormat::R_8_SNORM:                return DXGI_FORMAT_R8_SNORM;
-    case ImageFormat::R_8_UINT:                 return DXGI_FORMAT_R8_UINT;
-    case ImageFormat::R_8_SINT:                 return DXGI_FORMAT_R8_SINT;
-    case ImageFormat::R_16_UNORM:               return DXGI_FORMAT_R16_UNORM;
-    case ImageFormat::R_16_SNORM:               return DXGI_FORMAT_R16_SNORM;
-    case ImageFormat::R_16_UINT:                return DXGI_FORMAT_R16_UINT;
-    case ImageFormat::R_16_SINT:                return DXGI_FORMAT_R16_SINT;
-    case ImageFormat::R_16_FLOAT:               return DXGI_FORMAT_R16_FLOAT;
-    case ImageFormat::R_32_UINT:                return DXGI_FORMAT_R32_UINT;
-    case ImageFormat::R_32_SINT:                return DXGI_FORMAT_R32_SINT;
-    case ImageFormat::R_32_FLOAT:               return DXGI_FORMAT_R32_FLOAT;
+    case ImageFormat::R_8_UNORM:                return GL_R8;
+    case ImageFormat::R_8_SNORM:                return GL_R8_SNORM;
+    case ImageFormat::R_8_UINT:                 return GL_R8UI;
+    case ImageFormat::R_8_SINT:                 return GL_R8I;
+    case ImageFormat::R_16_UNORM:               return GL_R16;
+    case ImageFormat::R_16_SNORM:               return GL_R16_SNORM;
+    case ImageFormat::R_16_UINT:                return GL_R16UI;
+    case ImageFormat::R_16_SINT:                return GL_R16I;
+    case ImageFormat::R_16_FLOAT:               return GL_R16F;
+    case ImageFormat::R_32_UINT:                return GL_R32UI;
+    case ImageFormat::R_32_SINT:                return GL_R32I;
+    case ImageFormat::R_32_FLOAT:               return GL_R32F;
         // RG
-    case ImageFormat::RG_8_UNORM:               return DXGI_FORMAT_R8G8_UNORM;
-    case ImageFormat::RG_8_SNORM:               return DXGI_FORMAT_R8G8_SNORM;
-    case ImageFormat::RG_8_UINT:                return DXGI_FORMAT_R8G8_UINT;
-    case ImageFormat::RG_8_SINT:                return DXGI_FORMAT_R8G8_SINT;
-    case ImageFormat::RG_16_UNORM:              return DXGI_FORMAT_R16G16_UNORM;
-    case ImageFormat::RG_16_SNORM:              return DXGI_FORMAT_R16G16_SNORM;
-    case ImageFormat::RG_16_UINT:               return DXGI_FORMAT_R16G16_UINT;
-    case ImageFormat::RG_16_SINT:               return DXGI_FORMAT_R16G16_SINT;
-    case ImageFormat::RG_16_FLOAT:              return DXGI_FORMAT_R16G16_FLOAT;
-    case ImageFormat::RG_32_UINT:               return DXGI_FORMAT_R32G32_UINT;
-    case ImageFormat::RG_32_SINT:               return DXGI_FORMAT_R32G32_SINT;
-    case ImageFormat::RG_32_FLOAT:              return DXGI_FORMAT_R32G32_FLOAT;
+    case ImageFormat::RG_8_UNORM:               return GL_RG8;
+    case ImageFormat::RG_8_SNORM:               return GL_RG8_SNORM;
+    case ImageFormat::RG_8_UINT:                return GL_RG8UI;
+    case ImageFormat::RG_8_SINT:                return GL_RG8I;
+    case ImageFormat::RG_16_UNORM:              return GL_RG16;
+    case ImageFormat::RG_16_SNORM:              return GL_RG16_SNORM;
+    case ImageFormat::RG_16_UINT:               return GL_RG16UI;
+    case ImageFormat::RG_16_SINT:               return GL_RG16I;
+    case ImageFormat::RG_16_FLOAT:              return GL_RG16F;
+    case ImageFormat::RG_32_UINT:               return GL_RG32UI;
+    case ImageFormat::RG_32_SINT:               return GL_RG32I;
+    case ImageFormat::RG_32_FLOAT:              return GL_RG32F;
         // RGB
-    case ImageFormat::RGB_11_11_10_FLOAT:       return DXGI_FORMAT_R11G11B10_FLOAT;
-    case ImageFormat::RGB_32_UINT:              return DXGI_FORMAT_R32G32B32_UINT;
-    case ImageFormat::RGB_32_SINT:              return DXGI_FORMAT_R32G32B32_SINT;
-    case ImageFormat::RGB_32_FLOAT:             return DXGI_FORMAT_R32G32B32_FLOAT;
+    case ImageFormat::RGB_11_11_10_FLOAT:       return GL_R11F_G11F_B10F;
+    case ImageFormat::RGB_32_UINT:              return GL_RGB32UI;
+    case ImageFormat::RGB_32_SINT:              return GL_RGB32I;
+    case ImageFormat::RGB_32_FLOAT:             return GL_RGB32F;
         // RGBA
-    case ImageFormat::RGBA_8_UNORM:             return DXGI_FORMAT_R8G8B8A8_UNORM;
-    case ImageFormat::RGBA_8_UNORM_SRGB:        return DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
-    case ImageFormat::RGBA_8_SNORM:             return DXGI_FORMAT_R8G8B8A8_SNORM;
-    case ImageFormat::RGBA_8_UINT:              return DXGI_FORMAT_R8G8B8A8_UINT;
-    case ImageFormat::RGBA_8_SINT:              return DXGI_FORMAT_R8G8B8A8_SINT;
-    case ImageFormat::RGBA_10_10_10_2_UNORM:    return DXGI_FORMAT_R10G10B10A2_UNORM;
-    case ImageFormat::RGBA_10_10_10_2_UINT:     return DXGI_FORMAT_R10G10B10A2_UINT;
-    case ImageFormat::RGBA_16_UNORM:            return DXGI_FORMAT_R16G16B16A16_UNORM;
-    case ImageFormat::RGBA_16_UINT:             return DXGI_FORMAT_R16G16B16A16_UINT;
-    case ImageFormat::RGBA_16_SINT:             return DXGI_FORMAT_R16G16B16A16_SINT;
-    case ImageFormat::RGBA_16_FLOAT:            return DXGI_FORMAT_R16G16B16A16_FLOAT;
-    case ImageFormat::RGBA_32_UINT:             return DXGI_FORMAT_R32G32B32A32_UINT;
-    case ImageFormat::RGBA_32_SINT:             return DXGI_FORMAT_R32G32B32A32_SINT;
-    case ImageFormat::RGBA_32_FLOAT:            return DXGI_FORMAT_R32G32B32A32_FLOAT;
+    case ImageFormat::RGBA_8_UNORM:             return GL_RGBA8;
+    case ImageFormat::RGBA_8_UNORM_SRGB:        return GL_SRGB8_ALPHA8;
+    case ImageFormat::RGBA_8_SNORM:             return GL_RGBA8_SNORM;
+    case ImageFormat::RGBA_8_UINT:              return GL_RGBA8UI;
+    case ImageFormat::RGBA_8_SINT:              return GL_RGBA8I;
+    case ImageFormat::RGBA_10_10_10_2_UNORM:    return GL_RGB10_A2;
+    case ImageFormat::RGBA_10_10_10_2_UINT:     return GL_RGB10_A2UI;
+    case ImageFormat::RGBA_16_UNORM:            return GL_RGBA16;
+    case ImageFormat::RGBA_16_UINT:             return GL_RGBA16UI;
+    case ImageFormat::RGBA_16_SINT:             return GL_RGBA16I;
+    case ImageFormat::RGBA_16_FLOAT:            return GL_RGBA16F;
+    case ImageFormat::RGBA_32_UINT:             return GL_RGBA32UI;
+    case ImageFormat::RGBA_32_SINT:             return GL_RGBA32I;
+    case ImageFormat::RGBA_32_FLOAT:            return GL_RGBA32F;
     default:
         break;
     }
-    return DXGI_FORMAT_UNKNOWN;
+    return 0;
 }
 
-D3D_PRIMITIVE_TOPOLOGY primitiveTypeToD3DPrimitiveTopology(PrimitiveType type)
+GLenum primitiveTypeToGLenum(PrimitiveType type)
 {
     switch (type) {
-    case PrimitiveType::Point:          return D3D11_PRIMITIVE_TOPOLOGY_POINTLIST;
-    case PrimitiveType::LineList:       return D3D11_PRIMITIVE_TOPOLOGY_LINELIST;
-    case PrimitiveType::LineStrip:      return D3D11_PRIMITIVE_TOPOLOGY_LINESTRIP;
-    case PrimitiveType::TriangleList:   return D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
-    case PrimitiveType::TriangleStrip:  return D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP;
+    case PrimitiveType::Point:          return GL_POINTS;
+    case PrimitiveType::LineList:       return GL_LINES;
+    case PrimitiveType::LineStrip:      return GL_LINE_STRIP;
+    case PrimitiveType::TriangleList:   return GL_TRIANGLES;
+    case PrimitiveType::TriangleStrip:  return GL_TRIANGLE_STRIP;
     default:
         break;
     }
-    return D3D11_PRIMITIVE_TOPOLOGY_UNDEFINED;
+    return badGLenum;
 }
 
-D3D11_USAGE usageToD3DUsage(Usage usage)
+GLenum usageToGLenum(Usage usage, CpuAccessFlags cpuAccessFlags)
 {
     switch (usage) {
     case Usage::Default:
-        return D3D11_USAGE_DEFAULT;
+        return GL_DYNAMIC_DRAW;
     case Usage::Immutable:
-        return D3D11_USAGE_IMMUTABLE;
+        return GL_STATIC_DRAW;
     case Usage::Dynamic:
-        return D3D11_USAGE_DYNAMIC;
-    case Usage::Staging:
-        return D3D11_USAGE_STAGING;
+        return GL_STREAM_DRAW;
+    case Usage::Staging: {
+        if (!!(cpuAccessFlags & CpuAccessFlags::Read)) {
+            if (!!(cpuAccessFlags & CpuAccessFlags::Write)) {
+                throw core::LogicError("Qgl: staging buffer cannot habe both read and write cpu access.");
+            }
+            return GL_STATIC_READ;
+        } else if (!!(cpuAccessFlags & CpuAccessFlags::Write)) {
+            return GL_STATIC_COPY;
+        }
+        throw core::LogicError("Qgl: staging buffer needs either read and write cpu access");
+    }
     default:
         break;
     }
     throw core::LogicError("QglEngine: unsupported usage");
 }
 
-UINT resourceMiscFlagsToD3DResourceMiscFlags(ResourceMiscFlags resourceMiscFlags)
+UINT processResourceMiscFlags(ResourceMiscFlags resourceMiscFlags)
 {
     UINT x = 0;
-    if (!!(resourceMiscFlags & ResourceMiscFlags::GenerateMips)) {
-        x |= D3D11_RESOURCE_MISC_GENERATE_MIPS;
-    }
     if (!!(resourceMiscFlags & ResourceMiscFlags::Shared)) {
-        x |= D3D11_RESOURCE_MISC_SHARED;
+        throw core::LogicError("QglEngine: ResourceMiscFlags::Shared is not supported at the moment");
     }
-    if (!!(resourceMiscFlags & ResourceMiscFlags::TextureCube)) {
-        x |= D3D11_RESOURCE_MISC_TEXTURECUBE;
-    }
-    if (!!(resourceMiscFlags & ResourceMiscFlags::DrawIndirectArgs)) {
-        x |= D3D11_RESOURCE_MISC_DRAWINDIRECT_ARGS;
-    }
-    if (!!(resourceMiscFlags & ResourceMiscFlags::BufferRaw)) {
-        x |= D3D11_RESOURCE_MISC_BUFFER_ALLOW_RAW_VIEWS;
-    }
-    if (!!(resourceMiscFlags & ResourceMiscFlags::BufferStructured)) {
-        x |= D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
-    }
-    if (!!(resourceMiscFlags & ResourceMiscFlags::ResourceClamp)) {
-        x |= D3D11_RESOURCE_MISC_RESOURCE_CLAMP;
-    }
-    if (!!(resourceMiscFlags & ResourceMiscFlags::SharedKeyedMutex)) {
-        x |= D3D11_RESOURCE_MISC_SHARED_KEYEDMUTEX;
-    }
+    //if (!!(resourceMiscFlags & ResourceMiscFlags::TextureCube)) {
+    //    throw core::LogicError("QglEngine: ResourceMiscFlags::TextureCube is not supported at the moment");
+    //}
+    //if (!!(resourceMiscFlags & ResourceMiscFlags::ResourceClamp)) {
+    //    throw core::LogicError("QglEngine: ResourceMiscFlags::ResourceClamp is not supported at the moment");
+    //}
     return x;
 }
 
-D3D11_TEXTURE_ADDRESS_MODE imageWrapModeToD3DTextureAddressMode(ImageWrapMode mode)
+GLenum imageWrapModeToGLenum(ImageWrapMode mode)
 {
-    switch (mode) {
-    case ImageWrapMode::ConstantColor:
-        return D3D11_TEXTURE_ADDRESS_BORDER;
-    case ImageWrapMode::Clamp:
-        return D3D11_TEXTURE_ADDRESS_CLAMP;
-    case ImageWrapMode::MirrorClamp:
-        return D3D11_TEXTURE_ADDRESS_MIRROR_ONCE;
-    case ImageWrapMode::Repeat:
-        return D3D11_TEXTURE_ADDRESS_WRAP;
-    case ImageWrapMode::MirrorRepeat:
-        return D3D11_TEXTURE_ADDRESS_MIRROR;
-    default:
-        break;
+    static_assert(numImageWrapModes == 5);
+    static constexpr std::array<GLenum, numImageWrapModes> map = {
+        badGLenum,                      // Undefined
+        GL_REPEAT,                      // Repeat
+        GL_MIRRORED_REPEAT,             // MirrorRepeat
+        GL_CLAMP_TO_EDGE,               // Clamp
+        GL_CLAMP_TO_BORDER,             // ClampConstantColor
+    };
+
+    const UInt index = core::toUnderlying(mode);
+    if (index == 0 || index >= numImageWrapModes) {
+        throw core::LogicError("QglEngine: invalid ImageWrapMode enum value");
     }
-    throw core::LogicError("QglEngine: unknown image wrap mode");
+
+    return map[index];
 }
 
-D3D11_COMPARISON_FUNC comparisonFunctionToD3DComparisonFunc(ComparisonFunction func)
+GLenum comparisonFunctionToGLenum(ComparisonFunction func)
 {
-    switch (func) {
-    case ComparisonFunction::Disabled:
-        return D3D11_COMPARISON_FUNC{};
-    case ComparisonFunction::Always:
-        return D3D11_COMPARISON_ALWAYS;
-    case ComparisonFunction::Never:
-        return D3D11_COMPARISON_NEVER;
-    case ComparisonFunction::Equal:
-        return D3D11_COMPARISON_EQUAL;
-    case ComparisonFunction::NotEqual:
-        return D3D11_COMPARISON_NOT_EQUAL;
-    case ComparisonFunction::Less:
-        return D3D11_COMPARISON_LESS;
-    case ComparisonFunction::LessEqual:
-        return D3D11_COMPARISON_LESS_EQUAL;
-    case ComparisonFunction::Greater:
-        return D3D11_COMPARISON_GREATER;
-    case ComparisonFunction::GreaterEqual:
-        return D3D11_COMPARISON_GREATER_EQUAL;
-    default:
-        break;
+    static_assert(numComparisonFunctions == 10);
+    static constexpr std::array<GLenum, numComparisonFunctions> map = {
+        badGLenum,                      // Undefined
+        GL_NEVER,                       // Disabled
+        GL_ALWAYS,                      // Always
+        GL_NEVER,                       // Never
+        GL_EQUAL,                       // Equal
+        GL_NOTEQUAL,                    // NotEqual
+        GL_LESS,                        // Less
+        GL_LEQUAL,                      // LessEqual
+        GL_GREATER,                     // Greater
+        GL_GEQUAL,                      // GreaterEqual
+    };
+
+    const UInt index = core::toUnderlying(func);
+    if (index == 0 || index >= numComparisonFunctions) {
+        throw core::LogicError("QglEngine: invalid ComparisonFunction enum value");
     }
-    throw core::LogicError("QglEngine: unknown comparison func");
+
+    return map[index];
 }
 
-D3D11_BLEND blendFactorToD3DBlend(BlendFactor factor)
+GLenum blendFactorToGLenum(BlendFactor factor)
 {
-    switch (factor) {
-    case BlendFactor::One:
-        return D3D11_BLEND_ONE;
-    case BlendFactor::Zero:
-        return D3D11_BLEND_ZERO;
-    case BlendFactor::SourceColor:
-        return D3D11_BLEND_SRC_COLOR;
-    case BlendFactor::OneMinusSourceColor:
-        return D3D11_BLEND_INV_SRC_COLOR;
-    case BlendFactor::SourceAlpha:
-        return D3D11_BLEND_SRC_ALPHA;
-    case BlendFactor::OneMinusSourceAlpha:
-        return D3D11_BLEND_INV_SRC_ALPHA;
-    case BlendFactor::TargetColor:
-        return D3D11_BLEND_DEST_COLOR;
-    case BlendFactor::OneMinusTargetColor:
-        return D3D11_BLEND_INV_DEST_COLOR;
-    case BlendFactor::TargetAlpha:
-        return D3D11_BLEND_DEST_ALPHA;
-    case BlendFactor::OneMinusTargetAlpha:
-        return D3D11_BLEND_INV_DEST_ALPHA;
-    case BlendFactor::SourceAlphaSaturated:
-        return D3D11_BLEND_SRC_ALPHA_SAT;
-    case BlendFactor::Constant:
-        return D3D11_BLEND_BLEND_FACTOR;
-    case BlendFactor::OneMinusConstant:
-        return D3D11_BLEND_INV_BLEND_FACTOR;
-    case BlendFactor::SecondSourceColor:
-        return D3D11_BLEND_SRC1_COLOR;
-    case BlendFactor::OneMinusSecondSourceColor:
-        return D3D11_BLEND_INV_SRC1_COLOR;
-    case BlendFactor::SecondSourceAlpha:
-        return D3D11_BLEND_SRC1_ALPHA;
-    case BlendFactor::OneMinusSecondSourceAlpha:
-        return D3D11_BLEND_INV_SRC1_ALPHA;
-    default:
-        break;
+    static_assert(numBlendFactors == 18);
+    static constexpr std::array<GLenum, numBlendFactors> map = {
+        badGLenum,                      // Undefined
+        GL_ONE,                         // One
+        GL_ZERO,                        // Zero
+        GL_SRC_COLOR,                   // SourceColor
+        GL_ONE_MINUS_SRC_COLOR,         // OneMinusSourceColor
+        GL_SRC_ALPHA,                   // SourceAlpha
+        GL_ONE_MINUS_SRC_ALPHA,         // OneMinusSourceAlpha
+        GL_DST_COLOR,                   // TargetColor
+        GL_ONE_MINUS_DST_COLOR,         // OneMinusTargetColor
+        GL_DST_ALPHA,                   // TargetAlpha
+        GL_ONE_MINUS_DST_ALPHA,         // OneMinusTargetAlpha
+        GL_SRC_ALPHA_SATURATE,          // SourceAlphaSaturated
+        GL_CONSTANT_COLOR,              // Constant
+        GL_ONE_MINUS_CONSTANT_COLOR,    // OneMinusConstant
+        GL_SRC1_COLOR,                  // SecondSourceColor
+        GL_ONE_MINUS_SRC1_COLOR,        // OneMinusSecondSourceColor
+        GL_SRC1_ALPHA,                  // SecondSourceAlpha
+        GL_ONE_MINUS_SRC1_ALPHA,        // OneMinusSecondSourceAlpha
+    };
+
+    const UInt index = core::toUnderlying(factor);
+    if (index == 0 || index >= numBlendFactors) {
+        throw core::LogicError("QglEngine: invalid BlendFactor enum value");
     }
-    throw core::LogicError("QglEngine: unknown blend factor");
+
+    return map[index];
 }
 
 D3D11_BLEND_OP blendOpToD3DBlendOp(BlendOp op)

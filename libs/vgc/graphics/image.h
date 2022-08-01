@@ -107,6 +107,16 @@ public:
         numSamples_ = numSamples;
     }
 
+    bool isMipGenerationEnabled() const
+    {
+        return isMipGenerationEnabled_;
+    }
+
+    void setMipGenerationEnabled(bool enabled)
+    {
+        isMipGenerationEnabled_ = enabled;
+    }
+
     Usage usage() const
     {
         return usage_;
@@ -155,6 +165,7 @@ private:
     UInt8 numLayers_ = 1;
     UInt8 numMipLevels_ = 1;
     UInt8 numSamples_ = 1;
+    bool isMipGenerationEnabled_ = true;
     Usage usage_ = Usage::Default;
     ImageBindFlags bindFlags_ = ImageBindFlags::ShaderResource;
     CpuAccessFlags cpuAccessFlags_ = CpuAccessFlags::None;
@@ -207,6 +218,11 @@ public:
     UInt8 numSamples() const
     {
         return info_.numSamples();
+    }
+
+    bool isMipGenerationEnabled() const
+    {
+        return info_.isMipGenerationEnabled();
     }
 
     Usage usage() const

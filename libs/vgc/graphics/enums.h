@@ -52,14 +52,23 @@ VGC_DEFINE_SCOPED_ENUM_FLAGS_OPERATORS(ImageBindFlags)
 //
 enum class ResourceMiscFlags : UInt32 {
     None = 0,
-    GenerateMips = 1,
+
+    /// Enables resource sharing between compatible engines.
+    /// Unsupported at the moment.
+    ///
     Shared = 2,
-    TextureCube = 4,
-    DrawIndirectArgs = 0x10,
-    BufferRaw = 0x20,
-    BufferStructured = 0x40,
-    ResourceClamp = 0x80,
-    SharedKeyedMutex = 0x100,
+
+    // requires OpenGL 4.0 / ES 3.1
+    //DrawIndirectArgs = 0x10,
+
+    // requires OpenGL 4.3 / ES 3.1
+    //BufferRaw = 0x20,
+
+    // requires OpenGL 4.3 / ES 3.1
+    //BufferStructured = 0x40,
+
+    //ResourceClamp = 0x80,
+    //SharedKeyedMutex = 0x100,
 };
 VGC_DEFINE_SCOPED_ENUM_FLAGS_OPERATORS(ResourceMiscFlags)
 
@@ -193,7 +202,6 @@ inline constexpr ImageFormat swapChainTargetFormatToImageFormat(SwapChainTargetF
     return static_cast<ImageFormat>(core::toUnderlying(format));
 }
 
-
 inline constexpr UInt8 imageFormatToElementSizeInBytes(ImageFormat format)
 {
     switch (format) {
@@ -249,7 +257,35 @@ inline constexpr UInt8 imageFormatToElementSizeInBytes(ImageFormat format)
     return 1;
 }
 
+enum class ImageWrapMode : UInt8 {
+    Undefined,
+    Repeat,
+    MirrorRepeat,
+    Clamp,
+    ClampConstantColor,
+    // requires OpenGL 4.4
+    //MirrorClamp,
+    Max_ = ClampConstantColor,
+};
+inline constexpr UInt8 numImageWrapModes = static_cast<UInt8>(ImageWrapMode::Max_) + 1;
+
+enum class ComparisonFunction : UInt8 {
+    Undefined,
+    Disabled,
+    Always,
+    Never,
+    Equal,
+    NotEqual,
+    Less,
+    LessEqual,
+    Greater,
+    GreaterEqual,
+    Max_ = GreaterEqual,
+};
+inline constexpr UInt8 numComparisonFunctions = static_cast<UInt8>(ComparisonFunction::Max_) + 1;
+
 enum class BlendFactor : UInt8 {
+    Undefined,
     One,
     Zero,
     SourceColor,
@@ -267,15 +303,20 @@ enum class BlendFactor : UInt8 {
     OneMinusSecondSourceColor,
     SecondSourceAlpha,
     OneMinusSecondSourceAlpha,
+    Max_ = OneMinusSecondSourceAlpha,
 };
+inline constexpr UInt8 numBlendFactors = static_cast<UInt8>(BlendFactor::Max_) + 1;
 
 enum class BlendOp : UInt8 {
+    Undefined,
     Add,
     SourceMinusTarget,
     TargetMinusSource,
     Min,
     Max,
+    Max_ = Max,
 };
+inline constexpr UInt8 numBlendOps = static_cast<UInt8>(BlendOp::Max_) + 1;
 
 enum class BlendWriteMask : UInt8 {
     None = 0,
@@ -290,40 +331,29 @@ enum class BlendWriteMask : UInt8 {
 VGC_DEFINE_SCOPED_ENUM_FLAGS_OPERATORS(BlendWriteMask)
 
 enum class FillMode : UInt8 {
+    Undefined,
     Solid,
     Wireframe,
+    Max_ = Wireframe,
 };
+inline constexpr UInt8 numFillModes = static_cast<UInt8>(FillMode::Max_) + 1;
 
 enum class CullMode : UInt8 {
+    Undefined,
     None,
     Front,
     Back,
+    Max_ = Back,
 };
+inline constexpr UInt8 numCullModes = static_cast<UInt8>(CullMode::Max_) + 1;
 
 enum class FilterMode : UInt8 {
-    Point = 0,
-    Linear = 1,
+    Undefined,
+    Point,
+    Linear,
+    Max_ = Linear,
 };
-
-enum class ImageWrapMode : UInt8 {
-    ConstantColor = 0,
-    Clamp = 1,
-    MirrorClamp = 2,
-    Repeat = 3,
-    MirrorRepeat = 4,
-};
-
-enum class ComparisonFunction : UInt8 {
-    Disabled = 0,
-    Always = 1,
-    Never = 2,
-    Equal = 3,
-    NotEqual = 4,
-    Less = 5,
-    LessEqual = 6,
-    Greater = 7,
-    GreaterEqual = 8,
-};
+inline constexpr UInt8 numFilterModes = static_cast<UInt8>(FilterMode::Max_) + 1;
 
 enum class ShaderStage : Int8 {
     None = -1,
@@ -335,8 +365,7 @@ enum class ShaderStage : Int8 {
     //Compute,
     Max_ = Pixel,
 };
-
-static constexpr UInt8 numShaderStages = core::toUnderlying(ShaderStage::Max_) + 1;
+inline constexpr UInt8 numShaderStages = static_cast<UInt8>(ShaderStage::Max_) + 1;
 
 enum class BuiltinProgram : UInt8 {
     Simple,

@@ -565,167 +565,155 @@ D3D11_USAGE usageToD3DUsage(Usage usage)
 UINT resourceMiscFlagsToD3DResourceMiscFlags(ResourceMiscFlags resourceMiscFlags)
 {
     UINT x = 0;
-    if (!!(resourceMiscFlags & ResourceMiscFlags::GenerateMips)) {
-        x |= D3D11_RESOURCE_MISC_GENERATE_MIPS;
-    }
     if (!!(resourceMiscFlags & ResourceMiscFlags::Shared)) {
         x |= D3D11_RESOURCE_MISC_SHARED;
     }
-    if (!!(resourceMiscFlags & ResourceMiscFlags::TextureCube)) {
-        x |= D3D11_RESOURCE_MISC_TEXTURECUBE;
-    }
-    if (!!(resourceMiscFlags & ResourceMiscFlags::DrawIndirectArgs)) {
-        x |= D3D11_RESOURCE_MISC_DRAWINDIRECT_ARGS;
-    }
-    if (!!(resourceMiscFlags & ResourceMiscFlags::BufferRaw)) {
-        x |= D3D11_RESOURCE_MISC_BUFFER_ALLOW_RAW_VIEWS;
-    }
-    if (!!(resourceMiscFlags & ResourceMiscFlags::BufferStructured)) {
-        x |= D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
-    }
-    if (!!(resourceMiscFlags & ResourceMiscFlags::ResourceClamp)) {
-        x |= D3D11_RESOURCE_MISC_RESOURCE_CLAMP;
-    }
-    if (!!(resourceMiscFlags & ResourceMiscFlags::SharedKeyedMutex)) {
-        x |= D3D11_RESOURCE_MISC_SHARED_KEYEDMUTEX;
-    }
+    //if (!!(resourceMiscFlags & ResourceMiscFlags::DrawIndirectArgs)) {
+    //    x |= D3D11_RESOURCE_MISC_DRAWINDIRECT_ARGS;
+    //}
+    //if (!!(resourceMiscFlags & ResourceMiscFlags::BufferRaw)) {
+    //    x |= D3D11_RESOURCE_MISC_BUFFER_ALLOW_RAW_VIEWS;
+    //}
+    //if (!!(resourceMiscFlags & ResourceMiscFlags::BufferStructured)) {
+    //    x |= D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
+    //}
+    //if (!!(resourceMiscFlags & ResourceMiscFlags::ResourceClamp)) {
+    //    x |= D3D11_RESOURCE_MISC_RESOURCE_CLAMP;
+    //}
+    //if (!!(resourceMiscFlags & ResourceMiscFlags::SharedKeyedMutex)) {
+    //    x |= D3D11_RESOURCE_MISC_SHARED_KEYEDMUTEX;
+    //}
     return x;
 }
 
 D3D11_TEXTURE_ADDRESS_MODE imageWrapModeToD3DTextureAddressMode(ImageWrapMode mode)
 {
-    switch (mode) {
-    case ImageWrapMode::ConstantColor:
-        return D3D11_TEXTURE_ADDRESS_BORDER;
-    case ImageWrapMode::Clamp:
-        return D3D11_TEXTURE_ADDRESS_CLAMP;
-    case ImageWrapMode::MirrorClamp:
-        return D3D11_TEXTURE_ADDRESS_MIRROR_ONCE;
-    case ImageWrapMode::Repeat:
-        return D3D11_TEXTURE_ADDRESS_WRAP;
-    case ImageWrapMode::MirrorRepeat:
-        return D3D11_TEXTURE_ADDRESS_MIRROR;
-    default:
-        break;
+    static_assert(numImageWrapModes == 5);
+    static constexpr std::array<D3D11_TEXTURE_ADDRESS_MODE, numImageWrapModes> map = {
+        D3D11_TEXTURE_ADDRESS_MODE(0),  // Undefined
+        D3D11_TEXTURE_ADDRESS_WRAP,     // Repeat
+        D3D11_TEXTURE_ADDRESS_MIRROR,   // MirrorRepeat
+        D3D11_TEXTURE_ADDRESS_CLAMP,    // Clamp
+        D3D11_TEXTURE_ADDRESS_BORDER,   // ClampConstantColor
+    };
+
+    const UInt index = core::toUnderlying(mode);
+    if (index == 0 || index >= numImageWrapModes) {
+        throw core::LogicError("D3d11Engine: invalid ImageWrapMode enum value");
     }
-    throw core::LogicError("D3d11Engine: unknown image wrap mode");
+
+    return map[index];
 }
 
 D3D11_COMPARISON_FUNC comparisonFunctionToD3DComparisonFunc(ComparisonFunction func)
 {
-    switch (func) {
-    case ComparisonFunction::Disabled:
-        return D3D11_COMPARISON_FUNC{};
-    case ComparisonFunction::Always:
-        return D3D11_COMPARISON_ALWAYS;
-    case ComparisonFunction::Never:
-        return D3D11_COMPARISON_NEVER;
-    case ComparisonFunction::Equal:
-        return D3D11_COMPARISON_EQUAL;
-    case ComparisonFunction::NotEqual:
-        return D3D11_COMPARISON_NOT_EQUAL;
-    case ComparisonFunction::Less:
-        return D3D11_COMPARISON_LESS;
-    case ComparisonFunction::LessEqual:
-        return D3D11_COMPARISON_LESS_EQUAL;
-    case ComparisonFunction::Greater:
-        return D3D11_COMPARISON_GREATER;
-    case ComparisonFunction::GreaterEqual:
-        return D3D11_COMPARISON_GREATER_EQUAL;
-    default:
-        break;
+    static_assert(numComparisonFunctions == 10);
+    static constexpr std::array<D3D11_COMPARISON_FUNC, numComparisonFunctions> map = {
+        D3D11_COMPARISON_FUNC(0),       // Undefined
+        D3D11_COMPARISON_NEVER,         // Disabled
+        D3D11_COMPARISON_ALWAYS,        // Always
+        D3D11_COMPARISON_NEVER,         // Never
+        D3D11_COMPARISON_EQUAL,         // Equal
+        D3D11_COMPARISON_NOT_EQUAL,     // NotEqual
+        D3D11_COMPARISON_LESS,          // Less
+        D3D11_COMPARISON_LESS_EQUAL,    // LessEqual
+        D3D11_COMPARISON_GREATER,       // Greater
+        D3D11_COMPARISON_GREATER_EQUAL, // GreaterEqual
+    };
+
+    const UInt index = core::toUnderlying(func);
+    if (index == 0 || index >= numComparisonFunctions) {
+        throw core::LogicError("D3d11Engine: invalid ComparisonFunction enum value");
     }
-    throw core::LogicError("D3d11Engine: unknown comparison func");
+
+    return map[index];
 }
 
 D3D11_BLEND blendFactorToD3DBlend(BlendFactor factor)
 {
-    switch (factor) {
-    case BlendFactor::One:
-        return D3D11_BLEND_ONE;
-    case BlendFactor::Zero:
-        return D3D11_BLEND_ZERO;
-    case BlendFactor::SourceColor:
-        return D3D11_BLEND_SRC_COLOR;
-    case BlendFactor::OneMinusSourceColor:
-        return D3D11_BLEND_INV_SRC_COLOR;
-    case BlendFactor::SourceAlpha:
-        return D3D11_BLEND_SRC_ALPHA;
-    case BlendFactor::OneMinusSourceAlpha:
-        return D3D11_BLEND_INV_SRC_ALPHA;
-    case BlendFactor::TargetColor:
-        return D3D11_BLEND_DEST_COLOR;
-    case BlendFactor::OneMinusTargetColor:
-        return D3D11_BLEND_INV_DEST_COLOR;
-    case BlendFactor::TargetAlpha:
-        return D3D11_BLEND_DEST_ALPHA;
-    case BlendFactor::OneMinusTargetAlpha:
-        return D3D11_BLEND_INV_DEST_ALPHA;
-    case BlendFactor::SourceAlphaSaturated:
-        return D3D11_BLEND_SRC_ALPHA_SAT;
-    case BlendFactor::Constant:
-        return D3D11_BLEND_BLEND_FACTOR;
-    case BlendFactor::OneMinusConstant:
-        return D3D11_BLEND_INV_BLEND_FACTOR;
-    case BlendFactor::SecondSourceColor:
-        return D3D11_BLEND_SRC1_COLOR;
-    case BlendFactor::OneMinusSecondSourceColor:
-        return D3D11_BLEND_INV_SRC1_COLOR;
-    case BlendFactor::SecondSourceAlpha:
-        return D3D11_BLEND_SRC1_ALPHA;
-    case BlendFactor::OneMinusSecondSourceAlpha:
-        return D3D11_BLEND_INV_SRC1_ALPHA;
-    default:
-        break;
+    static_assert(numBlendFactors == 18);
+    static constexpr std::array<D3D11_BLEND, numBlendFactors> map = {
+        D3D11_BLEND(0),                 // Undefined
+        D3D11_BLEND_ONE,                // One
+        D3D11_BLEND_ZERO,               // Zero
+        D3D11_BLEND_SRC_COLOR,          // SourceColor
+        D3D11_BLEND_INV_SRC_COLOR,      // OneMinusSourceColor
+        D3D11_BLEND_SRC_ALPHA,          // SourceAlpha
+        D3D11_BLEND_INV_SRC_ALPHA,      // OneMinusSourceAlpha
+        D3D11_BLEND_DEST_COLOR,         // TargetColor
+        D3D11_BLEND_INV_DEST_COLOR,     // OneMinusTargetColor
+        D3D11_BLEND_DEST_ALPHA,         // TargetAlpha
+        D3D11_BLEND_INV_DEST_ALPHA,     // OneMinusTargetAlpha
+        D3D11_BLEND_SRC_ALPHA_SAT,      // SourceAlphaSaturated
+        D3D11_BLEND_BLEND_FACTOR,       // Constant
+        D3D11_BLEND_INV_BLEND_FACTOR,   // OneMinusConstant
+        D3D11_BLEND_SRC1_COLOR,         // SecondSourceColor
+        D3D11_BLEND_INV_SRC1_COLOR,     // OneMinusSecondSourceColor
+        D3D11_BLEND_SRC1_ALPHA,         // SecondSourceAlpha
+        D3D11_BLEND_INV_SRC1_ALPHA,     // OneMinusSecondSourceAlpha
+    };
+
+    const UInt index = core::toUnderlying(factor);
+    if (index == 0 || index >= numBlendFactors) {
+        throw core::LogicError("D3d11Engine: invalid BlendFactor enum value");
     }
-    throw core::LogicError("D3d11Engine: unknown blend factor");
+
+    return map[index];
 }
 
 D3D11_BLEND_OP blendOpToD3DBlendOp(BlendOp op)
 {
-    switch (op) {
-    case BlendOp::Add:
-        return D3D11_BLEND_OP_ADD;
-    case BlendOp::SourceMinusTarget:
-        return D3D11_BLEND_OP_SUBTRACT;
-    case BlendOp::TargetMinusSource:
-        return D3D11_BLEND_OP_REV_SUBTRACT;
-    case BlendOp::Min:
-        return D3D11_BLEND_OP_MIN;
-    case BlendOp::Max:
-        return D3D11_BLEND_OP_MAX;
-    default:
-        break;
+    static_assert(numBlendOps == 6);
+    static constexpr std::array<D3D11_BLEND_OP, numBlendOps> map = {
+        D3D11_BLEND_OP(0),              // Undefined
+        D3D11_BLEND_OP_ADD,             // Add
+        D3D11_BLEND_OP_SUBTRACT,        // SourceMinusTarget
+        D3D11_BLEND_OP_REV_SUBTRACT,    // TargetMinusSource
+        D3D11_BLEND_OP_MIN,             // Min
+        D3D11_BLEND_OP_MAX,             // Max
+    };
+
+    const UInt index = core::toUnderlying(op);
+    if (index == 0 || index >= numBlendOps) {
+        throw core::LogicError("D3d11Engine: invalid BlendOp enum value");
     }
-    throw core::LogicError("D3d11Engine: unknown blend op");
+
+    return map[index];
 }
 
-D3D11_FILL_MODE fillModeToD3DFilleMode(FillMode mode)
+D3D11_FILL_MODE fillModeToD3DFillMode(FillMode mode)
 {
-    switch (mode) {
-    case FillMode::Solid:
-        return D3D11_FILL_SOLID;
-    case FillMode::Wireframe:
-        return D3D11_FILL_WIREFRAME;
-    default:
-        break;
+    static_assert(numFillModes == 3);
+    static constexpr std::array<D3D11_FILL_MODE, numFillModes> map = {
+        D3D11_FILL_MODE(0),             // Undefined
+        D3D11_FILL_SOLID,               // Solid
+        D3D11_FILL_WIREFRAME,           // Wireframe
+    };
+
+    const UInt index = core::toUnderlying(mode);
+    if (index == 0 || index >= numFillModes) {
+        throw core::LogicError("D3d11Engine: invalid FillMode enum value");
     }
-    throw core::LogicError("D3d11Engine: unknown fill mode");
+
+    return map[index];
 }
 
-D3D11_CULL_MODE cullModeToD3DCulleMode(CullMode mode)
+D3D11_CULL_MODE cullModeToD3DCullMode(CullMode mode)
 {
-    switch (mode) {
-    case CullMode::None:
-        return D3D11_CULL_NONE;
-    case CullMode::Front:
-        return D3D11_CULL_FRONT;
-    case CullMode::Back:
-        return D3D11_CULL_BACK;
-    default:
-        break;
+    static_assert(numCullModes == 4);
+    static constexpr std::array<D3D11_CULL_MODE, numCullModes> map = {
+        D3D11_CULL_MODE(0),             // Undefined
+        D3D11_CULL_NONE,                // None
+        D3D11_CULL_FRONT,               // Front
+        D3D11_CULL_BACK,                // Back
+    };
+
+    const UInt index = core::toUnderlying(mode);
+    if (index == 0 || index >= numCullModes) {
+        throw core::LogicError("D3d11Engine: invalid CullMode enum value");
     }
-    throw core::LogicError("D3d11Engine: unknown cull mode");
+
+    return map[index];
 }
 
 // ENGINE FUNCTIONS
@@ -1047,7 +1035,7 @@ ImageViewPtr D3d11Engine::constructImageView_(const ImageViewCreateInfo& createI
 {
     // XXX should check bind flags compatibility in abstract engine
 
-    auto imageView = makeUnique<D3d11ImageView>(resourceRegistry_, createInfo, image, image->format());
+    auto imageView = makeUnique<D3d11ImageView>(resourceRegistry_, createInfo, image);
     imageView->dxgiFormat_ = static_cast<D3d11Image*>(image.get())->dxgiFormat();
     return ImageViewPtr(imageView.release());
 }
@@ -1117,6 +1105,7 @@ void D3d11Engine::resizeSwapChain_(SwapChain* swapChain, UInt32 width, UInt32 he
 
     ImageCreateInfo imageCreateInfo = {};
     imageCreateInfo.setRank(ImageRank::_2D);
+    imageCreateInfo.setFormat(d3dSwapChain->backBufferFormat());
     // XXX fill it using backBufferDesc
 
     D3d11ImagePtr backBufferImage(new D3d11Image(resourceRegistry_, imageCreateInfo));
@@ -1124,7 +1113,7 @@ void D3d11Engine::resizeSwapChain_(SwapChain* swapChain, UInt32 width, UInt32 he
 
     ImageViewCreateInfo viewCreateInfo = {};
     viewCreateInfo.setBindFlags(ImageBindFlags::RenderTarget);
-    D3d11ImageViewPtr colorView(new D3d11ImageView(resourceRegistry_, viewCreateInfo, backBufferImage, d3dSwapChain->backBufferFormat()));
+    D3d11ImageViewPtr colorView(new D3d11ImageView(resourceRegistry_, viewCreateInfo, backBufferImage));
 
     ComPtr<ID3D11RenderTargetView> backBufferView;
     device_->CreateRenderTargetView(backBuffer.get(), NULL, backBufferView.releaseAndGetAddressOf());
@@ -1194,6 +1183,10 @@ void D3d11Engine::initImage_(Image* image, const Span<const Span<const char>>* d
     }
 
     UINT d3dMiscFlags = resourceMiscFlagsToD3DResourceMiscFlags(d3dImage->resourceMiscFlags());
+
+    if (d3dImage->isMipGenerationEnabled()) {
+        d3dMiscFlags |= D3D11_RESOURCE_MISC_GENERATE_MIPS;
+    }
 
     if (d3dImage->rank() == ImageRank::_1D) {
         D3D11_TEXTURE1D_DESC desc = {};
@@ -1376,6 +1369,17 @@ void D3d11Engine::initSamplerState_(SamplerState* state)
     D3d11SamplerState* d3dSamplerState = static_cast<D3d11SamplerState*>(state);
     D3D11_SAMPLER_DESC desc = {};
     UINT filter = 0;
+
+    if (d3dSamplerState->magFilter() == FilterMode::Undefined) {
+        throw core::LogicError("D3d11: undefined mag filter");
+    }
+    if (d3dSamplerState->minFilter() == FilterMode::Undefined) {
+        throw core::LogicError("D3d11: undefined min filter");
+    }
+    if (d3dSamplerState->mipFilter() == FilterMode::Undefined) {
+        throw core::LogicError("D3d11: undefined mip filter");
+    }
+
     if (d3dSamplerState->maxAnisotropy() >= 1) {
         filter = D3D11_FILTER_ANISOTROPIC;
     }
@@ -1450,8 +1454,8 @@ void D3d11Engine::initRasterizerState_(RasterizerState* state)
 {
     D3d11RasterizerState* d3dRasterizerState = static_cast<D3d11RasterizerState*>(state);
     D3D11_RASTERIZER_DESC desc = {};
-    desc.FillMode = fillModeToD3DFilleMode(state->fillMode());
-    desc.CullMode = cullModeToD3DCulleMode(state->cullMode());
+    desc.FillMode = fillModeToD3DFillMode(state->fillMode());
+    desc.CullMode = cullModeToD3DCullMode(state->cullMode());
     desc.FrontCounterClockwise = state->isFrontCounterClockwise();
     //desc.DepthBias;
     //desc.DepthBiasClamp;
