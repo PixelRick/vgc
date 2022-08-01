@@ -36,7 +36,6 @@ vgc_add_library(graphics
         samplerstate.h
         strings.h
         swapchain.h
-        targets.h
         text.h
 
     CPP_FILES

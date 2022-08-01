@@ -82,7 +82,7 @@ Window::Window(ui::WidgetPtr widget) :
     //VGC_INFO(LogVgcUi, "Window class name: {}", classNameA);
 #else
     setSurfaceType(QWindow::OpenGLSurface);
-    engine_ = internal::QOpenglEngine::create();
+    engine_ = internal::QglEngine::create();
     scd.setWindowNativeHandle(static_cast<QWindow*>(this), graphics::WindowNativeHandleType::QOpenGLWindow);
 #endif
 

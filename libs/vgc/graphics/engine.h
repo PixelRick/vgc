@@ -25,6 +25,7 @@
 #include <memory>
 #include <mutex>
 #include <thread>
+#include <unordered_map>
 #include <unordered_set>
 #include <chrono>
 
@@ -42,6 +43,7 @@
 #include <vgc/graphics/detail/command.h>
 #include <vgc/graphics/detail/pipelinestate.h>
 #include <vgc/graphics/enums.h>
+#include <vgc/graphics/font.h>
 #include <vgc/graphics/framebuffer.h>
 #include <vgc/graphics/geometryview.h>
 #include <vgc/graphics/image.h>
@@ -255,6 +257,10 @@ public:
 
     void draw(const GeometryViewPtr& geometryView, Int numIndices, UInt numInstances);
 
+    void createTextAtlasResource();
+
+    void drawText(const TextAtlasResource& gaText);
+
     /// Clears the whole render area with the given color.
     ///
     void clear(const core::Color& color);
@@ -357,11 +363,16 @@ protected:
     BufferPtr glyphAtlasBuffer_; // 1D layered
     ImageViewPtr glyphAtlasBufferImageView_;
     BufferPtr textBatch_;
+    struct GlyphAtlasGlyphInfo {
+        unsigned int texelIdx;
+        unsigned int width;
+        unsigned int height;
+    };
+    std::unordered_map<SizedGlyph*, GlyphAtlasGlyphInfo> allocatedGlyphs_;
 
     ProgramPtr iconAtlasProgram_;
     ImagePtr iconAtlasImage_; // 2D
     ImageViewPtr iconAtlasImageView_;
-
     ProgramPtr roundedRectangleProgram_;
 
     // -- QUEUING --

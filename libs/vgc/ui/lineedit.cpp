@@ -118,7 +118,7 @@ void LineEdit::onPaintDraw(graphics::Engine* engine, PaintFlags /*flags*/)
         richText_->fill(a);
 
         // Load triangles data
-        engine->updateBufferData(triangles_.get(), [a = std::move(a)](){ return a.get()->data(); }, a->length() * 4);
+        engine->updateVertexBufferData(triangles_, std::move(a));
     }
     engine->setProgram(graphics::BuiltinProgram::Simple);
     engine->draw(triangles_, -1, 0);

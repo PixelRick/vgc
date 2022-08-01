@@ -214,12 +214,12 @@ public:
     {
         BuiltinGeometryLayout builtinLayout = info_.builtinGeometryLayout();
         if (builtinLayout != BuiltinGeometryLayout::None) {
-            Int layoutIndex = core::toUnderlying(info_.builtinGeometryLayout());
+            Int layoutIndex = core::toUnderlying(builtinLayout);
             if (i == 0) {
                 return std::array{
-                    2, // XY
-                    5, // XYRGB
-                    3, // XYZ
+                    2 * 4, // XY
+                    5 * 4, // XYRGB
+                    3 * 4, // XYZ
                 }[layoutIndex];
             }
             return 0;
@@ -227,7 +227,8 @@ public:
         return -1;
     }
 
-    const Int numVertices() const {
+    const Int numVertices() const
+    {
         Int elementSize = vertexSizeInBuffer(0);
         return info_.vertexBuffers()[0]->lengthInBytes() / elementSize;
     }

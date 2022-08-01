@@ -717,10 +717,10 @@ void Engine::draw(const GeometryViewPtr& geometryView, Int numIndices, UInt numI
         return;
     }
     syncState_();
+    Int n = (numIndices >= 0) ? numIndices : geometryView->numVertices();
     queueLambdaCommandWithParameters_<GeometryView*>(
         "draw",
         [=](Engine* engine, GeometryView* gv) {
-            Int n = (numIndices >= 0) ? numIndices : gv->numVertices();
             engine->draw_(gv, static_cast<UInt>(n), numInstances);
         },
         geometryView.get());

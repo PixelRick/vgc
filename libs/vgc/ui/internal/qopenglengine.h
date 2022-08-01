@@ -93,23 +93,23 @@ inline geometry::Mat4f toMat4f(const geometry::Mat4d& m) {
 
 namespace qopengl {
 
-VGC_DECLARE_OBJECT(QOpenglEngine);
+VGC_DECLARE_OBJECT(QglEngine);
 
 using namespace ::vgc::graphics;
 
-/// \class vgc::widget::QOpenglEngine
+/// \class vgc::widget::QglEngine
 /// \brief The QtOpenGL-based graphics::Engine.
 ///
 /// This class is an implementation of graphics::Engine using QOpenGLContext and
 /// OpenGL calls.
 ///
-class VGC_UI_API QOpenglEngine : public Engine {
+class VGC_UI_API QglEngine : public Engine {
 private:
-    VGC_OBJECT(QOpenglEngine, Engine)
+    VGC_OBJECT(QglEngine, Engine)
 
 protected:
-    QOpenglEngine();
-    QOpenglEngine(QOpenGLContext* ctx, bool isExternalCtx = true);
+    QglEngine();
+    QglEngine(QOpenGLContext* ctx, bool isExternalCtx = true);
 
     void onDestroyed() override;
 
@@ -118,8 +118,8 @@ public:
 
     /// Creates a new OpenglEngine.
     ///
-    static QOpenglEnginePtr create();
-    static QOpenglEnginePtr create(QOpenGLContext* ctx);
+    static QglEnginePtr create();
+    static QglEnginePtr create(QOpenGLContext* ctx);
 
     // not part of the common interface
 
@@ -183,23 +183,20 @@ private:
     QOpenGLContext* ctx_ = nullptr;
     bool isExternalCtx_ = false;
     QOpenGLFunctions_3_3_Core* api_ = nullptr;
-
     QSurface* surface_ = nullptr;
 
-    std::chrono::steady_clock::time_point startTime_;
-
     // Shader
-    std::unique_ptr<QOpenGLShaderProgram> paintShaderProgram_;
-    int posLoc_ = -1;
-    int colLoc_ = -1;
-    int projLoc_ = -1;
-    int viewLoc_ = -1;
+    //std::unique_ptr<QOpenGLShaderProgram> paintShaderProgram_;
+    //int posLoc_ = -1;
+    //int colLoc_ = -1;
+    //int projLoc_ = -1;
+    //int viewLoc_ = -1;
 };
 
 } // namespace qopengl
 
-using QOpenglEngine = qopengl::QOpenglEngine;
-using QOpenglEnginePtr = qopengl::QOpenglEnginePtr;
+using QglEngine = qopengl::QglEngine;
+using QglEnginePtr = qopengl::QglEnginePtr;
 
 } // namespace vgc::ui::internal
 

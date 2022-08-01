@@ -39,20 +39,24 @@ public:
         return firstLayer_;
     }
 
-    void setFirstLayer(UInt8 firstLayer)
-    {
-        firstLayer_ = firstLayer;
-    }
+    // texture views are not supported by Opengl until core 4.3
+    //
+    //void setFirstLayer(UInt8 firstLayer)
+    //{
+    //    firstLayer_ = firstLayer;
+    //}
 
     UInt8 numLayers() const
     {
         return numLayers_;
     }
 
-    void setNumLayers(UInt8 numLayers)
-    {
-        numLayers_ = numLayers;
-    }
+    // texture views are not supported by Opengl until core 4.3
+    // 
+    //void setNumLayers(UInt8 numLayers)
+    //{
+    //    numLayers_ = numLayers;
+    //}
 
     UInt8 lastLayer() const
     {
@@ -64,22 +68,24 @@ public:
         return firstMipLevel_;
     }
 
-    void setFirstMipLevel(UInt8 firstMipLevel)
-    {
-        firstMipLevel_ = firstMipLevel;
-    }
+    // texture views are not supported by Opengl until core 4.3
+    //void setFirstMipLevel(UInt8 firstMipLevel)
+    //{
+    //    firstMipLevel_ = firstMipLevel;
+    //}
 
     UInt8 numMipLevels() const
     {
         return numMipLevels_;
     }
 
-    /// Only effective when binding as a shader resource.
-    ///
-    void setNumMipLevels(UInt8 numMipLevels)
-    {
-        numMipLevels_ = numMipLevels;
-    }
+    // texture views are not supported by Opengl until core 4.3
+    // Only effective when binding as a shader resource.
+    //
+    //void setNumMipLevels(UInt8 numMipLevels)
+    //{
+    //    numMipLevels_ = numMipLevels;
+    //}
 
     UInt8 lastMipLevel() const
     {
@@ -124,12 +130,11 @@ protected:
 
     ImageView(ResourceRegistry* registry,
               const ImageViewCreateInfo& createInfo,
-              const ImagePtr& image,
-              ImageFormat format)
+              const ImagePtr& image)
         : Resource(registry)
         , info_(createInfo)
         , viewedResource_(image)
-        , format_(format) {
+        , format_(image->format()) {
     }
 
     ImageView(ResourceRegistry* registry,

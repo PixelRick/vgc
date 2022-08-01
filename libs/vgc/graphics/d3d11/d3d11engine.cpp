@@ -116,9 +116,8 @@ protected:
 
     D3d11ImageView(ResourceRegistry* registry,
               const ImageViewCreateInfo& createInfo,
-              const ImagePtr& image,
-              ImageFormat format)
-        : ImageView(registry, createInfo, image, format) {
+              const ImagePtr& image)
+        : ImageView(registry, createInfo, image) {
     }
 
     D3d11ImageView(ResourceRegistry* registry,
@@ -943,6 +942,7 @@ SwapChainPtr D3d11Engine::constructSwapChain_(const SwapChainCreateInfo& createI
 
     ImageCreateInfo imageCreateInfo = {};
     imageCreateInfo.setRank(ImageRank::_2D);
+    imageCreateInfo.setFormat(colorViewFormat);
     // XXX fill it using backBufferDesc
 
     D3d11ImagePtr backBufferImage(new D3d11Image(resourceRegistry_, imageCreateInfo));
@@ -950,7 +950,7 @@ SwapChainPtr D3d11Engine::constructSwapChain_(const SwapChainCreateInfo& createI
 
     ImageViewCreateInfo viewCreateInfo = {};
     viewCreateInfo.setBindFlags(ImageBindFlags::RenderTarget);
-    D3d11ImageViewPtr colorView(new D3d11ImageView(resourceRegistry_, viewCreateInfo, backBufferImage, colorViewFormat));
+    D3d11ImageViewPtr colorView(new D3d11ImageView(resourceRegistry_, viewCreateInfo, backBufferImage));
 
     ComPtr<ID3D11RenderTargetView> backBufferView;
     device_->CreateRenderTargetView(backBuffer.get(), NULL, backBufferView.releaseAndGetAddressOf());
