@@ -425,7 +425,7 @@ bool Window::nativeEvent(const QByteArray& eventType, void* message, NativeEvent
             //   https://stackoverflow.com/a/60339495/1951907
             // Should we issue a warning in these cases?
 
-            //widget_->setGeometry(0, 0, static_cast<float>(w), static_cast<float>(h));
+            widget_->setGeometry(0, 0, static_cast<float>(w), static_cast<float>(h));
             if (engine_ && swapChain_) {
                 engine_->resizeSwapChain(swapChain_, w, h);
                 //Sleep(50);

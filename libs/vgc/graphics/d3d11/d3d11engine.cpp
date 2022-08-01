@@ -62,15 +62,12 @@ public:
     }
 
 protected:
-    void release_(Engine* engine) override
-    {
-        Buffer::release_(engine);
-        object_.reset();
-    }
+    void release_(Engine* engine) override;
 
 private:
     ComPtr<ID3D11Buffer> object_;
     D3D11_BUFFER_DESC desc_ = {};
+
     std::array<bool, numShaderStages> isBoundToD3dStage_ = {};
 
     friend D3d11ImageView;
@@ -116,23 +113,23 @@ using D3d11ImagePtr = ResourcePtr<D3d11Image>;
 class D3d11ImageView : public ImageView {
 protected:
     friend D3d11Engine;
-    using ImageView::ImageView;
+
+    D3d11ImageView(ResourceRegistry* registry,
+              const ImageViewCreateInfo& createInfo,
+              const ImagePtr& image,
+              ImageFormat format)
+        : ImageView(registry, createInfo, image, format) {
+    }
 
     D3d11ImageView(ResourceRegistry* registry,
                    const ImageViewCreateInfo& createInfo,
-                   const D3d11BufferPtr& buffer,
+                   const BufferPtr& buffer,
                    ImageFormat format,
                    UInt32 numBufferElements)
         : ImageView(registry, createInfo, buffer, format, numBufferElements) {
 
-        buffer->dependentD3dImageViews_.append(this);
-    }
-
-    ~D3d11ImageView() {
-        D3d11Buffer* buffer = static_cast<D3d11Buffer*>(viewedBuffer().get());
-        if (buffer) {
-            buffer->dependentD3dImageViews_.removeOne(this);
-        }
+        d3dBuffer_ = buffer.get_static_cast<D3d11Buffer>();
+        d3dBuffer_->dependentD3dImageViews_.append(this);
     }
 
 public:
@@ -160,7 +157,7 @@ public:
     // XXX and forceSet after the resize ?
     void forceReleaseD3dObject()
     {
-        D3d11Image* d3dImage = static_cast<D3d11Image*>(viewedImage().get());
+        D3d11Image* d3dImage = viewedImage().get_static_cast<D3d11Image>();
         if (d3dImage) {
             d3dImage->forceReleaseD3dObject();
         }
@@ -171,39 +168,29 @@ public:
 
     ID3D11Resource* d3dViewedResource() const
     {
-        Buffer* buffer = viewedBuffer().get();
-        if (buffer) {
-            D3d11Buffer* d3dBuffer = static_cast<D3d11Buffer*>(buffer);
+        D3d11Buffer* d3dBuffer = viewedBuffer().get_static_cast<D3d11Buffer>();
+        if (d3dBuffer) {
             return d3dBuffer->object();
         }
         else {
-            D3d11Image* d3dImage = static_cast<D3d11Image*>(viewedImage().get());
+            D3d11Image* d3dImage = viewedImage().get_static_cast<D3d11Image>();
             return d3dImage->object();
         }
     }
 
 protected:
-    void releaseSubResources_() override
-    {
-        D3d11Buffer* buffer = static_cast<D3d11Buffer*>(viewedBuffer().get());
-        if (buffer) {
-            buffer->dependentD3dImageViews_.removeOne(this);
-        }
-        ImageView::releaseSubResources_();
-    }
-
-    void release_(Engine* engine) override
-    {
-        ImageView::release_(engine);
-        forceReleaseD3dObject();
-    }
+    void release_(Engine* engine) override;
 
 private:
     ComPtr<ID3D11ShaderResourceView> srv_;
     ComPtr<ID3D11RenderTargetView> rtv_;
     ComPtr<ID3D11DepthStencilView> dsv_;
     DXGI_FORMAT dxgiFormat_ = {};
+
     std::array<bool, numShaderStages> isBoundToD3dStage_ = {};
+
+    friend D3d11Buffer;
+    D3d11Buffer* d3dBuffer_ = nullptr; // used to clear backpointer at release time
 
     friend D3d11Framebuffer;
     core::Array<D3d11Framebuffer*> dependentD3dFramebuffers_;
@@ -344,9 +331,11 @@ protected:
     {
         if (colorView_) {
             colorView_->dependentD3dFramebuffers_.append(this);
+            d3dColorView_ = colorView_.get();
         }
         if (depthStencilView_) {
             depthStencilView_->dependentD3dFramebuffers_.append(this);
+            d3dDepthStencilView_ = depthStencilView_.get();
         }
     }
 
@@ -377,28 +366,69 @@ public:
 protected:
     void releaseSubResources_() override
     {
-        if (colorView_) {
-            colorView_->dependentD3dFramebuffers_.removeOne(this);
-        }
         colorView_.reset();
-        if (depthStencilView_) {
-            depthStencilView_->dependentD3dFramebuffers_.removeOne(this);
-        }
         depthStencilView_.reset();
     }
 
-    void release_(Engine* engine) override
-    {
-        Framebuffer::release_(engine);
-    }
+    void release_(Engine* engine) override;
 
 private:
     D3d11ImageViewPtr colorView_;
     D3d11ImageViewPtr depthStencilView_;
 
     bool isDefault_ = false;
+
+    bool isBoundToD3D_ = false;
+
+    friend D3d11ImageView;
+    D3d11ImageView* d3dColorView_ = nullptr; // used to clear backpointer at release time
+    D3d11ImageView* d3dDepthStencilView_ = nullptr; // used to clear backpointer at release time
 };
 using D3d11FramebufferPtr = ResourcePtr<D3d11Framebuffer>;
+
+void D3d11Buffer::release_(Engine* engine)
+{
+    Buffer::release_(engine);
+    object_.reset();
+    for (D3d11ImageView* view : dependentD3dImageViews_) {
+        view->d3dBuffer_ = nullptr;
+    }
+    dependentD3dImageViews_.clear();
+}
+
+void D3d11ImageView::release_(Engine* engine)
+{
+    ImageView::release_(engine);
+    srv_.reset();
+    rtv_.reset();
+    dsv_.reset();
+    if (d3dBuffer_) {
+        d3dBuffer_->dependentD3dImageViews_.removeOne(this);
+        d3dBuffer_ = nullptr;
+    }
+    for (D3d11Framebuffer* framebuffer : dependentD3dFramebuffers_) {
+        if (framebuffer->d3dColorView_ == this) {
+            framebuffer->d3dColorView_ = nullptr;
+        }
+        if (framebuffer->d3dDepthStencilView_ == this) {
+            framebuffer->d3dDepthStencilView_ = nullptr;
+        }
+    }
+    dependentD3dFramebuffers_.clear();
+}
+
+void D3d11Framebuffer::release_(Engine* engine)
+{
+    Framebuffer::release_(engine);
+    if (d3dColorView_) {
+        d3dColorView_->dependentD3dFramebuffers_.removeOne(this);
+        d3dColorView_ = nullptr;
+    }
+    if (d3dDepthStencilView_) {
+        d3dDepthStencilView_->dependentD3dFramebuffers_.removeOne(this);
+        d3dDepthStencilView_ = nullptr;
+    }
+}
 
 class D3d11SwapChain : public SwapChain {
 public:
@@ -920,7 +950,7 @@ SwapChainPtr D3d11Engine::constructSwapChain_(const SwapChainCreateInfo& createI
 
     ImageViewCreateInfo viewCreateInfo = {};
     viewCreateInfo.setBindFlags(ImageBindFlags::RenderTarget);
-    D3d11ImageViewPtr colorView(new D3d11ImageView(resourceRegistry_, viewCreateInfo, backBufferImage, colorViewFormat, 0));
+    D3d11ImageViewPtr colorView(new D3d11ImageView(resourceRegistry_, viewCreateInfo, backBufferImage, colorViewFormat));
 
     ComPtr<ID3D11RenderTargetView> backBufferView;
     device_->CreateRenderTargetView(backBuffer.get(), NULL, backBufferView.releaseAndGetAddressOf());
@@ -1017,7 +1047,7 @@ ImageViewPtr D3d11Engine::constructImageView_(const ImageViewCreateInfo& createI
 {
     // XXX should check bind flags compatibility in abstract engine
 
-    auto imageView = makeUnique<D3d11ImageView>(resourceRegistry_, createInfo, image, image->format(), 0);
+    auto imageView = makeUnique<D3d11ImageView>(resourceRegistry_, createInfo, image, image->format());
     imageView->dxgiFormat_ = static_cast<D3d11Image*>(image.get())->dxgiFormat();
     return ImageViewPtr(imageView.release());
 }
@@ -1094,7 +1124,7 @@ void D3d11Engine::resizeSwapChain_(SwapChain* swapChain, UInt32 width, UInt32 he
 
     ImageViewCreateInfo viewCreateInfo = {};
     viewCreateInfo.setBindFlags(ImageBindFlags::RenderTarget);
-    D3d11ImageViewPtr colorView(new D3d11ImageView(resourceRegistry_, viewCreateInfo, backBufferImage, d3dSwapChain->backBufferFormat(), 0));
+    D3d11ImageViewPtr colorView(new D3d11ImageView(resourceRegistry_, viewCreateInfo, backBufferImage, d3dSwapChain->backBufferFormat()));
 
     ComPtr<ID3D11RenderTargetView> backBufferView;
     device_->CreateRenderTargetView(backBuffer.get(), NULL, backBufferView.releaseAndGetAddressOf());
@@ -1121,8 +1151,7 @@ void D3d11Engine::initBuffer_(Buffer* buffer, const char* data, Int lengthInByte
 {
     D3d11Buffer* d3dBuffer = static_cast<D3d11Buffer*>(buffer);
     if (lengthInBytes) {
-        loadBuffer_(d3dBuffer->object_,
-                    d3dBuffer->desc_,
+        loadBuffer_(d3dBuffer,
                     data,
                     lengthInBytes);
     }
@@ -1436,7 +1465,7 @@ void D3d11Engine::initRasterizerState_(RasterizerState* state)
 
 void D3d11Engine::setSwapChain_(const SwapChainPtr& swapChain)
 {
-    D3d11SwapChain* d3dSwapChain = static_cast<D3d11SwapChain*>(swapChain.get());
+    D3d11SwapChain* d3dSwapChain = swapChain.get_static_cast<D3d11SwapChain>();
     setFramebuffer_(d3dSwapChain->defaultFrameBuffer());
     const float blend_factor[4] = { 0.f, 0.f, 0.f, 0.f };
     deviceCtx_->OMSetDepthStencilState(depthStencilState_.get(), 0);
@@ -1452,10 +1481,9 @@ void D3d11Engine::setFramebuffer_(const FramebufferPtr& framebuffer)
         boundFramebuffer_.reset();
         return;
     }
-    D3d11Framebuffer* d3dFramebuffer = static_cast<D3d11Framebuffer*>(framebuffer.get());
+    D3d11Framebuffer* d3dFramebuffer = framebuffer.get_static_cast<D3d11Framebuffer>();
     ID3D11RenderTargetView* rtvArray[1] = { d3dFramebuffer->rtvObject() };
     deviceCtx_->OMSetRenderTargets(1, rtvArray, d3dFramebuffer->dsvObject());
-    D3d11Framebuffer* d3dFramebuffer = static_cast<D3d11Framebuffer*>(framebuffer.get());
     boundFramebuffer_ = framebuffer;
 }
 
@@ -1473,7 +1501,7 @@ void D3d11Engine::setViewport_(Int x, Int y, Int width, Int height)
 
 void D3d11Engine::setProgram_(const ProgramPtr& program)
 {
-    D3d11Program* d3dProgram = static_cast<D3d11Program*>(program.get());
+    D3d11Program* d3dProgram = program.get_static_cast<D3d11Program>();
     deviceCtx_->VSSetShader(d3dProgram->vertexShader_.get(), NULL, 0);
     deviceCtx_->PSSetShader(d3dProgram->pixelShader_.get(), NULL, 0);
     deviceCtx_->GSSetShader(d3dProgram->geometryShader_.get(), NULL, 0);
@@ -1482,22 +1510,39 @@ void D3d11Engine::setProgram_(const ProgramPtr& program)
 
 void D3d11Engine::setBlendState_(const BlendStatePtr& state, const geometry::Vec4f& blendFactor)
 {
-    D3d11BlendState* d3dBlendState = static_cast<D3d11BlendState*>(state.get());
+    D3d11BlendState* d3dBlendState = state.get_static_cast<D3d11BlendState>();
     deviceCtx_->OMSetBlendState(d3dBlendState->object(), blendFactor.data(), 0xFFFFFFFF);
 }
 
 void D3d11Engine::setRasterizerState_(const RasterizerStatePtr& state)
 {
-    D3d11RasterizerState* d3dRasterizerState = static_cast<D3d11RasterizerState*>(state.get());
+    D3d11RasterizerState* d3dRasterizerState = state.get_static_cast<D3d11RasterizerState>();
     deviceCtx_->RSSetState(d3dRasterizerState->object());
 }
 
 void D3d11Engine::setStageConstantBuffers_(BufferPtr const* buffers, Int startIndex, Int count, ShaderStage shaderStage)
 {
+    const Int stageIdx = core::toUnderlying(shaderStage);
+    StageConstantBufferArray& boundConstantBufferArray = boundConstantBufferArrays_[core::toUnderlying(shaderStage)];
+    for (BufferPtr& buffer : boundConstantBufferArray) {
+        D3d11Buffer* d3dBuffer = buffer.get_static_cast<D3d11Buffer>();
+        if (d3dBuffer) {
+            d3dBuffer->isBoundToD3dStage_[stageIdx] = false;
+        }
+    }
+
     std::array<ID3D11Buffer*, maxConstantBuffersPerStage> d3d11Buffers = {};
     for (Int i = 0; i < count; ++i) {
-        Buffer* buffer = buffers[i].get();
-        d3d11Buffers[i] = buffer ? static_cast<D3d11Buffer*>(buffer)->object() : nullptr;
+        boundConstantBufferArray[startIndex + i] = buffers[i];
+        D3d11Buffer* d3dBuffer = buffers[i].get_static_cast<D3d11Buffer>();
+        d3d11Buffers[i] = d3dBuffer ? d3dBuffer->object() : nullptr;
+    }
+
+    for (BufferPtr& buffer : boundConstantBufferArray) {
+        D3d11Buffer* d3dBuffer = buffer.get_static_cast<D3d11Buffer>();
+        if (d3dBuffer) {
+            d3dBuffer->isBoundToD3dStage_[stageIdx] = true;
+        }
     }
 
     size_t stageIndex = toIndex_(shaderStage);
@@ -1513,10 +1558,27 @@ void D3d11Engine::setStageConstantBuffers_(BufferPtr const* buffers, Int startIn
 
 void D3d11Engine::setStageImageViews_(ImageViewPtr const* views, Int startIndex, Int count, ShaderStage shaderStage)
 {
+    const Int stageIdx = core::toUnderlying(shaderStage);
+    StageImageViewArray& boundImageViewArray = boundImageViewArrays_[core::toUnderlying(shaderStage)];
+    for (ImageViewPtr& view : boundImageViewArray) {
+        D3d11ImageView* d3dView = view.get_static_cast<D3d11ImageView>();
+        if (d3dView) {
+            d3dView->isBoundToD3dStage_[stageIdx] = false;
+        }
+    }
+
     std::array<ID3D11ShaderResourceView*, maxImageViewsPerStage> d3d11SRVs = {};
     for (Int i = 0; i < count; ++i) {
-        ImageView* view = views[i].get();
-        d3d11SRVs[i] = view ? static_cast<D3d11ImageView*>(view)->srvObject() : nullptr;
+        boundImageViewArray[startIndex + i] = views[i];
+        D3d11ImageView* d3dView = views[i].get_static_cast<D3d11ImageView>();
+        d3d11SRVs[i] = d3dView ? d3dView->srvObject() : nullptr;
+    }
+
+    for (ImageViewPtr& view : boundImageViewArray) {
+        D3d11ImageView* d3dView = view.get_static_cast<D3d11ImageView>();
+        if (d3dView) {
+            d3dView->isBoundToD3dStage_[stageIdx] = true;
+        }
     }
 
     size_t stageIndex = toIndex_(shaderStage);
@@ -1552,7 +1614,7 @@ void D3d11Engine::setStageSamplers_(SamplerStatePtr const* states, Int startInde
 void D3d11Engine::updateBufferData_(Buffer* buffer, const void* data, Int lengthInBytes)
 {
     D3d11Buffer* d3dBuffer = static_cast<D3d11Buffer*>(buffer);
-    loadBuffer_(d3dBuffer->object_, d3dBuffer->desc_, data, lengthInBytes);
+    loadBuffer_(d3dBuffer, data, lengthInBytes);
     d3dBuffer->gpuLengthInBytes_ = lengthInBytes;
 }
 
@@ -1586,9 +1648,13 @@ void D3d11Engine::draw_(GeometryView* view, UInt numIndices, UInt numInstances)
         view->strides().data(),
         view->offsets().data());
 
-    deviceCtx_->IASetPrimitiveTopology(d3dGeometryView->topology());
+    D3D11_PRIMITIVE_TOPOLOGY topology = d3dGeometryView->topology();
+    if (topology != topology_) {
+        topology_ = topology;
+        deviceCtx_->IASetPrimitiveTopology(topology);
+    }
 
-    D3d11Buffer* indexBuffer = static_cast<D3d11Buffer*>(view->indexBuffer().get());
+    D3d11Buffer* indexBuffer = view->indexBuffer().get_static_cast<D3d11Buffer>();
 
     if (numInstances == 0) {
         if (indexBuffer) {
@@ -1698,45 +1764,93 @@ void D3d11Engine::initBuiltinShaders_()
     // no-op atm, everything was done on create
 }
 
-bool D3d11Engine::loadBuffer_(ComPtr<ID3D11Buffer>& buffer, D3D11_BUFFER_DESC& desc, const void* data, Int dataSize)
+bool D3d11Engine::loadBuffer_(D3d11Buffer* buffer, const void* data, Int dataSize)
 {
+    ComPtr<ID3D11Buffer>& object = buffer->object_;
+    D3D11_BUFFER_DESC& desc = buffer->desc_;
     if (dataSize == 0) {
         return false;
     }
-    if ((dataSize > desc.ByteWidth) || (dataSize * 4 < desc.ByteWidth) || !buffer) {
+
+    if ((dataSize > desc.ByteWidth) || (dataSize * 4 < desc.ByteWidth) || !object) {
         UINT dataWidth = core::int_cast<UINT>(dataSize);
         desc.ByteWidth = dataWidth;
         if (desc.BindFlags & D3D11_BIND_CONSTANT_BUFFER) {
             desc.ByteWidth = (desc.ByteWidth + 0xFu) & ~UINT(0xFu);
         }
+
         if (data && desc.ByteWidth == dataWidth) {
             D3D11_SUBRESOURCE_DATA srData = {};
             srData.pSysMem = data;
-            if (device_->CreateBuffer(&desc, &srData, buffer.releaseAndGetAddressOf()) < 0) {
+            if (device_->CreateBuffer(&desc, &srData, object.releaseAndGetAddressOf()) < 0) {
                 desc.ByteWidth = 0;
                 return false;
             }
+            onBufferRecreated_(buffer);
             return true;
         }
-        if (device_->CreateBuffer(&desc, NULL, buffer.releaseAndGetAddressOf()) < 0) {
+        else if (device_->CreateBuffer(&desc, NULL, object.releaseAndGetAddressOf()) < 0) {
             desc.ByteWidth = 0;
             return false;
         }
+        onBufferRecreated_(buffer);
     }
     if (data) {
-        return writeBufferReserved_(buffer.get(), data, dataSize);
+        return writeBufferReserved_(object.get(), data, dataSize);
     }
     return true;
 }
 
-bool D3d11Engine::writeBufferReserved_(ID3D11Buffer* buffer, const void* data, Int dataSize)
+void D3d11Engine::onBufferRecreated_(D3d11Buffer* buffer)
+{
+    // do rebinds
+    for (Int i = 0; i < numShaderStages; ++i) {
+        if (buffer->isBoundToD3dStage_[i]) {
+            StageConstantBufferArray& arr = boundConstantBufferArrays_[i];
+            setStageConstantBuffers_(arr.data(), 0, arr.size(), ShaderStage(i));
+        }
+    }
+    bool shouldRebindFramebuffer_ = false;
+    std::array<bool, numShaderStages> isStageD3dImageViewArrayDirty_ = {};
+    for (D3d11ImageView* view : buffer->dependentD3dImageViews_) {
+        // rebuild
+        initImageView_(view);
+        // check if needs rebind
+        for (Int i = 0; i < numShaderStages; ++i) {
+            if (view->isBoundToD3dStage_[i]) {
+                isStageD3dImageViewArrayDirty_[i] = true;
+            }
+        }
+        for (D3d11Framebuffer* framebuffer : view->dependentD3dFramebuffers_) {
+            // rebuild
+            initFramebuffer_(framebuffer);
+            // check if needs rebind
+            if (framebuffer == boundFramebuffer_.get()) {
+                shouldRebindFramebuffer_ = true;
+            }
+        }
+    }
+    // rebind image views if needed
+    for (Int i = 0; i < numShaderStages; ++i) {
+        if (isStageD3dImageViewArrayDirty_[i]) {
+            StageImageViewArray& arr = boundImageViewArrays_[i];
+            setStageImageViews_(arr.data(), 0, arr.size(), ShaderStage(i));
+        }
+    }
+    // rebind framebuffer if needed
+    if (shouldRebindFramebuffer_) {
+        setFramebuffer_(boundFramebuffer_);
+    }
+}
+
+bool D3d11Engine::writeBufferReserved_(ID3D11Buffer* object, const void* data, Int dataSize)
 {
     D3D11_MAPPED_SUBRESOURCE mappedResource = {};
-    if (deviceCtx_->Map(buffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResource) < 0) {
+    if (deviceCtx_->Map(object, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResource) < 0) {
         return false;
     }
     memcpy(static_cast<char*>(mappedResource.pData), data, dataSize);
-    deviceCtx_->Unmap(buffer, 0);
+    deviceCtx_->Unmap(object, 0);
     return true;
 }
 

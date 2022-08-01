@@ -160,15 +160,15 @@ protected:
     void initBlendState_(BlendState* state) override;
     void initRasterizerState_(RasterizerState* state) override;
 
-    void setSwapChain_(SwapChain* swapChain) override;
-    void setFramebuffer_(Framebuffer* framebuffer) override;
+    void setSwapChain_(const SwapChainPtr& swapChain) override;
+    void setFramebuffer_(const FramebufferPtr& framebuffer) override;
     void setViewport_(Int x, Int y, Int width, Int height) override;
-    void setProgram_(Program* program) override;
-    void setBlendState_(BlendState* state, const geometry::Vec4f& blendFactor) override;
-    void setRasterizerState_(RasterizerState* state) override;
-    void setStageConstantBuffers_(Buffer* const* buffers, Int startIndex, Int count, ShaderStage shaderStage) override;
-    void setStageImageViews_(ImageView* const* views, Int startIndex, Int count, ShaderStage shaderStage) override;
-    void setStageSamplers_(SamplerState* const* states, Int startIndex, Int count, ShaderStage shaderStage) override;
+    void setProgram_(const ProgramPtr& program) override;
+    void setBlendState_(const BlendStatePtr& state, const geometry::Vec4f& blendFactor) override;
+    void setRasterizerState_(const RasterizerStatePtr& state) override;
+    void setStageConstantBuffers_(BufferPtr const* buffers, Int startIndex, Int count, ShaderStage shaderStage) override;
+    void setStageImageViews_(ImageViewPtr const* views, Int startIndex, Int count, ShaderStage shaderStage) override;
+    void setStageSamplers_(SamplerStatePtr const* states, Int startIndex, Int count, ShaderStage shaderStage) override;
 
     void updateBufferData_(Buffer* buffer, const void* data, Int lengthInBytes) override;
 

@@ -57,10 +57,10 @@ public:
     ResourceRegistry() = default;
 
     // must be called from a thread in which we can release resources
-    void releaseGarbagedResources(Engine* engine);
+    void releaseAndDeleteGarbagedResources(Engine* engine);
 
     // must be called from a thread in which we can release resources
-    void release(Engine* engine);
+    void releaseAllResources(Engine* engine);
 
 private:
     friend Resource;
@@ -110,7 +110,7 @@ private:
 
     std::mutex mutex_;
     std::atomic<Int64> refCount_ = 1;
-    std::atomic<bool> releasedByEngine_ = true;
+    std::atomic<bool> releasedByEngine_ = false;
 };
 
 } // namespace detail
@@ -148,23 +148,33 @@ protected:
     template<typename T>
     friend class ResourcePtr;
 
-    // should only be called by the registry
-    virtual ~Resource() {}
+    // Resources should only be destroyed by their registry.
+    virtual ~Resource() {
+#ifdef VGC_DEBUG
+        if (!released_) {
+            VGC_ERROR(LogVgcGraphics, "A resource has not been released before destruction");
+        }
+#endif
+    }
 
     // This function is called when the resource is being garbaged.
     // You must override it to reset all inner ResourcePtr.
     //
     virtual void releaseSubResources_() {}
 
-    // This function is called in the rendering thread only.
+    // This function is called only in the rendering thread.
     // You must override it to release the actual underlying data and objects.
     //
-    virtual void release_(Engine*) {};
+    virtual void release_(Engine*) {
+#ifdef VGC_DEBUG
+        released_ = true;
+#endif
+    }
 
 private:
     void initRef_()
     {
-        int64_t uninitializedValue = uninitializedCountValue;
+        int64_t uninitializedValue = uninitializedCountValue_;
         if (refCount_ == uninitializedValue) {
             refCount_ = 1;
         }
@@ -193,7 +203,10 @@ private:
     }
 
     ResourceRegistry* registry_;
-    std::atomic<Int64> refCount_ = uninitializedCountValue;
+    std::atomic<Int64> refCount_ = uninitializedCountValue_;
+#ifdef VGC_DEBUG
+    bool released_ = false;
+#endif
 
     // If this assert does not pass, we can use a boolean..
     static_assert(std::atomic<Int64>::is_always_lock_free);
@@ -201,7 +214,7 @@ private:
 
 namespace detail {
 
-inline void ResourceRegistry::releaseGarbagedResources(Engine* engine)
+inline void ResourceRegistry::releaseAndDeleteGarbagedResources(Engine* engine)
 {
     std::lock_guard<std::mutex> lg(mutex_);
     for (Resource* r : garbagedResources_) {
@@ -211,7 +224,7 @@ inline void ResourceRegistry::releaseGarbagedResources(Engine* engine)
     garbagedResources_.clear();
 }
 
-inline void ResourceRegistry::release(Engine* engine)
+inline void ResourceRegistry::releaseAllResources(Engine* engine)
 {
     if (releasedByEngine_.exchange(true)) {
         VGC_WARNING(LogVgcGraphics, "Trying to release a ResourceRegistry more than once.");
@@ -247,6 +260,10 @@ class SmartPtrBase_ {
 protected:
     ~SmartPtrBase_() = default;
 
+    constexpr SmartPtrBase_(T* p) noexcept
+        : p_(p) {
+    }
+
 public:
     constexpr SmartPtrBase_() noexcept
         : p_(nullptr) {
@@ -258,6 +275,11 @@ public:
 
     T* get() const {
         return p_;
+    }
+
+    template<typename U>
+    U* get_static_cast() const {
+        return static_cast<U*>(p_);
     }
 
     explicit operator bool() const noexcept
@@ -302,7 +324,10 @@ bool operator!=(const SmartPtrBase_<T>& lhs, const SmartPtrBase_<U>& rhs) noexce
 template<typename T>
 class ResourcePtr : public detail::SmartPtrBase_<T> {
 protected:
-    using base = detail::SmartPtrBase_<T>;
+    using Base = detail::SmartPtrBase_<T>;
+
+    template<typename U>
+    static constexpr bool isCompatible_ = std::is_convertible_v<U*, T*>;
 
     template<typename S, typename U>
     friend ResourcePtr<S> static_pointer_cast(const ResourcePtr<U>& r) noexcept;
@@ -311,7 +336,7 @@ protected:
 
     // For casts
     ResourcePtr(T* p, CastTag)
-        : p_(p)
+        : Base(p)
     {
         if (p_) {
             p_->incRef_();
@@ -324,10 +349,10 @@ public:
 
     static_assert(std::is_base_of_v<Resource, T>);
 
-    using base::base;
+    using Base::Base;
 
     explicit ResourcePtr(T* p)
-        : p_(p)
+        : Base(p)
     {
         if (p_) {
             p_->initRef_();
@@ -338,24 +363,24 @@ public:
         reset();
     }
 
-    template<typename U>
+    template<typename U, VGC_REQUIRES(isCompatible_<U>)>
     ResourcePtr(const ResourcePtr<U>& other)
-        : p_(other.p_)
+        : Base(other.p_)
     {
         if (p_) {
             p_->incRef_();
         }
     }
 
-    template<typename U>
+    template<typename U, VGC_REQUIRES(isCompatible_<U>)>
     ResourcePtr(ResourcePtr<U>&& other) noexcept
-        : p_(other.p_)
+        : Base(other.p_)
     {
         other.p_ = nullptr;
     }
 
     ResourcePtr(const ResourcePtr& other)
-        : p_(other.p_)
+        : Base(other.p_)
     {
         if (p_) {
             p_->incRef_();
@@ -363,7 +388,7 @@ public:
     }
 
     ResourcePtr(ResourcePtr&& other) noexcept
-        : p_(other.p_)
+        : Base(other.p_)
     {
         other.p_ = nullptr;
     }

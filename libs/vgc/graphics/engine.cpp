@@ -282,7 +282,7 @@ void Engine::setSwapChain(const SwapChainPtr& swapChain)
         [](Engine* engine, const SwapChainPtr& swapChain) {
             engine->setSwapChain_(swapChain);
         },
-        swapChain.get());
+        swapChain);
 }
 
 void Engine::setFramebuffer(const FramebufferPtr& framebuffer)
@@ -810,7 +810,7 @@ void Engine::renderThreadProc_()
             commandQueue_.clear();
             lastExecutedCommandListId_ = lastSubmittedCommandListId_;
             // release all resources..
-            resourceRegistry_->release(this);
+            resourceRegistry_->releaseAllResources(this);
             // notify
             lock.unlock();
             renderThreadEventConditionVariable_.notify_all();
@@ -835,7 +835,7 @@ void Engine::renderThreadProc_()
         renderThreadEventConditionVariable_.notify_all();
 
         // release garbaged resources (locking)
-        resourceRegistry_->releaseGarbagedResources(this);
+        resourceRegistry_->releaseAndDeleteGarbagedResources(this);
     }
 }
 

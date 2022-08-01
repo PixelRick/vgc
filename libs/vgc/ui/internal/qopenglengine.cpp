@@ -328,15 +328,15 @@ void QOpenglEngine::initGeometryView_(GeometryView* /*view*/) {}
 void QOpenglEngine::initBlendState_(BlendState* /*state*/) {}
 void QOpenglEngine::initRasterizerState_(RasterizerState* /*state*/) {}
 
-void QOpenglEngine::setSwapChain_(SwapChain* /*swapChain*/) {}
-void QOpenglEngine::setFramebuffer_(Framebuffer* /*framebuffer*/) {}
+void QOpenglEngine::setSwapChain_(const SwapChainPtr& /*swapChain*/) {}
+void QOpenglEngine::setFramebuffer_(const FramebufferPtr& /*framebuffer*/) {}
 void QOpenglEngine::setViewport_(Int /*x*/, Int /*y*/, Int /*width*/, Int /*height*/) {}
-void QOpenglEngine::setProgram_(Program* /*program*/) {}
-void QOpenglEngine::setBlendState_(BlendState* /*state*/, const geometry::Vec4f& /*blendFactor*/) {}
-void QOpenglEngine::setRasterizerState_(RasterizerState* /*state*/) {}
-void QOpenglEngine::setStageConstantBuffers_(Buffer* const* /*buffers*/, Int /*startIndex*/, Int /*count*/, ShaderStage /*shaderStage*/) {}
-void QOpenglEngine::setStageImageViews_(ImageView* const* /*views*/, Int /*startIndex*/, Int /*count*/, ShaderStage /*shaderStage*/) {}
-void QOpenglEngine::setStageSamplers_(SamplerState* const* /*states*/, Int /*startIndex*/, Int /*count*/, ShaderStage /*shaderStage*/) {}
+void QOpenglEngine::setProgram_(const ProgramPtr& /*program*/) {}
+void QOpenglEngine::setBlendState_(const BlendStatePtr& /*state*/, const geometry::Vec4f& /*blendFactor*/) {}
+void QOpenglEngine::setRasterizerState_(const RasterizerStatePtr& /*state*/) {}
+void QOpenglEngine::setStageConstantBuffers_(BufferPtr const* /*buffers*/, Int /*startIndex*/, Int /*count*/, ShaderStage /*shaderStage*/) {}
+void QOpenglEngine::setStageImageViews_(ImageViewPtr const* /*views*/, Int /*startIndex*/, Int /*count*/, ShaderStage /*shaderStage*/) {}
+void QOpenglEngine::setStageSamplers_(SamplerStatePtr const* /*states*/, Int /*startIndex*/, Int /*count*/, ShaderStage /*shaderStage*/) {}
 
 void QOpenglEngine::updateBufferData_(Buffer* /*buffer*/, const void* /*data*/, Int /*lengthInBytes*/) {}
 

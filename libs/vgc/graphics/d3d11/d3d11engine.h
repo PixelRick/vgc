@@ -113,20 +113,23 @@ private:
     ComPtr<ID3D11DeviceContext> deviceCtx_;
     ComPtr<ID3D11DepthStencilState> depthStencilState_;
     std::array<ComPtr<ID3D11InputLayout>, core::toUnderlying(BuiltinGeometryLayout::Max_) + 1> builtinLayouts_;
-    ID3D11InputLayout* layout_;
-
-    std::array<StageConstantBufferArray, numShaderStages> boundConstantBufferArrays_;
-    std::array<StageImageViewArray, numShaderStages> boundImageViewArrays_;
-    FramebufferPtr boundFramebuffer_;
-
-    void initBuiltinShaders_();
-    bool loadBuffer_(ComPtr<ID3D11Buffer>& buffer, D3D11_BUFFER_DESC& desc, const void* data, Int dataSize);
-    bool writeBufferReserved_(ID3D11Buffer* buffer, const void* data, Int dataSize);
+    ID3D11InputLayout* layout_ = nullptr;
+    D3D11_PRIMITIVE_TOPOLOGY topology_ = D3D_PRIMITIVE_TOPOLOGY_UNDEFINED;
 
     template<typename T, typename... Args>
     _NODISCARD std::unique_ptr<T> makeUnique(Args&&... args) {
         return std::unique_ptr<T>(new T(std::forward<Args>(args)...));
     }
+
+    void initBuiltinShaders_();
+    bool loadBuffer_(class D3d11Buffer* buffer, const void* data, Int dataSize);
+    void onBufferRecreated_(class D3d11Buffer* buffer);
+    bool writeBufferReserved_(ID3D11Buffer* object, const void* data, Int dataSize);
+
+    // to support resizing buffers
+    std::array<StageConstantBufferArray, numShaderStages> boundConstantBufferArrays_;
+    std::array<StageImageViewArray, numShaderStages> boundImageViewArrays_;
+    FramebufferPtr boundFramebuffer_;
 };
 
 } // namespace vgc::graphics
