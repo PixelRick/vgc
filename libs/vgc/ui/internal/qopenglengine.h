@@ -185,6 +185,13 @@ private:
     QOpenGLFunctions_3_3_Core* api_ = nullptr;
     QSurface* surface_ = nullptr;
 
+    template<typename T, typename... Args>
+    _NODISCARD std::unique_ptr<T> makeUnique(Args&&... args) {
+        return std::unique_ptr<T>(new T(std::forward<Args>(args)...));
+    }
+
+    void initBuiltinShaders_();
+
     // Shader
     //std::unique_ptr<QOpenGLShaderProgram> paintShaderProgram_;
     //int posLoc_ = -1;

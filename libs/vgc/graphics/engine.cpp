@@ -268,23 +268,6 @@ RasterizerStatePtr Engine::createRasterizerState(const RasterizerStateCreateInfo
     return rasterizerState;
 }
 
-void Engine::setSwapChain(const SwapChainPtr& swapChain)
-{
-    if (swapChain->registry_ != resourceRegistry_) {
-        // XXX error, using a resource from another engine..
-        return;
-    }
-    swapChain_ = swapChain;
-    frameStartTime_ = std::chrono::steady_clock::now();
-    dirtyBuiltinConstantBuffer_ = true;
-    queueLambdaCommandWithParameters_<SwapChainPtr>(
-        "setSwapChain",
-        [](Engine* engine, const SwapChainPtr& swapChain) {
-            engine->setSwapChain_(swapChain);
-        },
-        swapChain);
-}
-
 void Engine::setFramebuffer(const FramebufferPtr& framebuffer)
 {
     if (framebuffer && !checkResourceIsValid_(framebuffer.get())) {
@@ -696,6 +679,23 @@ void Engine::syncStageSamplers_(ShaderStage shaderStage)
         },
         samplerStateArrayStacks_[toIndex_(shaderStage)].last(),
         shaderStage);
+}
+
+void Engine::beginFrame(const SwapChainPtr& swapChain)
+{
+    if (swapChain->registry_ != resourceRegistry_) {
+        // XXX error, using a resource from another engine..
+        return;
+    }
+    swapChain_ = swapChain;
+    frameStartTime_ = std::chrono::steady_clock::now();
+    dirtyBuiltinConstantBuffer_ = true;
+    queueLambdaCommandWithParameters_<SwapChainPtr>(
+        "setSwapChain",
+        [](Engine* engine, const SwapChainPtr& swapChain) {
+            engine->setSwapChain_(swapChain);
+        },
+        swapChain);
 }
 
 void Engine::resizeSwapChain(const SwapChainPtr& swapChain, UInt32 width, UInt32 height)

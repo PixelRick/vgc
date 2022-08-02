@@ -92,9 +92,9 @@ public:
 
 private:
     Usage usage_ = Usage::Default;
-    BindFlags bindFlags_ = BindFlags::None;
-    CpuAccessFlags cpuAccessFlags_ = CpuAccessFlags::None;
-    ResourceMiscFlags resourceMiscFlags_ = ResourceMiscFlags::None;
+    BindFlags bindFlags_ = BindFlag::None;
+    CpuAccessFlags cpuAccessFlags_ = CpuAccessFlag::None;
+    ResourceMiscFlags resourceMiscFlags_ = ResourceMiscFlag::None;
 };
 
 /// \class vgc::graphics::Buffer
@@ -109,11 +109,11 @@ protected:
     {
         // Limitation of D3D11 impl
         const BindFlags bindFlags = this->bindFlags();
-        if (bindFlags == BindFlags::None) {
+        if (bindFlags == BindFlag::None) {
             throw core::LogicError("Bind flags cannot be None");
         }
-        if (!!(bindFlags & BindFlags::ConstantBuffer)) {
-            if (bindFlags != BindFlags::ConstantBuffer) {
+        if (bindFlags & BindFlag::ConstantBuffer) {
+            if (bindFlags != BindFlag::ConstantBuffer) {
                 throw core::LogicError("BindFlags::UniformBuffer cannot be combined with any other bind flag");
             }
         }

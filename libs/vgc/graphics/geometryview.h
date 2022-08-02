@@ -152,12 +152,12 @@ protected:
         // XXX check buffers against layout (slots, alignment, ..)
 
         for (const BufferPtr& vb : info_.vertexBuffers()) {
-            if (vb && !(vb->bindFlags() & BindFlags::VertexBuffer)) {
+            if (vb && !(vb->bindFlags() & BindFlag::VertexBuffer)) {
                 throw core::LogicError("Buffer needs BindFlags::VertexBuffer flag to be used as a vertex buffer");
             }
         }
         const BufferPtr& ib = info_.indexBuffer();
-        if (ib && !(ib->bindFlags() & BindFlags::IndexBuffer)) {
+        if (ib && !(ib->bindFlags() & BindFlag::IndexBuffer)) {
             throw core::LogicError("Buffer needs BindFlags::IndexBuffer flag to be used as an index buffer");
         }
 

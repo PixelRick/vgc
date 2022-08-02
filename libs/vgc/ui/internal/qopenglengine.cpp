@@ -500,55 +500,62 @@ GLenum blendFactorToGLenum(BlendFactor factor)
     return map[index];
 }
 
-D3D11_BLEND_OP blendOpToD3DBlendOp(BlendOp op)
+GLenum blendOpToGLenum(BlendOp op)
 {
-    switch (op) {
-    case BlendOp::Add:
-        return D3D11_BLEND_OP_ADD;
-    case BlendOp::SourceMinusTarget:
-        return D3D11_BLEND_OP_SUBTRACT;
-    case BlendOp::TargetMinusSource:
-        return D3D11_BLEND_OP_REV_SUBTRACT;
-    case BlendOp::Min:
-        return D3D11_BLEND_OP_MIN;
-    case BlendOp::Max:
-        return D3D11_BLEND_OP_MAX;
-    default:
-        break;
+    static_assert(numBlendOps == 6);
+    static constexpr std::array<GLenum, numBlendOps> map = {
+        badGLenum,                      // Undefined
+        GL_FUNC_ADD,                    // Add
+        GL_FUNC_SUBTRACT,               // SourceMinusTarget
+        GL_FUNC_REVERSE_SUBTRACT,       // TargetMinusSource
+        GL_MIN,                         // Min
+        GL_MAX,                         // Max
+    };
+
+    const UInt index = core::toUnderlying(op);
+    if (index == 0 || index >= numBlendOps) {
+        throw core::LogicError("QglEngine: invalid BlendOp enum value");
     }
-    throw core::LogicError("QglEngine: unknown blend op");
+
+    return map[index];
 }
 
-D3D11_FILL_MODE fillModeToD3DFilleMode(FillMode mode)
+GLenum fillModeToGLenum(FillMode mode)
 {
-    switch (mode) {
-    case FillMode::Solid:
-        return D3D11_FILL_SOLID;
-    case FillMode::Wireframe:
-        return D3D11_FILL_WIREFRAME;
-    default:
-        break;
+    static_assert(numFillModes == 3);
+    static constexpr std::array<GLenum, numFillModes> map = {
+        badGLenum,                      // Undefined
+        GL_FILL,                        // Solid
+        GL_LINE,                        // Wireframe
+    };
+
+    const UInt index = core::toUnderlying(mode);
+    if (index == 0 || index >= numFillModes) {
+        throw core::LogicError("QglEngine: invalid FillMode enum value");
     }
-    throw core::LogicError("QglEngine: unknown fill mode");
+
+    return map[index];
 }
 
-D3D11_CULL_MODE cullModeToD3DCulleMode(CullMode mode)
+GLenum cullModeToGLenum(CullMode mode)
 {
-    switch (mode) {
-    case CullMode::None:
-        return D3D11_CULL_NONE;
-    case CullMode::Front:
-        return D3D11_CULL_FRONT;
-    case CullMode::Back:
-        return D3D11_CULL_BACK;
-    default:
-        break;
+    static_assert(numCullModes == 4);
+    static constexpr std::array<GLenum, numCullModes> map = {
+        badGLenum,              // Undefined
+        GL_FRONT_AND_BACK,      // None -> must disable culling
+        GL_FRONT,               // Front
+        GL_BACK,                // Back
+    };
+
+    const UInt index = core::toUnderlying(mode);
+    if (index == 0 || index >= numCullModes) {
+        throw core::LogicError("QglEngine: invalid CullMode enum value");
     }
-    throw core::LogicError("QglEngine: unknown cull mode");
+
+    return map[index];
 }
 
 // ENGINE FUNCTIONS
-
 
 //namespace {
 //
@@ -781,21 +788,7 @@ QglEnginePtr QglEngine::create(QOpenGLContext* ctx)
 
 void QglEngine::setupContext()
 {
-    // Initialize shader program
-    //paintShaderProgram_.reset(new QOpenGLShaderProgram());
-    //paintShaderProgram_->addShaderFromSourceFile(QOpenGLShader::Vertex, shaderPath_("iv4pos_iv4col_um4proj_um4view_ov4fcol.v.glsl"));
-    //paintShaderProgram_->addShaderFromSourceFile(QOpenGLShader::Fragment, shaderPath_("iv4fcol.f.glsl"));
-    //paintShaderProgram_->link();
-
-    // Get shader locations
-    //paintShaderProgram_->bind();
-    //posLoc_  = paintShaderProgram_->attributeLocation("pos");
-    //colLoc_  = paintShaderProgram_->attributeLocation("col");
-    //projLoc_ = paintShaderProgram_->uniformLocation("proj");
-    //viewLoc_ = paintShaderProgram_->uniformLocation("view");
-    //paintShaderProgram_->release();
-
-    // Get API 3.2
+    // Get API 3.3
 #if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
     api_ = ctx_->versionFunctions<QOpenGLFunctions_3_3_Core>();
 #else
@@ -810,49 +803,196 @@ void QglEngine::setupContext()
 
 void QglEngine::createBuiltinShaders_()
 {
-
+    queueLambdaCommand_(
+        "initBuiltinShaders",
+        [=](Engine* engine) {
+            static_cast<QglEngine*>(engine)->initBuiltinShaders_();
+        });
 }
 
-SwapChainPtr QglEngine::constructSwapChain_(const SwapChainCreateInfo& /*createInfo*/) { return nullptr; }
-FramebufferPtr QglEngine::constructFramebuffer_(const ImageViewPtr& /*colorImageView*/) { return nullptr; }
-BufferPtr QglEngine::constructBuffer_(const BufferCreateInfo& /*createInfo*/) { return nullptr; }
-ImagePtr QglEngine::constructImage_(const ImageCreateInfo& /*createInfo*/) { return nullptr; }
-ImageViewPtr QglEngine::constructImageView_(const ImageViewCreateInfo& /*createInfo*/, const ImagePtr& /*image*/) { return nullptr; }
-ImageViewPtr QglEngine::constructImageView_(const ImageViewCreateInfo& /*createInfo*/, const BufferPtr& /*buffer*/, ImageFormat /*format*/, UInt32 /*numElements*/) { return nullptr; }
-SamplerStatePtr QglEngine::constructSamplerState_(const SamplerStateCreateInfo& /*createInfo*/) { return nullptr; }
-GeometryViewPtr QglEngine::constructGeometryView_(const GeometryViewCreateInfo& /*createInfo*/) { return nullptr; }
-BlendStatePtr QglEngine::constructBlendState_(const BlendStateCreateInfo& /*createInfo*/) { return nullptr; }
-RasterizerStatePtr QglEngine::constructRasterizerState_(const RasterizerStateCreateInfo& /*createInfo*/) { return nullptr; }
+SwapChainPtr QglEngine::constructSwapChain_(const SwapChainCreateInfo& createInfo)
+{
+    if (createInfo.windowNativeHandleType() != WindowNativeHandleType::QOpenGLWindow) {
+        throw core::LogicError("QglEngine: unsupported WindowNativeHandleType value.");
+    }
 
-void QglEngine::resizeSwapChain_(SwapChain* /*swapChain*/, UInt32 /*width*/, UInt32 /*height*/) {}
+    if (ctx_ == nullptr) {
+        throw core::LogicError("ctx_ is null.");
+    }
+
+    format_.setDepthBufferSize(24);
+    format_.setStencilBufferSize(8);
+    format_.setVersion(3, 2);
+    format_.setProfile(QSurfaceFormat::CoreProfile);
+    format_.setSamples(createInfo.numSamples());
+    format_.setSwapInterval(0);
+    
+    QWindow* wnd = static_cast<QWindow*>(createInfo.windowNativeHandle());
+    wnd->setFormat(format_);
+    wnd->create();
+    
+    return nullptr;//makeUnique<QglSwapChain>(resourceRegistry_, createInfo, wnd);
+}
+
+FramebufferPtr QglEngine::constructFramebuffer_(const ImageViewPtr& /*colorImageView*/)
+{
+
+
+
+
+    return nullptr;
+}
+
+BufferPtr QglEngine::constructBuffer_(const BufferCreateInfo& /*createInfo*/)
+{
+    return nullptr;
+}
+
+ImagePtr QglEngine::constructImage_(const ImageCreateInfo& /*createInfo*/)
+{
+    return nullptr;
+}
+
+ImageViewPtr QglEngine::constructImageView_(const ImageViewCreateInfo& /*createInfo*/, const ImagePtr& /*image*/)
+{
+    return nullptr;
+}
+
+ImageViewPtr QglEngine::constructImageView_(const ImageViewCreateInfo& /*createInfo*/, const BufferPtr& /*buffer*/, ImageFormat /*format*/, UInt32 /*numElements*/)
+{
+    return nullptr;
+}
+
+SamplerStatePtr QglEngine::constructSamplerState_(const SamplerStateCreateInfo& /*createInfo*/)
+{
+    return nullptr;
+}
+
+GeometryViewPtr QglEngine::constructGeometryView_(const GeometryViewCreateInfo& /*createInfo*/)
+{
+    return nullptr;
+}
+
+BlendStatePtr QglEngine::constructBlendState_(const BlendStateCreateInfo& /*createInfo*/)
+{
+    return nullptr;
+}
+
+RasterizerStatePtr QglEngine::constructRasterizerState_(const RasterizerStateCreateInfo& /*createInfo*/)
+{
+    return nullptr;
+}
+
+void QglEngine::resizeSwapChain_(SwapChain* /*swapChain*/, UInt32 /*width*/, UInt32 /*height*/)
+{
+}
 
 //--  RENDER THREAD implementation functions --
 
-void QglEngine::initFramebuffer_(Framebuffer* /*framebuffer*/) {}
-void QglEngine::initBuffer_(Buffer* /*buffer*/, const char* /*data*/, Int /*lengthInBytes*/) {}
-void QglEngine::initImage_(Image* /*image*/, const Span<const Span<const char>>* /*dataSpanSpan*/) {}
-void QglEngine::initImageView_(ImageView* /*view*/) {}
-void QglEngine::initSamplerState_(SamplerState* /*state*/) {}
-void QglEngine::initGeometryView_(GeometryView* /*view*/) {}
-void QglEngine::initBlendState_(BlendState* /*state*/) {}
-void QglEngine::initRasterizerState_(RasterizerState* /*state*/) {}
+void QglEngine::initFramebuffer_(Framebuffer* /*framebuffer*/)
+{
+}
 
-void QglEngine::setSwapChain_(const SwapChainPtr& /*swapChain*/) {}
-void QglEngine::setFramebuffer_(const FramebufferPtr& /*framebuffer*/) {}
-void QglEngine::setViewport_(Int /*x*/, Int /*y*/, Int /*width*/, Int /*height*/) {}
-void QglEngine::setProgram_(const ProgramPtr& /*program*/) {}
-void QglEngine::setBlendState_(const BlendStatePtr& /*state*/, const geometry::Vec4f& /*blendFactor*/) {}
-void QglEngine::setRasterizerState_(const RasterizerStatePtr& /*state*/) {}
-void QglEngine::setStageConstantBuffers_(BufferPtr const* /*buffers*/, Int /*startIndex*/, Int /*count*/, ShaderStage /*shaderStage*/) {}
-void QglEngine::setStageImageViews_(ImageViewPtr const* /*views*/, Int /*startIndex*/, Int /*count*/, ShaderStage /*shaderStage*/) {}
-void QglEngine::setStageSamplers_(SamplerStatePtr const* /*states*/, Int /*startIndex*/, Int /*count*/, ShaderStage /*shaderStage*/) {}
+void QglEngine::initBuffer_(Buffer* /*buffer*/, const char* /*data*/, Int /*lengthInBytes*/)
+{
+}
 
-void QglEngine::updateBufferData_(Buffer* /*buffer*/, const void* /*data*/, Int /*lengthInBytes*/) {}
+void QglEngine::initImage_(Image* /*image*/, const Span<const Span<const char>>* /*dataSpanSpan*/)
+{
+}
 
-void QglEngine::draw_(GeometryView* /*view*/, UInt /*numIndices*/, UInt /*numInstances*/) {}
-void QglEngine::clear_(const core::Color& /*color*/) {}
+void QglEngine::initImageView_(ImageView* /*view*/)
+{
+}
 
-UInt64 QglEngine::present_(SwapChain* /*swapChain*/, UInt32 /*syncInterval*/, PresentFlags /*flags*/) { return 0; }
+void QglEngine::initSamplerState_(SamplerState* /*state*/)
+{
+}
+
+void QglEngine::initGeometryView_(GeometryView* /*view*/)
+{
+}
+
+void QglEngine::initBlendState_(BlendState* /*state*/)
+{
+}
+
+void QglEngine::initRasterizerState_(RasterizerState* /*state*/)
+{
+}
+
+void QglEngine::setSwapChain_(const SwapChainPtr& /*swapChain*/)
+{
+}
+
+void QglEngine::setFramebuffer_(const FramebufferPtr& /*framebuffer*/)
+{
+}
+
+void QglEngine::setViewport_(Int /*x*/, Int /*y*/, Int /*width*/, Int /*height*/)
+{
+}
+
+void QglEngine::setProgram_(const ProgramPtr& /*program*/)
+{
+}
+
+void QglEngine::setBlendState_(const BlendStatePtr& /*state*/, const geometry::Vec4f& /*blendFactor*/)
+{
+}
+
+void QglEngine::setRasterizerState_(const RasterizerStatePtr& /*state*/)
+{
+}
+
+void QglEngine::setStageConstantBuffers_(BufferPtr const* /*buffers*/, Int /*startIndex*/, Int /*count*/, ShaderStage /*shaderStage*/)
+{
+}
+
+void QglEngine::setStageImageViews_(ImageViewPtr const* /*views*/, Int /*startIndex*/, Int /*count*/, ShaderStage /*shaderStage*/)
+{
+}
+
+void QglEngine::setStageSamplers_(SamplerStatePtr const* /*states*/, Int /*startIndex*/, Int /*count*/, ShaderStage /*shaderStage*/)
+{
+}
+
+void QglEngine::updateBufferData_(Buffer* /*buffer*/, const void* /*data*/, Int /*lengthInBytes*/)
+{
+}
+
+void QglEngine::draw_(GeometryView* /*view*/, UInt /*numIndices*/, UInt /*numInstances*/)
+{
+}
+
+void QglEngine::clear_(const core::Color& /*color*/)
+{
+}
+
+UInt64 QglEngine::present_(SwapChain* /*swapChain*/, UInt32 /*syncInterval*/, PresentFlags /*flags*/)
+{
+    return 0;
+}
+
+// Private methods
+
+void QglEngine::initBuiltinShaders_()
+{
+    // Initialize shader program
+    //paintShaderProgram_.reset(new QOpenGLShaderProgram());
+    //paintShaderProgram_->addShaderFromSourceFile(QOpenGLShader::Vertex, shaderPath_("iv4pos_iv4col_um4proj_um4view_ov4fcol.v.glsl"));
+    //paintShaderProgram_->addShaderFromSourceFile(QOpenGLShader::Fragment, shaderPath_("iv4fcol.f.glsl"));
+    //paintShaderProgram_->link();
+
+    // Get shader locations
+    //paintShaderProgram_->bind();
+    //posLoc_  = paintShaderProgram_->attributeLocation("pos");
+    //colLoc_  = paintShaderProgram_->attributeLocation("col");
+    //projLoc_ = paintShaderProgram_->uniformLocation("proj");
+    //viewLoc_ = paintShaderProgram_->uniformLocation("view");
+    //paintShaderProgram_->release();
+}
+
 
 //// USER THREAD pimpl functions
 //

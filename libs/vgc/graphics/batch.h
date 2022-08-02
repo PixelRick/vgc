@@ -54,36 +54,25 @@ using GeometryBatchPtr = ResourcePtr<GeometryBatch>;
 
 namespace detail {
 
-struct VGC_GRAPHICS_API BatchedGlyph {
+struct VGC_GRAPHICS_API TextAtlasVertex {
     geometry::Vec2f pos_;
     geometry::Vec2f size_;
     geometry::Rect2f preClip_;
+    unsigned int glyphIndex_;
     unsigned int colorIndex_;
-    unsigned int clipIndex_;
-};
-
-class VGC_GRAPHICS_API BatchedTextData : public Resource {
-protected:
-    friend Engine;
-
-    using Resource::Resource;
-
-
-
-    geometry::Rect2f preClip_;
-};
-
-struct VGC_GRAPHICS_API TextBatch : public Resource {
-protected:
-    friend Engine;
-
-    using Resource::Resource;
-
-    geometry::Vec2f size_;
-    geometry::Rect2f clip_;
+    //unsigned int clipIndex_;
 };
 
 } // namespace detail
+
+class VGC_GRAPHICS_API TextAtlasResource : public Resource {
+protected:
+    friend Engine;
+
+    using Resource::Resource;
+
+    core::Array<detail::TextAtlasVertex> data_;
+};
 
 } // namespace vgc::graphics
 

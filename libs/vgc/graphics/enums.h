@@ -24,7 +24,7 @@ namespace vgc::graphics {
 
 // See https://docs.microsoft.com/en-us/windows/win32/api/d3d11/ne-d3d11-d3d11_bind_flag
 //
-enum class BindFlags : UInt16 {
+enum class BindFlag : UInt16 {
     None = 0,
     VertexBuffer = 1,
     IndexBuffer = 2,
@@ -35,22 +35,22 @@ enum class BindFlags : UInt16 {
     StreamOutput = 0x40,
     UnorderedAccess = 0x80,
 };
-VGC_DEFINE_SCOPED_ENUM_FLAGS_OPERATORS(BindFlags)
+VGC_DEFINE_FLAGS(BindFlags, BindFlag)
 
 /// Subset of `BindFlags` compatible with images.
 //
-enum class ImageBindFlags : UInt16 {
+enum class ImageBindFlag : UInt16 {
     None = 0,
     ShaderResource = 8,
     RenderTarget = 0x10,
     DepthStencil = 0x20,
     UnorderedAccess = 0x80,
 };
-VGC_DEFINE_SCOPED_ENUM_FLAGS_OPERATORS(ImageBindFlags)
+VGC_DEFINE_FLAGS(ImageBindFlags, ImageBindFlag)
 
 // See https://docs.microsoft.com/en-us/windows/win32/api/d3d11/ne-d3d11-d3d11_resource_misc_flag
 //
-enum class ResourceMiscFlags : UInt32 {
+enum class ResourceMiscFlag : UInt32 {
     None = 0,
 
     /// Enables resource sharing between compatible engines.
@@ -70,16 +70,16 @@ enum class ResourceMiscFlags : UInt32 {
     //ResourceClamp = 0x80,
     //SharedKeyedMutex = 0x100,
 };
-VGC_DEFINE_SCOPED_ENUM_FLAGS_OPERATORS(ResourceMiscFlags)
+VGC_DEFINE_FLAGS(ResourceMiscFlags, ResourceMiscFlag)
 
 // See https://docs.microsoft.com/en-us/windows/win32/api/d3d11/ne-d3d11-d3d11_cpu_access_flag
 //
-enum class CpuAccessFlags : UInt8 {
+enum class CpuAccessFlag : UInt8 {
     None = 0,
     Read = 1,
     Write = 2,
 };
-VGC_DEFINE_SCOPED_ENUM_FLAGS_OPERATORS(CpuAccessFlags)
+VGC_DEFINE_FLAGS(CpuAccessFlags, CpuAccessFlag)
 
 // See https://docs.microsoft.com/en-us/windows/win32/api/d3d11/ne-d3d11-d3d11_usage
 //
@@ -109,10 +109,10 @@ enum class PrimitiveType : UInt8 {
     TriangleStrip,
 };
 
-enum class PresentFlags : UInt32 {
+enum class PresentFlag : UInt32 {
     None,
 };
-VGC_DEFINE_SCOPED_ENUM_FLAGS_OPERATORS(PresentFlags)
+VGC_DEFINE_FLAGS(PresentFlags, PresentFlag)
 
 enum class ImageRank : UInt8 {
     _1D,
@@ -262,10 +262,10 @@ enum class ImageWrapMode : UInt8 {
     Repeat,
     MirrorRepeat,
     Clamp,
-    ClampConstantColor,
+    ClampToConstantColor,
     // requires OpenGL 4.4
     //MirrorClamp,
-    Max_ = ClampConstantColor,
+    Max_ = ClampToConstantColor,
 };
 inline constexpr UInt8 numImageWrapModes = static_cast<UInt8>(ImageWrapMode::Max_) + 1;
 
@@ -318,7 +318,7 @@ enum class BlendOp : UInt8 {
 };
 inline constexpr UInt8 numBlendOps = static_cast<UInt8>(BlendOp::Max_) + 1;
 
-enum class BlendWriteMask : UInt8 {
+enum class BlendWriteMaskBit : UInt8 {
     None = 0,
     R = 1,
     G = 2,
@@ -328,7 +328,7 @@ enum class BlendWriteMask : UInt8 {
     RGBA = RGB | A,
     All = RGBA,
 };
-VGC_DEFINE_SCOPED_ENUM_FLAGS_OPERATORS(BlendWriteMask)
+VGC_DEFINE_FLAGS(BlendWriteMask, BlendWriteMaskBit)
 
 enum class FillMode : UInt8 {
     Undefined,
@@ -383,7 +383,7 @@ enum class BuiltinGeometryLayout : Int8 {
     Max_ = XYZ,
 };
 
-enum class PipelineParameters : UInt32 {
+enum class PipelineParameter : UInt32 {
     None = 0,
 
     Framebuffer                     = 0x00000001,
@@ -417,7 +417,7 @@ enum class PipelineParameters : UInt32 {
 
     All = Viewport | Program | BlendState | DepthStencilState | RasterizerState | AllShadersResources,
 };
-VGC_DEFINE_SCOPED_ENUM_FLAGS_OPERATORS(PipelineParameters)
+VGC_DEFINE_FLAGS(PipelineParameters, PipelineParameter)
 
 } // namespace vgc::graphics
 

@@ -181,8 +181,6 @@ public:
 
     RasterizerStatePtr createRasterizerState(const RasterizerStateCreateInfo& createInfo);
 
-    void setSwapChain(const SwapChainPtr& swapChain);
-
     void setFramebuffer(const FramebufferPtr& framebuffer = nullptr);
 
     void setViewport(Int x, Int y, Int width, Int height);
@@ -246,6 +244,8 @@ public:
     void popPipelineParameters(PipelineParameters parameters);
 
     FramebufferPtr getDefaultFramebuffer();
+
+    void beginFrame(const SwapChainPtr& swapChain);
 
     void resizeSwapChain(const SwapChainPtr& swapChain, UInt32 width, UInt32 height);
 
@@ -428,7 +428,7 @@ private:
     using StageSamplerStateArrayStack = core::Array<StageSamplerStateArray>;
     std::array<StageSamplerStateArrayStack, numShaderStages> samplerStateArrayStacks_;
 
-    PipelineParameters dirtyPipelineParameters_ = PipelineParameters::None;
+    PipelineParameters dirtyPipelineParameters_ = PipelineParameter::None;
 
     // called in user thread
     void syncState_();

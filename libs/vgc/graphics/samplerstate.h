@@ -162,9 +162,9 @@ private:
     // enables anisotropic filtering if >= 1, max is 16.
     // has precedence over user-defined filter modes.
     UInt8 maxAnisotropy_ = 0;
-    ImageWrapMode wrapModeU_ = ImageWrapMode::ConstantColor;
-    ImageWrapMode wrapModeV_ = ImageWrapMode::ConstantColor;
-    ImageWrapMode wrapModeW_ = ImageWrapMode::ConstantColor;
+    ImageWrapMode wrapModeU_ = ImageWrapMode::ClampToConstantColor;
+    ImageWrapMode wrapModeV_ = ImageWrapMode::ClampToConstantColor;
+    ImageWrapMode wrapModeW_ = ImageWrapMode::ClampToConstantColor;
     ComparisonFunction comparisonFunction_ = ComparisonFunction::Disabled;
     // enables comparison filtering if != None
     geometry::Vec4f wrapColor_ = {0.f, 0.f, 0.f, 0.f};
