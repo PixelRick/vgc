@@ -17,7 +17,11 @@
 #ifndef VGC_UI_ACTION_H
 #define VGC_UI_ACTION_H
 
+#include <string>
+#include <string_view>
+
 #include <vgc/core/innercore.h>
+#include <vgc/graphics/richtext.h>
 #include <vgc/ui/api.h>
 #include <vgc/ui/shortcut.h>
 
@@ -46,6 +50,18 @@ public:
     ///
     static ActionPtr create(const Shortcut& shortcut);
 
+    /// Returns the descriptive text for this action.
+    ///
+    const std::string& text() const {
+        return text_;
+    }
+
+    /// Sets the descriptive text for this action.
+    ///
+    void setText(std::string_view text) {
+        text_ = text;
+    }
+
     /// Triggers the action. This will cause the triggered signal to be emitted.
     ///
     /// \sa triggered
@@ -68,6 +84,7 @@ public:
 
 private:
     Shortcut shortcut_;
+    std::string text_;
 };
 
 } // namespace vgc::ui

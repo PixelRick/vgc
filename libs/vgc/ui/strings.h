@@ -28,6 +28,8 @@ VGC_UI_API extern const core::StringId ColorPaletteSelector;
 VGC_UI_API extern const core::StringId Flex;
 VGC_UI_API extern const core::StringId Label;
 VGC_UI_API extern const core::StringId LineEdit;
+VGC_UI_API extern const core::StringId Menu;
+VGC_UI_API extern const core::StringId MenuBar;
 VGC_UI_API extern const core::StringId Plot2d;
 
 VGC_UI_API extern const core::StringId background_color;

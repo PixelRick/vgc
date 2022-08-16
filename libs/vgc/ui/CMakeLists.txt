@@ -19,6 +19,8 @@ vgc_add_library(ui
         label.h
         lineedit.h
         logcategories.h
+        menu.h
+        menubar.h
         modifierkey.h
         mouseevent.h
         plot2d.h
@@ -45,6 +47,8 @@ vgc_add_library(ui
         label.cpp
         lineedit.cpp
         logcategories.cpp
+        menu.cpp
+        menubar.cpp
         mouseevent.cpp
         plot2d.cpp
         qtutil.cpp
