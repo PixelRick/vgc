@@ -75,6 +75,87 @@ void appendLineOpaqueNoAA(
     appendTriangle(data, d, b, a, color);
 }
 
+void appendLineOpaqueAA(core::Array<float>& data, const geometry::Vec2f& p0, const geometry::Vec2f& p1, const core::Colorf& color, const float width = 1.4f)
+{
+    geometry::Vec2f v = (p1 - p0).normalized();
+    geometry::Vec2f o = v.orthogonalized();
+    // current shader doesn't handle both sides of the edge, only one.
+    // maybe it can be compensated with the distance value.
+    constexpr float srqt2 = 1.41421f;
+    bool hasCore = width > srqt2;
+    geometry::Vec2f so = o * srqt2;
+    float nAngle = std::acosf(std::fabsf(v.x())) / 0.78539816340f;
+    nAngle = 1.f - std::fabsf(nAngle - 1.f);
+    core::Colorf colorOutter = color;
+    colorOutter.setR(-(colorOutter.r() + std::floorf(100.f * nAngle)));
+    core::Colorf colorInner = colorOutter;
+    colorInner.setG(colorInner.g() + 100.f);
+    if (hasCore) {
+        const float chw = (width - srqt2) / 2;
+        geometry::Vec2f co = o * chw;
+        // core
+        //     -v
+        //  A---^---B
+        //  |\  |   |
+        //  | \P0-->|o * chw;
+        //  |  \.   |
+        //  |   \   |
+        //  |   .\  |
+        //  |  P1 \ |
+        //  |   .  \|
+        //  C-------D
+        //
+        geometry::Vec2f a = p0 - o;
+        geometry::Vec2f b = p0 + o;
+        geometry::Vec2f c = p1 - o;
+        geometry::Vec2f d = p1 + o;
+        //appendTriangle(data, a, c, d, color);
+        //appendTriangle(data, d, b, a, color);
+        {
+            geometry::Vec2f a1 = a - so;
+            geometry::Vec2f c1 = c - so;
+            appendPoint(data, a1, colorOutter);
+            appendPoint(data, c1, colorOutter);
+            appendPoint(data, c, colorInner);
+            appendPoint(data, c, colorInner);
+            appendPoint(data, a, colorInner);
+            appendPoint(data, a1, colorOutter);
+        }
+        {
+            geometry::Vec2f b1 = b + so;
+            geometry::Vec2f d1 = d + so;
+            appendPoint(data, b, colorInner);
+            appendPoint(data, d, colorInner);
+            appendPoint(data, d1, colorOutter);
+            appendPoint(data, d1, colorOutter);
+            appendPoint(data, b1, colorOutter);
+            appendPoint(data, b, colorInner);
+        }
+    }
+    else {
+        {
+            geometry::Vec2f a1 = p0 - so;
+            geometry::Vec2f c1 = p1 - so;
+            appendPoint(data, a1, colorOutter);
+            appendPoint(data, c1, colorOutter);
+            appendPoint(data, p1, colorInner);
+            appendPoint(data, p1, colorInner);
+            appendPoint(data, p0, colorInner);
+            appendPoint(data, a1, colorOutter);
+        }
+        {
+            geometry::Vec2f b1 = p0 + so;
+            geometry::Vec2f d1 = p1 + so;
+            appendPoint(data, p0, colorInner);
+            appendPoint(data, p1, colorInner);
+            appendPoint(data, d1, colorOutter);
+            appendPoint(data, d1, colorOutter);
+            appendPoint(data, b1, colorOutter);
+            appendPoint(data, p0, colorInner);
+        }
+    }
+}
+
 } // namespace xyrgb
 
 Plot2d::Plot2d(Int numYs, Int maxXs)

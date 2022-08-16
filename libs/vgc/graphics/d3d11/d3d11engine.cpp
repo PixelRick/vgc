@@ -801,6 +801,10 @@ void D3d11Engine::createBuiltinShaders_() {
     // Create the paint pixel shader
     {
         static const char* pixelShaderSrc = R"hlsl(
+            #define PI      3.14159265359
+            #define PI_4    0.78539816340
+            #define SQRT2   1.41421356237
+
             struct PS_INPUT
             {
                 float4 pos : SV_POSITION;
@@ -809,6 +813,41 @@ void D3d11Engine::createBuiltinShaders_() {
 
             float4 main(PS_INPUT input) : SV_Target
             {
+                float4 col = input.col;
+                if (col.r < 0) {
+                    // line AA
+                    float r = -col.r;
+                    float g = col.g;
+                    float red = r % 1.f;
+                    float green = g % 1.f;
+                    col.r = red;
+                    col.g = green;
+                    float a = ((r - red) / 100.f) * PI_4;
+                    float dfv = ((g - green) / 100.f);
+
+                    float ca = cos(a);
+                    float ta = tan(a);
+                    float nd = (dfv - 0.5f) * 2.f;
+                    float d = abs(nd) * SQRT2;
+                    float yd = d / ca;
+                    float yPara = min(yd, 1.f - ta);
+                    float yt = 1 + ta - yd;
+                    float xt = yt / ta;
+                    float area0 = 0.f;
+                    if (yd > yPara) {
+                        area0 = 4.f - (yt * xt * 0.5f);
+                    }
+                    else {
+                        area0 = 2.f * (yPara + 1.f);
+                    }
+                    if (nd < 0) {
+                        area0 = 4.f - area0;
+                    }
+                    float alpha = area0 / 4.f;
+                    //return float4(a / PI_4, 0.f, 0.f, 1.f);
+                    //return float4(dfv, 0.f, 0.f, 1.f);
+                    return float4(1.f, green, 1.f, alpha);
+                }
                 return input.col;
             }
 

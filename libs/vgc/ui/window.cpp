@@ -73,6 +73,8 @@ Window::Window(ui::WidgetPtr widget)
     HWND hwnd = (HWND)QWindow::winId();
     hwnd_ = hwnd;
     scd.setWindowNativeHandle(hwnd, graphics::WindowNativeHandleType::Win32);
+    scd.setWidth(2560);
+    scd.setHeight(1440);
 
     //WNDCLASSEXW wc = { sizeof(WNDCLASSEXW), CS_CLASSDC, Window::WndProc, 0L, 20 * sizeof(LONG_PTR), ::GetModuleHandle(NULL), NULL, NULL, NULL, NULL, L"Win32 Window", NULL };
     //::RegisterClassExW(&wc);
