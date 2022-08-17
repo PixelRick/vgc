@@ -22,6 +22,7 @@ const core::StringId Button("Button");
 const core::StringId ColorPalette("ColorPalette");
 const core::StringId ColorPaletteSelector("ColorPaletteSelector");
 const core::StringId Flex("Flex");
+const core::StringId Grid("Grid");
 const core::StringId Label("Label");
 const core::StringId LineEdit("LineEdit");
 const core::StringId Menu("Menu");

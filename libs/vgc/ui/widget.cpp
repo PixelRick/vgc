@@ -37,7 +37,6 @@ Widget::Widget()
     , size_(0.0f, 0.0f)
     , mousePressedChild_(nullptr)
     , mouseEnteredChild_(nullptr)
-    , isTreeActive_(false)
     , focus_(nullptr) {
 
     children_->childAdded().connect(onWidgetAdded_());
