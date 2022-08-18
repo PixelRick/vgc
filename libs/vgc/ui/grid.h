@@ -119,7 +119,7 @@ private:
     }
 
     void resizeUpTo_(Int i, Int j) {
-        resize_((std::max)(numRows_, i + 1), std::max(numColumns_, j + 1));
+        resize_((std::max)(numRows_, i + 1), (std::max)(numColumns_, j + 1));
     }
 
     float getRowStartY_(Int index) {
