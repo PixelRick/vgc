@@ -18,6 +18,7 @@
 #define VGC_UI_GRID_H
 
 #include <vgc/core/array.h>
+#include <vgc/ui/margins.h>
 #include <vgc/ui/widget.h>
 
 namespace vgc::ui {
@@ -27,10 +28,7 @@ namespace detail {
 struct GridCell {
     Widget* widget = nullptr;
     // Cached metrics
-    float marginLeft = 0.f;
-    float marginRight = 0.f;
-    float marginTop = 0.f;
-    float marginBottom = 0.f;
+    Margins margins;
     geometry::Vec2f stretch;
     geometry::Vec2f shrink;
     geometry::Vec2f preferredSize;
@@ -104,7 +102,7 @@ protected:
 
 private:
     core::Array<GridCell> cells_;
-    
+
     core::Array<float> offsets_;
     float preferredRowHeight_;
 
@@ -121,7 +119,7 @@ private:
     }
 
     void resizeUpTo_(Int i, Int j) {
-        resize_(std::max(numRows_, i + 1), std::max(numColumns_, j + 1));
+        resize_((std::max)(numRows_, i + 1), std::max(numColumns_, j + 1));
     }
 
     float getRowStartY_(Int index) {
