@@ -71,31 +71,64 @@ namespace {
 
 float getLeftRightMargins(const Widget* widget) {
     return detail::getLength(widget, strings::margin_left)
-        + detail::getLength(widget, strings::margin_right);
+           + detail::getLength(widget, strings::margin_right);
 }
 
 float getTopBottomMargins(const Widget* widget) {
     return detail::getLength(widget, strings::margin_top)
-        + detail::getLength(widget, strings::margin_bottom);
+           + detail::getLength(widget, strings::margin_bottom);
 }
 
 float getLeftRightPadding(const Widget* widget) {
     return detail::getLength(widget, strings::padding_left)
-        + detail::getLength(widget, strings::padding_right);
+           + detail::getLength(widget, strings::padding_right);
 }
 
 float getTopBottomPadding(const Widget* widget) {
     return detail::getLength(widget, strings::padding_top)
-        + detail::getLength(widget, strings::padding_bottom);
+           + detail::getLength(widget, strings::padding_bottom);
 }
 
 } // namespace
-
 
 geometry::Vec2f Grid::computePreferredSize() const {
     PreferredSizeType auto_ = PreferredSizeType::Auto;
     PreferredSize w = preferredWidth();
     PreferredSize h = preferredHeight();
+
+    using namespace strings;
+
+    autoRowsSize_ = style(grid_auto_rows).to<PreferredSize>();;
+    autoColumnsSize_ = style(grid_auto_columns).to<PreferredSize>();;
+
+    // compute and cache all metrics
+    // -----
+
+    // zero track metrics
+    for (const TrackInfo& track : tracks_) {
+        track.zeroMetrics();
+    }
+
+    for (Int i = 0; i < numRows_; ++i) {
+        const TrackInfo& rowInfo = rowInfo_(i);
+        TrackInfo::Metrics& rowMetrics = rowInfo.metrics;
+        // XXX support "grid-template-rows" when lists are supported by style parser
+        // fallback when undefined: grid-auto-rows
+        rowMetrics.templateSize = autoRowsSize_;
+
+        for (Int j = 0; j < numColumns_; ++i) {
+            const TrackInfo& columnInfo = columnInfo_(i);
+            TrackInfo::Metrics& columnMetrics = columnInfo.metrics;
+            // XXX support "grid-template-columns" when lists are supported by style parser
+            // fallback when undefined: grid-auto-columns
+            columnMetrics.templateSize = autoColumnsSize_;
+
+            const Cell& cell = cellAt_(i, j);
+            Cell::Metrics& cellMetrics = cell.metrics;
+
+            //cell.widget
+        }
+    }
 
     geometry::Vec2f res(0, 0);
     if (w.type() == auto_) {
@@ -207,62 +240,58 @@ void Grid::updateChildrenGeometry() {
         }
     }
 
-
-
-
-        bool isRow = (direction_ == GridDirection::Row)
-                     || (direction_ == GridDirection::RowReverse);
-        bool isReverse = (direction_ == GridDirection::RowReverse)
-                         || (direction_ == GridDirection::ColumnReverse);
-        bool hinting = (style(strings::pixel_hinting) == strings::normal);
-        float paddingLeft = detail::getLength(this, strings::padding_left);
-        float paddingRight = detail::getLength(this, strings::padding_right);
-        float paddingTop = detail::getLength(this, strings::padding_top);
-        float paddingBottom = detail::getLength(this, strings::padding_bottom);
-        float preferredMainSize = isRow ? preferredSize().x() : preferredSize().y();
-        float mainPaddingBefore = isRow ? paddingLeft : paddingTop;
-        float crossPaddingBefore = isRow ? paddingTop : paddingLeft;
-        float crossPaddingAfter = isRow ? paddingBottom : paddingRight;
-        float mainSize = isRow ? width() : height();
-        float crossSize = isRow ? height() : width();
-        float freeSpace = mainSize - preferredMainSize;
-        float eps = 1e-6f;
-        // TODO: have a loop to resolve constraint violations, as per 9.7.4:
-        // https://www.w3.org/TR/css-Gridbox-1/#resolve-Gridible-length
-        // Indeed, although we currently don't have explicit min/max constraints,
-        // we still have an implicit min-size = 0 constraint. The algorithm
-        // below don't properly handle this constraint: if the size of one of
-        // the items is shrinked to a negative size, then it is clamped to zero,
-        // but the lost space due to clamping isn't redistributed to other items,
-        // causing an overflow.
-        float childStretchBonus = 0;
-        float totalStretch =
-            computeTotalStretch(isRow, freeSpace, this, childStretchBonus);
-        if (totalStretch < eps) {
-            // For now, we stretch evenly as if all childStretch were equal to
-            // one. Later, we should instead insert empty space between the items,
-            // based on alignment properties, see:
-            // https://developer.mozilla.org/en-US/docs/Web/CSS/CSS_Box_Alignment
-            childStretchBonus = 1;
-            totalStretch = computeTotalStretch(isRow, freeSpace, this, childStretchBonus);
-        }
-        float extraSpacePerStretch = freeSpace / totalStretch;
-        float childMainPosition = mainPaddingBefore;
-        Widget* child = isReverse ? lastChild() : firstChild();
-        while (child) {
-            stretchChild(
-                isRow,
-                freeSpace,
-                crossSize,
-                extraSpacePerStretch,
-                child,
-                childStretchBonus,
-                childMainPosition,
-                crossPaddingBefore,
-                crossPaddingAfter,
-                hinting);
-            child = isReverse ? child->previousSibling() : child->nextSibling();
-        }
+    bool isRow =
+        (direction_ == GridDirection::Row) || (direction_ == GridDirection::RowReverse);
+    bool isReverse = (direction_ == GridDirection::RowReverse)
+                     || (direction_ == GridDirection::ColumnReverse);
+    bool hinting = (style(strings::pixel_hinting) == strings::normal);
+    float paddingLeft = detail::getLength(this, strings::padding_left);
+    float paddingRight = detail::getLength(this, strings::padding_right);
+    float paddingTop = detail::getLength(this, strings::padding_top);
+    float paddingBottom = detail::getLength(this, strings::padding_bottom);
+    float preferredMainSize = isRow ? preferredSize().x() : preferredSize().y();
+    float mainPaddingBefore = isRow ? paddingLeft : paddingTop;
+    float crossPaddingBefore = isRow ? paddingTop : paddingLeft;
+    float crossPaddingAfter = isRow ? paddingBottom : paddingRight;
+    float mainSize = isRow ? width() : height();
+    float crossSize = isRow ? height() : width();
+    float freeSpace = mainSize - preferredMainSize;
+    float eps = 1e-6f;
+    // TODO: have a loop to resolve constraint violations, as per 9.7.4:
+    // https://www.w3.org/TR/css-Gridbox-1/#resolve-Gridible-length
+    // Indeed, although we currently don't have explicit min/max constraints,
+    // we still have an implicit min-size = 0 constraint. The algorithm
+    // below don't properly handle this constraint: if the size of one of
+    // the items is shrinked to a negative size, then it is clamped to zero,
+    // but the lost space due to clamping isn't redistributed to other items,
+    // causing an overflow.
+    float childStretchBonus = 0;
+    float totalStretch = computeTotalStretch(isRow, freeSpace, this, childStretchBonus);
+    if (totalStretch < eps) {
+        // For now, we stretch evenly as if all childStretch were equal to
+        // one. Later, we should instead insert empty space between the items,
+        // based on alignment properties, see:
+        // https://developer.mozilla.org/en-US/docs/Web/CSS/CSS_Box_Alignment
+        childStretchBonus = 1;
+        totalStretch = computeTotalStretch(isRow, freeSpace, this, childStretchBonus);
+    }
+    float extraSpacePerStretch = freeSpace / totalStretch;
+    float childMainPosition = mainPaddingBefore;
+    Widget* child = isReverse ? lastChild() : firstChild();
+    while (child) {
+        stretchChild(
+            isRow,
+            freeSpace,
+            crossSize,
+            extraSpacePerStretch,
+            child,
+            childStretchBonus,
+            childMainPosition,
+            crossPaddingBefore,
+            crossPaddingAfter,
+            hinting);
+        child = isReverse ? child->previousSibling() : child->nextSibling();
+    }
 }
 
 float Grid::getPreferredRowHeight_(Int i) const {
@@ -276,10 +305,10 @@ float Grid::getPreferredColumnWidth_(Int j) const {
 }
 
 void Grid::erase_(Widget* widget) {
-    for (Widget*& w : cells_) {
-        if (w == widget) {
-            w = nullptr;
-            // XXX shrink ?
+    for (Cell& cell : cells_) {
+        if (cell.widget == widget) {
+            cell = Cell();
+            // XXX shrink array ?
         }
     }
 }

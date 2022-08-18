@@ -556,14 +556,19 @@ style::StylePropertySpecTablePtr createGlobalStylePropertySpecTable_() {
 
     // Insert additional specs
     // Reference: https://www.w3.org/TR/CSS21/propidx.html
-    table->insert("column-gap",       zero,     false, &parseStyleLength);
-    table->insert("preferred-height", autosize, false, &parseStylePreferredSize);
-    table->insert("preferred-width",  autosize, false, &parseStylePreferredSize);
-    table->insert("row-gap",          zero,     false, &parseStyleLength);
-    table->insert("shrink-height",    one,      false, &parseStyleNumber);
-    table->insert("shrink-width",     one,      false, &parseStyleNumber);
-    table->insert("stretch-height",   one,      false, &parseStyleNumber);
-    table->insert("stretch-width",    one,      false, &parseStyleNumber);
+
+    using namespace strings;
+
+    table->insert("column-gap",        zero,     false, &parseStyleLength);
+    table->insert(grid_auto_columns,   autosize, false, &parseStylePreferredSize);
+    table->insert(grid_auto_rows,      autosize, false, &parseStylePreferredSize);
+    table->insert("preferred-height",  autosize, false, &parseStylePreferredSize);
+    table->insert("preferred-width",   autosize, false, &parseStylePreferredSize);
+    table->insert("row-gap",           zero,     false, &parseStyleLength);
+    table->insert("shrink-height",     one,      false, &parseStyleNumber);
+    table->insert("shrink-width",      one,      false, &parseStyleNumber);
+    table->insert("stretch-height",    one,      false, &parseStyleNumber);
+    table->insert("stretch-width",     one,      false, &parseStyleNumber);
 
     return table;
 }

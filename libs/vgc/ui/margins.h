@@ -276,7 +276,8 @@ geometry::Rect2f operator+(const geometry::Rect2f& rect, const Margins& margins)
 }
 
 /// Returns a copy of `rect` shrinked (offsetted inwards) by `margins`.
-/// This is convenient to apply padding.
+///
+/// This operator is convenient to apply padding.
 ///
 geometry::Rect2f operator-(const geometry::Rect2f& rect, const Margins& margins) {
     return geometry::Rect2f(

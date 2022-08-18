@@ -37,6 +37,8 @@ VGC_UI_API extern const core::StringId background_color;
 VGC_UI_API extern const core::StringId background_color_on_hover;
 VGC_UI_API extern const core::StringId border_radius;
 VGC_UI_API extern const core::StringId column_gap;
+VGC_UI_API extern const core::StringId grid_auto_columns;
+VGC_UI_API extern const core::StringId grid_auto_rows;
 VGC_UI_API extern const core::StringId margin_bottom;
 VGC_UI_API extern const core::StringId margin_left;
 VGC_UI_API extern const core::StringId margin_right;

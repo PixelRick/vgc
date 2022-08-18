@@ -18,6 +18,7 @@
 #define VGC_UI_GRID_H
 
 #include <vgc/core/array.h>
+#include <vgc/geometry/Range1f.h>
 #include <vgc/ui/margins.h>
 #include <vgc/ui/widget.h>
 
@@ -25,25 +26,85 @@ namespace vgc::ui {
 
 namespace detail {
 
+namespace DirIndex {
+enum Value {
+    Width = 0,  // in x
+    Height = 1, // in y
+};
+} // namespace DirIndex
+
 struct GridCell {
     Widget* widget = nullptr;
-    // Cached metrics
-    Margins margins;
-    geometry::Vec2f stretch;
-    geometry::Vec2f shrink;
-    geometry::Vec2f preferredSize;
+
+    struct Metrics {
+        Margins margins;
+        geometry::Vec2f stretch;
+        geometry::Vec2f shrink;
+        geometry::Vec2f preferredSize;
+    };
+    mutable Metrics metrics;
+
+    constexpr bool isShrinkable(DirIndex::Value v) const {
+        return metrics.shrink[v] > 0;
+    }
+
+    constexpr bool isStretchable(DirIndex::Value v) const {
+        return metrics.stretch[v] > 0;
+    }
+
+    constexpr void zeroMetrics() const {
+        metrics.margins = {};
+        metrics.stretch = {};
+        metrics.shrink = {};
+        metrics.preferredSize = {};
+    }
 };
 
-struct GridTrack {
-    float offset;
-    // Cached metrics
-    float maxChildPreferredSize = 0.f;
-    float minChildPreferredSize = 0.f;
-    float maxStretchWidth = 0.f;
-    float stretchHeight = 0.f;
-    float shrinkWidth = 0.f;
-    float shrinkHeight = 0.f;
-    PreferredSize preferredSize;
+struct GridTrackInfo {
+    float offset = 0.f;
+    float size = 0.f;
+
+    struct Metrics {
+        // size defined by grid-template-rows, grid-template-columns
+        //              or grid-auto-rows, grid-auto-columns.
+        PreferredSize templateSize;
+        geometry::Range1f cellPreferredSizeRange;
+        // this average is only among the stretchables
+        float avgCellStretch = 0.f;
+        // this average is only among the shrinkables
+        float avgCellShrink = 0.f;
+        float maxUnshrinkableCellSize = 0.f;
+        // empty cells do not count
+        Int numShrinkableCells = 0;
+        // empty cells do not count
+        Int numStretchableCells = 0;
+        bool hasNonShrinkableCells = false;
+        bool hasNonStretchableCells = false;
+    };
+    mutable Metrics metrics;
+
+    constexpr float endOffset() const {
+        return offset + size;
+    }
+
+    constexpr bool hasShrinkables() const {
+        return metrics.numShrinkableCells > 0;
+    }
+
+    constexpr bool hasStretchables() const {
+        return metrics.numStretchableCells > 0;
+    }
+
+    constexpr void zeroMetrics() const {
+        metrics.cellPreferredSizeRange = {};
+        metrics.avgCellStretch = 0.f;
+        metrics.avgCellShrink = 0.f;
+        metrics.maxUnshrinkableCellSize = 0.f;
+        metrics.numShrinkableCells = 0;
+        metrics.numStretchableCells = 0;
+        metrics.hasNonShrinkableCells = false;
+        metrics.hasNonStretchableCells = false;
+    }
 };
 
 } // namespace detail
@@ -57,7 +118,8 @@ class VGC_UI_API Grid : public Widget {
 private:
     VGC_OBJECT(Grid, Widget)
 
-    using GridCell = detail::GridCell;
+    using Cell = detail::GridCell;
+    using TrackInfo = detail::GridTrackInfo;
 
 protected:
     /// This is an implementation details. Please use
@@ -101,49 +163,37 @@ protected:
     void updateChildrenGeometry() override;
 
 private:
-    core::Array<GridCell> cells_;
-
-    core::Array<float> offsets_;
-    float preferredRowHeight_;
-
+    core::Array<Cell> cells_;
+    core::Array<TrackInfo> tracks_;
     Int numRows_ = 0;
     Int numColumns_ = 0;
+    mutable PreferredSize autoRowsSize_;
+    mutable PreferredSize autoColumnsSize_;
 
-    float getPreferredRowHeight_(Int i) const;
-    float getPreferredColumnWidth_(Int j) const;
-    void erase_(Widget* widget);
-    void resize_(Int numRows, Int numColumns);
-
-    GridCell& cellAt_(Int i, Int j) {
+    Cell& cellAt_(Int i, Int j) {
         return cells_[i * numRows_ + j];
     }
 
+    const Cell& cellAt_(Int i, Int j) const {
+        return cells_[i * numRows_ + j];
+    }
+
+    const TrackInfo& rowInfo_(Int i) const {
+        return tracks_[i];
+    }
+
+    const TrackInfo& columnInfo_(Int j) const {
+        return tracks_[numRows_ + j];
+    }
+
+    float getPreferredRowHeight_(Int i) const;
+    float getPreferredColumnWidth_(Int j) const;
+
+    void erase_(Widget* widget);
+    void resize_(Int numRows, Int numColumns);
+
     void resizeUpTo_(Int i, Int j) {
         resize_((std::max)(numRows_, i + 1), (std::max)(numColumns_, j + 1));
-    }
-
-    float getRowStartY_(Int index) {
-        return offsets_[index];
-    }
-
-    float getRowEndY_(Int index) {
-        return offsets_[index + 1];
-    }
-
-    float getColumnStartX_(Int index) {
-        return offsets_[numRows_ + 1 + index];
-    }
-
-    float getColumnEndX_(Int index) {
-        return offsets_[numRows_ + 1 + index + 1];
-    }
-
-    float getRowHeight_(Int index) {
-        return getRowEndY_(index) - getRowStartY_(index);
-    }
-
-    float getColumnWidth_(Int index) {
-        return getColumnEndX_(index) - getColumnStartX_(index);
     }
 };
 

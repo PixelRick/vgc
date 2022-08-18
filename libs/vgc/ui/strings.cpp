@@ -33,6 +33,8 @@ const core::StringId background_color("background-color");
 const core::StringId background_color_on_hover("background-color-on-hover");
 const core::StringId border_radius("border-radius");
 const core::StringId column_gap("column-gap");
+const core::StringId grid_auto_columns("grid-auto-columns");
+const core::StringId grid_auto_rows("grid-auto-rows");
 const core::StringId margin_bottom("margin-bottom");
 const core::StringId margin_left("margin-left");
 const core::StringId margin_right("margin-right");
