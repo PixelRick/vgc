@@ -20,6 +20,7 @@
 #include <QInputMethodEvent>
 #include <QMouseEvent>
 #include <QOpenGLFunctions>
+#include <QScreen>
 
 #include <vgc/core/os.h>
 #include <vgc/core/paths.h>
@@ -544,6 +545,9 @@ void Window::paint(bool sync) {
 
     // XXX make it endInlineFrame in QglEngine and copy its code into Engine::present()
     engine_->endFrame(sync ? 1 : 0);
+
+    // animate (temporary)
+    requestUpdate();
 }
 
 bool Window::event(QEvent* event) {
