@@ -320,8 +320,11 @@ void Canvas::updateCurveGraphics_(graphics::Engine* engine, CurveGraphics& r) {
         r.strokeGeometry_ =
             engine->createDynamicTriangleStripView(BuiltinGeometryLayout::XY_iRGBA);
 
-        r.pointsGeometry_ = engine->createDynamicGeometryView(
-            PrimitiveType::Point, BuiltinGeometryLayout::XY_iRGBA);
+        r.pointsGeometry_ =
+            engine->createDynamicTriangleStripView(BuiltinGeometryLayout::XYDxDy_iXYRGBA);
+
+        r.dispLineGeometry_ =
+            engine->createDynamicTriangleStripView(BuiltinGeometryLayout::XYDxDy_iXYRGBA);
 
         r.inited_ = true;
     }
@@ -339,11 +342,18 @@ void Canvas::updateCurveGraphics_(graphics::Engine* engine, CurveGraphics& r) {
     geometry::Curve curve;
     curve.setColor(color);
     for (Int j = 0; j < nControlPoints; ++j) {
-        curve.addControlPoint(positions[j], widths[j]);
+        curve.addControlPoint(positions[j], widths[j] /** 0.05*/);
     }
 
-    // Triangulate the curve
-    geometry::Vec2fArray glVerticesTriangles;
+    geometry::Vec2fArray strokeVertices;
+    core::Array<geometry::Vec4f> pointVertices;
+    core::FloatArray pointInstData;
+    core::Array<geometry::Vec4f> lineVertices;
+    core::FloatArray lineInstData;
+
+    float ptHalfSize = 5.f;
+    float lineHalfSize = 2.f;
+
     double maxAngle = 0.05;
     int minQuads = 1;
     int maxQuads = 64;
@@ -363,40 +373,70 @@ void Canvas::updateCurveGraphics_(graphics::Engine* engine, CurveGraphics& r) {
         curve.sampleRange(samplingParams, samples);
         for (const geometry::CurveSample& s : samples) {
             geometry::Vec2d p0 = s.leftPoint();
-            glVerticesTriangles.emplaceLast(geometry::Vec2f(p0));
+            strokeVertices.emplaceLast(geometry::Vec2f(p0));
             geometry::Vec2d p1 = s.rightPoint();
-            glVerticesTriangles.emplaceLast(geometry::Vec2f(p1));
+            strokeVertices.emplaceLast(geometry::Vec2f(p1));
+            geometry::Vec2f p = geometry::Vec2f(s.position());
+            geometry::Vec2f n = geometry::Vec2f(s.normal());
+            // clang-format off
+            lineVertices.emplaceLast(p.x(), p.y(), -lineHalfSize * n.x(), -lineHalfSize * n.y());
+            lineVertices.emplaceLast(p.x(), p.y(),  lineHalfSize * n.x(),  lineHalfSize * n.y());
+            // clang-format on
         }
     }
     else {
         geometry::Vec2dArray triangles = curve.triangulate(maxAngle, 1, 64);
         for (const geometry::Vec2d& p : triangles) {
-            glVerticesTriangles.emplaceLast(geometry::Vec2f(p));
+            strokeVertices.emplaceLast(geometry::Vec2f(p));
         }
     }
 
-    engine->updateVertexBufferData(r.strokeGeometry_, std::move(glVerticesTriangles));
+    engine->updateBufferData(
+        r.strokeGeometry_->vertexBuffer(0), //
+        std::move(strokeVertices));
     engine->updateBufferData(
         r.strokeGeometry_->vertexBuffer(1), //
         core::Array<float>({color.r(), color.g(), color.b(), color.a()}));
 
+    lineInstData.extend({0.f, 0.f, 0.02f, 0.64f, 1.0f, 1.f});
+
+    engine->updateBufferData(
+        r.dispLineGeometry_->vertexBuffer(0), std::move(lineVertices));
+    engine->updateBufferData(
+        r.dispLineGeometry_->vertexBuffer(1), std::move(lineInstData));
+
+    // clang-format off
+    pointVertices.extend({
+        {0, 0, -ptHalfSize, -ptHalfSize},
+                         {0, 0, -ptHalfSize,  ptHalfSize},
+                         {0, 0,  ptHalfSize, -ptHalfSize},
+                         {0, 0,  ptHalfSize,  ptHalfSize} });
+    // clang-format on
+
     const geometry::Vec2dArray& d = curve.positionData();
-    geometry::Vec2fArray glVerticesControlPoints;
     Int ncp = core::int_cast<GLsizei>(d.length());
     for (Int j = 0; j < ncp; ++j) {
         geometry::Vec2d dp = d[j];
-        glVerticesControlPoints.emplaceLast(
-            static_cast<float>(dp.x()), static_cast<float>(dp.y()));
+        pointInstData.extend(
+            {static_cast<float>(dp.x()),
+             static_cast<float>(dp.y()),
+             1.f,
+             0.f,
+             static_cast<float>(j) / ncp,
+             1.f});
     }
-    engine->updateVertexBufferData(r.pointsGeometry_, std::move(glVerticesControlPoints));
+    r.numPoints = ncp;
+
     engine->updateBufferData(
-        r.pointsGeometry_->vertexBuffer(1), //
-        core::Array<float>({1.0f, 0.0f, 0.0f, 1.0f}));
+        r.pointsGeometry_->vertexBuffer(0), std::move(pointVertices));
+    engine->updateBufferData(
+        r.pointsGeometry_->vertexBuffer(1), std::move(pointInstData));
 }
 
 void Canvas::destroyCurveGraphics_(CurveGraphics& r) {
     r.strokeGeometry_.reset();
     r.pointsGeometry_.reset();
+    r.dispLineGeometry_.reset();
     r.inited_ = false;
 }
 
@@ -696,10 +736,13 @@ void Canvas::onPaintDraw(graphics::Engine* engine, PaintOptions /*options*/) {
         engine->draw(r.strokeGeometry_, -1, 0);
     }
 
+    engine->setProgram(graphics::BuiltinProgram::SreenSpaceDisplacement);
+
     // Draw control points
     if (showControlPoints_) {
         for (CurveGraphics& r : curveGraphics_) {
-            engine->draw(r.pointsGeometry_, -1, 0);
+            engine->draw(r.dispLineGeometry_, -1, 0);
+            engine->draw(r.pointsGeometry_, -1, r.numPoints);
         }
     }
 

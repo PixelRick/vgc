@@ -73,6 +73,34 @@ private:
     core::Array<SelectionList> lists_;
 };
 
+struct VGC_UI_API CurveMesh {
+    explicit CurveMesh() {
+    }
+
+private:
+    struct Sample {
+        geometry::Vec2f pos;
+        geometry::Vec2f rhsNormal_;
+    };
+
+    core::DoubleArray crossSectionSamples_;
+};
+
+struct VGC_UI_API CurveObject {
+    explicit CurveObject() {
+    }
+
+private:
+    // Stroke
+    graphics::BufferPtr strokeStrip_;
+    graphics::BufferPtr controlPoints_;
+    graphics::BufferPtr outline_;
+
+    bool inited_ = false;
+
+    CurveMesh mesh_;
+};
+
 /// \class vgc::ui::Canvas
 /// \brief A document canvas widget.
 ///
@@ -200,6 +228,10 @@ private:
 
         // Control Points
         graphics::GeometryViewPtr pointsGeometry_;
+        Int numPoints = 0;
+
+        // Line
+        graphics::GeometryViewPtr dispLineGeometry_;
 
         bool inited_ = false;
         dom::Element* element;
@@ -221,7 +253,6 @@ private:
     };
 
     std::set<CurveGraphicsIterator, unwrapped_less> toUpdate_;
-    //bool needsSort_ = false;
 
     void clearGraphics_();
     void updateCurveGraphics_(graphics::Engine* engine);
