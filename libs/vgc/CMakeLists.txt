@@ -1,6 +1,7 @@
 add_subdirectory(core)
 add_subdirectory(dom)
 add_subdirectory(geometry)
+add_subdirectory(graph)
 add_subdirectory(graphics)
 add_subdirectory(style)
 add_subdirectory(ui)

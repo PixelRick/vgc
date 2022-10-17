@@ -52,6 +52,13 @@ Element* Element::create(Element* parent, core::StringId name) {
     return create_(parent, name);
 }
 
+const Value& Element::getAuthoredAttribute(core::StringId name) const {
+    if (const AuthoredAttribute* authored = findAuthoredAttribute_(name)) {
+        return authored->value();
+    }
+    return Value::invalid();
+}
+
 const Value& Element::getAttribute(core::StringId name) const {
     if (const AuthoredAttribute* authored = findAuthoredAttribute_(name)) {
         return authored->value();

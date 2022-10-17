@@ -20,6 +20,16 @@
 
 namespace vgc::dom {
 
+VGC_DEFINE_ENUM(
+    ValueType,
+    (None, "None"),
+    (Invalid, "Invalid"),
+    (Int, "Int"),
+    (String, "String"),
+    (Color, "Color"),
+    (DoubleArray, "DoubleArray"),
+    (Vec2dArray, "Vec2dArray"))
+
 const Value& Value::none() {
     // trusty leaky singleton
     static const Value* v = new Value(ValueType::None);

@@ -26,6 +26,7 @@
 #include <vgc/dom/document.h>
 #include <vgc/dom/element.h>
 #include <vgc/geometry/camera2d.h>
+#include <vgc/geometry/curve.h>
 #include <vgc/geometry/vec2d.h>
 #include <vgc/ui/api.h>
 #include <vgc/ui/cursor.h>
@@ -73,19 +74,6 @@ private:
     core::Array<SelectionList> lists_;
 };
 
-struct VGC_UI_API CurveMesh {
-    explicit CurveMesh() {
-    }
-
-private:
-    struct Sample {
-        geometry::Vec2f pos;
-        geometry::Vec2f rhsNormal_;
-    };
-
-    core::DoubleArray crossSectionSamples_;
-};
-
 struct VGC_UI_API CurveObject {
     explicit CurveObject() {
     }
@@ -98,7 +86,7 @@ private:
 
     bool inited_ = false;
 
-    CurveMesh mesh_;
+    //CurveMesh mesh_;
 };
 
 /// \class vgc::ui::Canvas

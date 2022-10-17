@@ -18,10 +18,12 @@
 #define VGC_DOM_VALUE_H
 
 #include <memory>
+#include <string>
 #include <variant>
 
 #include <vgc/core/array.h>
 #include <vgc/core/color.h>
+#include <vgc/core/enum.h>
 #include <vgc/dom/api.h>
 #include <vgc/geometry/vec2d.h>
 
@@ -89,32 +91,21 @@ enum class ValueType {
     // XXX TODO: complete the list of types
     None,
     Invalid,
+    Int,
+    String,
     Color,
     DoubleArray,
     Vec2dArray,
 };
 
+VGC_DOM_API
+VGC_DECLARE_ENUM(ValueType)
+
 /// Writes the given ValueType to the output stream.
 ///
 template<typename OStream>
 void write(OStream& out, ValueType v) {
-    switch (v) {
-    case ValueType::None:
-        write(out, "ValueType::None");
-        break;
-    case ValueType::Invalid:
-        write(out, "ValueType::Invalid");
-        break;
-    case ValueType::Color:
-        write(out, "ValueType::Color");
-        break;
-    case ValueType::DoubleArray:
-        write(out, "ValueType::DoubleArray");
-        break;
-    case ValueType::Vec2dArray:
-        write(out, "ValueType::Vec2dArray");
-        break;
-    }
+    core::formatTo(out, "{}", v);
 }
 
 /// \class vgc::dom::Value
@@ -125,7 +116,7 @@ public:
     /// Constructs an empty value, that is, whose ValueType is None.
     ///
     constexpr Value()
-        : Value(ValueType::None) {
+        : type_(ValueType::None) {
     }
 
     /// Returns a const reference to an empty value. This is useful for error
@@ -143,6 +134,27 @@ public:
     Value(const core::Color& color)
         : type_(ValueType::Color)
         , var_(color) {
+    }
+
+    /// Constructs a Value holding an Int.
+    ///
+    Value(Int integer)
+        : type_(ValueType::Int)
+        , var_(integer) {
+    }
+
+    /// Constructs a Value holding a string.
+    ///
+    Value(const std::string& s)
+        : type_(ValueType::String)
+        , var_(s) {
+    }
+
+    /// Constructs a Value holding a string.
+    ///
+    Value(std::string&& s)
+        : type_(ValueType::String)
+        , var_(std::move(s)) {
     }
 
     /// Constructs a Value holding a DoubleArray.
@@ -195,67 +207,109 @@ public:
     ///
     void shrinkToFit();
 
-    /// Returns the Color held by this Value.
-    /// The behavior is undefined if type() != ValueType::Color.
+    /// Returns the `core::Color` held by this `Value`.
+    /// The behavior is undefined if `type() != ValueType::Color`.
     ///
     core::Color getColor() const {
         return std::get<core::Color>(var_);
     }
 
-    /// Copies the Color held by this Value to \p color.
+    /// Copies the `core::Color` held by this `Value` to `reference`.
     /// The behavior is undefined if type() != ValueType::Color.
     ///
-    void get(core::Color& color) const {
-        color = std::get<core::Color>(var_);
+    void get(core::Color& reference) const {
+        reference = std::get<core::Color>(var_);
     }
 
-    /// Sets this Value to the given \p color.
+    /// Sets this `Value` to the given `color`.
     ///
     void set(const core::Color& color) {
         type_ = ValueType::Color;
         var_ = color;
     }
 
-    /// Returns the Vec2dArray held by this Value.
-    /// The behavior is undefined if type() != ValueType::Vec2dArray.
+    /// Returns the integer held by this `Value`.
+    /// The behavior is undefined if `type() != ValueType::Int`.
+    ///
+    Int getInt() const {
+        return std::get<Int>(var_);
+    }
+
+    /// Copies the integer held by this `Value` to `ref`.
+    /// The behavior is undefined if `type() != ValueType::Int`.
+    ///
+    void get(Int& ref) const {
+        ref = std::get<Int>(var_);
+    }
+
+    /// Sets this `Value` to the given integer `value`.
+    ///
+    void set(Int value) {
+        type_ = ValueType::Int;
+        var_ = value;
+    }
+
+    /// Returns the string held by this `Value`.
+    /// The behavior is undefined if `type() != ValueType::String`.
+    ///
+    const std::string& getString() const {
+        return std::get<std::string>(var_);
+    }
+
+    /// Copies the string held by this `Value` to `ref`.
+    /// The behavior is undefined if `type() != ValueType::String`.
+    ///
+    void get(std::string& reference) const {
+        reference = std::get<std::string>(var_);
+    }
+
+    /// Sets this `Value` to the given string `s`.
+    ///
+    void set(std::string s) {
+        type_ = ValueType::String;
+        var_ = std::move(s);
+    }
+
+    /// Returns the `Vec2dArray` held by this `Value`.
+    /// The behavior is undefined if `type() != ValueType::Vec2dArray`.
     ///
     const geometry::Vec2dArray& getVec2dArray() const {
         return *std::get<std::shared_ptr<geometry::Vec2dArray>>(var_);
     }
 
-    /// Copies the Vec2dArray held by this Value to \p doubleArray.
-    /// The behavior is undefined if type() != ValueType::Vec2dArray.
+    /// Copies the `Vec2dArray` held by this `Value` to `reference`.
+    /// The behavior is undefined if `type() != ValueType::Vec2dArray`.
     ///
-    void get(geometry::Vec2dArray& vec2dArray) const {
-        vec2dArray = getVec2dArray();
+    void get(geometry::Vec2dArray& reference) const {
+        reference = getVec2dArray();
     }
 
-    /// Sets this value to the given \p vec2dArray.
+    /// Sets this `Value` to the given `vec2dArray`.
     ///
-    void set(const geometry::Vec2dArray& vec2dArray) {
+    void set(geometry::Vec2dArray vec2dArray) {
         type_ = ValueType::Vec2dArray;
-        var_ = std::make_shared<geometry::Vec2dArray>(vec2dArray);
+        var_ = std::make_shared<geometry::Vec2dArray>(std::move(vec2dArray));
     }
 
-    /// Returns the DoubleArray held by this Value.
-    /// The behavior is undefined if type() != ValueType::DoubleArray.
+    /// Returns the `DoubleArray` held by this `Value`.
+    /// The behavior is undefined if `type() != ValueType::DoubleArray`.
     ///
     const core::DoubleArray& getDoubleArray() const {
         return *std::get<std::shared_ptr<core::DoubleArray>>(var_);
     }
 
-    /// Copies the DoubleArray held by this Value to \p doubleArray.
-    /// The behavior is undefined if type() != ValueType::DoubleArray.
+    /// Copies the `DoubleArray` held by this `Value` to `reference`.
+    /// The behavior is undefined if `type() != ValueType::DoubleArray`.
     ///
-    void get(core::DoubleArray& doubleArray) const {
-        doubleArray = getDoubleArray();
+    void get(core::DoubleArray& reference) const {
+        reference = getDoubleArray();
     }
 
-    /// Sets this value to the given \p vec2dArray.
+    /// Sets this `Value` to the given `doubleArray`.
     ///
-    void set(const core::DoubleArray& doubleArray) {
+    void set(core::DoubleArray doubleArray) {
         type_ = ValueType::DoubleArray;
-        var_ = std::make_shared<core::DoubleArray>(doubleArray);
+        var_ = std::make_shared<core::DoubleArray>(std::move(doubleArray));
     }
 
 private:
@@ -270,6 +324,8 @@ private:
     std::variant<
         std::monostate,
         core::Color,
+        Int,
+        std::string,
         std::shared_ptr<core::DoubleArray>,
         std::shared_ptr<geometry::Vec2dArray>>
         var_;
