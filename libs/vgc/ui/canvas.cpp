@@ -330,8 +330,8 @@ void Canvas::updateCurveGraphics_(graphics::Engine* engine, CurveGraphics& r) {
     }
 
     dom::Element* path = r.element;
-    geometry::Vec2dArray positions = path->getAttribute(POSITIONS).getVec2dArray();
-    core::DoubleArray widths = path->getAttribute(WIDTHS).getDoubleArray();
+    const geometry::Vec2dArray& positions = path->getAttribute(POSITIONS).getVec2dArray();
+    const core::DoubleArray& widths = path->getAttribute(WIDTHS).getDoubleArray();
     core::Color color = path->getAttribute(COLOR).getColor();
 
     // Convert the dom::Path to a geometry::Curve

@@ -211,6 +211,11 @@ public:
         return authoredAttributes_;
     }
 
+    /// Gets the authored value of the given attribute.
+    /// Returns an invalid value if the attribute does not exist.
+    ///
+    const Value& getAuthoredAttribute(core::StringId name) const;
+
     /// Gets the value of the given attribute. Emits a warning and returns an
     /// invalid value if the attribute does not exist.
     ///
