@@ -19,6 +19,7 @@
 
 #include <functional> // hash
 #include <string>
+#include <string_view>
 
 #include <vgc/core/api.h>
 #include <vgc/core/format.h>
@@ -104,7 +105,7 @@ class VGC_CORE_API StringId {
 public:
     // Constructs a StringId representing the empty string.
     //
-    StringId() noexcept
+    constexpr StringId() noexcept
         : stringPtr_(nullptr) {
     }
 
@@ -124,13 +125,23 @@ public:
         }
     }
 
-    /// Constructs a StringId representing the given string \p s.
+    /// Constructs a StringId representing the given string `s`.
     ///
     explicit StringId(const char s[])
         : stringPtr_(nullptr) {
 
         if (s && s[0] != '\0') {
-            init_(std::string(s));
+            init_(s);
+        }
+    }
+
+    /// Constructs a StringId representing the given string `s`.
+    ///
+    explicit StringId(std::string_view s)
+        : stringPtr_(nullptr) {
+
+        if (s.size() && s[0] != '\0') {
+            init_(s);
         }
     }
 
@@ -190,7 +201,7 @@ public:
 private:
     friend struct std::hash<StringId>;
     const std::string* stringPtr_;
-    void init_(const std::string& s);
+    void init_(std::string_view s);
 };
 
 /// Returns whether the given std::string is equal to the given StringId.

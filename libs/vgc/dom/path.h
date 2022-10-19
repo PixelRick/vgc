@@ -17,6 +17,7 @@
 #ifndef VGC_DOM_PATH_H
 #define VGC_DOM_PATH_H
 
+#include <vgc/core/flags.h>
 #include <vgc/core/object.h>
 #include <vgc/core/stringid.h>
 #include <vgc/dom/api.h>
@@ -25,36 +26,163 @@
 
 namespace vgc::dom {
 
+class Path;
+
 namespace detail {
 
-VGC_DOM_API extern const core::StringId relRoot;
+template<typename T, typename... Rest>
+inline void hashCombine(std::size_t& res, const T& v, Rest... rest) {
+    res ^= std::hash<T>()(v) + 0x9E3779B9 + (res << 6) + (res >> 2);
+    (hash_multiple(res, rest), ...);
+}
 
 } // namespace detail
+
+/*
+path examples:
+/layer/rect.v[0] = "/layer/rect/v0" if real
+    element: /layer/rect
+    attribute: v
+    isArrayAttribute: true
+    attributeIndex: 0  -> should we support more ? matrix[0][2] ?
+/layer/curve.startVertex
+    element: /layer/curve
+    attribute: startVertex
+    isArrayAttribute: false
+    attributeIndex: 0
+*/
+
+/// \enum vgc::dom::PathSegmentType
+/// \brief Specifies the type of a path segment.
+///
+// clang-format off
+enum class PathSegmentFlag : UInt16 {
+    None        = 0x00,
+    Element     = 0x01,
+    Attribute   = 0x02,
+    Root        = 0x04, // only allowed as first segment
+    Dot         = 0x08, // only allowed as first segment
+    Indexed     = 0x10, // only allowed for attributes atm
+};
+// clang-format on
+
+VGC_DEFINE_FLAGS(PathSegmentFlags, PathSegmentFlag)
+
+/// \class vgc::dom::PathSegment
+/// \brief Represents a path segment.
+///
+/// It can be an `Element` name or an attribute name with an optional index.
+///
+class VGC_DOM_API PathSegment {
+private:
+    friend Path;
+
+public:
+    using ArrayIndexType = Int;
+
+    // Constructs a segment representing the root element.
+    constexpr PathSegment() noexcept
+        : flags_(PathSegmentFlag::RootElementFlags) {
+    }
+
+    explicit PathSegment(
+        core::StringId name,
+        PathSegmentFlags flags = PathSegmentFlag::Element,
+        ArrayIndexType arrayIndex = 0) noexcept;
+
+    core::StringId name() const noexcept {
+        name_;
+    }
+
+    PathSegmentFlags flags() const noexcept {
+        return flags_;
+    }
+
+    bool isElement() const noexcept {
+        return flags_.has(PathSegmentFlag::Element);
+    }
+
+    bool isAttribute() const noexcept {
+        return flags_.has(PathSegmentFlag::Attribute);
+    }
+
+    bool isRootElement() const noexcept {
+        return flags_.has(PathSegmentFlag::RootElementFlags);
+    }
+
+    bool isIndexed() const noexcept {
+        return flags_.has(PathSegmentFlag::Indexed);
+    }
+
+    ArrayIndexType arrayIndex() const noexcept {
+        return arrayIndex_;
+    }
+
+    size_t hash() const noexcept {
+        size_t res = 'PSEG';
+        detail::hashCombine(res, name_, flags_);
+        if (flags_.has(PathSegmentFlag::Indexed)) {
+            detail::hashCombine(res, arrayIndex_);
+        }
+        return res;
+    }
+
+private:
+    core::StringId name_;
+    PathSegmentFlags flags_ = PathSegmentFlag::None;
+    ArrayIndexType arrayIndex_ = 0;
+};
 
 /// \class vgc::dom::Path
 /// \brief Represents a path to a node or attribute.
 ///
-class Path {
+class VGC_DOM_API Path {
 public:
+    using ArrayIndexType = PathSegment::ArrayIndexType;
+
+    Path() noexcept = default;
+    Path(Element* element);
     Path(Element* element, core::StringId attributeName);
-    Path(Document* document, std::string_view path);
+    Path(Element* element, core::StringId attributeName, ArrayIndexType arrayIndex);
+
+    Path(std::string_view path);
+    //Path(Element* element, std::string_view relativePath);
 
     size_t hash() const noexcept {
         size_t res = 'PATH';
-        std::hash<core::StringId> hasher = {};
-        for (const core::StringId& sid : path_) {
-            res ^= hasher(sid);
+        for (const PathSegment& s : segments_) {
+            detail::hashCombine(res, s.hash());
         }
+        return res;
     }
 
     std::string string() const noexcept;
 
-    bool isRelative() const noexcept {
-        return !path_.isEmpty() && path_.first() == detail::relRoot;
+    bool isEmpty() const noexcept {
+        return segments_.isEmpty();
     }
 
+    bool isRelativeToFirstElement() const noexcept {
+        return !segments_.isEmpty() && segments_.first().isElement()
+               && !segments_.first().isRootElement();
+    }
+
+    bool isElement() const noexcept {
+        return !segments_.isEmpty() && segments_.last().isElement();
+    }
+
+    bool isAttribute() const noexcept {
+        return !segments_.isEmpty() && segments_.last().isAttribute();
+    }
+
+    Path elementPath() const;
+    Path elementRelativeAttributePath() const;
+
+    Path& removeAttribute();
+    Path& removeIndex();
+
 private:
-    core::Array<core::StringId> path_;
+    core::Array<PathSegment> segments_;
 };
 
 } // namespace vgc::dom
