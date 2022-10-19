@@ -105,7 +105,7 @@ class VGC_CORE_API StringId {
 public:
     // Constructs a `StringId` representing the empty string.
     //
-    StringId() noexcept
+    constexpr StringId() noexcept
         : stringPtr_(nullptr) {
     }
 
