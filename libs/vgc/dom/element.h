@@ -28,6 +28,8 @@ namespace vgc::dom {
 VGC_DECLARE_OBJECT(Document);
 VGC_DECLARE_OBJECT(Element);
 
+class Path;
+
 /// \class vgc::dom::NamedElementIterator
 /// \brief Iterates over sibling elements with a given name.
 ///
@@ -204,6 +206,9 @@ public:
     core::StringId name() const {
         return name_;
     }
+
+    Element* elementFromRelativePath(const Path& path) const { return nullptr; }
+    //Value attributeFromRelativePath(const Path& path) const { return {}; }
 
     /// Returns the authored attributes of this element.
     ///
