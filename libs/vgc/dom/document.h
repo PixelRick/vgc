@@ -34,6 +34,8 @@ VGC_DECLARE_OBJECT(Node);
 VGC_DECLARE_OBJECT(Document);
 VGC_DECLARE_OBJECT(Element);
 
+class Path;
+
 /// \class vgc::dom::Document
 /// \brief Represents a VGC document.
 ///
@@ -185,6 +187,9 @@ public:
     /// Returns the root element of this Document.
     ///
     Element* rootElement() const;
+
+    Element* elementFromPath(const Path& path) const { return nullptr; }
+    //Value attributeFromRelativePath(const Path& path) const { return {}; }
 
     /// Returns the XML declaration of this document.
     ///
