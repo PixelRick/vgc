@@ -188,9 +188,6 @@ public:
     ///
     Element* rootElement() const;
 
-    Element* elementFromPath(const Path& path) const { return nullptr; }
-    //Value attributeFromRelativePath(const Path& path) const { return {}; }
-
     /// Returns the XML declaration of this document.
     ///
     /// The default value is:

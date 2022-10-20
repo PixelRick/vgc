@@ -207,9 +207,6 @@ public:
         return name_;
     }
 
-    Element* elementFromRelativePath(const Path& path) const { return nullptr; }
-    //Value attributeFromRelativePath(const Path& path) const { return {}; }
-
     /// Returns the authored attributes of this element.
     ///
     const core::Array<AuthoredAttribute>& authoredAttributes() const {

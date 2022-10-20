@@ -51,7 +51,6 @@ private:
 template<typename T>
 using ElementMap = std::unordered_map<ElementPath, T>;
 
-
 // canvas
 //struct VGC_GRAPH_API Edge : Cell {
 //
@@ -62,10 +61,11 @@ using ElementMap = std::unordered_map<ElementPath, T>;
 //    graphics::BufferPtr outline_;
 //
 //    CurveMesh mesh_;
-};
+//};
 
 } // namespace vgc::graph
 
+template<>
 struct std::hash<vgc::graph::ElementPath> {
     std::size_t operator()(const vgc::graph::ElementPath& p) const noexcept {
         return p.hash();

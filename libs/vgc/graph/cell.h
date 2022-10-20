@@ -18,6 +18,8 @@
 #define VGC_GRAPH_CELL_H
 
 #include <vgc/core/object.h>
+#include <vgc/dom/path.h>
+#include <vgc/geometry/curve.h>
 #include <vgc/geometry/mat2d.h>
 #include <vgc/geometry/vec2d.h>
 #include <vgc/graph/api.h>
@@ -52,18 +54,15 @@ protected:
     virtual ~GraphElement() = default;
 
 public:
-    // do we need these in dom ?
-    const DomPath& shortPath() const {
-        return domPath_;
-    }
+    //const dom::Path& shortPath() const {
+    //    return domPath_;
+    //}
 
 private:
-
     std::shared_ptr<Transform2d> transform_;
 };
 
 } // namespace detail
-
 
 /// \enum vgc::graph::CellType
 /// \brief Specifies the type of a Cell.
@@ -81,12 +80,12 @@ protected:
     virtual ~Cell() = default;
 
 public:
-    const ElementPath& shortPath() const {
+    const dom::Path& shortPath() const {
         return shortPath_;
     }
 
 private:
-    ElementPath shortPath_;
+    dom::Path shortPath_;
 };
 
 class VGC_GRAPH_API KeyCell : virtual public Cell {
@@ -122,9 +121,9 @@ private:
 class VGC_GRAPH_API KeyEdge : virtual public KeyCell, Edge {
 
 private:
-    geometry::Vec2fArray meshVertices_;
+    geometry::Vec2dArray meshVertices_;
     core::Array<UInt32> meshIndices_;
-    geometry::Vec2f meshOffset_;
+    geometry::Vec2d meshOffset_;
     core::Array<geometry::CurveSample> samples_;
     bool isClosed_ = false;
 };

@@ -24,10 +24,14 @@ VGC_DEFINE_ENUM(
     ValueType,
     (None, "None"),
     (Invalid, "Invalid"),
-    (Int, "Int"),
     (String, "String"),
-    (Color, "Color"),
+    (Int, "Int"),
+    (IntArray, "IntArray"),
+    (Double, "Double"),
     (DoubleArray, "DoubleArray"),
+    (Color, "Color"),
+    (ColorArray, "ColorArray"),
+    (Vec2d, "Vec2d"),
     (Vec2dArray, "Vec2dArray"))
 
 const Value& Value::none() {
@@ -49,11 +53,17 @@ void Value::clear() {
 
 void Value::shrinkToFit() {
     switch (type_) {
+    case ValueType::IntArray:
+        std::get<core::IntArray>(var_).shrinkToFit();
+        break;
     case ValueType::DoubleArray:
-        std::get<std::shared_ptr<core::DoubleArray>>(var_)->shrinkToFit();
+        std::get<core::DoubleArray>(var_).shrinkToFit();
+        break;
+    case ValueType::ColorArray:
+        std::get<core::Array<core::Color>>(var_).shrinkToFit();
         break;
     case ValueType::Vec2dArray:
-        std::get<std::shared_ptr<geometry::Vec2dArray>>(var_)->shrinkToFit();
+        std::get<geometry::Vec2dArray>(var_).shrinkToFit();
         break;
     default:
         break;
@@ -80,10 +90,22 @@ Value parseValue(const std::string& s, ValueType t) {
         case ValueType::Invalid:
             checkExpectedString_(s, "Invalid");
             return Value::invalid();
-        case ValueType::Color:
-            return Value(core::parse<core::Color>(s));
+        case ValueType::String:
+            return Value(s);
+        case ValueType::Int:
+            return Value(core::parse<Int>(s));
+        case ValueType::IntArray:
+            return Value(core::parse<core::IntArray>(s));
+        case ValueType::Double:
+            return Value(core::parse<double>(s));
         case ValueType::DoubleArray:
             return Value(core::parse<core::DoubleArray>(s));
+        case ValueType::Color:
+            return Value(core::parse<core::Color>(s));
+        case ValueType::ColorArray:
+            return Value(core::parse<core::Array<core::Color>>(s));
+        case ValueType::Vec2d:
+            return Value(core::parse<geometry::Vec2d>(s));
         case ValueType::Vec2dArray:
             return Value(core::parse<geometry::Vec2dArray>(s));
         }

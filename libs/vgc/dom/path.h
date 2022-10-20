@@ -30,10 +30,14 @@ class Path;
 
 namespace detail {
 
-template<typename T, typename... Rest>
-inline void hashCombine(std::size_t& res, const T& v, Rest... rest) {
+template<typename T>
+void hashCombine(std::size_t& res, const T& v) {
     res ^= std::hash<T>()(v) + 0x9E3779B9 + (res << 6) + (res >> 2);
-    (hash_multiple(res, rest), ...);
+}
+
+template<typename... Ts>
+std::enable_if_t<(sizeof...(Ts) > 1), void> hashCombine(std::size_t& res, Ts... values) {
+    (hashCombine(res, values), ...);
 }
 
 } // namespace detail
@@ -43,13 +47,13 @@ path examples:
 /layer/rect.v[0] = "/layer/rect/v0" if real
     element: /layer/rect
     attribute: v
-    isArrayAttribute: true
-    attributeIndex: 0  -> should we support more ? matrix[0][2] ?
+    isIndexed: true
+    arrayIndex: 0
 /layer/curve.startVertex
     element: /layer/curve
     attribute: startVertex
-    isArrayAttribute: false
-    attributeIndex: 0
+    isIndexed: false
+    arrayIndex: 0
 */
 
 /// \enum vgc::dom::PathSegmentType
@@ -58,11 +62,12 @@ path examples:
 // clang-format off
 enum class PathSegmentFlag : UInt16 {
     None        = 0x00,
-    Element     = 0x01,
-    Attribute   = 0x02,
-    Root        = 0x04, // only allowed as first segment
-    Dot         = 0x08, // only allowed as first segment
-    Indexed     = 0x10, // only allowed for attributes atm
+    Root        = 0x01, // only allowed as first segment
+    UniqueId    = 0x02, // only allowed as first segment
+    Dot         = 0x04, // only allowed as first segment
+    Element     = 0x08,
+    Attribute   = 0x10,
+    Indexed     = 0x20, // only allowed for attributes atm
 };
 // clang-format on
 
@@ -81,9 +86,7 @@ public:
     using ArrayIndexType = Int;
 
     // Constructs a segment representing the root element.
-    constexpr PathSegment() noexcept
-        : flags_(PathSegmentFlag::RootElementFlags) {
-    }
+    constexpr PathSegment() noexcept = default;
 
     explicit PathSegment(
         core::StringId name,
@@ -91,11 +94,23 @@ public:
         ArrayIndexType arrayIndex = 0) noexcept;
 
     core::StringId name() const noexcept {
-        name_;
+        return name_;
     }
 
     PathSegmentFlags flags() const noexcept {
         return flags_;
+    }
+
+    bool isRoot() const noexcept {
+        return flags_.has(PathSegmentFlag::Root);
+    }
+
+    bool isUniqueId() const noexcept {
+        return flags_.has(PathSegmentFlag::UniqueId);
+    }
+
+    bool isDot() const noexcept {
+        return flags_.has(PathSegmentFlag::Dot);
     }
 
     bool isElement() const noexcept {
@@ -104,10 +119,6 @@ public:
 
     bool isAttribute() const noexcept {
         return flags_.has(PathSegmentFlag::Attribute);
-    }
-
-    bool isRootElement() const noexcept {
-        return flags_.has(PathSegmentFlag::RootElementFlags);
     }
 
     bool isIndexed() const noexcept {
@@ -140,6 +151,7 @@ class VGC_DOM_API Path {
 public:
     using ArrayIndexType = PathSegment::ArrayIndexType;
 
+    /// Constructs a null path.
     Path() noexcept = default;
     Path(Element* element);
     Path(Element* element, core::StringId attributeName);
@@ -162,17 +174,24 @@ public:
         return segments_.isEmpty();
     }
 
-    bool isRelativeToFirstElement() const noexcept {
-        return !segments_.isEmpty() && segments_.first().isElement()
-               && !segments_.first().isRootElement();
+    bool isAbsolute() const noexcept {
+        if (!segments_.isEmpty()) {
+            const PathSegment& seg = segments_.getUnchecked(0);
+            return seg.isRoot() || seg.isUniqueId();
+        }
+        return false;
+    }
+
+    bool isBased() const noexcept {
+        return !segments_.isEmpty() && segments_.getUnchecked(0).isElement();
     }
 
     bool isElement() const noexcept {
-        return !segments_.isEmpty() && segments_.last().isElement();
+        return !segments_.isEmpty() && segments_.getUnchecked(0).isElement();
     }
 
     bool isAttribute() const noexcept {
-        return !segments_.isEmpty() && segments_.last().isAttribute();
+        return !segments_.isEmpty() && segments_.getUnchecked(0).isAttribute();
     }
 
     Path elementPath() const;

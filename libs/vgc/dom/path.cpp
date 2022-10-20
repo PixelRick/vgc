@@ -32,14 +32,14 @@ const core::StringId nameAttrName("name");
 
 }
 
-explicit PathSegment::PathSegment(
+PathSegment::PathSegment(
     core::StringId name,
-    PathSegmentFlags flags = PathSegmentFlag::Element,
-    ArrayIndexType arrayIndex = 0)
+    PathSegmentFlags flags,
+    ArrayIndexType arrayIndex) noexcept
 
     : name_(name)
-    , arrayIndex_(arrayIndex)
-    , flags_(flags) {
+    , flags_(flags)
+    , arrayIndex_(arrayIndex) {
 }
 
 namespace {
@@ -75,6 +75,7 @@ bool appendElementReversePath(core::Array<PathSegment>& segments, Element* eleme
         }
         element = parentElement;
     }
+    return true;
 }
 
 bool isReservedChar(char c) {
@@ -82,7 +83,7 @@ bool isReservedChar(char c) {
     return reserved.find(c) != std::string::npos;
 }
 
-size_t findReservedChar(std::string_view path, size_t start) {
+size_t findReservedCharOrEnd(std::string_view path, size_t start) {
     constexpr std::string_view reserved = "/.#[]";
     const size_t n = path.size();
     size_t i = start;
@@ -115,7 +116,7 @@ Path::Path(
 
     : Path(element) {
 
-    segments_.emplaceLast(attributeName, PathSegmentFlag::Attribute);
+    segments_.emplaceLast(attributeName, PathSegmentFlag::Attribute, arrayIndex);
 }
 
 Path::Path(std::string_view path) {
@@ -123,34 +124,49 @@ Path::Path(std::string_view path) {
     size_t i = 0;
     size_t j = 0;
 
-    // parse first element
+    // Empty path is equivalent to dot path.
     if (n == 0) {
-        segments_.emplaceLast(core::StringId(), PathSegmentFlag::Root);
+        segments_.emplaceLast(core::StringId(), PathSegmentFlag::Dot);
         return;
     }
-    else if (path[0] == '/') {
-        // full path
+
+    char firstChar = path[0];
+    if (firstChar == '/') {
+        // Full path.
         segments_.emplaceLast(core::StringId(), PathSegmentFlag::Root);
-        // don't increment i here, elements are expected to be preceeded by '/' and '/.attr' is no valid.
+        i = 1;
+        if (i < n && !isReservedChar(path[1])) {
+            j = findReservedCharOrEnd(path, i + 1);
+            segments_.emplaceLast(
+                core::StringId(path.substr(i, j - i)), PathSegmentFlag::Element);
+        }
     }
-    else if (path[0] == '#') {
-        // based path
+    else if (firstChar == '#') {
+        // Based path.
         ++i;
-        j = findReservedChar(path, i);
+        j = findReservedCharOrEnd(path, i);
         if (j == i) {
             VGC_ERROR(
-                LogVgcDom, "Empty unique name (starts with '#') in path: \"{}\".", path);
+                LogVgcDom, "Empty unique name (starts with '#') in path \"{}\".", path);
             segments_.clear();
             return;
         }
         segments_.emplaceLast(
-            core::StringId(path.substr(i, j - i)), PathSegmentFlag::Element);
+            core::StringId(path.substr(i, j - i)), PathSegmentFlag::UniqueId);
         i = j;
     }
-    else if (!isReservedChar(path[0])) {
-        // relative path
+    else if (firstChar == '.') {
+        // Relative path.
         segments_.emplaceLast(core::StringId(), PathSegmentFlag::Dot);
-        j = findReservedChar(path, i + 1);
+        if (n > 2 && path[1] == '/') {
+            // Skip only if it is not an attribute dot.
+            i += 2;
+        }
+    }
+    else if (!isReservedChar(firstChar)) {
+        // Relative path.
+        segments_.emplaceLast(core::StringId(), PathSegmentFlag::Dot);
+        j = findReservedCharOrEnd(path, i + 1);
         segments_.emplaceLast(
             core::StringId(path.substr(i, j - i)), PathSegmentFlag::Element);
         i = j;
@@ -158,9 +174,9 @@ Path::Path(std::string_view path) {
 
     while (i < n && path[i] == '/') {
         ++i;
-        j = findReservedChar(path, i);
+        j = findReservedCharOrEnd(path, i);
         if (j == i) {
-            VGC_ERROR(LogVgcDom, "Empty element name in path: \"{}\".", path);
+            VGC_ERROR(LogVgcDom, "Empty element name in path \"{}\".", path);
             segments_.clear();
             return;
         }
@@ -171,9 +187,9 @@ Path::Path(std::string_view path) {
 
     if (i < n && path[i] == '.') {
         ++i;
-        j = findReservedChar(path, i);
+        j = findReservedCharOrEnd(path, i);
         if (j == i) {
-            VGC_ERROR(LogVgcDom, "Empty attribute name in path: \"{}\".", path);
+            VGC_ERROR(LogVgcDom, "Empty attribute name in path \"{}\".", path);
             segments_.clear();
             return;
         }
@@ -182,14 +198,14 @@ Path::Path(std::string_view path) {
 
         if (i < n && path[i] == '[') {
             ++i;
-            j = findReservedChar(path, i);
+            j = findReservedCharOrEnd(path, i);
             if (j == n || path[i] != ']') {
-                VGC_ERROR(LogVgcDom, "Expected ']' after index in path: \"{}\".", path);
+                VGC_ERROR(LogVgcDom, "Expected ']' after index in path \"{}\".", path);
                 segments_.clear();
                 return;
             }
             if (j == i) {
-                VGC_ERROR(LogVgcDom, "Empty index in path: \"{}\".", path);
+                VGC_ERROR(LogVgcDom, "Empty index in path \"{}\".", path);
                 segments_.clear();
                 return;
             }
@@ -197,7 +213,7 @@ Path::Path(std::string_view path) {
             size_t index = 0;
             auto result = std::from_chars(&path[i], &path[j], index);
             if (result.ec == std::errc::invalid_argument) {
-                VGC_ERROR(LogVgcDom, "Invalid index format in path: \"{}\".", path);
+                VGC_ERROR(LogVgcDom, "Invalid index format in path \"{}\".", path);
                 segments_.clear();
                 return;
             }
@@ -214,8 +230,9 @@ Path::Path(std::string_view path) {
     if (i != n) {
         VGC_ERROR(
             LogVgcDom,
-            "Unexpected extra characters after end of attribute identifier in path: "
-            "\"{}\".",
+            "Unexpected character '{}' at index {} in path \"{}\".",
+            path[i],
+            i,
             path);
         segments_.clear();
         return;
@@ -234,11 +251,15 @@ std::string Path::string() const noexcept {
 
     const PathSegment& seg0 = segments_[0];
     PathSegmentFlags flags0 = seg0.flags_;
-    if (flags0.has(PathSegmentFlag::Dot)) {
+    if (flags0.has(PathSegmentFlag::Root)) {
+        ret.append(1, '/');
         ++i;
     }
     else if (flags0.has(PathSegmentFlag::Root)) {
         ret.append(1, '/');
+        ++i;
+    }
+    if (flags0.has(PathSegmentFlag::Dot)) {
         ++i;
     }
 
@@ -307,6 +328,7 @@ Path& Path::removeIndex() {
         const PathSegment& seg = segments_.last();
         seg.flags().unset(PathSegmentFlag::Indexed);
     }
+    return *this;
 }
 
 } // namespace vgc::dom

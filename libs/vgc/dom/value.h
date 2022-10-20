@@ -19,6 +19,7 @@
 
 #include <memory>
 #include <string>
+#include <tuple>
 #include <variant>
 
 #include <vgc/core/array.h>
@@ -28,6 +29,8 @@
 #include <vgc/geometry/vec2d.h>
 
 namespace vgc::dom {
+
+class Value;
 
 /// \enum vgc::dom::ValueType
 /// \brief Specifies the type of an attribute Value
@@ -91,10 +94,14 @@ enum class ValueType {
     // XXX TODO: complete the list of types
     None,
     Invalid,
-    Int,
     String,
-    Color,
+    Int,
+    IntArray,
+    Double,
     DoubleArray,
+    Color,
+    ColorArray,
+    Vec2d,
     Vec2dArray,
 };
 
@@ -102,11 +109,28 @@ VGC_DOM_API
 VGC_DECLARE_ENUM(ValueType)
 
 /// Writes the given ValueType to the output stream.
+/// DEPRECATED
 ///
 template<typename OStream>
-void write(OStream& out, ValueType v) {
-    core::formatTo(out, "{}", v);
+void write(OStream& /*out*/, ValueType /*v*/) {
+    //core::formatTo(out, "{}", v);
 }
+
+namespace detail {
+
+using ValueVariantType = std::variant<
+    std::monostate,
+    std::string,
+    Int,
+    core::IntArray,
+    double,
+    core::DoubleArray,
+    core::Color,
+    core::Array<core::Color>,
+    geometry::Vec2d,
+    geometry::Vec2dArray>;
+
+} // namespace detail
 
 /// \class vgc::dom::Value
 /// \brief Holds the value of an attribute
@@ -129,60 +153,67 @@ public:
     ///
     static const Value& invalid();
 
-    /// Constructs a Value holding a Color.
+    /// Constructs a Value holding a std::string.
     ///
-    Value(const core::Color& color)
-        : type_(ValueType::Color)
-        , var_(color) {
+    Value(std::string string)
+        : type_(ValueType::String)
+        , var_(std::move(string)) {
     }
 
     /// Constructs a Value holding an Int.
     ///
-    Value(Int integer)
+    Value(Int value)
         : type_(ValueType::Int)
-        , var_(integer) {
+        , var_(value) {
     }
 
-    /// Constructs a Value holding a string.
+    /// Constructs a Value holding an array of Int.
     ///
-    Value(const std::string& s)
-        : type_(ValueType::String)
-        , var_(s) {
+    Value(core::Array<Int> intArray)
+        : type_(ValueType::IntArray)
+        , var_(std::move(intArray)) {
     }
 
-    /// Constructs a Value holding a string.
+    /// Constructs a Value holding a double.
     ///
-    Value(std::string&& s)
-        : type_(ValueType::String)
-        , var_(std::move(s)) {
+    Value(double value)
+        : type_(ValueType::Double)
+        , var_(value) {
     }
 
-    /// Constructs a Value holding a DoubleArray.
+    /// Constructs a Value holding an array of double.
     ///
-    Value(const core::DoubleArray& doubleArray)
+    Value(core::Array<double> doubleArray)
         : type_(ValueType::DoubleArray)
-        , var_(std::make_shared<core::DoubleArray>(doubleArray)) {
+        , var_(std::move(doubleArray)) {
     }
 
-    /// Constructs a Value holding a DoubleArray.
+    /// Constructs a Value holding a Color.
     ///
-    Value(core::DoubleArray&& doubleArray)
-        : type_(ValueType::DoubleArray)
-        , var_(std::make_shared<core::DoubleArray>(std::move(doubleArray))) {
+    Value(core::Color color)
+        : type_(ValueType::Color)
+        , var_(std::move(color)) {
+    }
+
+    /// Constructs a Value holding an array of Color.
+    ///
+    Value(core::Array<core::Color> colorArray)
+        : type_(ValueType::ColorArray)
+        , var_(std::move(colorArray)) {
+    }
+
+    /// Constructs a Value holding a Vec2d.
+    ///
+    Value(geometry::Vec2d vec2d)
+        : type_(ValueType::Vec2d)
+        , var_(vec2d) {
     }
 
     /// Constructs a Value holding a Vec2dArray.
     ///
-    Value(const geometry::Vec2dArray& vec2dArray)
+    Value(geometry::Vec2dArray vec2dArray)
         : type_(ValueType::Vec2dArray)
-        , var_(std::make_shared<geometry::Vec2dArray>(vec2dArray)) {
-    }
-
-    /// Constructs a Value holding a Vec2dArray.
-    ///
-    Value(geometry::Vec2dArray&& vec2dArray)
-        : type_(ValueType::Vec2dArray)
-        , var_(std::make_shared<geometry::Vec2dArray>(std::move(vec2dArray))) {
+        , var_(std::move(vec2dArray)) {
     }
 
     /// Returns the ValueType of this Value.
@@ -207,46 +238,20 @@ public:
     ///
     void shrinkToFit();
 
-    /// Returns the `core::Color` held by this `Value`.
-    /// The behavior is undefined if `type() != ValueType::Color`.
-    ///
-    core::Color getColor() const {
-        return std::get<core::Color>(var_);
+    template<typename T>
+    const T& get() {
+        return std::get<T>(var_);
     }
 
-    /// Copies the `core::Color` held by this `Value` to `reference`.
-    /// The behavior is undefined if type() != ValueType::Color.
+    /// Returns the item of type `ItemType` held by the container in this `Value`.
+    /// The behavior is undefined if `type() != ValueType::Array..` or index is out
+    /// of container range.
     ///
-    void get(core::Color& reference) const {
-        reference = std::get<core::Color>(var_);
-    }
-
-    /// Sets this `Value` to the given `color`.
-    ///
-    void set(const core::Color& color) {
-        type_ = ValueType::Color;
-        var_ = color;
-    }
-
-    /// Returns the integer held by this `Value`.
-    /// The behavior is undefined if `type() != ValueType::Int`.
-    ///
-    Int getInt() const {
-        return std::get<Int>(var_);
-    }
-
-    /// Copies the integer held by this `Value` to `ref`.
-    /// The behavior is undefined if `type() != ValueType::Int`.
-    ///
-    void get(Int& ref) const {
-        ref = std::get<Int>(var_);
-    }
-
-    /// Sets this `Value` to the given integer `value`.
-    ///
-    void set(Int value) {
-        type_ = ValueType::Int;
-        var_ = value;
+    // XXX what to do when index is out of range ?
+    template<typename ItemType>
+    const ItemType& getItem(Int index) {
+        using ArrayType = core::Array<ItemType>;
+        return std::get<ArrayType>(var_)[index];
     }
 
     /// Returns the string held by this `Value`.
@@ -256,13 +261,6 @@ public:
         return std::get<std::string>(var_);
     }
 
-    /// Copies the string held by this `Value` to `ref`.
-    /// The behavior is undefined if `type() != ValueType::String`.
-    ///
-    void get(std::string& reference) const {
-        reference = std::get<std::string>(var_);
-    }
-
     /// Sets this `Value` to the given string `s`.
     ///
     void set(std::string s) {
@@ -270,46 +268,131 @@ public:
         var_ = std::move(s);
     }
 
-    /// Returns the `Vec2dArray` held by this `Value`.
-    /// The behavior is undefined if `type() != ValueType::Vec2dArray`.
+    /// Returns the integer held by this `Value`.
+    /// The behavior is undefined if `type() != ValueType::Int`.
     ///
-    const geometry::Vec2dArray& getVec2dArray() const {
-        return *std::get<std::shared_ptr<geometry::Vec2dArray>>(var_);
+    Int getInt() const {
+        return std::get<Int>(var_);
     }
 
-    /// Copies the `Vec2dArray` held by this `Value` to `reference`.
-    /// The behavior is undefined if `type() != ValueType::Vec2dArray`.
+    /// Sets this `Value` to the given integer `value`.
     ///
-    void get(geometry::Vec2dArray& reference) const {
-        reference = getVec2dArray();
+    void set(Int value) {
+        type_ = ValueType::Int;
+        var_ = value;
     }
 
-    /// Sets this `Value` to the given `vec2dArray`.
+    /// Returns the `IntArray` held by this `Value`.
+    /// The behavior is undefined if `type() != ValueType::IntArray`.
     ///
-    void set(geometry::Vec2dArray vec2dArray) {
-        type_ = ValueType::Vec2dArray;
-        var_ = std::make_shared<geometry::Vec2dArray>(std::move(vec2dArray));
+    const core::IntArray& getIntArray() const {
+        return std::get<core::IntArray>(var_);
+    }
+
+    /// Sets this `Value` to the given `intArray`.
+    ///
+    void set(core::IntArray intArray) {
+        type_ = ValueType::IntArray;
+        var_ = std::move(intArray);
+    }
+
+    /// Returns the double held by this `Value`.
+    /// The behavior is undefined if `type() != ValueType::Double`.
+    ///
+    double getDouble() const {
+        return std::get<double>(var_);
+    }
+
+    /// Sets this `Value` to the given double `value`.
+    ///
+    void set(double value) {
+        type_ = ValueType::Double;
+        var_ = value;
     }
 
     /// Returns the `DoubleArray` held by this `Value`.
     /// The behavior is undefined if `type() != ValueType::DoubleArray`.
     ///
     const core::DoubleArray& getDoubleArray() const {
-        return *std::get<std::shared_ptr<core::DoubleArray>>(var_);
-    }
-
-    /// Copies the `DoubleArray` held by this `Value` to `reference`.
-    /// The behavior is undefined if `type() != ValueType::DoubleArray`.
-    ///
-    void get(core::DoubleArray& reference) const {
-        reference = getDoubleArray();
+        return std::get<core::DoubleArray>(var_);
     }
 
     /// Sets this `Value` to the given `doubleArray`.
     ///
     void set(core::DoubleArray doubleArray) {
         type_ = ValueType::DoubleArray;
-        var_ = std::make_shared<core::DoubleArray>(std::move(doubleArray));
+        var_ = std::move(doubleArray);
+    }
+
+    /// Returns the `core::Color` held by this `Value`.
+    /// The behavior is undefined if `type() != ValueType::Color`.
+    ///
+    const core::Color& getColor() const {
+        return std::get<core::Color>(var_);
+    }
+
+    /// Sets this `Value` to the given `color`.
+    ///
+    void set(const core::Color& color) {
+        type_ = ValueType::Color;
+        var_ = color;
+    }
+
+    /// Returns the `core::Array<core::Color>` held by this `Value`.
+    /// The behavior is undefined if `type() != ValueType::ColorArray`.
+    ///
+    const core::Array<core::Color>& getColorArray() const {
+        return std::get<core::Array<core::Color>>(var_);
+    }
+
+    /// Sets this `Value` to the given `colorArray`.
+    ///
+    void set(core::Array<core::Color> colorArray) {
+        type_ = ValueType::ColorArray;
+        var_ = std::move(colorArray);
+    }
+
+    /// Returns the `geometry::Vec2d` held by this `Value`.
+    /// The behavior is undefined if `type() != ValueType::Vec2d`.
+    ///
+    const geometry::Vec2d& getVec2d() const {
+        return std::get<geometry::Vec2d>(var_);
+    }
+
+    /// Sets this `Value` to the given `vec2d`.
+    ///
+    void set(const geometry::Vec2d& vec2d) {
+        type_ = ValueType::Vec2d;
+        var_ = vec2d;
+    }
+
+    /// Returns the `Vec2dArray` held by this `Value`.
+    /// The behavior is undefined if `type() != ValueType::Vec2dArray`.
+    ///
+    const geometry::Vec2dArray& getVec2dArray() const {
+        return std::get<geometry::Vec2dArray>(var_);
+    }
+
+    /// Sets this `Value` to the given `vec2dArray`.
+    ///
+    void set(geometry::Vec2dArray vec2dArray) {
+        type_ = ValueType::Vec2dArray;
+        var_ = std::move(vec2dArray);
+    }
+
+    template<typename OStream>
+    void writeTo(OStream& out) const {
+        switch (type_) {
+        case ValueType::None:
+            write(out, "None");
+            break;
+        case ValueType::Invalid:
+            write(out, "Invalid");
+            break;
+        default:
+            //std::visit([](auto&& arg) { write(out, arg); }, v.var_);
+            break;
+        }
     }
 
 private:
@@ -321,37 +404,15 @@ private:
     }
 
     ValueType type_ = ValueType::Invalid;
-    std::variant<
-        std::monostate,
-        core::Color,
-        Int,
-        std::string,
-        std::shared_ptr<core::DoubleArray>,
-        std::shared_ptr<geometry::Vec2dArray>>
-        var_;
+    detail::ValueVariantType var_;
 };
 
 /// Writes the given Value to the output stream.
+/// DEPRECATED
 ///
 template<typename OStream>
-void write(OStream& out, const Value& v) {
-    switch (v.type()) {
-    case ValueType::None:
-        write(out, "None");
-        break;
-    case ValueType::Invalid:
-        write(out, "Invalid");
-        break;
-    case ValueType::Color:
-        write(out, v.getColor());
-        break;
-    case ValueType::DoubleArray:
-        write(out, v.getDoubleArray());
-        break;
-    case ValueType::Vec2dArray:
-        write(out, v.getVec2dArray());
-        break;
-    }
+void write(OStream& /*out*/, const Value& /*v*/) {
+    //v.writeTo(out);
 }
 
 /// Converts the given string into a Value. Raises vgc::dom::VgcSyntaxError if

@@ -24,6 +24,9 @@
 
 namespace vgc::dom {
 
+VGC_DECLARE_OBJECT(Element);
+class Path;
+
 /// \enum vgc::dom::NodeType
 /// \brief Specifies the type of a Node.
 ///
@@ -288,6 +291,11 @@ public:
     bool isDescendant(const Node* other) const {
         return isDescendantObject(other);
     }
+
+    Element* elementFromPath(const Path& path) const;
+
+    template<typename T>
+    const T* valueFromPath(const Path& path) const;
 
 private:
     // Operations
