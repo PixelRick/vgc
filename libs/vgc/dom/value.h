@@ -101,12 +101,188 @@ enum class ValueType {
 VGC_DOM_API
 VGC_DECLARE_ENUM(ValueType)
 
+namespace detail {
+
+/*
+
+ValueRef is the type-erased pointer to a type-erased Value, how can it copy into Value ?
+Neither std::variant nor std::any can really help here right ?
+
+Let's use a custom virtual table, and std::variant until we have all operators in it.
+
+*/
+
+// Derive variant types from single value types.
+// e.g.: int, double -> int, array<int>, shared_ptr<array<int>, double, array<double>..
+
+using SingleValueTypes = std::tuple<std::string, Int, double, core::Color, geometry::Vec2d>;
+
+template<typename TmpTuple, typename... ValueTypes>
+struct ValueVariantTypesTuple_;
+
+template<typename... Processed, typename T, typename... Rest>
+struct ValueVariantTypesTuple_<std::tuple<Processed...>, T, Rest...> {
+    using typesTuple = ValueVariantTypesTuple_<
+        std::tuple<Processed..., T, core::Array<T>/*, std::shared_ptr<core::Array<T>>*/>,
+        Rest...>::typesTuple;
+};
+
+template<typename... Processed>
+struct ValueVariantTypesTuple_<std::tuple<Processed...>> {
+    using typesTuple = std::tuple<Processed...>;
+};
+
+template<typename VariantTypesTuple>
+struct ValueVariantType2_;
+
+template<typename... VariantTypes>
+struct ValueVariantType2_<std::tuple<VariantTypes...>> {
+    using type = std::variant<std::monostate, VariantTypes...>;
+};
+
+template<typename ValueTypesTuple>
+struct ValueVariantType_;
+
+template<typename... ValueTypes>
+struct ValueVariantType_<std::tuple<ValueTypes...>> {
+    using type = ValueVariantType2_<ValueVariantTypesTuple_<std::tuple<>, ValueTypes...>::typesTuple>::type;
+};
+
+using ValueVariantType = ValueVariantType_<SingleValueTypes>;
+
+// Define our custom vtbl structure.
+
+class ConstValueRef;
+
+//template<typename T>
+//struct ValueTypeFunctions {
+//    static void copyDataToValue(void* ptr, Value& to) {
+//        to.value_ = static_cast<T*>(ptr);
+//    }
+//
+//    static ConstValueRef getItem(void* ptr, Int index) {
+//        return {};
+//    }
+//};
+
+struct ValueVtbl {
+    ValueType publicType;
+    std::type_index realType;
+    std::type_index itemType;
+    bool isArray;
+    void (* fnCopyDataToValue)(void* ptr, Value& to);
+    void* (* fnGetItem)(void* ptr, Int index);
+    void (* fnShrinkToFit)(void* ptr);
+};
+
+template<typename T, ValueType valueType>
+struct ValueVtblSingleton {
+    ValueVtbl* get() {
+        static ValueVtbl vtbl = {
+            valueType,
+            std::type_index(typeid(T)),
+            std::type_index(typeid(void)),
+            false,
+            [](void* ptr, Value& to){},
+            [](void* ptr, Int index, std::type_index getType){ return nullptr; },
+            [](void* ptr){} };
+        }
+    }
+};
+
+#define VGC_DEFINE_VALUE_FUNCTIONS_FOR_SINGLE_TYPE(Type, Value)
+
+/*
+getters:
+value.get<Color>() -> checks type is color
+value.get<Color>(12) -> checks type is part of color array types 
+*/
+
+} // namespace detail
+
 /// Writes the given ValueType to the output stream.
 ///
 template<typename OStream>
 void write(OStream& out, ValueType v) {
     core::formatTo(out, "{}", v);
 }
+
+/// \class vgc::dom::ValueRef
+/// \brief References the value or an indexed value of an attribute.
+///
+class VGC_DOM_API ValueRef {
+private:
+    friend Value;
+
+public:
+    ValueRef(const ValueRef&) = delete;
+    ValueRef& operator=(const ValueRef&) = delete;
+
+    /// Returns the ValueType of the referenced value.
+    ///
+    ValueType type() const {
+        return valueVtbl_ ? valueVtbl_->publicType : ValueType::None;
+    }
+
+    /// Returns whether this Value is Valid, that is, whether type() is not
+    /// ValueType::Invalid, which means that it does hold one of the correct
+    /// values.
+    ///
+    bool isValid() const {
+        return type() != ValueType::Invalid;
+    }
+
+    /// Reclaims unused memory in container values.
+    ///
+    void shrinkToFit() {
+        if (valueVtbl_ && ptr_) {
+            valueVtbl_->fnShrinkToFit(ptr_);
+        }
+    }
+
+    template<typename T>
+    T& get() {
+        if (valueVtbl_ && valueVtbl_->realType == std::type_index(typeid(T)) {
+            return *static_cast<T*>(ptr_);
+        }
+    }
+
+    // must check if item is not const..
+    template<typename T>
+    T& getItem(Int index) {
+        if (valueVtbl_ && valueVtbl_->itemType == std::type_index(typeid(T)) {
+            return *static_cast<T*>(valueVtbl_->fnGetItem(index));
+        }
+    }
+
+    template<typename T>
+    const T& get() const {
+        if (valueVtbl_ && valueVtbl_->realType == std::type_index(typeid(T)) {
+            return *static_cast<T*>(ptr_);
+        }
+    }
+
+    template<typename T>
+    const T& getItem(Int index) const {
+        if (valueVtbl_ && valueVtbl_->itemType == std::type_index(typeid(T)) {
+            return *static_cast<T*>(valueVtbl_->fnGetItem(index));
+        }
+    }
+
+    template<typename T>
+    void set(const T&) {
+        // 
+    }
+
+    template<typename T>
+    void set(T&&) {
+        //
+    }
+
+private:
+    detail::ValueVtbl* valueVtbl_;
+    void* ptr_;
+};
 
 /// \class vgc::dom::Value
 /// \brief Holds the value of an attribute
