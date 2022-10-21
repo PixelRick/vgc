@@ -18,6 +18,7 @@
 
 #include <vgc/core/array.h>
 #include <vgc/core/colors.h>
+#include <vgc/dom/path.h>
 #include <vgc/geometry/vec2d.h>
 
 namespace vgc::dom {
@@ -38,16 +39,27 @@ const T* find_(const std::map<core::StringId, T>& map, core::StringId name) {
 } // namespace
 
 ElementSpec::ElementSpec(
-    const std::string& name,
+    const std::string& tagName,
     const std::vector<AttributeSpec>& attributes)
 
-    : name_(core::StringId(name))
+    : tagName_(core::StringId(tagName))
+    , defaultIdPrefix_()
     , attributes_() {
 
     for (const AttributeSpec& attr : attributes) {
         attributes_.emplace(attr.name(), attr);
     }
     // TODO: use move semantics for performance
+}
+
+ElementSpec::ElementSpec(
+    const std::string& tagName,
+    const std::string& defaultIdPrefix,
+    const std::vector<AttributeSpec>& attributes)
+
+    : ElementSpec(tagName, attributes)  {
+
+    defaultIdPrefix_ = core::StringId(defaultIdPrefix);
 }
 
 const AttributeSpec* ElementSpec::findAttributeSpec(core::StringId name) const {
@@ -64,13 +76,12 @@ ValueType ElementSpec::valueType(core::StringId name) const {
     return attr ? attr->valueType() : ValueType::Invalid;
 }
 
-Schema::Schema(const std::vector<ElementSpec>& elements)
+Schema::Schema(std::initializer_list<ElementSpec> elements)
     : elements_() {
 
     for (const ElementSpec& element : elements) {
-        elements_.emplace(element.name(), element);
+        elements_.emplace(element.tagName(), element);
     }
-    // TODO: use move semantics for performance
 }
 
 const ElementSpec* Schema::findElementSpec(core::StringId name) const {
@@ -81,17 +92,29 @@ const Schema& schema() {
 
     // trusty leaky singleton
     // clang-format off
-    static const Schema* instance = new Schema{{
+    static const Schema* instance = new Schema{
         { "colorpaletteitem", {
             {"color", core::colors::black}
         }},
         { "colorpalette", {
             // No attributes
         }},
-        { "path", {
+        { "vertex", "v", {
+            {"color", core::colors::black},
+            {"position", geometry::Vec2dArray()},
+            {"width", core::DoubleArray()},
+        }},
+        { "edge", "e", {
             {"color", core::colors::black},
             {"positions", geometry::Vec2dArray()},
-            {"widths", core::DoubleArray()}
+            {"widths", core::DoubleArray()},
+            {"startVertex", dom::Path()},
+            {"endVertex", dom::Path()},
+        }},
+        { "path", "p", {
+            {"color", core::colors::black},
+            {"positions", geometry::Vec2dArray()},
+            {"widths", core::DoubleArray()},
         }},
         { "user", {
             // No attributes
@@ -99,7 +122,7 @@ const Schema& schema() {
         { "vgc", {
             // No attributes
         }}
-    }};
+    };
     // clang-format on
 
     return *instance;

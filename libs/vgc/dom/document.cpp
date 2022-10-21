@@ -292,7 +292,7 @@ private:
             if (doc->rootElement()) {
                 throw XmlSyntaxError(
                     "Unexpected second root element '" + tagName_ + "'. A root element '"
-                    + doc->rootElement()->name().string()
+                    + doc->rootElement()->tagName().string()
                     + "' has already been defined, and there cannot be more than one.");
             }
             else {
@@ -325,16 +325,16 @@ private:
                 "Unexpected end tag '" + tagName_
                 + "'. It does not have a matching start tag.");
         }
-        else if (tagName_ != Element::cast(currentNode_)->name().string()) {
+        else if (tagName_ != Element::cast(currentNode_)->tagName()) {
             throw XmlSyntaxError(
                 "Unexpected end tag '" + tagName_ + "'. Its matching start '"
-                + Element::cast(currentNode_)->name().string()
+                + Element::cast(currentNode_)->tagName().string()
                 + "' has a different name.");
         }
         else {
             currentNode_ = currentNode_->parent();
             if (currentNode_->nodeType() == NodeType::Element) {
-                tagName_ = Element::cast(currentNode_)->name().string();
+                tagName_ = Element::cast(currentNode_)->tagName();
                 elementSpec_ = schema().findElementSpec(tagName_);
             }
             else {
@@ -798,6 +798,14 @@ void Document::save(const std::string& filePath, const XmlFormattingStyle& style
 
     out << xmlDeclaration_ << std::endl;
     writeChildren(out, style, 0, this);
+}
+
+Element* Document::elementById(core::StringId id) const {
+    auto it = elementByIdMap_.find(id);
+    if (it != elementByIdMap_.end()) {
+        return it->second;
+    }
+    return nullptr;
 }
 
 void Document::enableHistory(core::StringId entrypointName) {

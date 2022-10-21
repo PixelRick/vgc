@@ -21,6 +21,7 @@
 
 #include <vgc/dom/logcategories.h>
 #include <vgc/dom/strings.h>
+#include <vgc/dom/element.h>
 
 namespace vgc::dom {
 
@@ -34,10 +35,12 @@ const core::StringId nameAttrName("name");
 
 PathSegment::PathSegment(
     core::StringId name,
+    PathSegmentType type,
     PathSegmentFlags flags,
-    ArrayIndexType arrayIndex) noexcept
+    Int arrayIndex) noexcept
 
     : name_(name)
+    , type_(type)
     , flags_(flags)
     , arrayIndex_(arrayIndex) {
 }
@@ -60,7 +63,7 @@ bool appendElementReversePath(core::Array<PathSegment>& segments, Element* eleme
                 LogVgcDom,
                 "Failed to create dom::Path with element <{}> as segment since it has no "
                 "attribute \"name\" and thus cannot be uniquely identified.",
-                element->name());
+                element->tagName());
             return false;
             //
             // possible fallback with tagName[index]:
@@ -106,17 +109,17 @@ Path::Path(Element* element) {
 Path::Path(Element* element, core::StringId attributeName)
     : Path(element) {
 
-    segments_.emplaceLast(attributeName, PathSegmentFlag::Attribute);
+    segments_.emplaceLast(attributeName, PathSegmentType::Attribute);
 }
 
 Path::Path(
     Element* element,
     core::StringId attributeName,
-    PathSegment::ArrayIndexType arrayIndex)
+    Int arrayIndex)
 
     : Path(element) {
 
-    segments_.emplaceLast(attributeName, PathSegmentFlag::Attribute, arrayIndex);
+    segments_.emplaceLast(attributeName, PathSegmentType::Attribute, PathSegmentFlag::Indexed, arrayIndex);
 }
 
 Path::Path(std::string_view path) {
@@ -126,19 +129,19 @@ Path::Path(std::string_view path) {
 
     // Empty path is equivalent to dot path.
     if (n == 0) {
-        segments_.emplaceLast(core::StringId(), PathSegmentFlag::Dot);
+        segments_.emplaceLast(core::StringId(), PathSegmentType::Dot);
         return;
     }
 
     char firstChar = path[0];
     if (firstChar == '/') {
         // Full path.
-        segments_.emplaceLast(core::StringId(), PathSegmentFlag::Root);
+        segments_.emplaceLast(core::StringId(), PathSegmentType::Root);
         i = 1;
         if (i < n && !isReservedChar(path[1])) {
             j = findReservedCharOrEnd(path, i + 1);
             segments_.emplaceLast(
-                core::StringId(path.substr(i, j - i)), PathSegmentFlag::Element);
+                core::StringId(path.substr(i, j - i)), PathSegmentType::Element);
         }
     }
     else if (firstChar == '#') {
@@ -152,12 +155,12 @@ Path::Path(std::string_view path) {
             return;
         }
         segments_.emplaceLast(
-            core::StringId(path.substr(i, j - i)), PathSegmentFlag::UniqueId);
+            core::StringId(path.substr(i, j - i)), PathSegmentType::UniqueId);
         i = j;
     }
     else if (firstChar == '.') {
         // Relative path.
-        segments_.emplaceLast(core::StringId(), PathSegmentFlag::Dot);
+        segments_.emplaceLast(core::StringId(), PathSegmentType::Dot);
         if (n > 2 && path[1] == '/') {
             // Skip only if it is not an attribute dot.
             i += 2;
@@ -165,10 +168,10 @@ Path::Path(std::string_view path) {
     }
     else if (!isReservedChar(firstChar)) {
         // Relative path.
-        segments_.emplaceLast(core::StringId(), PathSegmentFlag::Dot);
+        segments_.emplaceLast(core::StringId(), PathSegmentType::Dot);
         j = findReservedCharOrEnd(path, i + 1);
         segments_.emplaceLast(
-            core::StringId(path.substr(i, j - i)), PathSegmentFlag::Element);
+            core::StringId(path.substr(i, j - i)), PathSegmentType::Element);
         i = j;
     }
 
@@ -181,7 +184,7 @@ Path::Path(std::string_view path) {
             return;
         }
         segments_.emplaceLast(
-            core::StringId(path.substr(i, j - i)), PathSegmentFlag::Element);
+            core::StringId(path.substr(i, j - i)), PathSegmentType::Element);
         i = j;
     }
 
@@ -219,11 +222,11 @@ Path::Path(std::string_view path) {
             }
 
             segments_.emplaceLast(
-                core::StringId(attrName), PathSegmentFlag::Attribute, index);
+                core::StringId(attrName), PathSegmentType::Attribute, PathSegmentFlag::Indexed, index);
             i = j;
         }
         else {
-            segments_.emplaceLast(core::StringId(attrName), PathSegmentFlag::Attribute);
+            segments_.emplaceLast(core::StringId(attrName), PathSegmentType::Attribute);
         }
     }
 
@@ -250,23 +253,24 @@ std::string Path::string() const noexcept {
     Int i = 0;
 
     const PathSegment& seg0 = segments_[0];
-    PathSegmentFlags flags0 = seg0.flags_;
-    if (flags0.has(PathSegmentFlag::Root)) {
+    PathSegmentType type0 = seg0.type();
+    if (type0 == PathSegmentType::Root) {
         ret.append(1, '/');
         ++i;
     }
-    else if (flags0.has(PathSegmentFlag::Root)) {
-        ret.append(1, '/');
+    else if (type0 == PathSegmentType::UniqueId) {
+        ret.append(1, '#');
         ++i;
     }
-    if (flags0.has(PathSegmentFlag::Dot)) {
+    if (type0 == PathSegmentType::Dot) {
         ++i;
     }
 
     const Int n = segments_.length();
     for (; i < n; ++i) {
         const PathSegment& seg = segments_[i];
-        if (flags0.has(PathSegmentFlag::Element)) {
+        PathSegmentType type = seg.type();
+        if (type == PathSegmentType::Element) {
             if (skipSlash) {
                 skipSlash = false;
             }
@@ -275,10 +279,10 @@ std::string Path::string() const noexcept {
             }
             ret.append(seg.name());
         }
-        else if (flags0.has(PathSegmentFlag::Attribute)) {
+        else if (type == PathSegmentType::Attribute) {
             ret.append(1, '.');
             ret.append(seg.name());
-            if (flags0.has(PathSegmentFlag::Indexed)) {
+            if (seg.isIndexed()) {
                 ret.append(core::format("[{}]", seg.arrayIndex()));
             }
         }
@@ -297,8 +301,9 @@ std::string Path::string() const noexcept {
 Path Path::elementPath() const {
     Path ret = {};
     for (auto it = segments_.rbegin(); it != segments_.rend(); ++it) {
-        if (!it->flags().has(PathSegmentFlag::Attribute)) {
+        if (it->type() != PathSegmentType::Attribute) {
             ret.segments_.assign(segments_.begin(), it.base());
+            break;
         }
     }
     return ret;
@@ -306,9 +311,11 @@ Path Path::elementPath() const {
 
 Path Path::elementRelativeAttributePath() const {
     Path ret = {};
+    ret.segments_.emplaceLast(core::StringId(), PathSegmentType::Dot);
     for (auto it = segments_.rbegin(); it != segments_.rend(); ++it) {
-        if (!it->flags().has(PathSegmentFlag::Attribute)) {
+        if (it->type() != PathSegmentType::Attribute) {
             ret.segments_.assign(it.base(), segments_.end());
+            break;
         }
     }
     return ret;
@@ -316,10 +323,12 @@ Path Path::elementRelativeAttributePath() const {
 
 Path& Path::removeAttribute() {
     for (auto it = segments_.rbegin(); it != segments_.rend(); ++it) {
-        if (!it->flags().has(PathSegmentFlag::Attribute)) {
+        if (it->type() != PathSegmentType::Attribute) {
             segments_.erase(segments_.begin(), it.base());
+            return *this;
         }
     }
+    segments_.clear();
     return *this;
 }
 

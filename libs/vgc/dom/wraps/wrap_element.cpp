@@ -32,5 +32,5 @@ void wrap_element(py::module& m) {
         //.def(py::init([](Document* parent, const std::string& name) { return This::create(parent, name); } ))
         //.def(py::init([](Element* parent, const std::string& name) { return This::create(parent, name); } ))
         .def_property_readonly(
-            "name", [](const This& self) { return self.name().string(); });
+            "name", [](const This& self) { return self.tagName().string(); });
 }

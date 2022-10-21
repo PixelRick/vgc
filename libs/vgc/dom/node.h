@@ -21,6 +21,7 @@
 #include <vgc/core/object.h>
 #include <vgc/dom/api.h>
 #include <vgc/dom/exceptions.h>
+#include <vgc/dom/value.h>
 
 namespace vgc::dom {
 
@@ -294,8 +295,8 @@ public:
 
     Element* elementFromPath(const Path& path) const;
 
-    template<typename T>
-    const T* valueFromPath(const Path& path) const;
+    // Later, prefer returning a ValuePtr or ValueRef
+    Value valueFromPath(const Path& path) const;
 
 private:
     // Operations

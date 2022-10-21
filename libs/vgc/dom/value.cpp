@@ -51,25 +51,6 @@ void Value::clear() {
     var_ = std::monostate{};
 }
 
-void Value::shrinkToFit() {
-    switch (type_) {
-    case ValueType::IntArray:
-        std::get<core::IntArray>(var_).shrinkToFit();
-        break;
-    case ValueType::DoubleArray:
-        std::get<core::DoubleArray>(var_).shrinkToFit();
-        break;
-    case ValueType::ColorArray:
-        std::get<core::Array<core::Color>>(var_).shrinkToFit();
-        break;
-    case ValueType::Vec2dArray:
-        std::get<geometry::Vec2dArray>(var_).shrinkToFit();
-        break;
-    default:
-        break;
-    }
-}
-
 namespace {
 
 void checkExpectedString_(const std::string& s, const char* expected) {
@@ -108,12 +89,15 @@ Value parseValue(const std::string& s, ValueType t) {
             return Value(core::parse<geometry::Vec2d>(s));
         case ValueType::Vec2dArray:
             return Value(core::parse<geometry::Vec2dArray>(s));
+        case ValueType::Path:
+            return Value(core::parse<dom::Path>(s));
+        case ValueType::PathArray:
+            return Value(core::parse<core::Array<dom::Path>>(s));
         }
     }
     catch (const core::ParseError& e) {
-        throw VgcSyntaxError(
-            "Failed to convert '" + s + "' into a Value of type " + core::toString(t)
-            + " for the following reason: " + e.what());
+        throw VgcSyntaxError(core::format(
+            "Failed to convert '{}' into a Value of type {} for the following reason: {}", s, t, e.what()));
     }
     return Value::invalid(); // Silence "not all control paths return a value" in MSVC
 }

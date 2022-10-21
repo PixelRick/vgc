@@ -26,6 +26,7 @@
 #include <vgc/core/color.h>
 #include <vgc/core/enum.h>
 #include <vgc/dom/api.h>
+#include <vgc/dom/path.h>
 #include <vgc/geometry/vec2d.h>
 
 namespace vgc::dom {
@@ -103,32 +104,56 @@ enum class ValueType {
     ColorArray,
     Vec2d,
     Vec2dArray,
+    Path,
+    PathArray,
 };
 
 VGC_DOM_API
 VGC_DECLARE_ENUM(ValueType)
 
-/// Writes the given ValueType to the output stream.
-/// DEPRECATED
-///
-template<typename OStream>
-void write(OStream& /*out*/, ValueType /*v*/) {
-    //core::formatTo(out, "{}", v);
+namespace detail {
+
+template<typename T>
+using CowPtr = std::shared_ptr<const T>;
+
+template<typename T>
+struct CowPtrTraits {};
+
+template<typename T>
+struct CowPtrTraits<CowPtr<T>> {
+    using innerType = T;
+};
+
+template<typename T>
+struct isCowPtr_ : std::integral_constant<bool, false> {};
+
+template<typename T>
+struct isCowPtr_<CowPtr<T>> : std::integral_constant<bool, true> {};
+
+template<typename T>
+constexpr bool isCowPtr = isCowPtr<T>::value;
+
+template<typename T>
+CowPtr<std::remove_reference_t<T>> makeCowPtr(T&& x) {
+    return std::make_shared<const std::remove_reference_t<T>>(std::forward<T>(x));
 }
 
-namespace detail {
+template<typename T>
+using ArrayCowPtr = CowPtr<core::Array<T>>;
 
 using ValueVariantType = std::variant<
     std::monostate,
     std::string,
     Int,
-    core::IntArray,
+    ArrayCowPtr<Int>,
     double,
-    core::DoubleArray,
+    ArrayCowPtr<double>,
     core::Color,
-    core::Array<core::Color>,
+    ArrayCowPtr<core::Color>,
     geometry::Vec2d,
-    geometry::Vec2dArray>;
+    ArrayCowPtr<geometry::Vec2d>,
+    dom::Path,
+    ArrayCowPtr<dom::Path>>;
 
 } // namespace detail
 
@@ -144,76 +169,90 @@ public:
     }
 
     /// Returns a const reference to an empty value. This is useful for error
-    /// handling in methods that must return a Value by const reference.
+    /// handling in methods that must return a `Value` by const reference.
     ///
     static const Value& none();
 
     /// Returns a const reference to an invalid value. This is useful for error
-    /// handling in methods that must return a Value by const reference.
+    /// handling in methods that must return a `Value` by const reference.
     ///
     static const Value& invalid();
 
-    /// Constructs a Value holding a std::string.
+    /// Constructs a `Value` holding a `std::string`.
     ///
     Value(std::string string)
         : type_(ValueType::String)
         , var_(std::move(string)) {
     }
 
-    /// Constructs a Value holding an Int.
+    /// Constructs a `Value` holding an `Int`.
     ///
     Value(Int value)
         : type_(ValueType::Int)
         , var_(value) {
     }
 
-    /// Constructs a Value holding an array of Int.
+    /// Constructs a `Value` holding an array of `Int`.
     ///
     Value(core::Array<Int> intArray)
         : type_(ValueType::IntArray)
-        , var_(std::move(intArray)) {
+        , var_(detail::makeCowPtr(std::move(intArray))) {
     }
 
-    /// Constructs a Value holding a double.
+    /// Constructs a `Value` holding a `double`.
     ///
     Value(double value)
         : type_(ValueType::Double)
         , var_(value) {
     }
 
-    /// Constructs a Value holding an array of double.
+    /// Constructs a `Value` holding an array of `double`.
     ///
     Value(core::Array<double> doubleArray)
         : type_(ValueType::DoubleArray)
-        , var_(std::move(doubleArray)) {
+        , var_(detail::makeCowPtr(std::move(doubleArray))) {
     }
 
-    /// Constructs a Value holding a Color.
+    /// Constructs a `Value` holding a `Color`.
     ///
     Value(core::Color color)
         : type_(ValueType::Color)
         , var_(std::move(color)) {
     }
 
-    /// Constructs a Value holding an array of Color.
+    /// Constructs a `Value` holding an array of `Color`.
     ///
     Value(core::Array<core::Color> colorArray)
         : type_(ValueType::ColorArray)
-        , var_(std::move(colorArray)) {
+        , var_(detail::makeCowPtr(std::move(colorArray))) {
     }
 
-    /// Constructs a Value holding a Vec2d.
+    /// Constructs a `Value` holding a `Vec2d`.
     ///
     Value(geometry::Vec2d vec2d)
         : type_(ValueType::Vec2d)
         , var_(vec2d) {
     }
 
-    /// Constructs a Value holding a Vec2dArray.
+    /// Constructs a `Value` holding a `Vec2dArray`.
     ///
     Value(geometry::Vec2dArray vec2dArray)
         : type_(ValueType::Vec2dArray)
-        , var_(std::move(vec2dArray)) {
+        , var_(detail::makeCowPtr(std::move(vec2dArray))) {
+    }
+
+    /// Constructs a `Value` holding a `dom::Path`.
+    ///
+    Value(dom::Path path)
+        : type_(ValueType::Path)
+        , var_(path) {
+    }
+
+    /// Constructs a `Value` holding an array of `dom::Path`.
+    ///
+    Value(core::Array<dom::Path> pathArray)
+        : type_(ValueType::PathArray)
+        , var_(detail::makeCowPtr(std::move(pathArray))) {
     }
 
     /// Returns the ValueType of this Value.
@@ -222,7 +261,7 @@ public:
         return type_;
     }
 
-    /// Returns whether this Value is Valid, that is, whether type() is not
+    /// Returns whether this `Value` is Valid, that is, whether type() is not
     /// ValueType::Invalid, which means that it does hold one of the correct
     /// values.
     ///
@@ -230,18 +269,9 @@ public:
         return type() != ValueType::Invalid;
     }
 
-    /// Stops holding any Value. This makes this Value empty.
+    /// Stops holding any Value. This makes this `Value` empty.
     ///
     void clear();
-
-    /// Reclaims unused memory.
-    ///
-    void shrinkToFit();
-
-    template<typename T>
-    const T& get() {
-        return std::get<T>(var_);
-    }
 
     /// Returns the item of type `ItemType` held by the container in this `Value`.
     /// The behavior is undefined if `type() != ValueType::Array..` or index is out
@@ -249,9 +279,8 @@ public:
     ///
     // XXX what to do when index is out of range ?
     template<typename ItemType>
-    const ItemType& getItem(Int index) {
-        using ArrayType = core::Array<ItemType>;
-        return std::get<ArrayType>(var_)[index];
+    Value getItem(Int index) {
+        return Value(std::get<detail::ArrayCowPtr<ItemType>>(var_).get()[index]);
     }
 
     /// Returns the string held by this `Value`.
@@ -282,18 +311,18 @@ public:
         var_ = value;
     }
 
-    /// Returns the `IntArray` held by this `Value`.
+    /// Returns the `core::Array<Int>` held by this `Value`.
     /// The behavior is undefined if `type() != ValueType::IntArray`.
     ///
-    const core::IntArray& getIntArray() const {
-        return std::get<core::IntArray>(var_);
+    const core::Array<Int>& getIntArray() const {
+        return *std::get<detail::ArrayCowPtr<Int>>(var_);
     }
 
     /// Sets this `Value` to the given `intArray`.
     ///
-    void set(core::IntArray intArray) {
+    void set(core::Array<Int> intArray) {
         type_ = ValueType::IntArray;
-        var_ = std::move(intArray);
+        var_ = detail::makeCowPtr(std::move(intArray));
     }
 
     /// Returns the double held by this `Value`.
@@ -310,18 +339,18 @@ public:
         var_ = value;
     }
 
-    /// Returns the `DoubleArray` held by this `Value`.
+    /// Returns the `core::Array<double>` held by this `Value`.
     /// The behavior is undefined if `type() != ValueType::DoubleArray`.
     ///
-    const core::DoubleArray& getDoubleArray() const {
-        return std::get<core::DoubleArray>(var_);
+    const core::Array<double>& getDoubleArray() const {
+        return *std::get<detail::ArrayCowPtr<double>>(var_);
     }
 
     /// Sets this `Value` to the given `doubleArray`.
     ///
-    void set(core::DoubleArray doubleArray) {
+    void set(core::Array<double> doubleArray) {
         type_ = ValueType::DoubleArray;
-        var_ = std::move(doubleArray);
+        var_ = detail::makeCowPtr(std::move(doubleArray));
     }
 
     /// Returns the `core::Color` held by this `Value`.
@@ -342,14 +371,14 @@ public:
     /// The behavior is undefined if `type() != ValueType::ColorArray`.
     ///
     const core::Array<core::Color>& getColorArray() const {
-        return std::get<core::Array<core::Color>>(var_);
+        return *std::get<detail::ArrayCowPtr<core::Color>>(var_);
     }
 
     /// Sets this `Value` to the given `colorArray`.
     ///
     void set(core::Array<core::Color> colorArray) {
         type_ = ValueType::ColorArray;
-        var_ = std::move(colorArray);
+        var_ = detail::makeCowPtr(std::move(colorArray));
     }
 
     /// Returns the `geometry::Vec2d` held by this `Value`.
@@ -366,18 +395,46 @@ public:
         var_ = vec2d;
     }
 
-    /// Returns the `Vec2dArray` held by this `Value`.
+    /// Returns the `core::Array<geometry::Vec2d>` held by this `Value`.
     /// The behavior is undefined if `type() != ValueType::Vec2dArray`.
     ///
-    const geometry::Vec2dArray& getVec2dArray() const {
-        return std::get<geometry::Vec2dArray>(var_);
+    const core::Array<geometry::Vec2d>& getVec2dArray() const {
+        return *std::get<detail::ArrayCowPtr<geometry::Vec2d>>(var_);
     }
 
     /// Sets this `Value` to the given `vec2dArray`.
     ///
-    void set(geometry::Vec2dArray vec2dArray) {
+    void set(core::Array<geometry::Vec2d> vec2dArray) {
         type_ = ValueType::Vec2dArray;
-        var_ = std::move(vec2dArray);
+        var_ = detail::makeCowPtr(std::move(vec2dArray));
+    }
+
+    /// Returns the `dom::Path` held by this `Value`.
+    /// The behavior is undefined if `type() != ValueType::Path`.
+    ///
+    const dom::Path& getPath() const {
+        return std::get<dom::Path>(var_);
+    }
+
+    /// Sets this `Value` to the given `path`.
+    ///
+    void set(const dom::Path& path) {
+        type_ = ValueType::Path;
+        var_ = path;
+    }
+
+    /// Returns the `core::Array<dom::Path>` held by this `Value`.
+    /// The behavior is undefined if `type() != ValueType::PathArray`.
+    ///
+    const core::Array<dom::Path>& getPathArray() const {
+        return *std::get<detail::ArrayCowPtr<dom::Path>>(var_);
+    }
+
+    /// Sets this `Value` to the given `pathArray`.
+    ///
+    void set(core::Array<dom::Path> pathArray) {
+        type_ = ValueType::PathArray;
+        var_ = detail::makeCowPtr(std::move(pathArray));
     }
 
     template<typename OStream>
@@ -390,7 +447,20 @@ public:
             write(out, "Invalid");
             break;
         default:
-            //std::visit([](auto&& arg) { write(out, arg); }, v.var_);
+            std::visit(
+                [&](auto&& arg) {
+                    using T = std::decay_t<decltype(arg)>;
+                    if constexpr (std::is_same_v<T, std::monostate>) {
+                        write(out, "None");
+                    }
+                    if constexpr (isCowPtr<T>) {
+                        write(out, *arg);
+                    }
+                    else {
+                        write(out, arg);
+                    }
+                },
+                var_);
             break;
         }
     }
@@ -408,15 +478,14 @@ private:
 };
 
 /// Writes the given Value to the output stream.
-/// DEPRECATED
 ///
 template<typename OStream>
-void write(OStream& /*out*/, const Value& /*v*/) {
-    //v.writeTo(out);
+void write(OStream& out, const Value& v) {
+    v.writeTo(out);
 }
 
 /// Converts the given string into a Value. Raises vgc::dom::VgcSyntaxError if
-/// the given string does not represent a Value of the given ValueType.
+/// the given string does not represent a `Value` of the given ValueType.
 ///
 VGC_DOM_API
 Value parseValue(const std::string& s, ValueType t);

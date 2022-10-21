@@ -61,11 +61,6 @@ double width_(const MouseEvent* event) {
     return event->hasPressure() ? 2 * event->pressure() * defaultWidth : defaultWidth;
 }
 
-core::StringId PATH("path");
-core::StringId POSITIONS("positions");
-core::StringId WIDTHS("widths");
-core::StringId COLOR("color");
-
 void drawCrossCursor(QPainter& painter) {
     painter.setPen(QPen(Qt::color1, 1.0));
     painter.drawLine(16, 0, 16, 10);
@@ -104,6 +99,19 @@ QCursor crossCursor() {
 }
 
 } // namespace
+
+namespace strings {
+
+core::StringId color("color");
+core::StringId path("path");
+core::StringId vertex("vertex");
+core::StringId position("position");
+core::StringId width("width");
+core::StringId edge("edge");
+core::StringId positions("positions");
+core::StringId widths("widths");
+
+} // namespace strings
 
 Canvas::Canvas(dom::Document* document)
     : Widget()
@@ -190,7 +198,7 @@ bool Canvas::onKeyPress(QKeyEvent* event) {
 void Canvas::onDocumentChanged_(const dom::Diff& diff) {
     for (dom::Node* node : diff.removedNodes()) {
         dom::Element* e = dom::Element::cast(node);
-        if (!(e && e->name() == PATH)) {
+        if (!(e && e->tagName() == strings::edge)) {
             continue;
         }
         auto it = curveGraphicsMap_.find(e);
@@ -206,7 +214,7 @@ void Canvas::onDocumentChanged_(const dom::Diff& diff) {
     dom::Element* root = document_->rootElement();
     for (dom::Node* node : diff.reparentedNodes()) {
         dom::Element* e = dom::Element::cast(node);
-        if (!(e && e->name() == PATH)) {
+        if (!(e && e->tagName() == strings::edge)) {
             continue;
         }
         if (e->parent() == root) {
@@ -226,7 +234,7 @@ void Canvas::onDocumentChanged_(const dom::Diff& diff) {
 
     for (dom::Node* node : diff.createdNodes()) {
         dom::Element* e = dom::Element::cast(node);
-        if (!(e && e->name() == PATH)) {
+        if (!(e && e->tagName() == strings::edge)) {
             continue;
         }
         if (e->parent() == root) {
@@ -249,7 +257,7 @@ void Canvas::onDocumentChanged_(const dom::Diff& diff) {
         auto insert = curveGraphics_.begin();
         for (dom::Node* node : root->children()) {
             dom::Element* e = dom::Element::cast(node);
-            if (!(e && e->name() == PATH)) {
+            if (!(e && e->tagName() == strings::edge)) {
                 continue;
             }
             auto it = curveGraphicsMap_[e]; // works unless there is a bug
@@ -329,10 +337,10 @@ void Canvas::updateCurveGraphics_(graphics::Engine* engine, CurveGraphics& r) {
         r.inited_ = true;
     }
 
-    dom::Element* path = r.element;
-    const geometry::Vec2dArray& positions = path->getAttribute(POSITIONS).getVec2dArray();
-    const core::DoubleArray& widths = path->getAttribute(WIDTHS).getDoubleArray();
-    core::Color color = path->getAttribute(COLOR).getColor();
+    dom::Element* edge = r.element;
+    const geometry::Vec2dArray& positions = edge->getAttribute(strings::positions).getVec2dArray();
+    const core::DoubleArray& widths = edge->getAttribute(strings::widths).getDoubleArray();
+    core::Color color = edge->getAttribute(strings::color).getColor();
 
     // Convert the dom::Path to a geometry::Curve
     // XXX move this logic to dom::Path
@@ -456,11 +464,11 @@ void Canvas::startCurve_(const geometry::Vec2d& p, double width) {
     });
 
     dom::Element* root = document_->rootElement();
-    dom::Element* path = dom::Element::create(root, PATH);
+    dom::Element* path = dom::Element::create(root, strings::edge);
 
-    path->setAttribute(POSITIONS, geometry::Vec2dArray());
-    path->setAttribute(WIDTHS, core::DoubleArray());
-    path->setAttribute(COLOR, currentColor_);
+    path->setAttribute(strings::positions, geometry::Vec2dArray());
+    path->setAttribute(strings::widths, core::DoubleArray());
+    path->setAttribute(strings::color, currentColor_);
 
     continueCurve_(p, width);
 }

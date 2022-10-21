@@ -22,6 +22,7 @@
 #include <vgc/dom/attribute.h>
 #include <vgc/dom/node.h>
 #include <vgc/dom/value.h>
+#include <vgc/dom/strings.h>
 
 namespace vgc::dom {
 
@@ -31,7 +32,7 @@ VGC_DECLARE_OBJECT(Element);
 class Path;
 
 /// \class vgc::dom::NamedElementIterator
-/// \brief Iterates over sibling elements with a given name.
+/// \brief Iterates over sibling elements with a given tag name.
 ///
 class VGC_DOM_API NamedElementIterator {
 public:
@@ -48,11 +49,11 @@ public:
     }
 
     /// Constructs `NamedElementIterator` starting at the given element, and
-    /// iterating over its siblings with the given `name`.
+    /// iterating over its siblings with the given `tagName`.
     ///
-    explicit NamedElementIterator(Element* element, core::StringId name)
+    explicit NamedElementIterator(Element* element, core::StringId tagName)
         : p_(element)
-        , name_(name) {
+        , tagName_(tagName) {
     }
 
     /// Prefix-increments this iterator.
@@ -93,20 +94,20 @@ public:
 
 private:
     Element* p_;
-    core::StringId name_;
+    core::StringId tagName_;
 };
 
 /// \class vgc::dom::NamedElementRange
-/// \brief A range of sibling elements with a given name.
+/// \brief A range of sibling elements with a given tag name.
 ///
 class VGC_DOM_API NamedElementRange {
 public:
     /// Constructs a `NamedElementRange` iterating forward over elements
-    /// between `begin` (included) and `end` (excluded) with the given `name`.
+    /// between `begin` (included) and `end` (excluded) with the given `tagName`.
     ///
-    NamedElementRange(Element* begin, Element* end, core::StringId name)
-        : begin_(begin, name)
-        , end_(end, name) {
+    NamedElementRange(Element* begin, Element* end, core::StringId tagName)
+        : begin_(begin, tagName)
+        , end_(end, tagName) {
     }
 
     /// Returns the begin of the range.
@@ -143,45 +144,45 @@ private:
     VGC_OBJECT(Element, Node)
 
 protected:
-    /// Constructs a parent-less Element with the given \p name, owned by the
-    /// given \p document. This constructor is an implementation detail only
-    /// available to derived classes. In order to create an Element, please use
+    /// Constructs a parent-less `Element` with the given `tagName`, owned by the
+    /// given `document`. This constructor is an implementation detail only
+    /// available to derived classes. In order to create an `Element`, please use
     /// the following:
     ///
     /// ```cpp
-    /// ElementPtr element = Element::create(parent, name);
+    /// ElementPtr element = Element::create(parent, tagName);
     /// ```
     ///
-    Element(Document* document, core::StringId name);
+    Element(Document* document, core::StringId tagName);
 
 public:
-    /// Creates an element with the given \p name as the root element of the
-    /// given \p parent Document. Returns a valid non-null Element.
+    /// Creates an `Element` with the given `tagName` as the root element of the
+    /// given `parent` `Document`. Returns a valid non-null `Element`.
     ///
-    /// A SecondRootElementError exception is raised if the given \p parent
-    /// Document already has a root element.
+    /// A `SecondRootElementError` exception is raised if the given `parent`
+    /// `Document` already has a root element.
     ///
-    static Element* create(Document* parent, core::StringId name);
+    static Element* create(Document* parent, core::StringId tagName);
     /// \overload
-    static Element* create(Document* parent, const std::string& name) {
-        return create(parent, core::StringId(name));
+    static Element* create(Document* parent, const std::string& tagName) {
+        return create(parent, core::StringId(tagName));
     }
 
-    /// Creates an element with the given \p name as the last child of the
-    /// given \p parent Element. Always returns a valid non-null Element.
+    /// Creates an `Element` with the given `tagName` as the last child of the
+    /// given `parent` `Element`. Always returns a valid non-null `Element`.
     ///
-    static Element* create(Element* parent, core::StringId name);
+    static Element* create(Element* parent, core::StringId tagName);
     /// \overload
-    static Element* create(Element* parent, const std::string& name) {
-        return create(parent, core::StringId(name));
+    static Element* create(Element* parent, const std::string& tagName) {
+        return create(parent, core::StringId(tagName));
     }
 
-    /// Casts the given \p node to an Element. Returns nullptr if node is
-    /// nullptr or if node->nodeType() != NodeType::Element.
+    /// Casts the given `node` to an `Element`. Returns `nullptr` if `node` is
+    /// `nullptr` or if `node->nodeType() != NodeType::Element`.
     ///
-    /// This is functionaly equivalent to dynamic_cast<Element*>, while being
-    /// as fast as static_cast<Element*>. Therefore, always prefer using this
-    /// method over static_cast<Element*> or dynamic_cast<Element*>.
+    /// This is functionaly equivalent to `dynamic_cast<Element*>`, while being
+    /// as fast as `static_cast<Element*>`. Therefore, always prefer using this
+    /// method over `static_cast<Element*>` or `dynamic_cast<Element*>`.
     ///
     static Element* cast(Node* node) {
         return (node && node->nodeType() == NodeType::Element)
@@ -189,7 +190,7 @@ public:
                    : nullptr;
     }
 
-    /// Returns the name of the element. This is equivalent to tagName()
+    /// Returns the tag name of the element. This is equivalent to tagName()
     /// in the W3C DOM Specification.
     ///
     /// This function is safe to call even when the node is not alive.
@@ -203,8 +204,28 @@ public:
     /// unique as long as they have different parent, like filenames, or
     /// Pixar's USD prim names.
     ///
-    core::StringId name() const {
-        return name_;
+    core::StringId tagName() const {
+        return tagName_;
+    }
+
+    const std::string& name() const {
+        static std::string empty = "";
+        const Value& v = getAttribute(strings::name);
+        if (!v.isValid()) {
+            return empty;
+        }
+        return v.getString();
+    }
+
+    core::StringId id() const {
+        if (uniqueId_ == core::StringId()) {
+            // create a new id !
+            //Element* e = Element::cast(node);
+            //if (e) {
+            //    auto it = elementByIdMap_[e->id()];
+            //}
+        }
+        return uniqueId_;
     }
 
     /// Returns the authored attributes of this element.
@@ -219,7 +240,7 @@ public:
     const Value& getAuthoredAttribute(core::StringId name) const;
 
     /// Gets the value of the given attribute. Emits a warning and returns an
-    /// invalid value if the attribute does not exist.
+    /// invalid value if the attribute neither is authored nor has a default value.
     ///
     const Value& getAttribute(core::StringId name) const;
 
@@ -241,13 +262,13 @@ public:
     }
 
     /// Returns the first child `Element` of this `Element` that has the given
-    /// `name`. Returns nullptr if this `Element` has no child `Element` with
-    /// the given `name`.
+    /// `tagName`. Returns nullptr if this `Element` has no child `Element` with
+    /// the given `tagName`.
     ///
     /// \sa lastChildElement(), previousSiblingElement(), and nextSiblingElement().
     ///
-    Element* firstChildElement(core::StringId name) const {
-        return findElementNext_(firstChild(), name);
+    Element* firstChildElement(core::StringId tagName) const {
+        return findElementNext_(firstChild(), tagName);
     }
 
     /// Returns the last child `Element` of this `Element`.
@@ -260,13 +281,13 @@ public:
     }
 
     /// Returns the last child `Element` of this `Element` that has the given
-    /// `name`. Returns nullptr if this `Element` has no child `Element` with
-    /// the given `name`.
+    /// `tagName`. Returns nullptr if this `Element` has no child `Element` with
+    /// the given `tagName`.
     ///
     /// \sa lastChildElement(), previousSiblingElement(), and nextSiblingElement().
     ///
-    Element* lastChildElement(core::StringId name) const {
-        return findElementPrevious_(lastChild(), name);
+    Element* lastChildElement(core::StringId tagName) const {
+        return findElementPrevious_(lastChild(), tagName);
     }
 
     /// Returns the previous sibling of this `Element`.
@@ -279,13 +300,13 @@ public:
     }
 
     /// Returns the previous sibling of this `Element` that has the given
-    /// `name`. Returns nullptr if this `Element` is the first child `Element`
-    /// of its parent with the given `name`.
+    /// `tagName`. Returns nullptr if this `Element` is the first child `Element`
+    /// of its parent with the given `tagName`.
     ///
     /// \sa nextSiblingElement(), firstChildElement(), and lastChildElement().
     ///
-    Element* previousSiblingElement(core::StringId name) const {
-        return findElementPrevious_(previousSibling(), name);
+    Element* previousSiblingElement(core::StringId tagName) const {
+        return findElementPrevious_(previousSibling(), tagName);
     }
 
     /// Returns the next sibling of this `Element`.
@@ -297,21 +318,23 @@ public:
         return findElementNext_(nextSibling());
     }
 
-    /// Returns the next sibling of this `Element` that has the given `name`.
+    /// Returns the next sibling of this `Element` that has the given `tagName`.
     /// Returns nullptr if this `Element` is the last child `Element` of its
-    /// parent with the given `name`.
+    /// parent with the given `tagName`.
     ///
     /// \sa previousSiblingElement(), firstChildElement(), and lastChildElement().
     ///
-    Element* nextSiblingElement(core::StringId name) const {
-        return findElementNext_(nextSibling(), name);
+    Element* nextSiblingElement(core::StringId tagName) const {
+        return findElementNext_(nextSibling(), tagName);
     }
 
-    /// Iterates over all child elements with the given `name`.
+    /// Iterates over all child elements with the given `tagName`.
     ///
-    NamedElementRange childElements(core::StringId name) {
-        return NamedElementRange(firstChildElement(name), nullptr, name);
+    NamedElementRange childElements(core::StringId tagName) {
+        return NamedElementRange(firstChildElement(tagName), nullptr, tagName);
     }
+
+    VGC_SIGNAL(attributeChanged, (core::StringId, name), (const Value&, oldValue), (const Value&, newValue))
 
 private:
     // Operations
@@ -319,13 +342,16 @@ private:
     friend class SetAttributeOperation;
     friend class RemoveAuthoredAttributeOperation;
 
-    // Name of this element.
-    core::StringId name_;
+    // Tag name of this element.
+    core::StringId tagName_;
+
+    // Unique identifier of this element.
+    core::StringId uniqueId_;
 
     // Helper method for create(). Assumes that a new Element can indeed be
     // appended to parent.
     //
-    static Element* create_(Node* parent, core::StringId name);
+    static Element* create_(Node* parent, core::StringId tagName);
 
     // Authored attributes of this element. Note: copying AuthoredAttribute
     // instances is expensive, but fortunately there shouldn't be any copy with
@@ -353,19 +379,19 @@ private:
         return static_cast<Element*>(node);
     }
 
-    Element* findElementNext_(Node* node, core::StringId name) const {
+    Element* findElementNext_(Node* node, core::StringId tagName) const {
         while (node
                && (node->nodeType() != NodeType::Element
-                   || static_cast<Element*>(node)->name() != name)) {
+                   || static_cast<Element*>(node)->tagName() != tagName)) {
             node = node->nextSibling();
         }
         return static_cast<Element*>(node);
     }
 
-    Element* findElementPrevious_(Node* node, core::StringId name) const {
+    Element* findElementPrevious_(Node* node, core::StringId tagName) const {
         while (node
                && (node->nodeType() != NodeType::Element
-                   || static_cast<Element*>(node)->name() != name)) {
+                   || static_cast<Element*>(node)->tagName() != tagName)) {
             node = node->previousSibling();
         }
         return static_cast<Element*>(node);
@@ -373,15 +399,15 @@ private:
 };
 
 inline NamedElementIterator& NamedElementIterator::operator++() {
-    p_ = p_->nextSiblingElement(name_);
+    p_ = p_->nextSiblingElement(tagName_);
     return *this;
 }
 
-/// Defines the name of an element, retrievable via the
-/// VGC_DOM_ELEMENT_GET_NAME(key) macro. This must only be used in .cpp files
+/// Defines the tag name of an element, retrievable via the
+/// VGC_DOM_ELEMENT_GET_TAGNAME(key) macro. This must only be used in .cpp files
 /// where subclasses of Element are defined. Never use this in header files.
-/// Also, the corresponding VGC_DOM_ELEMENT_GET_NAME(key) can only be used in
-/// the same .cpp file where the name has been defined.
+/// Also, the corresponding VGC_DOM_ELEMENT_GET_TAGNAME(key) can only be used in
+/// the same .cpp file where the tag name has been defined.
 ///
 /// Example:
 ///
@@ -391,16 +417,16 @@ inline NamedElementIterator& NamedElementIterator::operator++() {
 /// Foo::Foo() : Element(VGC_DOM_ELEMENT_GET_NAME(foo)) { }
 /// \endcode
 ///
-#define VGC_DOM_ELEMENT_DEFINE_NAME(key, name)                                           \
-    static vgc::core::StringId VGC_DOM_ELEMENT_NAME_##key##_() {                         \
-        static vgc::core::StringId s(name);                                              \
+#define VGC_DOM_ELEMENT_DEFINE_TAGNAME(key, tagName)                                     \
+    static vgc::core::StringId VGC_DOM_ELEMENT_TAGNAME_##key##_() {                      \
+        static vgc::core::StringId s(tagName);                                           \
         return s;                                                                        \
     }
 
-/// Retrieves the element name defined via
-/// VGC_DOM_ELEMENT_DEFINE_NAME(key, name)
+/// Retrieves the element tag name defined via
+/// VGC_DOM_ELEMENT_DEFINE_TAGNAME(key, tagName)
 ///
-#define VGC_DOM_ELEMENT_GET_NAME(key) VGC_DOM_ELEMENT_NAME_##key##_()
+#define VGC_DOM_ELEMENT_GET_TAGNAME(key) VGC_DOM_ELEMENT_TAGNAME_##key##_()
 
 } // namespace vgc::dom
 

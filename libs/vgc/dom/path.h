@@ -21,11 +21,11 @@
 #include <vgc/core/object.h>
 #include <vgc/core/stringid.h>
 #include <vgc/dom/api.h>
-#include <vgc/dom/document.h>
-#include <vgc/dom/element.h>
 
 namespace vgc::dom {
 
+VGC_DECLARE_OBJECT(Document);
+VGC_DECLARE_OBJECT(Element);
 class Path;
 
 namespace detail {
@@ -60,14 +60,22 @@ path examples:
 /// \brief Specifies the type of a path segment.
 ///
 // clang-format off
-enum class PathSegmentFlag : UInt16 {
+enum class PathSegmentType : UInt8 {
+    Root = 0,
+    UniqueId,
+    Dot,
+    Element,
+    Attribute,
+};
+// clang-format on
+
+/// \enum vgc::dom::PathSegmentFlag
+/// \brief Specifies special properties of a path segment.
+///
+// clang-format off
+enum class PathSegmentFlag : UInt8 {
     None        = 0x00,
-    Root        = 0x01, // only allowed as first segment
-    UniqueId    = 0x02, // only allowed as first segment
-    Dot         = 0x04, // only allowed as first segment
-    Element     = 0x08,
-    Attribute   = 0x10,
-    Indexed     = 0x20, // only allowed for attributes atm
+    Indexed     = 0x01, // only allowed for attributes atm
 };
 // clang-format on
 
@@ -83,49 +91,34 @@ private:
     friend Path;
 
 public:
-    using ArrayIndexType = Int;
+    using ArrayIndex = Int;
 
     // Constructs a segment representing the root element.
     constexpr PathSegment() noexcept = default;
 
     explicit PathSegment(
         core::StringId name,
-        PathSegmentFlags flags = PathSegmentFlag::Element,
-        ArrayIndexType arrayIndex = 0) noexcept;
+        PathSegmentType type = PathSegmentType::Element,
+        PathSegmentFlags flags = PathSegmentFlag::None,
+        Int arrayIndex = 0) noexcept;
 
     core::StringId name() const noexcept {
         return name_;
+    }
+
+    PathSegmentType type() const noexcept {
+        return type_;
     }
 
     PathSegmentFlags flags() const noexcept {
         return flags_;
     }
 
-    bool isRoot() const noexcept {
-        return flags_.has(PathSegmentFlag::Root);
-    }
-
-    bool isUniqueId() const noexcept {
-        return flags_.has(PathSegmentFlag::UniqueId);
-    }
-
-    bool isDot() const noexcept {
-        return flags_.has(PathSegmentFlag::Dot);
-    }
-
-    bool isElement() const noexcept {
-        return flags_.has(PathSegmentFlag::Element);
-    }
-
-    bool isAttribute() const noexcept {
-        return flags_.has(PathSegmentFlag::Attribute);
-    }
-
     bool isIndexed() const noexcept {
         return flags_.has(PathSegmentFlag::Indexed);
     }
 
-    ArrayIndexType arrayIndex() const noexcept {
+    Int arrayIndex() const noexcept {
         return arrayIndex_;
     }
 
@@ -140,8 +133,9 @@ public:
 
 private:
     core::StringId name_;
+    PathSegmentType type_ = PathSegmentType::Element;
     PathSegmentFlags flags_ = PathSegmentFlag::None;
-    ArrayIndexType arrayIndex_ = 0;
+    Int arrayIndex_ = 0;
 };
 
 /// \class vgc::dom::Path
@@ -149,13 +143,11 @@ private:
 ///
 class VGC_DOM_API Path {
 public:
-    using ArrayIndexType = PathSegment::ArrayIndexType;
-
     /// Constructs a null path.
     Path() noexcept = default;
     Path(Element* element);
     Path(Element* element, core::StringId attributeName);
-    Path(Element* element, core::StringId attributeName, ArrayIndexType arrayIndex);
+    Path(Element* element, core::StringId attributeName, Int arrayIndex);
 
     Path(std::string_view path);
     //Path(Element* element, std::string_view relativePath);
@@ -176,22 +168,33 @@ public:
 
     bool isAbsolute() const noexcept {
         if (!segments_.isEmpty()) {
-            const PathSegment& seg = segments_.getUnchecked(0);
-            return seg.isRoot() || seg.isUniqueId();
+            PathSegmentType type = segments_.getUnchecked(0).type();
+            return (type == PathSegmentType::Root) || (type == PathSegmentType::UniqueId);
         }
         return false;
     }
 
+    bool isRelative() const noexcept {
+        return !isAbsolute();
+    }
+
     bool isBased() const noexcept {
-        return !segments_.isEmpty() && segments_.getUnchecked(0).isElement();
+        return !segments_.isEmpty()
+               && segments_.getUnchecked(0).type() == PathSegmentType::UniqueId;
     }
 
     bool isElement() const noexcept {
-        return !segments_.isEmpty() && segments_.getUnchecked(0).isElement();
+        return !segments_.isEmpty()
+               && segments_.getUnchecked(0).type() == PathSegmentType::Element;
     }
 
     bool isAttribute() const noexcept {
-        return !segments_.isEmpty() && segments_.getUnchecked(0).isAttribute();
+        return !segments_.isEmpty()
+               && segments_.getUnchecked(0).type() == PathSegmentType::Attribute;
+    }
+
+    const core::Array<PathSegment>& segments() const {
+        return segments_;
     }
 
     Path elementPath() const;
@@ -203,6 +206,19 @@ public:
 private:
     core::Array<PathSegment> segments_;
 };
+
+/// Reads a `Path` from the input stream, and stores it in the given output
+/// parameter `v`. Leading whitespaces are allowed. Raises `ParseError` if the
+/// stream does not start with a `Path`.
+///
+template<typename IStream>
+void readTo(Path& v, IStream& in) {
+    skipWhitespaceCharacters(in);
+    skipExpectedCharacter(in, '@');
+    skipExpectedCharacter(in, '\'');
+    std::string s = readStringUntilExpectedCharacter(in, '\'');
+    v = Path(s);
+}
 
 } // namespace vgc::dom
 
