@@ -491,14 +491,14 @@ void Canvas::continueCurve_(const geometry::Vec2d& p, double width) {
         // freely mutate the value and trusteing them in sending a changed
         // signal themselves.
 
-        geometry::Vec2dArray positions = path->getAttribute(POSITIONS).getVec2dArray();
-        core::DoubleArray widths = path->getAttribute(WIDTHS).getDoubleArray();
+        geometry::Vec2dArray positions = path->getAttribute(strings::positions).getVec2dArray();
+        core::DoubleArray widths = path->getAttribute(strings::widths).getDoubleArray();
 
         positions.append(p);
         widths.append(width);
 
-        path->setAttribute(POSITIONS, std::move(positions));
-        path->setAttribute(WIDTHS, std::move(widths));
+        path->setAttribute(strings::positions, std::move(positions));
+        path->setAttribute(strings::widths, std::move(widths));
 
         document()->emitPendingDiff();
     }

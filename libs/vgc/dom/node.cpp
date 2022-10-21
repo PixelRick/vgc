@@ -204,8 +204,20 @@ Element* Node::elementFromPath(const Path& path) const {
     return res;
 }
 
-Value Node::valueFromPath(const Path& /*path*/) const {
-
+Value Node::valueFromPath(const Path& path) const {
+    // XXX could check path is valid..
+    if (path.isAttribute()) {
+        Element* e = elementFromPath(path);
+        if (e) {
+            const PathSegment& seg = path.segments().last();
+            Value v = e->getAttribute(seg.name());
+            if (v.isValid() && seg.isIndexed()) {
+                v = v.getItem(seg.arrayIndex());
+            }
+            return v;
+        }
+    }
+    return Value();
 }
 
 } // namespace vgc::dom

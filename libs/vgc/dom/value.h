@@ -131,7 +131,7 @@ template<typename T>
 struct isCowPtr_<CowPtr<T>> : std::integral_constant<bool, true> {};
 
 template<typename T>
-constexpr bool isCowPtr = isCowPtr<T>::value;
+constexpr bool isCowPtr = isCowPtr_<T>::value;
 
 template<typename T>
 CowPtr<std::remove_reference_t<T>> makeCowPtr(T&& x) {
@@ -273,14 +273,21 @@ public:
     ///
     void clear();
 
-    /// Returns the item of type `ItemType` held by the container in this `Value`.
+    /// Returns the item held by the container in this `Value` at the given `index`.
     /// The behavior is undefined if `type() != ValueType::Array..` or index is out
     /// of container range.
     ///
     // XXX what to do when index is out of range ?
-    template<typename ItemType>
     Value getItem(Int index) {
-        return Value(std::get<detail::ArrayCowPtr<ItemType>>(var_).get()[index]);
+        return std::visit(
+            [&](auto&& arg) -> Value {
+                using T = std::decay_t<decltype(arg)>;
+                if constexpr (detail::isCowPtr<T>) {
+                    return Value(std::get<T>(var_).get()[index]);
+                }
+                return Value();
+            },
+            var_);
     }
 
     /// Returns the string held by this `Value`.
@@ -453,7 +460,7 @@ public:
                     if constexpr (std::is_same_v<T, std::monostate>) {
                         write(out, "None");
                     }
-                    if constexpr (isCowPtr<T>) {
+                    else if constexpr (detail::isCowPtr<T>) {
                         write(out, *arg);
                     }
                     else {
