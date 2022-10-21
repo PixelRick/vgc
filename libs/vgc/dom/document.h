@@ -371,6 +371,7 @@ private:
     std::string xmlDeclaration_;
 
     // Utilities
+    friend Element; // XXX <- create accessors ?
     std::unordered_map<core::StringId, Element*> elementByIdMap_;
 
     // Operations

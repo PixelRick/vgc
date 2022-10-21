@@ -52,6 +52,29 @@ Element* Element::create(Element* parent, core::StringId tagName) {
     return create_(parent, tagName);
 }
 
+core::StringId Element::id() const {
+    if (uniqueId_ == core::StringId()) {
+        // create a new id !
+        const ElementSpec* es = schema().findElementSpec(tagName_);
+        core::StringId prefix = tagName_;
+        if (es && es->defaultIdPrefix() != core::StringId()) {
+            prefix = es->defaultIdPrefix();
+        }
+        auto& elementByIdMap = document()->elementByIdMap_;
+        for (Int i = 0; i > 0; ++i) {
+            core::StringId id = core::StringId(core::format("{}{}", prefix, i));
+            if (elementByIdMap.find(id) == elementByIdMap.end()) {
+                Element* ncThis = const_cast<Element*>(this);
+                elementByIdMap[id] = ncThis;
+                ncThis->uniqueId_ = id;
+                ncThis->setAttribute(strings::id, id.string());
+                break;
+            }
+        }
+    }
+    return uniqueId_;
+}
+
 const Value& Element::getAuthoredAttribute(core::StringId name) const {
     if (const AuthoredAttribute* authored = findAuthoredAttribute_(name)) {
         return authored->value();

@@ -23,6 +23,7 @@
 #include <vgc/dom/node.h>
 #include <vgc/dom/value.h>
 #include <vgc/dom/strings.h>
+#include <vgc/dom/schema.h>
 
 namespace vgc::dom {
 
@@ -217,16 +218,7 @@ public:
         return v.getString();
     }
 
-    core::StringId id() const {
-        if (uniqueId_ == core::StringId()) {
-            // create a new id !
-            //Element* e = Element::cast(node);
-            //if (e) {
-            //    auto it = elementByIdMap_[e->id()];
-            //}
-        }
-        return uniqueId_;
-    }
+    core::StringId id() const;
 
     /// Returns the authored attributes of this element.
     ///
