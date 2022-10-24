@@ -61,13 +61,11 @@ core::StringId Element::id() const {
             prefix = es->defaultIdPrefix();
         }
         auto& elementByIdMap = document()->elementByIdMap_;
-        for (Int i = 0; i > 0; ++i) {
+        for (Int i = 0; i < core::IntMax; ++i) {
             core::StringId id = core::StringId(core::format("{}{}", prefix, i));
             if (elementByIdMap.find(id) == elementByIdMap.end()) {
                 Element* ncThis = const_cast<Element*>(this);
-                elementByIdMap[id] = ncThis;
-                ncThis->uniqueId_ = id;
-                ncThis->setAttribute(strings::id, id.string());
+                ncThis->setAttribute(strings::id, id);
                 break;
             }
         }
@@ -98,16 +96,16 @@ const Value& Element::getAttribute(core::StringId name) const {
     }
 }
 
-void Element::setAttribute(core::StringId name, const Value& value) {
-    core::History::do_<SetAttributeOperation>(document()->history(), this, name, value);
-}
-
 void Element::clearAttribute(core::StringId name) {
     if (AuthoredAttribute* authored = findAuthoredAttribute_(name)) {
         Int index = std::distance(&authoredAttributes_[0], authored);
         core::History::do_<RemoveAuthoredAttributeOperation>(
             document()->history(), this, name, index);
     }
+}
+
+void Element::setAttribute_(core::StringId name, const Value& value) {
+    core::History::do_<SetAttributeOperation>(document()->history(), this, name, value);
 }
 
 AuthoredAttribute* Element::findAuthoredAttribute_(core::StringId name) {
@@ -117,6 +115,24 @@ AuthoredAttribute* Element::findAuthoredAttribute_(core::StringId name) {
 
 const AuthoredAttribute* Element::findAuthoredAttribute_(core::StringId name) const {
     return const_cast<Element*>(this)->findAuthoredAttribute_(name);
+}
+
+void Element::onAttributeChanged_(core::StringId name, const Value& oldValue, const Value& newValue) {
+    if (name == strings::name) {
+        name_ = newValue.hasValue() ? newValue.getStringId() : core::StringId();
+    }
+    else if (name == strings::id) {
+        auto& elementByIdMap = document()->elementByIdMap_;
+        if (uniqueId_ != core::StringId()) {
+            elementByIdMap.erase(uniqueId_);
+            uniqueId_ = core::StringId();
+        }
+        if (newValue.hasValue()) {
+            uniqueId_ = newValue.getStringId();
+            elementByIdMap[uniqueId_] = this;
+        }
+    }
+    attributeChanged().emit(name, oldValue, newValue);
 }
 
 } // namespace vgc::dom

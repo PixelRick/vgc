@@ -212,7 +212,7 @@ Value Node::valueFromPath(const Path& path) const {
             const PathSegment& seg = path.segments().last();
             Value v = e->getAttribute(seg.name());
             if (v.isValid() && seg.isIndexed()) {
-                v = v.getItem(seg.arrayIndex());
+                v = v.getItemWrapped(seg.arrayIndex());
             }
             return v;
         }

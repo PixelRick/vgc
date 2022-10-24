@@ -199,8 +199,8 @@ void skipExpectedString(IStream& in, CharIterator begin, CharIterator end) {
         if (c != *it) {
             std::string message;
             message += "Unexpected '";
-            message.append(begin, end);
-            message += *it;
+            message.append(begin, it);
+            message += c;
             message += "'. Expected '";
             message.append(begin, end);
             message += "'.";

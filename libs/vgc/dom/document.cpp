@@ -587,14 +587,24 @@ private:
     void onAttribute_() {
         core::StringId name(attributeName_);
 
-        const AttributeSpec* spec = elementSpec_->findAttributeSpec(name);
-        if (!spec) {
-            throw VgcSyntaxError(
-                "Unknown attribute '" + attributeName_ + "' for element '" + tagName_
-                + "'. Excepted an attribute name defined in the VGC schema.");
+        ValueType valueType = {};
+        if (name == strings::name) {
+            valueType = ValueType::StringId;
+        }
+        else if (name == strings::id) {
+            valueType = ValueType::StringId;
+        }
+        else {
+            const AttributeSpec* spec = elementSpec_->findAttributeSpec(name);
+            if (!spec) {
+                throw VgcSyntaxError(
+                    "Unknown attribute '" + attributeName_ + "' for element '" + tagName_
+                    + "'. Excepted an attribute name defined in the VGC schema.");
+            }
+            valueType = spec->valueType();
         }
 
-        Value value = parseValue(attributeValue_, spec->valueType());
+        Value value = parseValue(attributeValue_, valueType);
         Element::cast(currentNode_)->setAttribute(name, value);
     }
 

@@ -344,7 +344,6 @@ public:
         const std::string& filePath,
         const XmlFormattingStyle& style = XmlFormattingStyle()) const;
 
-
     Element* elementById(core::StringId id) const;
 
     void enableHistory(core::StringId entrypointName);

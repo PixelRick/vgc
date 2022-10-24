@@ -139,9 +139,10 @@ Path::Path(std::string_view path) {
         segments_.emplaceLast(core::StringId(), PathSegmentType::Root);
         i = 1;
         if (i < n && !isReservedChar(path[1])) {
-            j = findReservedCharOrEnd(path, i + 1);
+            j = findReservedCharOrEnd(path, i);
             segments_.emplaceLast(
                 core::StringId(path.substr(i, j - i)), PathSegmentType::Element);
+            i = j;
         }
     }
     else if (firstChar == '#') {
@@ -164,6 +165,10 @@ Path::Path(std::string_view path) {
         if (n > 2 && path[1] == '/') {
             // Skip only if it is not an attribute dot.
             i += 2;
+        }
+        else if (n == 1) {
+            // "."
+            return;
         }
     }
     else if (!isReservedChar(firstChar)) {
@@ -202,7 +207,7 @@ Path::Path(std::string_view path) {
         if (i < n && path[i] == '[') {
             ++i;
             j = findReservedCharOrEnd(path, i);
-            if (j == n || path[i] != ']') {
+            if (j == n || path[j] != ']') {
                 VGC_ERROR(LogVgcDom, "Expected ']' after index in path \"{}\".", path);
                 segments_.clear();
                 return;
@@ -213,7 +218,7 @@ Path::Path(std::string_view path) {
                 return;
             }
 
-            size_t index = 0;
+            Int index = 0;
             auto result = std::from_chars(&path[i], &path[j], index);
             if (result.ec == std::errc::invalid_argument) {
                 VGC_ERROR(LogVgcDom, "Invalid index format in path \"{}\".", path);
@@ -223,7 +228,7 @@ Path::Path(std::string_view path) {
 
             segments_.emplaceLast(
                 core::StringId(attrName), PathSegmentType::Attribute, PathSegmentFlag::Indexed, index);
-            i = j;
+            i = j + 1;
         }
         else {
             segments_.emplaceLast(core::StringId(attrName), PathSegmentType::Attribute);
@@ -240,62 +245,6 @@ Path::Path(std::string_view path) {
         segments_.clear();
         return;
     }
-}
-
-std::string Path::string() const noexcept {
-    if (segments_.isEmpty()) {
-        return "";
-    }
-
-    std::string ret = {};
-
-    bool skipSlash = true;
-    Int i = 0;
-
-    const PathSegment& seg0 = segments_[0];
-    PathSegmentType type0 = seg0.type();
-    if (type0 == PathSegmentType::Root) {
-        ret.append(1, '/');
-        ++i;
-    }
-    else if (type0 == PathSegmentType::UniqueId) {
-        ret.append(1, '#');
-        ++i;
-    }
-    if (type0 == PathSegmentType::Dot) {
-        ++i;
-    }
-
-    const Int n = segments_.length();
-    for (; i < n; ++i) {
-        const PathSegment& seg = segments_[i];
-        PathSegmentType type = seg.type();
-        if (type == PathSegmentType::Element) {
-            if (skipSlash) {
-                skipSlash = false;
-            }
-            else {
-                ret.append(1, '/');
-            }
-            ret.append(seg.name());
-        }
-        else if (type == PathSegmentType::Attribute) {
-            ret.append(1, '.');
-            ret.append(seg.name());
-            if (seg.isIndexed()) {
-                ret.append(core::format("[{}]", seg.arrayIndex()));
-            }
-        }
-        else {
-            VGC_ERROR(
-                LogVgcDom,
-                "Could not convert dom::Path to string, it contains unexpected "
-                "segments.");
-            return "";
-        }
-    }
-
-    return ret;
 }
 
 Path Path::elementPath() const {
@@ -338,6 +287,70 @@ Path& Path::removeIndex() {
         seg.flags().unset(PathSegmentFlag::Indexed);
     }
     return *this;
+}
+
+void Path::writeTo_(fmt::memory_buffer& out) const {
+    if (segments_.isEmpty()) {
+        return;
+    }
+
+    size_t oldSize = out.size();
+
+    bool skipSlash = true;
+    Int i = 0;
+
+    const PathSegment& seg0 = segments_[0];
+    PathSegmentType type0 = seg0.type();
+    if (type0 == PathSegmentType::Root) {
+        out.push_back('/');
+        ++i;
+    }
+    else if (type0 == PathSegmentType::UniqueId) {
+        out.push_back('#');
+        out.append(seg0.name().string());
+        skipSlash = false;
+        ++i;
+    }
+    else if (type0 == PathSegmentType::Dot) {
+        if (segments_.size() == 1) {
+            out.push_back('.');
+            return;
+        }
+        ++i;
+    }
+
+    const Int n = segments_.length();
+    for (; i < n; ++i) {
+        const PathSegment& seg = segments_[i];
+        PathSegmentType type = seg.type();
+        if (type == PathSegmentType::Element) {
+            if (skipSlash) {
+                skipSlash = false;
+            }
+            else {
+                out.push_back('/');
+            }
+            out.append(seg.name().string());
+        }
+        else if (type == PathSegmentType::Attribute) {
+            out.push_back('.');
+            out.append(seg.name().string());
+            if (seg.isIndexed()) {
+                out.push_back('[');
+                // XXX better way ?
+                core::formatTo(std::back_inserter(out), "{}", seg.arrayIndex());
+                out.push_back(']');
+            }
+        }
+        else {
+            VGC_ERROR(
+                LogVgcDom,
+                "Could not convert dom::Path to string, it contains unexpected "
+                "segments.");
+            out.resize(oldSize);
+            return;
+        }
+    }
 }
 
 } // namespace vgc::dom

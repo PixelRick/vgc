@@ -18,6 +18,7 @@
 #define VGC_DOM_PATH_H
 
 #include <vgc/core/flags.h>
+#include <vgc/core/format.h>
 #include <vgc/core/object.h>
 #include <vgc/core/stringid.h>
 #include <vgc/dom/api.h>
@@ -133,7 +134,7 @@ public:
 
 private:
     core::StringId name_;
-    PathSegmentType type_ = PathSegmentType::Element;
+    PathSegmentType type_ = PathSegmentType::Root;
     PathSegmentFlags flags_ = PathSegmentFlag::None;
     Int arrayIndex_ = 0;
 };
@@ -145,6 +146,7 @@ class VGC_DOM_API Path {
 public:
     /// Constructs a null path.
     Path() noexcept = default;
+
     Path(Element* element);
     Path(Element* element, core::StringId attributeName);
     Path(Element* element, core::StringId attributeName, Int arrayIndex);
@@ -154,13 +156,17 @@ public:
 
     size_t hash() const noexcept {
         size_t res = 'PATH';
-        for (const PathSegment& s : segments_) {
-            detail::hashCombine(res, s.hash());
+        for (const PathSegment& seg : segments_) {
+            detail::hashCombine(res, seg.hash());
         }
         return res;
     }
 
-    std::string string() const noexcept;
+    std::string toString() const {
+        fmt::memory_buffer b;
+        writeTo_(b);
+        return std::string(b.begin(), b.size());
+    }
 
     bool isEmpty() const noexcept {
         return segments_.isEmpty();
@@ -185,12 +191,12 @@ public:
 
     bool isElement() const noexcept {
         return !segments_.isEmpty()
-               && segments_.getUnchecked(0).type() == PathSegmentType::Element;
+               && segments_.last().type() == PathSegmentType::Element;
     }
 
     bool isAttribute() const noexcept {
         return !segments_.isEmpty()
-               && segments_.getUnchecked(0).type() == PathSegmentType::Attribute;
+               && segments_.last().type() == PathSegmentType::Attribute;
     }
 
     const core::Array<PathSegment>& segments() const {
@@ -203,9 +209,23 @@ public:
     Path& removeAttribute();
     Path& removeIndex();
 
+    template<typename OStream>
+    friend void write(OStream& out, const Path& path) {
+        fmt::memory_buffer b;
+        path.writeTo_(b);
+        write(out, b.begin(), static_cast<std::streamsize>(b.size()));
+    }
+
 private:
     core::Array<PathSegment> segments_;
+
+    void writeTo_(fmt::memory_buffer& out) const;
 };
+
+static_assert(std::is_copy_constructible_v<Path>);
+static_assert(std::is_move_constructible_v<Path>);
+static_assert(std::is_copy_assignable_v<Path>);
+static_assert(std::is_move_assignable_v<Path>);
 
 /// Reads a `Path` from the input stream, and stores it in the given output
 /// parameter `v`. Leading whitespaces are allowed. Raises `ParseError` if the

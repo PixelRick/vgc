@@ -38,9 +38,10 @@ class VGC_DOM_API AttributeSpec {
 public:
     /// Creates a built-in attribute.
     ///
-    AttributeSpec(const std::string& name, const Value& defaultValue)
+    template<typename T>
+    AttributeSpec(const std::string& name, T&& defaultValue)
         : name_(core::StringId(name))
-        , defaultValue_(defaultValue) {
+        , defaultValue_(std::forward<T>(defaultValue)) {
     }
 
     /// Returns the name of this built-in attribute.
@@ -80,9 +81,7 @@ public:
     /// Creates an `ElementSpec` for the given Element `tagName`, with the given
     /// built-in `attributes`.
     ///
-    ElementSpec(
-        const std::string& tagName,
-        const std::vector<AttributeSpec>& attributes);
+    ElementSpec(const std::string& tagName, const std::vector<AttributeSpec>& attributes);
 
     /// Creates an `ElementSpec` for the given Element `tagName`, with the given
     /// built-in `attributes` and `defaultIdPrefix`.

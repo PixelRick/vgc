@@ -17,6 +17,9 @@
 #ifndef VGC_DOM_ELEMENT_H
 #define VGC_DOM_ELEMENT_H
 
+#include <string>
+#include <string_view>
+
 #include <vgc/core/stringid.h>
 #include <vgc/dom/api.h>
 #include <vgc/dom/attribute.h>
@@ -209,13 +212,12 @@ public:
         return tagName_;
     }
 
-    const std::string& name() const {
-        static std::string empty = "";
-        const Value& v = getAttribute(strings::name);
-        if (!v.isValid()) {
-            return empty;
-        }
-        return v.getString();
+    core::StringId name() const {
+        return name_;
+    }
+
+    void setName(std::string_view name) {
+        setAttribute(strings::name, Value(core::StringId(name)));
     }
 
     core::StringId id() const;
@@ -238,7 +240,14 @@ public:
 
     /// Sets the value of the given attribute.
     ///
-    void setAttribute(core::StringId name, const Value& value);
+    template<typename T>
+    void setAttribute(core::StringId name, T&& value) {
+        setAttribute_(name, Value(std::forward<T>(value)));
+    }
+    // overload
+    void setAttribute(core::StringId name, const Value& value) {
+        setAttribute_(name, value);
+    }
 
     /// Clears the authored value of the given attribute.
     ///
@@ -337,7 +346,10 @@ private:
     // Tag name of this element.
     core::StringId tagName_;
 
-    // Unique identifier of this element.
+    // Name of this element. (cache)
+    core::StringId name_;
+
+    // Unique identifier of this element. (cache)
     core::StringId uniqueId_;
 
     // Helper method for create(). Assumes that a new Element can indeed be
@@ -352,6 +364,8 @@ private:
     // AuthoredAttribute has a non-throwing move constructor and destructor.
     //
     core::Array<AuthoredAttribute> authoredAttributes_;
+
+    void setAttribute_(core::StringId name, const Value& value);
 
     // Helper functions to find attributes. Return nullptr if not found.
     AuthoredAttribute* findAuthoredAttribute_(core::StringId name);
@@ -388,6 +402,8 @@ private:
         }
         return static_cast<Element*>(node);
     }
+
+    void onAttributeChanged_(core::StringId name, const Value& oldValue, const Value& newValue);
 };
 
 inline NamedElementIterator& NamedElementIterator::operator++() {

@@ -21,10 +21,12 @@
 #include <string>
 #include <tuple>
 #include <variant>
+#include <type_traits>
 
 #include <vgc/core/array.h>
 #include <vgc/core/color.h>
 #include <vgc/core/enum.h>
+#include <vgc/core/stringid.h>
 #include <vgc/dom/api.h>
 #include <vgc/dom/path.h>
 #include <vgc/geometry/vec2d.h>
@@ -96,6 +98,7 @@ enum class ValueType {
     None,
     Invalid,
     String,
+    StringId,
     Int,
     IntArray,
     Double,
@@ -115,6 +118,9 @@ namespace detail {
 
 template<typename T>
 using CowPtr = std::shared_ptr<const T>;
+
+static_assert(std::is_copy_constructible_v<CowPtr<char>>);
+static_assert(std::is_copy_assignable_v<CowPtr<char>>);
 
 template<typename T>
 struct CowPtrTraits {};
@@ -144,6 +150,7 @@ using ArrayCowPtr = CowPtr<core::Array<T>>;
 using ValueVariantType = std::variant<
     std::monostate,
     std::string,
+    core::StringId,
     Int,
     ArrayCowPtr<Int>,
     double,
@@ -154,6 +161,11 @@ using ValueVariantType = std::variant<
     ArrayCowPtr<geometry::Vec2d>,
     dom::Path,
     ArrayCowPtr<dom::Path>>;
+
+static_assert(std::is_copy_constructible_v<ValueVariantType>);
+static_assert(std::is_copy_assignable_v<ValueVariantType>);
+static_assert(std::is_move_constructible_v<ValueVariantType>);
+static_assert(std::is_move_assignable_v<ValueVariantType>);
 
 } // namespace detail
 
@@ -180,77 +192,91 @@ public:
 
     /// Constructs a `Value` holding a `std::string`.
     ///
-    Value(std::string string)
+    explicit Value(std::string string)
         : type_(ValueType::String)
         , var_(std::move(string)) {
     }
 
+    /// Constructs a `Value` holding a `std::string`.
+    ///
+    explicit Value(std::string_view string)
+        : type_(ValueType::String)
+        , var_(std::string(string)) {
+    }
+
+    /// Constructs a `Value` holding a `std::string`.
+    ///
+    explicit Value(core::StringId stringId)
+        : type_(ValueType::StringId)
+        , var_(stringId) {
+    }
+
     /// Constructs a `Value` holding an `Int`.
     ///
-    Value(Int value)
+    explicit Value(Int value)
         : type_(ValueType::Int)
         , var_(value) {
     }
 
     /// Constructs a `Value` holding an array of `Int`.
     ///
-    Value(core::Array<Int> intArray)
+    explicit Value(core::Array<Int> intArray)
         : type_(ValueType::IntArray)
         , var_(detail::makeCowPtr(std::move(intArray))) {
     }
 
     /// Constructs a `Value` holding a `double`.
     ///
-    Value(double value)
+    explicit Value(double value)
         : type_(ValueType::Double)
         , var_(value) {
     }
 
     /// Constructs a `Value` holding an array of `double`.
     ///
-    Value(core::Array<double> doubleArray)
+    explicit Value(core::Array<double> doubleArray)
         : type_(ValueType::DoubleArray)
         , var_(detail::makeCowPtr(std::move(doubleArray))) {
     }
 
     /// Constructs a `Value` holding a `Color`.
     ///
-    Value(core::Color color)
+    explicit Value(core::Color color)
         : type_(ValueType::Color)
         , var_(std::move(color)) {
     }
 
     /// Constructs a `Value` holding an array of `Color`.
     ///
-    Value(core::Array<core::Color> colorArray)
+    explicit Value(core::Array<core::Color> colorArray)
         : type_(ValueType::ColorArray)
         , var_(detail::makeCowPtr(std::move(colorArray))) {
     }
 
     /// Constructs a `Value` holding a `Vec2d`.
     ///
-    Value(geometry::Vec2d vec2d)
+    explicit Value(geometry::Vec2d vec2d)
         : type_(ValueType::Vec2d)
         , var_(vec2d) {
     }
 
     /// Constructs a `Value` holding a `Vec2dArray`.
     ///
-    Value(geometry::Vec2dArray vec2dArray)
+    explicit Value(geometry::Vec2dArray vec2dArray)
         : type_(ValueType::Vec2dArray)
         , var_(detail::makeCowPtr(std::move(vec2dArray))) {
     }
 
     /// Constructs a `Value` holding a `dom::Path`.
     ///
-    Value(dom::Path path)
+    explicit Value(dom::Path path)
         : type_(ValueType::Path)
         , var_(path) {
     }
 
     /// Constructs a `Value` holding an array of `dom::Path`.
     ///
-    Value(core::Array<dom::Path> pathArray)
+    explicit Value(core::Array<dom::Path> pathArray)
         : type_(ValueType::PathArray)
         , var_(detail::makeCowPtr(std::move(pathArray))) {
     }
@@ -269,23 +295,49 @@ public:
         return type() != ValueType::Invalid;
     }
 
+    bool hasValue() const {
+        return type() > ValueType::Invalid;
+    }
+
     /// Stops holding any Value. This makes this `Value` empty.
     ///
     void clear();
 
     /// Returns the item held by the container in this `Value` at the given `index`.
-    /// The behavior is undefined if `type() != ValueType::Array..` or index is out
-    /// of container range.
+    /// This returns an empty value if `type() != ValueType::Array..` or index is out
+    /// of container wrap range [-length, length).
     ///
     // XXX what to do when index is out of range ?
-    Value getItem(Int index) {
+    Value getItemWrapped(Int index) {
         return std::visit(
             [&](auto&& arg) -> Value {
                 using T = std::decay_t<decltype(arg)>;
                 if constexpr (detail::isCowPtr<T>) {
-                    return Value(std::get<T>(var_).get()[index]);
+                    const T& a = std::get<T>(var_);
+                    const Int n = a->length();
+                    if (index >= -n && index < n) {
+                        return Value(a->getWrapped(index));
+                    }
                 }
                 return Value();
+            },
+            var_);
+    }
+
+    /// Returns the length of the held array.
+    /// Returns 0 if this value is not an array.
+    ///
+    Int arrayLength() {
+        return std::visit(
+            [&](auto&& arg) -> Int {
+                using T = std::decay_t<decltype(arg)>;
+                if constexpr (detail::isCowPtr<T>) {
+                    const T& a = std::get<T>(var_);
+                    return a->length();
+                }
+                else {
+                    return 0;
+                }
             },
             var_);
     }
@@ -301,6 +353,20 @@ public:
     ///
     void set(std::string s) {
         type_ = ValueType::String;
+        var_ = std::move(s);
+    }
+
+    /// Returns the string identifier held by this `Value`.
+    /// The behavior is undefined if `type() != ValueType::StringId`.
+    ///
+    core::StringId getStringId() const {
+        return std::get<core::StringId>(var_);
+    }
+
+    /// Sets this `Value` to the given string `s`.
+    ///
+    void set(core::StringId s) {
+        type_ = ValueType::StringId;
         var_ = std::move(s);
     }
 
@@ -425,9 +491,9 @@ public:
 
     /// Sets this `Value` to the given `path`.
     ///
-    void set(const dom::Path& path) {
+    void set(dom::Path path) {
         type_ = ValueType::Path;
-        var_ = path;
+        var_ = std::move(path);
     }
 
     /// Returns the `core::Array<dom::Path>` held by this `Value`.

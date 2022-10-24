@@ -73,6 +73,8 @@ Value parseValue(const std::string& s, ValueType t) {
             return Value::invalid();
         case ValueType::String:
             return Value(s);
+        case ValueType::StringId:
+            return Value(core::StringId(s));
         case ValueType::Int:
             return Value(core::parse<Int>(s));
         case ValueType::IntArray:
