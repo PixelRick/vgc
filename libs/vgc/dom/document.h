@@ -344,6 +344,8 @@ public:
 
     Element* elementById(core::StringId id) const;
 
+    Element* elementByInternalId(core::Id id) const;
+
     void enableHistory(core::StringId entrypointName);
 
     core::History* history() const {
@@ -370,6 +372,7 @@ private:
     // Utilities
     friend Element; // XXX <- create accessors ?
     std::unordered_map<core::StringId, Element*> elementByIdMap_;
+    std::unordered_map<core::Id, Element*> elementByInternalIdMap_;
 
     // Operations
     friend class CreateElementOperation;

@@ -17,6 +17,7 @@
 #ifndef VGC_DOM_ELEMENT_H
 #define VGC_DOM_ELEMENT_H
 
+#include <vgc/core/id.h>
 #include <vgc/core/stringid.h>
 #include <vgc/dom/api.h>
 #include <vgc/dom/attribute.h>
@@ -232,7 +233,11 @@ public:
     /// document.
     ///
     core::StringId id() const {
-        return uniqueId_;
+        return id_;
+    }
+
+    core::Id internalId() const {
+        return internalId_;
     }
 
     /// Returns or creates the unique identifier of this element.
@@ -367,7 +372,10 @@ private:
     core::StringId name_;
 
     // Unique identifier of this element. (cache)
-    core::StringId uniqueId_;
+    core::StringId id_;
+
+    // Unique internal Id of this element.
+    core::Id internalId_;
 
     // Helper method for create(). Assumes that a new Element can indeed be
     // appended to parent.

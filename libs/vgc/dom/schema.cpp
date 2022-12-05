@@ -99,6 +99,8 @@ const Schema& schema() {
         { "colorpalette", {
             // No attributes
         }},
+        { "layer", {
+        }},
         { "path", "p", {
             {"color", core::colors::black},
             {"positions", geometry::Vec2dArray()},

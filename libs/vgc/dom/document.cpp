@@ -818,6 +818,14 @@ Element* Document::elementById(core::StringId id) const {
     return nullptr;
 }
 
+Element* Document::elementByInternalId(core::Id id) const {
+    auto it = elementByInternalIdMap_.find(id);
+    if (it != elementByInternalIdMap_.end()) {
+        return it->second;
+    }
+    return nullptr;
+}
+
 void Document::enableHistory(core::StringId entrypointName) {
     if (!history_) {
         history_ = core::History::create(entrypointName);

@@ -21,6 +21,13 @@ namespace vgc::dom::strings {
 const core::StringId name("name");
 const core::StringId id("id");
 
+const core::StringId layer("layer");
+const core::StringId vertex("vertex");
+const core::StringId edge("edge");
+
+const core::StringId position("position");
+const core::StringId positions("positions");
+
 const core::StringId New_Document("New Document");
 const core::StringId Open_Document("Open Document");
 
