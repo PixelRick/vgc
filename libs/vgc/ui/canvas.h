@@ -23,13 +23,12 @@
 #include <vgc/core/color.h>
 #include <vgc/core/object.h>
 #include <vgc/core/performancelog.h>
-#include <vgc/dom/document.h>
-#include <vgc/dom/element.h>
 #include <vgc/geometry/camera2d.h>
 #include <vgc/geometry/vec2d.h>
 #include <vgc/ui/api.h>
 #include <vgc/ui/cursor.h>
 #include <vgc/ui/widget.h>
+#include <vgc/workspace/workspace.h>
 
 namespace vgc::ui {
 
@@ -84,17 +83,17 @@ protected:
     /// This is an implementation details. Please use
     /// Canvas::create() instead.
     ///
-    Canvas(dom::Document* document);
+    Canvas(workspace::Workspace* workspace);
 
 public:
     /// Creates a Canvas.
     ///
-    static CanvasPtr create(dom::Document* document);
+    static CanvasPtr create(workspace::Workspace* workspace);
 
-    /// Returns the observed document.
+    /// Returns the observed document workspace.
     ///
-    dom::Document* document() const {
-        return document_;
+    workspace::Workspace* workspace() const {
+        return workspace_;
     }
 
     // XXX temporary. Will be deferred to separate class.
@@ -104,9 +103,9 @@ public:
 
     SelectionList getSelectableItemsAt(const geometry::Vec2f& position);
 
-    /// Sets the observed document.
+    /// Sets the observed document workspace.
     ///
-    void setDocument(dom::Document* document);
+    void setWorkspace(workspace::Workspace* workspace);
 
     /// Creates and manages new performance logs as children of the given \p
     /// parent.
@@ -137,6 +136,8 @@ protected:
     void onPaintDestroy(graphics::Engine* engine) override;
     //
 
+    VGC_SLOT(onWorkspaceChanged, onWorkspaceChanged_)
+
 private:
     // Flags
     bool reload_ = true;
@@ -148,11 +149,12 @@ private:
     geometry::Camera2d camera_;
 
     // Scene
-    dom::Document* document_;
+    workspace::Workspace* workspace_;
     core::UndoGroup* drawCurveUndoGroup_ = nullptr;
-    core::ConnectionHandle documentChangedConnectionHandle_;
+    core::ConnectionHandle workspaceChangedConnectionHandle_;
 
-    void onDocumentChanged_(const dom::Diff& diff);
+    void onWorkspaceChanged_();
+    //void onDocumentChanged_(const dom::Diff& diff);
 
     // Moving camera
     bool isSketching_ = false;
@@ -275,8 +277,8 @@ private:
     // is an example of how responsibilities could be separated:
     //
     // Widget: Creates an OpenGL context, receive graphical user input.
-    // Renderer: Renders the document to the given OpenGL context.
-    // Controller: Modifies the document based on user input (could be in the
+    // Renderer: Renders the workspace to the given OpenGL context.
+    // Controller: Modifies the workspace based on user input (could be in the
     // form of "Action" instances).
     //
     void startCurve_(const geometry::Vec2d& p, double width = 1.0);

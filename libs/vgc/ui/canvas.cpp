@@ -49,8 +49,8 @@ void SelectionListHistory::setSelection(SelectionList&& list) {
     selectionChanged().emit();
 }
 
-CanvasPtr Canvas::create(dom::Document* document) {
-    return CanvasPtr(new Canvas(document));
+CanvasPtr Canvas::create(workspace::Workspace* workspace) {
+    return CanvasPtr(new Canvas(workspace));
 }
 
 namespace {
@@ -104,9 +104,9 @@ QCursor crossCursor() {
 
 } // namespace
 
-Canvas::Canvas(dom::Document* document)
+Canvas::Canvas(workspace::Workspace* workspace)
     : Widget()
-    , document_(document)
+    , workspace_(workspace)
     , mousePressed_(false)
     , tabletPressed_(false)
     , polygonMode_(0)
@@ -137,25 +137,20 @@ SelectionList Canvas::getSelectableItemsAt(const geometry::Vec2f& /*position*/) 
     return l;
 }
 
-void Canvas::setDocument(dom::Document* document) {
+void Canvas::setWorkspace(workspace::Workspace* workspace) {
 
     clearGraphics_();
 
-    if (documentChangedConnectionHandle_) {
-        document_->disconnect(documentChangedConnectionHandle_);
+    if (workspaceChangedConnectionHandle_) {
+        workspace_->disconnect(workspaceChangedConnectionHandle_);
     }
 
-    document_ = document;
-    if (document_) {
-        documentChangedConnectionHandle_ = document_->changed().connect(
-            [this](const dom::Diff& diff) { this->onDocumentChanged_(diff); });
-        document_->emitPendingDiff();
+    workspace_ = workspace;
+    if (workspace_) {
+        workspaceChangedConnectionHandle_ =
+            workspace_->changed().connect(this->onWorkspaceChanged());
 
-        // Note: the above is a quick hack to initialize the resources after
-        // doing "new document" or "open document", but it wouldn't work if we
-        // have two canvases.
-        //
-        // TODO: implement initialization from new document without using pending diff.
+        // XXX flag for full redraw
     }
 
     requestRepaint();
@@ -196,96 +191,100 @@ bool Canvas::onKeyPress(KeyEvent* event) {
     // not handled here, including modifiers.
 }
 
-void Canvas::onDocumentChanged_(const dom::Diff& diff) {
-    for (dom::Node* node : diff.removedNodes()) {
-        dom::Element* e = dom::Element::cast(node);
-        if (!(e && e->tagName() == PATH)) {
-            continue;
-        }
-        auto it = curveGraphicsMap_.find(e);
-        if (it != curveGraphicsMap_.end()) {
-            removedCurveGraphics_.splice(
-                removedCurveGraphics_.begin(), curveGraphics_, it->second);
-            curveGraphicsMap_.erase(it);
-        }
-    }
-
-    bool needsSort = false;
-
-    dom::Element* root = document_->rootElement();
-    for (dom::Node* node : diff.reparentedNodes()) {
-        dom::Element* e = dom::Element::cast(node);
-        if (!(e && e->tagName() == PATH)) {
-            continue;
-        }
-        if (e->parent() == root) {
-            needsSort = true;
-            auto it = appendCurveGraphics_(e);
-            toUpdate_.insert(it);
-        }
-        else {
-            auto it = curveGraphicsMap_.find(e);
-            if (it != curveGraphicsMap_.end()) {
-                removedCurveGraphics_.splice(
-                    removedCurveGraphics_.begin(), curveGraphics_, it->second);
-                curveGraphicsMap_.erase(it);
-            }
-        }
-    }
-
-    for (dom::Node* node : diff.createdNodes()) {
-        dom::Element* e = dom::Element::cast(node);
-        if (!(e && e->tagName() == PATH)) {
-            continue;
-        }
-        if (e->parent() == root) {
-            needsSort = true;
-            auto it = appendCurveGraphics_(e);
-            toUpdate_.insert(it);
-        }
-    }
-
-    if (!needsSort) {
-        for (dom::Node* node : diff.childrenReorderedNodes()) {
-            if (node == root) {
-                needsSort = true;
-                break;
-            }
-        }
-    }
-
-    if (needsSort) {
-        auto insert = curveGraphics_.begin();
-        for (dom::Node* node : root->children()) {
-            dom::Element* e = dom::Element::cast(node);
-            if (!(e && e->tagName() == PATH)) {
-                continue;
-            }
-            auto it = curveGraphicsMap_[e]; // works unless there is a bug
-            if (insert == it) {
-                ++insert;
-            }
-            else {
-                curveGraphics_.splice(insert, curveGraphics_, it);
-            }
-        }
-    }
-
-    // XXX it's possible that update is done twice if the element is both modified and reparented..
-
-    const auto& modifiedElements = diff.modifiedElements();
-    for (CurveGraphicsIterator it = curveGraphics_.begin(); it != curveGraphics_.end();
-         ++it) {
-
-        auto it2 = modifiedElements.find(it->element);
-        if (it2 != modifiedElements.end()) {
-            toUpdate_.insert(it);
-        }
-    }
-
-    // ask for redraw
+void Canvas::onWorkspaceChanged_() {
     requestRepaint();
 }
+
+//void Canvas::onDocumentChanged_(const dom::Diff& diff) {
+//    for (dom::Node* node : diff.removedNodes()) {
+//        dom::Element* e = dom::Element::cast(node);
+//        if (!(e && e->tagName() == PATH)) {
+//            continue;
+//        }
+//        auto it = curveGraphicsMap_.find(e);
+//        if (it != curveGraphicsMap_.end()) {
+//            removedCurveGraphics_.splice(
+//                removedCurveGraphics_.begin(), curveGraphics_, it->second);
+//            curveGraphicsMap_.erase(it);
+//        }
+//    }
+//
+//    bool needsSort = false;
+//
+//    dom::Element* root = workspace_->rootElement();
+//    for (dom::Node* node : diff.reparentedNodes()) {
+//        dom::Element* e = dom::Element::cast(node);
+//        if (!(e && e->tagName() == PATH)) {
+//            continue;
+//        }
+//        if (e->parent() == root) {
+//            needsSort = true;
+//            auto it = appendCurveGraphics_(e);
+//            toUpdate_.insert(it);
+//        }
+//        else {
+//            auto it = curveGraphicsMap_.find(e);
+//            if (it != curveGraphicsMap_.end()) {
+//                removedCurveGraphics_.splice(
+//                    removedCurveGraphics_.begin(), curveGraphics_, it->second);
+//                curveGraphicsMap_.erase(it);
+//            }
+//        }
+//    }
+//
+//    for (dom::Node* node : diff.createdNodes()) {
+//        dom::Element* e = dom::Element::cast(node);
+//        if (!(e && e->tagName() == PATH)) {
+//            continue;
+//        }
+//        if (e->parent() == root) {
+//            needsSort = true;
+//            auto it = appendCurveGraphics_(e);
+//            toUpdate_.insert(it);
+//        }
+//    }
+//
+//    if (!needsSort) {
+//        for (dom::Node* node : diff.childrenReorderedNodes()) {
+//            if (node == root) {
+//                needsSort = true;
+//                break;
+//            }
+//        }
+//    }
+//
+//    if (needsSort) {
+//        auto insert = curveGraphics_.begin();
+//        for (dom::Node* node : root->children()) {
+//            dom::Element* e = dom::Element::cast(node);
+//            if (!(e && e->tagName() == PATH)) {
+//                continue;
+//            }
+//            auto it = curveGraphicsMap_[e]; // works unless there is a bug
+//            if (insert == it) {
+//                ++insert;
+//            }
+//            else {
+//                curveGraphics_.splice(insert, curveGraphics_, it);
+//            }
+//        }
+//    }
+//
+//    // XXX it's possible that update is done twice if the element is both modified and reparented..
+//
+//    const auto& modifiedElements = diff.modifiedElements();
+//    for (CurveGraphicsIterator it = curveGraphics_.begin(); it != curveGraphics_.end();
+//         ++it) {
+//
+//        auto it2 = modifiedElements.find(it->element);
+//        if (it2 != modifiedElements.end()) {
+//            toUpdate_.insert(it);
+//        }
+//    }
+//
+//    // ask for redraw
+//    requestRepaint();
+//}
 
 void Canvas::clearGraphics_() {
     for (CurveGraphics& r : curveGraphics_) {
@@ -339,20 +338,20 @@ void Canvas::updateCurveGraphics_(graphics::Engine* engine, CurveGraphics& r) {
     }
 
     dom::Element* path = r.element;
-    geometry::Vec2dArray positions = path->getAttribute(POSITIONS).getVec2dArray();
-    core::DoubleArray widths = path->getAttribute(WIDTHS).getDoubleArray();
+    geometry::SharedConstVec2dArray positions =
+        path->getAttribute(POSITIONS).getVec2dArray();
+    core::SharedConstDoubleArray widths = path->getAttribute(WIDTHS).getDoubleArray();
     core::Color color = path->getAttribute(COLOR).getColor();
 
     // Convert the dom::Path to a geometry::Curve
     // XXX move this logic to dom::Path
 
-    VGC_CORE_ASSERT(positions.size() == widths.size());
-    Int nControlPoints = positions.length();
+    VGC_CORE_ASSERT(positions.get().size() == widths.get().size());
+    //Int nPoints = positions.get().length();
     geometry::Curve curve;
     curve.setColor(color);
-    for (Int j = 0; j < nControlPoints; ++j) {
-        curve.addControlPoint(positions[j], widths[j]);
-    }
+    curve.setPositionData(positions);
+    curve.setWidthData(widths);
 
     geometry::Vec2fArray strokeVertices;
     core::Array<geometry::Vec4f> pointVertices;
@@ -453,13 +452,13 @@ void Canvas::destroyCurveGraphics_(CurveGraphics& r) {
 }
 
 void Canvas::startCurve_(const geometry::Vec2d& p, double width) {
-    if (!document_) {
+    if (!workspace_ || !workspace_->document()) {
         return;
     }
 
     // XXX CLEAN
     static core::StringId Draw_Curve("Draw Curve");
-    drawCurveUndoGroup_ = document_->history()->createUndoGroup(Draw_Curve);
+    drawCurveUndoGroup_ = workspace_->document()->history()->createUndoGroup(Draw_Curve);
 
     drawCurveUndoGroup_->undone().connect([this](core::UndoGroup*, bool /*isAbort*/) {
         // isAbort should be true since we have no sub-group
@@ -467,7 +466,7 @@ void Canvas::startCurve_(const geometry::Vec2d& p, double width) {
         drawCurveUndoGroup_ = nullptr;
     });
 
-    dom::Element* root = document_->rootElement();
+    dom::Element* root = workspace_->document()->rootElement();
     dom::Element* path = dom::Element::create(root, PATH);
 
     path->setAttribute(POSITIONS, geometry::Vec2dArray());
@@ -478,12 +477,12 @@ void Canvas::startCurve_(const geometry::Vec2d& p, double width) {
 }
 
 void Canvas::continueCurve_(const geometry::Vec2d& p, double width) {
-    if (!document_) {
+    if (!workspace_ || !workspace_->document()) {
         return;
     }
 
     // XXX CLEAN
-    dom::Element* root = document_->rootElement();
+    dom::Element* root = workspace_->document()->rootElement();
     dom::Element* path = root->lastChildElement();
 
     if (path) {
@@ -504,7 +503,7 @@ void Canvas::continueCurve_(const geometry::Vec2d& p, double width) {
         path->setAttribute(POSITIONS, std::move(positions));
         path->setAttribute(WIDTHS, std::move(widths));
 
-        document()->emitPendingDiff();
+        workspace_->sync();
     }
 }
 

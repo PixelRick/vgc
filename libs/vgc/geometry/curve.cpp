@@ -606,7 +606,7 @@ void Curve::sampleRange(
     Int start,
     Int end) const {
 
-    Int numSegs = (std::max)(Int(0), numControlPoints() - 1);
+    Int numSegs = (std::max)(Int(0), numPoints() - 1);
     if (start < 0) {
         start = (std::max)(Int(0), numSegs - start);
     }

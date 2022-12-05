@@ -60,7 +60,7 @@ public:
     /// color), and the saturation and lightness should be given in [0, 1] and
     /// are implicitly clamped to this range.
     ///
-    static constexpr Color hsl(float h, float s, float l);
+    static Color hsl(float h, float s, float l);
 
     /// Creates a Color initialized with the given r, g, b in [0, 1]. The alpha
     /// channel is set to 1.0.

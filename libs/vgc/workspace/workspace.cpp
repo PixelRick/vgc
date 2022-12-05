@@ -23,12 +23,17 @@ namespace vgc::workspace {
 Workspace::Workspace(dom::DocumentPtr document)
     : document_(document) {
 
-    document->changed().connect(onDocumentChanged());
+    document->changed().connect(onDocumentDiff());
 
     vac_ = topology::Vac::create();
-    vac_->changed().connect(onVacChanged());
+    vac_->changed().connect(onVacDiff());
 
     initVacFromDocument();
+}
+
+/* static */
+WorkspacePtr Workspace::create(dom::DocumentPtr document) {
+    return WorkspacePtr(new Workspace(document));
 }
 
 //Renderable* Workspace::createRenderable(
@@ -39,7 +44,11 @@ Workspace::Workspace(dom::DocumentPtr document)
 //    // todo
 //}
 
-void Workspace::onDocumentChanged_(const dom::Diff& diff) {
+void Workspace::sync() {
+    // XXX todo
+}
+
+void Workspace::onDocumentDiff_(const dom::Diff& diff) {
     if (isSyncOngoing_) {
         return;
     }
@@ -103,7 +112,7 @@ void Workspace::onDocumentChanged_(const dom::Diff& diff) {
     std::set<topology::VacCell*> aliveStar;
 }
 
-void Workspace::onVacChanged_(const topology::VacDiff& /*diff*/) {
+void Workspace::onVacDiff_(const topology::VacDiff& /*diff*/) {
     if (isSyncOngoing_) {
         return;
     }

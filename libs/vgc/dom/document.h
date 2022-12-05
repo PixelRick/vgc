@@ -21,6 +21,7 @@
 #include <optional>
 #include <unordered_map>
 
+#include <vgc/core/id.h>
 #include <vgc/core/object.h>
 #include <vgc/core/stringid.h>
 #include <vgc/dom/api.h>
@@ -352,6 +353,10 @@ public:
         return history_.get();
     }
 
+    core::Id version() const {
+        return version_;
+    }
+
     bool emitPendingDiff();
 
     VGC_SIGNAL(changed, (const Diff&, diff))
@@ -385,6 +390,7 @@ private:
     //friend class Element;
 
     core::HistoryPtr history_;
+    core::Id version_;
     Diff pendingDiff_;
     core::Array<NodePtr> pendingDiffKeepAllocPointers_;
     std::unordered_map<Node*, NodeRelatives> previousRelativesMap_;

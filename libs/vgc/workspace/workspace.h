@@ -73,8 +73,10 @@ private:
 
     using RenderObjectMap = std::map<core::Id, std::unique_ptr<RenderObject>>;
 
-public:
     Workspace(dom::DocumentPtr document);
+
+public:
+    static WorkspacePtr create(dom::DocumentPtr document);
 
     RenderObject*
     getOrCreateRenderObject(core::Id id, graphics::Engine* engine, core::AnimTime t);
@@ -84,16 +86,28 @@ public:
         graphics::Engine* engine,
         core::AnimTime t);
 
-    VGC_SLOT(onDocumentChanged, onDocumentChanged_)
-    VGC_SLOT(onVacChanged, onVacChanged_)
+    dom::Document* document() const {
+        return document_.getIfAlive();
+    }
+
+    const topology::Vac* vac() const {
+        return vac_.getIfAlive();
+    }
+
+    void sync();
+
+    VGC_SIGNAL(changed);
+
+    VGC_SLOT(onDocumentDiff, onDocumentDiff_)
+    VGC_SLOT(onVacDiff, onVacDiff_)
 
 protected:
     RenderObjectMap* getRenderObjectMap(graphics::Engine* engine, core::AnimTime t) {
         return renderObjectByIdByTimeByEngine_[engine][t].get();
     }
 
-    void onDocumentChanged_(const dom::Diff& diff);
-    void onVacChanged_(const topology::VacDiff& diff);
+    void onDocumentDiff_(const dom::Diff& diff);
+    void onVacDiff_(const topology::VacDiff& diff);
 
     void initVacFromDocument();
 

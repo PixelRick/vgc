@@ -5,6 +5,7 @@ vgc_add_library(ui
     VGC_DEPENDENCIES
         graphics
         dom
+        workspace
 
     HEADER_FILES
         action.h

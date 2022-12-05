@@ -89,7 +89,7 @@ public:
 
     template<
         size_t level,
-        VGC_REQUIRES(level >= 1 && (level <= degree + 1) level degree >= 1)>
+        VGC_REQUIRES(level >= 1 && (level <= degree + 1) && degree >= 1)>
     const T& firstValueOfLevel() {
         return values_[levelOffset_<level>];
     }
@@ -247,13 +247,6 @@ void cubicBezierPosAndDer(
 
 // clang-format on
 
-template<typename T, typename Scalar>
-T cubicBezierPosCasteljau(core::Span<const T, 4> controlPoints, Scalar u) {
-    DeCasteljauTree<T, Scalar, 3> tree = {};
-    tree.compute(controlPoints, u);
-    return tree.position();
-}
-
 template<size_t n, typename T, typename Scalar, VGC_REQUIRES(n >= 2)>
 T bezierDerivativeBezier(
     core::Span<const T, n> controlPoints,
@@ -268,7 +261,7 @@ template<size_t n, typename T, typename Scalar, VGC_REQUIRES(n >= 2)>
 T bezierPosCasteljau(core::Span<const T, n> controlPoints, Scalar u) {
     DeCasteljauTree<T, Scalar, n - 1> tree = {};
     tree.compute(controlPoints, u);
-    return tree.position();
+    return tree.value();
 }
 
 template<size_t n, typename T, typename Scalar, VGC_REQUIRES(n >= 2)>
@@ -280,18 +273,18 @@ void bezierPosAndDerCasteljau(
 
     DeCasteljauTree<T, Scalar, n - 1> tree = {};
     tree.compute(controlPoints, u);
-    pos = tree.position();
+    pos = tree.value();
     der = tree.derivative();
 }
 
 template<typename T, typename Scalar>
 T cubicBezierPosCasteljau(core::Span<const T, 4> controlPoints, Scalar u) {
-    bezierPosCasteljau(controlPoints, u, pos, der);
+    return bezierPosCasteljau(controlPoints, u);
 }
 
 template<typename T, typename Scalar>
 T quadraticBezierPosCasteljau(core::Span<const T, 3> controlPoints, Scalar u) {
-    bezierPosCasteljau(controlPoints, u, pos, der);
+    return bezierPosCasteljau(controlPoints, u);
 }
 
 /// Variant of `cubicBezierPosAndDer` expecting a pointer to a contiguous sequence

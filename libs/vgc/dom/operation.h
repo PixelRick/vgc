@@ -75,7 +75,30 @@ private:
     Node* nextSibling_ = nullptr;
 };
 
-class VGC_DOM_API CreateElementOperation : public core::Operation {
+class VGC_DOM_API Operation : public core::Operation {
+protected:
+    Operation()
+        : newDocumentVersion_(core::genId()) {
+    }
+
+    core::Id oldDocumentVersion() const {
+        return oldDocumentVersion_;
+    }
+
+    void setOldDocumentVersion(core::Id version) {
+        oldDocumentVersion_ = version;
+    }
+
+    core::Id newDocumentVersion() const {
+        return newDocumentVersion_;
+    }
+
+private:
+    core::Id oldDocumentVersion_;
+    core::Id newDocumentVersion_;
+};
+
+class VGC_DOM_API CreateElementOperation : public Operation {
 protected:
     CreateElementOperation(Element* element, Node* parent, Node* nextSibling)
         : element_(element)
@@ -112,7 +135,7 @@ private:
     bool keepAlive_ = false;
 };
 
-class VGC_DOM_API RemoveNodeOperation : public core::Operation {
+class VGC_DOM_API RemoveNodeOperation : public Operation {
 protected:
     RemoveNodeOperation(Node* node)
         : node_(node) {
@@ -144,7 +167,7 @@ private:
     NodeRelatives savedRelatives_;
 };
 
-class VGC_DOM_API MoveNodeOperation : public core::Operation {
+class VGC_DOM_API MoveNodeOperation : public Operation {
 protected:
     MoveNodeOperation(Node* node, Node* newParent, Node* newNextSibling)
         : node_(node)
@@ -175,7 +198,7 @@ private:
     NodeRelatives newRelatives_;
 };
 
-class VGC_DOM_API SetAttributeOperation : public core::Operation {
+class VGC_DOM_API SetAttributeOperation : public Operation {
 protected:
     friend Operation;
 
@@ -217,7 +240,7 @@ private:
     Value newValue_;
 };
 
-class VGC_DOM_API RemoveAuthoredAttributeOperation : public core::Operation {
+class VGC_DOM_API RemoveAuthoredAttributeOperation : public Operation {
 protected:
     RemoveAuthoredAttributeOperation(Element* element, core::StringId name, Int index)
         : element_(element)
