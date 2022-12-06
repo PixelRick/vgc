@@ -72,7 +72,7 @@ protected:
     friend UndoGroup;
     friend History;
 
-    constexpr Operation() noexcept = default;
+    Operation() noexcept = default;
 
 public:
     virtual ~Operation() = default;

@@ -28,7 +28,7 @@ Workspace::Workspace(dom::DocumentPtr document)
     vac_ = topology::Vac::create();
     vac_->changed().connect(onVacDiff());
 
-    initVacFromDocument();
+    initVacFromDom_();
 }
 
 /* static */
@@ -44,18 +44,38 @@ WorkspacePtr Workspace::create(dom::DocumentPtr document) {
 //    // todo
 //}
 
+void Workspace::updateFromDom() {
+    if (!document_ || !vac_) {
+        return;
+    }
+
+    isUpdatingFromDom_ = true;
+    document_->emitPendingDiff();
+    vac_->emitPendingDiff();
+    isUpdatingFromDom_ = false;
+}
+
+void Workspace::updateFromVac() {
+    if (!document_ || !vac_) {
+        return;
+    }
+
+    isUpdatingFromVac_ = true;
+    vac_->emitPendingDiff();
+    document_->emitPendingDiff();
+    isUpdatingFromVac_ = false;
+}
+
 void Workspace::sync() {
     // XXX todo
 }
 
 void Workspace::onDocumentDiff_(const dom::Diff& diff) {
-    if (isSyncOngoing_) {
+    if (isUpdatingFromVac_) {
         return;
     }
 
     namespace ss = dom::strings;
-
-    // XXX todo: build graphics objects at the same time and save cell pointers in.
 
     // we have to create the new elements in the right order
 
@@ -113,19 +133,23 @@ void Workspace::onDocumentDiff_(const dom::Diff& diff) {
 }
 
 void Workspace::onVacDiff_(const topology::VacDiff& /*diff*/) {
-    if (isSyncOngoing_) {
+    if (isUpdatingFromDom_) {
         return;
     }
 
     //
 }
 
-void Workspace::initVacFromDocument() {
-    if (!document_) {
+void Workspace::initVacFromDom_() {
+    if (!document_ || !vac_) {
         return;
     }
+    isUpdatingFromDom_ = true;
 
-    //
+    // see onDocumentDiff_
+
+    lastSyncedDomVersion_ = document_->version();
+    lastSyncedVacVersion_ = vac_->version();
 }
 
 } // namespace vgc::workspace

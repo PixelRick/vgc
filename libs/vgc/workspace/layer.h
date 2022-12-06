@@ -18,11 +18,11 @@
 #define VGC_WORKSPACE_LAYER_H
 
 #include <vgc/workspace/api.h>
-#include <vgc/workspace/renderable.h>
+#include <vgc/workspace/graphicelement.h>
 
 namespace vgc::workspace {
 
-class VGC_WORKSPACE_API Layer : Renderable {};
+class VGC_WORKSPACE_API Layer : GraphicElement {};
 
 } // namespace vgc::workspace
 

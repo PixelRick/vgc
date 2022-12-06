@@ -826,11 +826,12 @@ Element* Document::elementByInternalId(core::Id id) const {
     return nullptr;
 }
 
-void Document::enableHistory(core::StringId entrypointName) {
+core::History* Document::enableHistory(core::StringId entrypointName) {
     if (!history_) {
         history_ = core::History::create(entrypointName);
         history_->headChanged().connect(onHistoryHeadChanged());
     }
+    return history_.get();
 }
 
 bool Document::emitPendingDiff() {

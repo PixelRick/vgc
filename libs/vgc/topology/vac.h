@@ -136,6 +136,10 @@ public:
         return nodes_.find(id) != nodes_.end();
     }
 
+    core::Id version() const {
+        return version_;
+    }
+
     bool emitPendingDiff();
 
     VGC_SIGNAL(changed, (const VacDiff&, diff))
@@ -148,6 +152,7 @@ protected:
     // diff
 
 private:
+    core::Id version_ = {};
     std::unordered_map<core::Id, std::unique_ptr<VacNode>> nodes_;
     VacGroup root_;
     VacDiff diff_ = {};

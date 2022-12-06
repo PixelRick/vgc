@@ -51,31 +51,31 @@ namespace vgc::workspace {
 //    gradient params (gradient palette ?)
 //    effect params (effect group ?)
 
-class RenderObject;
-
 // called "rendered element" in SVG spec
-class VGC_WORKSPACE_API Renderable {
-protected:
-    virtual ~Renderable() = default;
+class VGC_WORKSPACE_API GraphicElement {
+public:
+    virtual ~GraphicElement() = default;
+
+    GraphicElement(dom::Element* domElement, topology::VacNode* vacNode)
+        : domElement_(domElement)
+        , vacNode_(vacNode) {
+    }
 
 public:
-    virtual std::shared_ptr<RenderObject>
-    createRenderObject(graphics::Engine* engine, core::AnimTime t) = 0;
+    //virtual std::shared_ptr<RenderObject>
+    //createRenderObject(graphics::Engine* engine, core::AnimTime t) = 0;
+
+    dom::Element* domElement() const {
+        return domElement_;
+    }
+
+    topology::VacNode* vacNode() const {
+        return vacNode_;
+    }
 
 private:
     dom::Element* domElement_;
     topology::VacNode* vacNode_;
-};
-
-class VGC_WORKSPACE_API RenderObject {
-
-    // the base virtual interface is meant to draw everything with the same parameters.
-    // for instance: everything in wireframe, everything with gradients disabled.
-
-    // A custom renderer should be able to hide all texts for instance, or draw them
-    // wireframe but the rest normally.
-
-    // Is selection/highlight style part of the default rendering ?
 };
 
 } // namespace vgc::workspace

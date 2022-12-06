@@ -18,11 +18,11 @@
 #define VGC_WORKSPACE_FACE_H
 
 #include <vgc/workspace/api.h>
-#include <vgc/workspace/renderable.h>
+#include <vgc/workspace/graphicelement.h>
 
 namespace vgc::workspace {
 
-class VGC_WORKSPACE_API Face : Renderable {};
+class VGC_WORKSPACE_API Face : GraphicElement {};
 
 } // namespace vgc::workspace
 

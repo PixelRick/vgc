@@ -18,13 +18,18 @@
 #define VGC_WORKSPACE_RENDERER_H
 
 #include <vgc/workspace/api.h>
+#include <vgc/workspace/graphicelement.h>
 
 namespace vgc::workspace {
 
 class VGC_WORKSPACE_API Renderer {
+public:
+    void visit(GraphicElement* e) {
+    }
 
-    // allow virtual override to control the visit..
-    // and probably leave it recursive.
+protected:
+    virtual void onVisit_(GraphicElement* e) = 0;
+
 };
 
 } // namespace vgc::workspace

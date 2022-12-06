@@ -8,8 +8,8 @@ vgc_add_library(workspace
         api.h
         edge.h
         face.h
+        graphicelement.h
         layer.h
-        renderable.h
         renderer.h
         text.h
         workspace.h
@@ -17,8 +17,8 @@ vgc_add_library(workspace
     CPP_FILES
         edge.cpp
         face.cpp
+        graphicelement.cpp
         layer.cpp
-        renderable.cpp
         renderer.cpp
         text.cpp
         workspace.cpp

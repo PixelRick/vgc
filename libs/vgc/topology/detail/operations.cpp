@@ -48,6 +48,7 @@ VacGroup* Operations::linkVacGroupUnchecked(
     // add cell to parent group
     parentGroup->children_.emplace(insertPos, p);
     // update diff
+    vac->version_ = core::genId();
     if (vac->diffEnabled_) {
         vac->diff_.onNodeDiff(p, VacNodeDiffFlag::Created);
         vac->diff_.onNodeDiff(parentGroup, VacNodeDiffFlag::ChildrenChanged);
@@ -68,6 +69,7 @@ KeyVertex* Operations::linkKeyVertex(
     // add cell to parent group
     parentGroup->children_.emplace(insertPos, p);
     // update diff
+    vac->version_ = core::genId();
     if (vac->diffEnabled_) {
         vac->diff_.onNodeDiff(p, VacNodeDiffFlag::Created);
         vac->diff_.onNodeDiff(parentGroup, VacNodeDiffFlag::ChildrenChanged);
@@ -97,6 +99,7 @@ KeyEdge* Operations::linkKeyEdgeUnchecked(
         endVertex->star_.emplaceLast(p);
     }
     // update diff
+    vac->version_ = core::genId();
     if (vac->diffEnabled_) {
         vac->diff_.onNodeDiff(p, VacNodeDiffFlag::Created);
         vac->diff_.onNodeDiff(parentGroup, VacNodeDiffFlag::ChildrenChanged);
@@ -149,6 +152,7 @@ KeyEdge* Operations::linkKeyClosedEdge(
     // add cell to parent group
     parentGroup->children_.emplace(insertPos, p);
     // update diff
+    vac->version_ = core::genId();
     if (vac->diffEnabled_) {
         vac->diff_.onNodeDiff(p, VacNodeDiffFlag::Created);
         vac->diff_.onNodeDiff(parentGroup, VacNodeDiffFlag::ChildrenChanged);
@@ -159,8 +163,11 @@ KeyEdge* Operations::linkKeyClosedEdge(
 void Operations::setKeyVertexPositionUnchecked(KeyVertex* v, const geometry::Vec2d& pos) {
     v->geometryParameters_.position_ = pos;
     Vac* vac = v->vac();
-    if (vac && vac->diffEnabled_) {
-        vac->diff_.onNodeDiff(v, VacNodeDiffFlag::ParametersChanged);
+    if (vac) {
+        vac->version_ = core::genId();
+        if (vac->diffEnabled_) {
+            vac->diff_.onNodeDiff(v, VacNodeDiffFlag::ParametersChanged);
+        }
     }
 }
 

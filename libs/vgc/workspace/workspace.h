@@ -26,7 +26,7 @@
 #include <vgc/dom/document.h>
 #include <vgc/topology/vac.h>
 #include <vgc/workspace/api.h>
-#include <vgc/workspace/renderable.h>
+#include <vgc/workspace/graphicelement.h>
 
 namespace vgc::graphics {
 
@@ -65,35 +65,33 @@ class VGC_WORKSPACE_API Workspace : public core::Object {
 private:
     VGC_OBJECT(Workspace, core::Object)
 
-    template<typename T>
-    using ByEngineMap = std::unordered_map<graphics::Engine*, T>;
-
-    template<typename T>
-    using ByTimeMap = std::map<core::AnimTime, T>;
-
-    using RenderObjectMap = std::map<core::Id, std::unique_ptr<RenderObject>>;
-
     Workspace(dom::DocumentPtr document);
 
 public:
     static WorkspacePtr create(dom::DocumentPtr document);
 
-    RenderObject*
-    getOrCreateRenderObject(core::Id id, graphics::Engine* engine, core::AnimTime t);
+    /*RenderObject*
+    getOrCreateRenderObject(core::Id id, graphics::Engine* engine, core::AnimTime t);*/
 
-    RenderObject* getOrCreateRenderObject(
-        Renderable* renderable,
-        graphics::Engine* engine,
-        core::AnimTime t);
+    //RenderObject* getOrCreateRenderObject(
+    //    Renderable* renderable,
+    //    graphics::Engine* engine,
+    //    core::AnimTime t);
 
     dom::Document* document() const {
-        return document_.getIfAlive();
+        return document_.get();
     }
 
     const topology::Vac* vac() const {
-        return vac_.getIfAlive();
+        return vac_.get();
     }
 
+    core::History* history() const {
+        return document_.get()->history();
+    }
+
+    void updateFromDom();
+    void updateFromVac();
     void sync();
 
     VGC_SIGNAL(changed);
@@ -102,24 +100,24 @@ public:
     VGC_SLOT(onVacDiff, onVacDiff_)
 
 protected:
-    RenderObjectMap* getRenderObjectMap(graphics::Engine* engine, core::AnimTime t) {
+    /*RenderObjectMap* getRenderObjectMap(graphics::Engine* engine, core::AnimTime t) {
         return renderObjectByIdByTimeByEngine_[engine][t].get();
-    }
+    }*/
 
     void onDocumentDiff_(const dom::Diff& diff);
     void onVacDiff_(const topology::VacDiff& diff);
 
-    void initVacFromDocument();
+    void initVacFromDom_();
 
 private:
-    ByEngineMap<ByTimeMap<std::unique_ptr<RenderObjectMap>>>
-        renderObjectByIdByTimeByEngine_;
-
     std::unordered_map<core::Id, ElementPointers> idToPointers_;
 
     dom::DocumentPtr document_;
     topology::VacPtr vac_;
-    bool isSyncOngoing_ = false;
+    bool isUpdatingFromDom_ = false;
+    bool isUpdatingFromVac_ = false;
+    core::Id lastSyncedDomVersion_ = {};
+    core::Id lastSyncedVacVersion_ = {};
 };
 
 } // namespace vgc::workspace

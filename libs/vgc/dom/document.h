@@ -347,7 +347,7 @@ public:
 
     Element* elementByInternalId(core::Id id) const;
 
-    void enableHistory(core::StringId entrypointName);
+    core::History* enableHistory(core::StringId entrypointName);
 
     core::History* history() const {
         return history_.get();
@@ -361,6 +361,7 @@ public:
 
     VGC_SIGNAL(changed, (const Diff&, diff))
 
+protected:
     VGC_SLOT(onHistoryHeadChanged, onHistoryHeadChanged_)
 
 private:

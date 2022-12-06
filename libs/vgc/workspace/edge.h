@@ -21,7 +21,7 @@
 #include <vgc/geometry/vec4d.h>
 #include <vgc/graphics/buffer.h>
 #include <vgc/workspace/api.h>
-#include <vgc/workspace/renderable.h>
+#include <vgc/workspace/graphicelement.h>
 
 namespace vgc::workspace {
 
@@ -35,7 +35,7 @@ private:
     core::Array<UInt32> meshIndices_;
 };
 
-class VGC_WORKSPACE_API Edge : Renderable {
+class VGC_WORKSPACE_API EdgeGraphics {
 public:
 private:
     // Stroke
@@ -51,20 +51,20 @@ private:
     // if edge is animated we probably want to cache the graphics.
 };
 
-class VGC_WORKSPACE_API EdgeObject : RenderObject {
-public:
-private:
+
+struct CurveGraphics {
     // Stroke
-    graphics::BufferPtr meshVertices_;
-    graphics::BufferPtr meshUVSTs_;
-    graphics::BufferPtr meshIndices_;
-    graphics::BufferPtr controlPoints_;
-    graphics::BufferPtr centerline_;
+    graphics::GeometryViewPtr strokeGeometry_;
 
-    //CurveMesh mesh_;
+    // Fill
+    //graphics::GeometryViewPtr fillGeometry_;
 
-    // if edge is not animated we want to share the graphics resources for all frames.
-    // if edge is animated we probably want to cache the graphics.
+    // Control Points
+    graphics::GeometryViewPtr pointsGeometry_;
+    Int numPoints = 0;
+
+    // Line
+    graphics::GeometryViewPtr dispLineGeometry_;
 };
 
 } // namespace vgc::workspace
