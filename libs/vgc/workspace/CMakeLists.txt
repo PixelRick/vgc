@@ -6,20 +6,10 @@ vgc_add_library(workspace
 
     HEADER_FILES
         api.h
-        edge.h
-        face.h
-        graphicelement.h
-        layer.h
-        renderer.h
-        text.h
+        element.h
         workspace.h
 
     CPP_FILES
-        edge.cpp
-        face.cpp
-        graphicelement.cpp
-        layer.cpp
-        renderer.cpp
-        text.cpp
+        element.cpp
         workspace.cpp
 )

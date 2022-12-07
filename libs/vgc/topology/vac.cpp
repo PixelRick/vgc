@@ -25,57 +25,22 @@ VacPtr Vac::create() {
     return VacPtr(new Vac());
 }
 
+void Vac::clear() {
+    nodes_.clear();
+    root_.children_.clear();
+    root_.transform_ = geometry::Mat3d::identity;
+    root_.inverseTransform_ = geometry::Mat3d::identity;
+    root_.transformFromRoot_ = geometry::Mat3d::identity;
+    diff_.reset();
+    ++version_;
+}
+
 bool Vac::emitPendingDiff() {
-
-    // Vac doesn't keep a relatives map
-
-    //for (const auto& [node, oldRelatives] : previousRelativesMap_) {
-    //    if (pendingDiff_.createdNodes_.contains(node)) {
-    //        continue;
-    //    }
-    //    if (pendingDiff_.removedNodes_.contains(node)) {
-    //        continue;
-    //    }
-
-    //    NodeRelatives newRelatives(node);
-    //    if (oldRelatives.parent_ != newRelatives.parent_) {
-    //        pendingDiff_.reparentedNodes_.insert(node);
-    //    }
-    //    else if (
-    //        oldRelatives.nextSibling_ != newRelatives.nextSibling_
-    //        || oldRelatives.previousSibling_ != newRelatives.previousSibling_) {
-    //        // this introduces false positives if old siblings were removed or
-    //        // new siblings were added.
-    //        pendingDiff_.childrenReorderedNodes_.insert(newRelatives.parent_);
-    //    }
-    //}
-    //previousRelativesMap_.clear();
-
-    //// remove created and removed nodes from modified elements
-    //auto& modifiedElements = pendingDiff_.modifiedElements_;
-    //for (auto it = modifiedElements.begin(), last = modifiedElements.end(); it != last;) {
-    //    Node* node = it->first;
-    //    if (pendingDiff_.createdNodes_.contains(node)) {
-    //        it = modifiedElements.erase(it);
-    //        continue;
-    //    }
-    //    if (pendingDiff_.removedNodes_.contains(node)) {
-    //        it = modifiedElements.erase(it);
-    //        continue;
-    //    }
-    //    ++it;
-    //}
-
-    //if (!pendingDiff_.isEmpty()) {
-
-    //    // XXX todo: emit node signals in here ?
-
-    //    changed().emit(pendingDiff_);
-    //    pendingDiff_.reset();
-    //    pendingDiffKeepAllocPointers_.clear();
-    //    return true;
-    //}
-
+    if (!diff_.isEmpty()) {
+        changed().emit(diff_);
+        diff_.reset();
+        return true;
+    }
     return false;
 }
 

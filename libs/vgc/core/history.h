@@ -142,6 +142,10 @@ public:
         return operations_.size();
     }
 
+    UndoGroup* openAncestor() const {
+        return openAncestor_;
+    }
+
     UndoGroup* parent() const {
         return static_cast<UndoGroup*>(this->parentObject());
     }

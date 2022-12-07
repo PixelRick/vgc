@@ -201,11 +201,11 @@ void Canvas::onWorkspaceChanged_() {
 //        if (!(e && e->tagName() == PATH)) {
 //            continue;
 //        }
-//        auto it = curveGraphicsMap_.find(e);
-//        if (it != curveGraphicsMap_.end()) {
-//            removedCurveGraphics_.splice(
-//                removedCurveGraphics_.begin(), curveGraphics_, it->second);
-//            curveGraphicsMap_.erase(it);
+//        auto it = edgeGraphicsMap_.find(e);
+//        if (it != edgeGraphicsMap_.end()) {
+//            removedEdgeGraphics_.splice(
+//                removedEdgeGraphics_.begin(), edgeGraphics_, it->second);
+//            edgeGraphicsMap_.erase(it);
 //        }
 //    }
 //
@@ -219,15 +219,15 @@ void Canvas::onWorkspaceChanged_() {
 //        }
 //        if (e->parent() == root) {
 //            needsSort = true;
-//            auto it = appendCurveGraphics_(e);
+//            auto it = appendEdgeGraphics_(e);
 //            toUpdate_.insert(it);
 //        }
 //        else {
-//            auto it = curveGraphicsMap_.find(e);
-//            if (it != curveGraphicsMap_.end()) {
-//                removedCurveGraphics_.splice(
-//                    removedCurveGraphics_.begin(), curveGraphics_, it->second);
-//                curveGraphicsMap_.erase(it);
+//            auto it = edgeGraphicsMap_.find(e);
+//            if (it != edgeGraphicsMap_.end()) {
+//                removedEdgeGraphics_.splice(
+//                    removedEdgeGraphics_.begin(), edgeGraphics_, it->second);
+//                edgeGraphicsMap_.erase(it);
 //            }
 //        }
 //    }
@@ -239,7 +239,7 @@ void Canvas::onWorkspaceChanged_() {
 //        }
 //        if (e->parent() == root) {
 //            needsSort = true;
-//            auto it = appendCurveGraphics_(e);
+//            auto it = appendEdgeGraphics_(e);
 //            toUpdate_.insert(it);
 //        }
 //    }
@@ -254,18 +254,18 @@ void Canvas::onWorkspaceChanged_() {
 //    }
 //
 //    if (needsSort) {
-//        auto insert = curveGraphics_.begin();
+//        auto insert = edgeGraphics_.begin();
 //        for (dom::Node* node : root->children()) {
 //            dom::Element* e = dom::Element::cast(node);
 //            if (!(e && e->tagName() == PATH)) {
 //                continue;
 //            }
-//            auto it = curveGraphicsMap_[e]; // works unless there is a bug
+//            auto it = edgeGraphicsMap_[e]; // works unless there is a bug
 //            if (insert == it) {
 //                ++insert;
 //            }
 //            else {
-//                curveGraphics_.splice(insert, curveGraphics_, it);
+//                edgeGraphics_.splice(insert, edgeGraphics_, it);
 //            }
 //        }
 //    }
@@ -273,7 +273,7 @@ void Canvas::onWorkspaceChanged_() {
 //    // XXX it's possible that update is done twice if the element is both modified and reparented..
 //
 //    const auto& modifiedElements = diff.modifiedElements();
-//    for (CurveGraphicsIterator it = curveGraphics_.begin(); it != curveGraphics_.end();
+//    for (EdgeGraphicsIterator it = edgeGraphics_.begin(); it != edgeGraphics_.end();
 //         ++it) {
 //
 //        auto it2 = modifiedElements.find(it->element);
@@ -287,27 +287,27 @@ void Canvas::onWorkspaceChanged_() {
 //}
 
 void Canvas::clearGraphics_() {
-    for (CurveGraphics& r : curveGraphics_) {
-        destroyCurveGraphics_(r);
+    for (EdgeGraphics& r : edgeGraphics_) {
+        destroyEdgeGraphics_(r);
     }
-    curveGraphics_.clear();
-    curveGraphicsMap_.clear();
+    edgeGraphics_.clear();
+    edgeGraphicsMap_.clear();
 }
 
-void Canvas::updateCurveGraphics_(graphics::Engine* engine) {
+void Canvas::updateEdgeGraphics_(graphics::Engine* engine) {
     updateTask_.start();
 
-    removedCurveGraphics_.clear();
+    removedEdgeGraphics_.clear();
     bool tesselationModeChanged = requestedTesselationMode_ != currentTesselationMode_;
     if (tesselationModeChanged) {
         currentTesselationMode_ = requestedTesselationMode_;
-        for (CurveGraphics& r : curveGraphics_) {
-            updateCurveGraphics_(engine, r);
+        for (EdgeGraphics& r : edgeGraphics_) {
+            updateEdgeGraphics_(engine, r);
         }
     }
     else {
         for (auto it : toUpdate_) {
-            updateCurveGraphics_(engine, *it);
+            updateEdgeGraphics_(engine, *it);
         }
     }
     toUpdate_.clear();
@@ -315,13 +315,13 @@ void Canvas::updateCurveGraphics_(graphics::Engine* engine) {
     updateTask_.stop();
 }
 
-Canvas::CurveGraphicsIterator Canvas::appendCurveGraphics_(dom::Element* element) {
-    auto it = curveGraphics_.emplace(curveGraphics_.end(), CurveGraphics(element));
-    curveGraphicsMap_.emplace(element, it);
+Canvas::EdgeGraphicsIterator Canvas::appendEdgeGraphics_(dom::Element* element) {
+    auto it = edgeGraphics_.emplace(edgeGraphics_.end(), EdgeGraphics(element));
+    edgeGraphicsMap_.emplace(element, it);
     return it;
 }
 
-void Canvas::updateCurveGraphics_(graphics::Engine* engine, CurveGraphics& r) {
+void Canvas::updateEdgeGraphics_(graphics::Engine* engine, EdgeGraphics& r) {
     using namespace graphics;
     if (!r.inited_) {
         // XXX use indexing when triangulate() implements indices.
@@ -444,7 +444,7 @@ void Canvas::updateCurveGraphics_(graphics::Engine* engine, CurveGraphics& r) {
         r.pointsGeometry_->vertexBuffer(1), std::move(pointInstData));
 }
 
-void Canvas::destroyCurveGraphics_(CurveGraphics& r) {
+void Canvas::destroyEdgeGraphics_(EdgeGraphics& r) {
     r.strokeGeometry_.reset();
     r.pointsGeometry_.reset();
     r.dispLineGeometry_.reset();
@@ -690,7 +690,7 @@ void Canvas::onPaintDraw(graphics::Engine* engine, PaintOptions /*options*/) {
 
     namespace gs = graphics::strings;
 
-    updateCurveGraphics_(engine);
+    updateEdgeGraphics_(engine);
 
     drawTask_.start();
 
@@ -741,7 +741,7 @@ void Canvas::onPaintDraw(graphics::Engine* engine, PaintOptions /*options*/) {
 
     // Draw triangles
 
-    for (CurveGraphics& r : curveGraphics_) {
+    for (EdgeGraphics& r : edgeGraphics_) {
         engine->draw(r.strokeGeometry_, -1, 0);
     }
 
@@ -749,7 +749,7 @@ void Canvas::onPaintDraw(graphics::Engine* engine, PaintOptions /*options*/) {
 
     // Draw control points
     if (showControlPoints_) {
-        for (CurveGraphics& r : curveGraphics_) {
+        for (EdgeGraphics& r : edgeGraphics_) {
             engine->draw(r.dispLineGeometry_, -1, 0);
             engine->draw(r.pointsGeometry_, -1, r.numPoints);
         }
@@ -763,8 +763,9 @@ void Canvas::onPaintDraw(graphics::Engine* engine, PaintOptions /*options*/) {
 
 void Canvas::onPaintDestroy(graphics::Engine*) {
     bgGeometry_.reset();
-    for (CurveGraphics& r : curveGraphics_) {
-        destroyCurveGraphics_(r);
+    bgFillRS_.reset();
+    for (EdgeGraphics& r : edgeGraphics_) {
+        destroyEdgeGraphics_(r);
     }
     fillRS_.reset();
     wireframeRS_.reset();

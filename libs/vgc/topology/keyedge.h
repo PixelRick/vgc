@@ -66,8 +66,8 @@ private:
     KeyVertex* startVertex_ = nullptr;
     KeyVertex* endVertex_ = nullptr;
 
-    // position and orientation when not bound to vertices
-    detail::Transform2d transform_;
+    // position and orientation when not bound to vertices ?
+    //detail::Transform2d transform_;
 
     std::unique_ptr<KeyEdgeGeometry> geometry_ = {};
     bool isClosed_ = false;

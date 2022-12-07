@@ -40,23 +40,17 @@ class Operations;
 // we also need edge shape source/def, which can be different curve types
 // -> EdgeParameters
 
-class VGC_TOPOLOGY_API EdgeSampling : DataObject {
+class VGC_TOPOLOGY_API EdgeBezierQuadSampling : DataObject {
 public:
-    EdgeSampling(core::Id id) noexcept
+    EdgeBezierQuadSampling(core::Id id) noexcept
         : DataObject(id) {
     }
 
 public:
-    const geometry::CurveSampleArray& samples() const {
-        return samples_;
-    }
-
-    geometry::CurveSampleArray& samplesRef() {
-        return samples_;
-    }
-
 private:
-    geometry::CurveSampleArray samples_;
+    // to be moved to curve.h.
+    // array of Vec2d, points at odd indices are the middle control points.
+    // maybe better in curve.h
 };
 
 // generic parameters for all models
@@ -93,6 +87,8 @@ private:
 // In which space do we sample ?
 // inbetweening -> common ancestor for best identification of interest points
 //
+
+// XXX deprecated for new design 2022-12-07
 class VGC_TOPOLOGY_API KeyEdgeGeometry {
 private:
     friend detail::Operations;
@@ -116,26 +112,11 @@ public:
     // - the common ancestor group space for best morphing
     // - the canvas space for best rendering
 
-    virtual EdgeSampling computeSampling(const SamplingParameters& parameters) = 0;
-    virtual EdgeSampling computeSamplingUniformU(
-        const geometry::Mat3d& viewMatrix,
-        Int count,
-        geometry::Range1d range) = 0;
-    virtual EdgeSampling computeSamplingUniformU(double du) = 0;
-    virtual EdgeSampling computeSamplingUniformS(Int count) = 0;
-    virtual EdgeSampling computeSamplingUniformS(double ds) = 0;
-
-    // important for inbetweening
-    //virtual EdgeSampling computeMergeSampling(
-    //    EdgeSampling sampling,
-    //    const core::Array<double>& sortedUValues) = 0;
+    virtual EdgeBezierQuadSampling
+    computeSampling(const SamplingParameters& parameters) = 0;
 
 protected:
     //virtual EdgeSampling computeSampling() = 0;
-
-private:
-    // lod0 ?
-    geometry::CurveSampleArray cachedSamples_;
 };
 
 // key edge
@@ -150,6 +131,8 @@ VGC_DEFINE_FLAGS(
     KeyEdgeInterpolatedPointsGeometryFlags,
     KeyEdgeInterpolatedPointsGeometryFlag)
 
+
+// XXX deprecated for new design 2022-12-07
 class VGC_TOPOLOGY_API KeyEdgeInterpolatedPointsGeometry {
 private:
     friend detail::Operations;

@@ -190,7 +190,18 @@ private:
     // Component (drawn and selectable..)
 
     struct CurveGraphics {
-        explicit CurveGraphics(dom::Element* element)
+        graphics::BufferPtr controlPoints_;
+        graphics::BufferPtr thickline_;
+    };
+
+    struct StrokeGraphics {
+        graphics::BufferPtr meshVertices_;
+        graphics::BufferPtr meshUVSTs_;
+        graphics::BufferPtr meshIndices_;
+    };
+
+    struct EdgeGraphics {
+        explicit EdgeGraphics(dom::Element* element)
             : element(element) {
         }
 
@@ -211,11 +222,11 @@ private:
         dom::Element* element;
     };
 
-    using CurveGraphicsIterator = std::list<CurveGraphics>::iterator;
+    using EdgeGraphicsIterator = std::list<EdgeGraphics>::iterator;
 
-    std::list<CurveGraphics> curveGraphics_; // in draw order
-    std::list<CurveGraphics> removedCurveGraphics_;
-    std::map<dom::Element*, CurveGraphicsIterator> curveGraphicsMap_;
+    std::list<EdgeGraphics> edgeGraphics_; // in draw order
+    std::list<EdgeGraphics> removedEdgeGraphics_;
+    std::map<dom::Element*, EdgeGraphicsIterator> edgeGraphicsMap_;
     graphics::GeometryViewPtr bgGeometry_;
 
     struct unwrapped_less {
@@ -225,14 +236,14 @@ private:
         }
     };
 
-    std::set<CurveGraphicsIterator, unwrapped_less> toUpdate_;
+    std::set<EdgeGraphicsIterator, unwrapped_less> toUpdate_;
     //bool needsSort_ = false;
 
     void clearGraphics_();
-    void updateCurveGraphics_(graphics::Engine* engine);
-    CurveGraphicsIterator appendCurveGraphics_(dom::Element* element);
-    void updateCurveGraphics_(graphics::Engine* engine, CurveGraphics& r);
-    static void destroyCurveGraphics_(CurveGraphics& r);
+    void updateEdgeGraphics_(graphics::Engine* engine);
+    EdgeGraphicsIterator appendEdgeGraphics_(dom::Element* element);
+    void updateEdgeGraphics_(graphics::Engine* engine, EdgeGraphics& r);
+    static void destroyEdgeGraphics_(EdgeGraphics& r);
 
     // Make sure to disallow concurrent usage of the mouse and the tablet to
     // avoid conflicts. This also acts as a work around the following Qt bugs:

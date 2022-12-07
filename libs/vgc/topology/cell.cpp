@@ -18,23 +18,6 @@
 
 namespace vgc::topology {
 
-void VacGroup::setTransform(const geometry::Mat3d& transform) {
-    transform_ = transform;
-    // todo: handle non-invertible case.
-    inverseTransform_ = transform_.inverted();
-    updateTransformFromRoot();
-}
-
-void VacGroup::updateTransformFromRoot() {
-    const VacGroup* p = parentGroup();
-    if (p) {
-        transformFromRoot_ = p->transformFromRoot() * transform_;
-    }
-    else {
-        transformFromRoot_ = transform_;
-    }
-}
-
 geometry::Mat3d VacGroup::computeInverseTransformTo(VacGroup* ancestor) const {
     geometry::Mat3d t = inverseTransform_;
     VacGroup* g = parentGroup();
@@ -43,6 +26,23 @@ geometry::Mat3d VacGroup::computeInverseTransformTo(VacGroup* ancestor) const {
         g = parentGroup();
     }
     return t;
+}
+
+void VacGroup::setTransform_(const geometry::Mat3d& transform) {
+    transform_ = transform;
+    // todo: handle non-invertible case.
+    inverseTransform_ = transform_.inverted();
+    updateTransformFromRoot_();
+}
+
+void VacGroup::updateTransformFromRoot_() {
+    const VacGroup* p = parentGroup();
+    if (p) {
+        transformFromRoot_ = p->transformFromRoot() * transform_;
+    }
+    else {
+        transformFromRoot_ = transform_;
+    }
 }
 
 } // namespace vgc::topology

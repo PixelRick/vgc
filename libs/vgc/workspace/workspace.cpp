@@ -77,19 +77,22 @@ void Workspace::onDocumentDiff_(const dom::Diff& diff) {
 
     namespace ss = dom::strings;
 
-    // we have to create the new elements in the right order
-
-    // first create deffered everything new
-
-    /*
-    processing order:
-    //
-    core::Array<Node*> createdNodes_;
-    std::unordered_map<Element*, std::set<core::StringId>> modifiedElements_;
-    std::set<Node*> reparentedNodes_;
-    core::Array<Node*> removedNodes_;
-    std::set<Node*> childrenReorderedNodes_;
-    */
+    // first create everything new
+    // processing order:
+    // 
+    //  std::unordered_map<Element*, std::set<core::StringId>> modifiedElements_;
+    //  -> invalidate and delete desynced vac parts.
+    //  -> add the destroyed cells to a pending rebuild and link list.
+    //  
+    //  core::Array<Node*> createdNodes_;
+    //  -> but don't link them yet. add
+    //  -> add the destroyed cells to a pending link list.
+    // 
+    //  std::unordered_map<Element*, std::set<core::StringId>> modifiedElements_;
+    //  std::set<Node*> reparentedNodes_;
+    //  core::Array<Node*> removedNodes_;
+    //  std::set<Node*> childrenReorderedNodes_;
+    // 
 
     core::Array<std::unique_ptr<topology::VacCell>> createdCells;
 
@@ -129,6 +132,41 @@ void Workspace::onDocumentDiff_(const dom::Diff& diff) {
         }
     }
 
+    for (const auto& me : diff.modifiedElements()) {
+        dom::Element* e = me.first;
+        const std::set<core::StringId>& attrs = me.second;
+        if (!e) {
+            continue;
+        }
+        if (e->tagName() == ss::vertex) {
+            //
+        }
+        else if (e->tagName() == ss::edge) {
+            // What if startVertex or endVertex changes ?
+            // It is not really a valid vac operation.
+            //
+        }
+        else if (e->tagName() == ss::layer) {
+            //
+        }
+    }
+
+    for (dom::Node* n : diff.reparentedNodes()) {
+        dom::Element* e = dom::Element::cast(n);
+        if (!e) {
+            continue;
+        }
+        if (e->tagName() == ss::vertex) {
+            //
+        }
+        else if (e->tagName() == ss::edge) {
+            //
+        }
+        else if (e->tagName() == ss::layer) {
+            //
+        }
+    }
+
     std::set<topology::VacCell*> aliveStar;
 }
 
@@ -145,6 +183,8 @@ void Workspace::initVacFromDom_() {
         return;
     }
     isUpdatingFromDom_ = true;
+
+    vac_->clear();
 
     // see onDocumentDiff_
 

@@ -214,11 +214,6 @@ public:
         return computeInverseTransformTo(nullptr);
     }
 
-protected:
-    void updateTransformFromRoot();
-
-    void setTransform(const geometry::Mat3d& transform);
-
 private:
     friend Vac;
     friend detail::Operations;
@@ -229,6 +224,9 @@ private:
     // to speed-up working with cells connected from different groups
     geometry::Mat3d inverseTransform_;
     geometry::Mat3d transformFromRoot_;
+
+    void setTransform_(const geometry::Mat3d& transform);
+    void updateTransformFromRoot_();
 };
 
 // boundaries:

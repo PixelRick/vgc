@@ -113,6 +113,8 @@ protected:
 public:
     static VacPtr create();
 
+    void clear();
+
     VacGroup* rootGroup() const {
         return const_cast<VacGroup*>(&root_);
     }
@@ -136,8 +138,14 @@ public:
         return nodes_.find(id) != nodes_.end();
     }
 
-    core::Id version() const {
+    // An increasing version seems enough, we don't need it to match document version.
+
+    Int64 version() const {
         return version_;
+    }
+
+    void incrementVersion() {
+        ++version_;
     }
 
     bool emitPendingDiff();
@@ -152,7 +160,7 @@ protected:
     // diff
 
 private:
-    core::Id version_ = {};
+    Int64 version_ = 0;
     std::unordered_map<core::Id, std::unique_ptr<VacNode>> nodes_;
     VacGroup root_;
     VacDiff diff_ = {};

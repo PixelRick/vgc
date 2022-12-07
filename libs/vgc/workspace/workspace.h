@@ -26,7 +26,7 @@
 #include <vgc/dom/document.h>
 #include <vgc/topology/vac.h>
 #include <vgc/workspace/api.h>
-#include <vgc/workspace/graphicelement.h>
+#include <vgc/workspace/element.h>
 
 namespace vgc::graphics {
 
@@ -37,26 +37,6 @@ class Engine;
 namespace vgc::workspace {
 
 VGC_DECLARE_OBJECT(Workspace);
-
-struct VGC_WORKSPACE_API ElementPointers {
-protected:
-    ElementPointers(dom::Element* domElement, topology::VacNode* vacNode)
-        : domElement_(domElement)
-        , vacNode_(vacNode) {
-    }
-
-    dom::Element* domElement() const {
-        return domElement_;
-    }
-
-    topology::VacNode* vacNode() const {
-        return vacNode_;
-    }
-
-private:
-    dom::Element* domElement_;
-    topology::VacNode* vacNode_;
-};
 
 /// \class vgc::workspace::Workspace
 /// \brief Represents a workspace to manage, manipulate and visit a vector graphics scene.
@@ -110,14 +90,15 @@ protected:
     void initVacFromDom_();
 
 private:
-    std::unordered_map<core::Id, ElementPointers> idToPointers_;
+    std::unordered_map<core::Id, Element> elementsById_;
+    Element* vacRootElement_;
 
     dom::DocumentPtr document_;
     topology::VacPtr vac_;
     bool isUpdatingFromDom_ = false;
     bool isUpdatingFromVac_ = false;
     core::Id lastSyncedDomVersion_ = {};
-    core::Id lastSyncedVacVersion_ = {};
+    Int64 lastSyncedVacVersion_ = -1;
 };
 
 } // namespace vgc::workspace

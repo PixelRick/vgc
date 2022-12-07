@@ -47,8 +47,9 @@ VacGroup* Operations::linkVacGroupUnchecked(
     vac->nodes_[p->id_] = std::move(u);
     // add cell to parent group
     parentGroup->children_.emplace(insertPos, p);
+    // inc version
+    vac->incrementVersion();
     // update diff
-    vac->version_ = core::genId();
     if (vac->diffEnabled_) {
         vac->diff_.onNodeDiff(p, VacNodeDiffFlag::Created);
         vac->diff_.onNodeDiff(parentGroup, VacNodeDiffFlag::ChildrenChanged);
@@ -68,8 +69,9 @@ KeyVertex* Operations::linkKeyVertex(
     vac->nodes_[p->id_] = std::move(u);
     // add cell to parent group
     parentGroup->children_.emplace(insertPos, p);
+    // inc version
+    vac->incrementVersion();
     // update diff
-    vac->version_ = core::genId();
     if (vac->diffEnabled_) {
         vac->diff_.onNodeDiff(p, VacNodeDiffFlag::Created);
         vac->diff_.onNodeDiff(parentGroup, VacNodeDiffFlag::ChildrenChanged);
@@ -98,8 +100,9 @@ KeyEdge* Operations::linkKeyEdgeUnchecked(
     if (endVertex != startVertex) {
         endVertex->star_.emplaceLast(p);
     }
+    // inc version
+    vac->incrementVersion();
     // update diff
-    vac->version_ = core::genId();
     if (vac->diffEnabled_) {
         vac->diff_.onNodeDiff(p, VacNodeDiffFlag::Created);
         vac->diff_.onNodeDiff(parentGroup, VacNodeDiffFlag::ChildrenChanged);
@@ -151,8 +154,9 @@ KeyEdge* Operations::linkKeyClosedEdge(
     vac->nodes_[p->id_] = std::move(u);
     // add cell to parent group
     parentGroup->children_.emplace(insertPos, p);
+    // inc version
+    vac->incrementVersion();
     // update diff
-    vac->version_ = core::genId();
     if (vac->diffEnabled_) {
         vac->diff_.onNodeDiff(p, VacNodeDiffFlag::Created);
         vac->diff_.onNodeDiff(parentGroup, VacNodeDiffFlag::ChildrenChanged);
@@ -164,7 +168,9 @@ void Operations::setKeyVertexPositionUnchecked(KeyVertex* v, const geometry::Vec
     v->geometryParameters_.position_ = pos;
     Vac* vac = v->vac();
     if (vac) {
-        vac->version_ = core::genId();
+        // inc version
+        vac->incrementVersion();
+        // update diff
         if (vac->diffEnabled_) {
             vac->diff_.onNodeDiff(v, VacNodeDiffFlag::ParametersChanged);
         }
