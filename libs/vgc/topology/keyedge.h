@@ -57,10 +57,10 @@ public:
 
     //
 
-    EdgeSampling computeSamplingAt(core::AnimTime /*t*/) {
-        // XXX todo
-        return EdgeSampling(-1);
-    }
+    //EdgeSampling computeSamplingAt(core::AnimTime /*t*/) {
+    //    // XXX todo
+    //    return EdgeSampling(-1);
+    //}
 
 private:
     KeyVertex* startVertex_ = nullptr;

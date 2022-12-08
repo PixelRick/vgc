@@ -7,9 +7,11 @@ vgc_add_library(workspace
     HEADER_FILES
         api.h
         element.h
+        logcategories.h
         workspace.h
 
     CPP_FILES
         element.cpp
+        logcategories.cpp
         workspace.cpp
 )

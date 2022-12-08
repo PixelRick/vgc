@@ -18,6 +18,7 @@
 #define VGC_WORKSPACE_ELEMENT_H
 
 #include <vgc/core/arithmetic.h>
+#include <vgc/core/array.h>
 #include <vgc/core/flags.h>
 #include <vgc/core/id.h>
 #include <vgc/core/stringid.h>
@@ -57,8 +58,6 @@ namespace vgc::workspace {
 //    gradient params (gradient palette ?)
 //    effect params (effect group ?)
 //
-
-
 
 enum class ElementFlag : UInt16 {
     None = 0x00,
@@ -103,10 +102,32 @@ public:
         return flags_;
     }
 
+    Element* prev() {
+        return next_;
+    }
+
+    Element* next() {
+        return next_;
+    }
+
+    /// Returns bottom-most child in depth order.
+    ///
+    Element* firstChild() const {
+        return firstChild_;
+    }
+
+    /// Returns top-most child in depth order.
+    ///
+    Element* lastChild() const {
+        return lastChild_;
+    }
+
+    Int numChildren() const {
+        return numChildren_;
+    }
+
 private:
     friend class Workspace;
-
-    Element* parent_ = nullptr;
 
     // uniquely identifies an element
     // if vacNode_ != nullptr then vacNode_->id() == id_.
@@ -114,6 +135,14 @@ private:
 
     dom::Element* domElement_;
     topology::VacNode* vacNode_;
+
+    Element* prev_;
+    Element* next_;
+    Element* parent_ = nullptr;
+
+    Element* firstChild_;
+    Element* lastChild_;
+    Int numChildren_;
 
     ElementFlags flags_;
 };

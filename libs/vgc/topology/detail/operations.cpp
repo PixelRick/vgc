@@ -35,16 +35,26 @@ Operations::createUnlinkedKeyEdge(core::Id id, core::AnimTime t) {
     return std::unique_ptr<KeyEdge>(new KeyEdge(id, t));
 }
 
+void checkIndexInRange(VacGroup* group, Int index) {
+    if (index < 0 || index > group->numChildren()) {
+        throw core::IndexError(core::format(
+            "Child index {} out of range for insertion in group (end index currently is "
+            "{}).",
+            index,
+            group->numChildren()));
+    }
+}
+
 VacGroup* Operations::linkVacGroupUnchecked(
-    std::unique_ptr<VacGroup>&& u,
+    std::unique_ptr<VacGroup>&& p_,
     Vac* vac,
     VacGroup* parentGroup,
     Int insertPos) {
 
-    VacGroup* p = u.get();
+    VacGroup* p = p_.get();
 
     // add cell to vac
-    vac->nodes_[p->id_] = std::move(u);
+    vac->nodes_[p->id_] = std::move(p_);
     // add cell to parent group
     parentGroup->children_.emplace(insertPos, p);
     // inc version
@@ -57,18 +67,17 @@ VacGroup* Operations::linkVacGroupUnchecked(
     return p;
 }
 
-KeyVertex* Operations::linkKeyVertex(
-    std::unique_ptr<KeyVertex>&& u,
+KeyVertex* Operations::linkKeyVertex_(
+    std::unique_ptr<KeyVertex>&& p_,
     VacGroup* parentGroup,
     Int insertPos) {
 
     Vac* vac = parentGroup->vac();
-    KeyVertex* p = u.get();
+    KeyVertex* p = p_.get();
 
     // add cell to vac
-    vac->nodes_[p->id_] = std::move(u);
-    // add cell to parent group
-    parentGroup->children_.emplace(insertPos, p);
+    vac->nodes_[p->id_] = std::move(p_);
+
     // inc version
     vac->incrementVersion();
     // update diff
@@ -79,22 +88,40 @@ KeyVertex* Operations::linkKeyVertex(
     return p;
 }
 
-KeyEdge* Operations::linkKeyEdgeUnchecked(
-    std::unique_ptr<KeyEdge>&& u,
+KeyVertex*
+Operations::linkKeyVertex(std::unique_ptr<KeyVertex>&& p_, VacGroup* parentGroup) {
+
+    KeyVertex* p = linkKeyVertexNoInsert_(std::move(p_), parentGroup);
+    // add cell to parent group
+    p->parentGroup_ = parentGroup;
+    parentGroup->children_.emplaceLast(p);
+    return p;
+}
+
+KeyVertex* Operations::linkKeyVertex(
+    std::unique_ptr<KeyVertex>&& p_,
     VacGroup* parentGroup,
-    Int insertPos,
+    Int insertPos) {
+
+    checkIndexInRange(parentGroup, insertPos);
+    KeyVertex* p = linkKeyVertexNoInsert_(std::move(p_), parentGroup);
+    // add cell to parent group
+    parentGroup->children_.emplace(insertPos, p);
+    return p;
+}
+
+KeyEdge* Operations::linkKeyEdgeUncheckedNoInsert_(
+    std::unique_ptr<KeyEdge>&& p_,
+    VacGroup* parentGroup,
     KeyVertex* startVertex,
     KeyVertex* endVertex) {
 
     Vac* vac = parentGroup->vac();
-    KeyEdge* p = u.get();
+    KeyEdge* p = p_.get();
 
     // init cell
     p->startVertex_ = startVertex;
     p->endVertex_ = endVertex;
-
-    // add cell to parent group
-    parentGroup->children_.emplace(insertPos, p);
     // add edge to new vertices star
     startVertex->star_.emplaceLast(p);
     if (endVertex != startVertex) {
@@ -112,16 +139,41 @@ KeyEdge* Operations::linkKeyEdgeUnchecked(
     return p;
 }
 
-KeyEdge* Operations::linkKeyEdge(
-    std::unique_ptr<KeyEdge>&& u,
+KeyEdge* Operations::linkKeyEdgeUnchecked(
+    std::unique_ptr<KeyEdge>&& p_,
     VacGroup* parentGroup,
-    Int insertPos,
+    KeyVertex* startVertex,
+    KeyVertex* endVertex) {
+
+    KeyEdge* p =
+        linkKeyEdgeUncheckedNoInsert_(std::move(p_), parentGroup, startVertex, endVertex);
+    // add cell to parent group
+    parentGroup->children_.emplaceLast(p);
+    return p;
+}
+
+KeyEdge* Operations::linkKeyEdgeUnchecked(
+    std::unique_ptr<KeyEdge>&& p_,
+    VacGroup* parentGroup,
+    KeyVertex* startVertex,
+    KeyVertex* endVertex,
+    Int insertPos) {
+
+    KeyEdge* p =
+        linkKeyEdgeUncheckedNoInsert_(std::move(p_), parentGroup, startVertex, endVertex);
+    // add cell to parent group
+    parentGroup->children_.emplace(insertPos, p);
+    return p;
+}
+
+void linkKeyEdgeCheck_(
+    KeyEdge* p,
+    VacGroup* parentGroup,
     KeyVertex* startVertex,
     KeyVertex* endVertex) {
 
     Vac* vac = parentGroup->vac();
-    KeyEdge* p = u.get();
-    // checks
+
     if (vac != startVertex->vac()) {
         throw LogicError("Given parentGroup and startVertex are not from the same Vac.");
     }
@@ -134,16 +186,34 @@ KeyEdge* Operations::linkKeyEdge(
     if (p->time() != endVertex->time()) {
         throw LogicError("Given endVertex has different time than this edge.");
     }
+}
 
+KeyEdge* Operations::linkKeyEdge(
+    std::unique_ptr<KeyEdge>&& p_,
+    VacGroup* parentGroup,
+    KeyVertex* startVertex,
+    KeyVertex* endVertex) {
+
+    linkKeyEdgeCheck_(p_.get(), parentGroup, startVertex, endVertex);
+    return linkKeyEdgeUnchecked(std::move(p_), parentGroup, startVertex, endVertex);
+}
+
+KeyEdge* Operations::linkKeyEdge(
+    std::unique_ptr<KeyEdge>&& p_,
+    VacGroup* parentGroup,
+    KeyVertex* startVertex,
+    KeyVertex* endVertex,
+    Int insertPos) {
+
+    linkKeyEdgeCheck_(p_.get(), parentGroup, startVertex, endVertex);
     return linkKeyEdgeUnchecked(
-        std::move(u), parentGroup, insertPos, startVertex, endVertex);
+        std::move(p_), parentGroup, startVertex, endVertex, insertPos);
 }
 
 KeyEdge* Operations::linkKeyClosedEdge(
     std::unique_ptr<KeyEdge>&& u,
     VacGroup* parentGroup,
-    Int insertPos,
-    core::AnimTime t) {
+    Int insertPos) {
 
     Vac* vac = parentGroup->vac();
     KeyEdge* p = u.get();

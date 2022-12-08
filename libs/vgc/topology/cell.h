@@ -18,6 +18,7 @@
 #define VGC_TOPOLOGY_CELL_H
 
 #include <optional>
+#include <type_traits>
 
 #include <vgc/core/animtime.h>
 #include <vgc/core/id.h>
@@ -113,11 +114,72 @@ private:
     geometry::Mat2d rotationScale_ = geometry::Mat2d::identity;
 };
 
+template<typename T, typename Child>
+class TreeParentCRTP;
+
+template<typename T, typename Parent>
+class TreeChildCRTP {
+private:
+    friend TreeParentCRTP<Parent, T>;
+    static_assert(std::is_base_of_v<TreeParentCRTP<Parent, T>, Parent>);
+
+protected:
+    T* prev() const {
+        return next_;
+    }
+
+    T* next() const {
+        return next_;
+    }
+
+    Parent* parent() const {
+        return parent_;
+    }
+
+private:
+    T* prev_ = nullptr;
+    T* next_ = nullptr;
+    Parent* parent_ = nullptr;
+};
+
+template<typename T, typename Child>
+class TreeParentCRTP {
+private:
+    static_assert(std::is_base_of_v<TreeChildCRTP<Child, T>, Child>);
+
+protected:
+    Child* firstChild() const {
+        return firstChild_;
+    }
+
+    Child* lastChild() const {
+        return lastChild_;
+    }
+
+    Int numChildren() const {
+        return numChildren_;
+    }
+
+    //void append(T* x) {
+    //    if (x->Links::next_) {
+    //        x->Links::next_->Links::prev_ = x->Links::prev_;
+    //    }
+    //    // but how to update count ?
+    //}
+
+private:
+    Child* first_ = nullptr;
+    Child* last_ = nullptr;
+    Int numChildren_ = 0;
+};
+
 } // namespace detail
 
-class VGC_TOPOLOGY_API VacNode {
+class VGC_TOPOLOGY_API VacNode : public detail::TreeChildCRTP<VacNode, VacGroup> {
 private:
     friend detail::Operations;
+
+    using TreeChildBase = detail::TreeChildCRTP<VacNode, VacGroup>;
 
 protected:
     VacNode(core::Id id) noexcept
@@ -136,8 +198,16 @@ public:
     VacNode(const VacNode&) = delete;
     VacNode& operator=(const VacNode&) = delete;
 
+    VacNode* prev() const {
+        return TreeChildBase::prev();
+    }
+
+    VacNode* next() const {
+        return TreeChildBase::next();
+    }
+
     VacGroup* parentGroup() const {
-        return parentGroup_;
+        return TreeChildBase::parent();
     }
 
     core::Id id() const {
@@ -160,14 +230,16 @@ protected:
 private:
     friend Vac;
 
-    VacGroup* parentGroup_ = nullptr;
     core::Id id_ = -1;
     const std::optional<VacCellType> cellType_;
 };
 
-class VGC_TOPOLOGY_API VacGroup : public VacNode {
+class VGC_TOPOLOGY_API VacGroup : public VacNode,
+                                  public detail::TreeParentCRTP<VacGroup, VacNode> {
 private:
     friend detail::Operations;
+
+    using TreeParentBase = detail::TreeParentCRTP<VacGroup, VacNode>;
 
 public:
     ~VacGroup() override = default;
@@ -186,14 +258,20 @@ public:
         return vac_;
     }
 
-    /// Returns children in depth order from bottom to top.
+    /// Returns bottom-most child in depth order.
     ///
-    const core::Array<VacNode*>& children() const {
-        return children_;
+    VacNode* firstChild() const {
+        return TreeParentBase::firstChild();
+    }
+
+    /// Returns top-most child in depth order.
+    ///
+    VacNode* lastChild() const {
+        return TreeParentBase::lastChild();
     }
 
     Int numChildren() const {
-        return children_.length();
+        return TreeParentBase::numChildren();
     }
 
     const geometry::Mat3d& transform() const {
@@ -219,7 +297,10 @@ private:
     friend detail::Operations;
 
     Vac* vac_ = nullptr;
-    core::Array<VacNode*> children_;
+    VacNode* firstChild_ = nullptr;
+    VacNode* lastChild_ = nullptr;
+    Int numChildren_ = 0;
+
     geometry::Mat3d transform_;
     // to speed-up working with cells connected from different groups
     geometry::Mat3d inverseTransform_;

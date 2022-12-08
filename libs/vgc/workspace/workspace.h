@@ -38,6 +38,12 @@ namespace vgc::workspace {
 
 VGC_DECLARE_OBJECT(Workspace);
 
+namespace detail {
+
+struct VacElementLists;
+
+} // namespace detail
+
 /// \class vgc::workspace::Workspace
 /// \brief Represents a workspace to manage, manipulate and visit a vector graphics scene.
 ///
@@ -70,8 +76,6 @@ public:
         return document_.get()->history();
     }
 
-    void updateFromDom();
-    void updateFromVac();
     void sync();
 
     VGC_SIGNAL(changed);
@@ -87,16 +91,25 @@ protected:
     void onDocumentDiff_(const dom::Diff& diff);
     void onVacDiff_(const topology::VacDiff& diff);
 
-    void initVacFromDom_();
+    void updateTreeAndVacFromDom_();
+    void updateTreeAndDomFromVac_();
+
+    void updateTreeFromDom_();
+
+    void rebuildTreeFromDom_();
+    void rebuildVacFromTree_();
+
+    void fillVacElementListsUsingTagNameRecursive(Element* e, detail::VacElementLists& ce)
+        const;
 
 private:
-    std::unordered_map<core::Id, Element> elementsById_;
-    Element* vacRootElement_;
+    std::unordered_map<core::Id, std::unique_ptr<Element>> elementsById_;
+    Element* vgcElement_;
 
     dom::DocumentPtr document_;
     topology::VacPtr vac_;
-    bool isUpdatingFromDom_ = false;
-    bool isUpdatingFromVac_ = false;
+    bool isDomBeingUpdated_ = false;
+    bool isVacBeingUpdated_ = false;
     core::Id lastSyncedDomVersion_ = {};
     Int64 lastSyncedVacVersion_ = -1;
 };

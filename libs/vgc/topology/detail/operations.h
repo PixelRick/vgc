@@ -30,78 +30,134 @@ public:
 
     static std::unique_ptr<KeyVertex>
     createUnlinkedKeyVertex(core::Id id, core::AnimTime t = {});
+
     static std::unique_ptr<KeyEdge>
     createUnlinkedKeyEdge(core::Id id, core::AnimTime t = {});
 
-    // Throws if insertPos is not in range.
+    static VacGroup*
+    linkVacGroupUnchecked(std::unique_ptr<VacGroup>&& p, Vac* vac, VacGroup* parentGroup);
+
+    /// \overload
+    /// Throws if insertPos is not in range.
     static VacGroup* linkVacGroupUnchecked(
         std::unique_ptr<VacGroup>&& p,
         Vac* vac,
         VacGroup* parentGroup,
         Int insertPos);
 
-    // Throws if insertPos is not in range.
+    static KeyVertex*
+    linkKeyVertex(std::unique_ptr<KeyVertex>&& p, VacGroup* parentGroup);
+
+    /// \overload
+    /// Throws if insertPos is not in range.
     static KeyVertex*
     linkKeyVertex(std::unique_ptr<KeyVertex>&& p, VacGroup* parentGroup, Int insertPos);
 
-    // Throws if insertPos is not in range.
     static KeyEdge* linkKeyEdgeUnchecked(
         std::unique_ptr<KeyEdge>&& p,
         VacGroup* parentGroup,
-        Int insertPos,
         KeyVertex* startVertex,
         KeyVertex* endVertex);
 
-    // Throws if insertPos is not in range.
+    /// \overload
+    /// Throws if insertPos is not in range.
+    static KeyEdge* linkKeyEdgeUnchecked(
+        std::unique_ptr<KeyEdge>&& p,
+        VacGroup* parentGroup,
+        KeyVertex* startVertex,
+        KeyVertex* endVertex,
+        Int insertPos);
+
     static KeyEdge* linkKeyEdge(
         std::unique_ptr<KeyEdge>&& p,
         VacGroup* parentGroup,
-        Int insertPos,
         KeyVertex* startVertex,
         KeyVertex* endVertex);
 
-    // Throws if insertPos is not in range.
-    static KeyEdge* linkKeyClosedEdge(
+    /// \overload
+    /// Throws if insertPos is not in range.
+    static KeyEdge* linkKeyEdge(
         std::unique_ptr<KeyEdge>&& p,
         VacGroup* parentGroup,
-        Int insertPos,
-        core::AnimTime t = {});
+        KeyVertex* startVertex,
+        KeyVertex* endVertex,
+        Int insertPos);
 
-    // Throws if insertPos is not in range.
-    static KeyVertex* createKeyVertex(
-        core::Id id,
-        VacGroup* parentGroup,
-        Int insertPos,
-        core::AnimTime t = {}) {
+    static KeyEdge*
+    linkKeyClosedEdge(std::unique_ptr<KeyEdge>&& p, VacGroup* parentGroup);
 
-        std::unique_ptr<KeyVertex> p = createUnlinkedKeyVertex(id, t);
-        return linkKeyVertex(std::move(p), parentGroup, insertPos);
+    /// \overload
+    /// Throws if insertPos is not in range.
+    static KeyEdge*
+    linkKeyClosedEdge(std::unique_ptr<KeyEdge>&& p, VacGroup* parentGroup, Int insertPos);
+
+    static KeyVertex* createKeyVertex(core::Id id, VacGroup* parentGroup) {
+
+        std::unique_ptr<KeyVertex> p = createUnlinkedKeyVertex(id);
+        return linkKeyVertex(std::move(p), parentGroup);
     }
 
-    // Throws if insertPos is not in range.
+    /// \overload
+    /// Throws if insertPos is not in range.
+    static KeyVertex* createKeyVertex(core::Id id, VacGroup* parentGroup, Int insertPos) {
+
+        std::unique_ptr<KeyVertex> p = createUnlinkedKeyVertex(id);
+        return linkKeyVertex(std::move(p), parentGroup);
+    }
+
     static KeyEdge* createKeyEdge(
         core::Id id,
         VacGroup* parentGroup,
-        Int insertPos,
         KeyVertex* startVertex,
         KeyVertex* endVertex) {
 
         std::unique_ptr<KeyEdge> p = createUnlinkedKeyEdge(id);
-        return linkKeyEdge(std::move(p), parentGroup, insertPos, startVertex, endVertex);
+        return linkKeyEdge(std::move(p), parentGroup, startVertex, endVertex);
     }
 
-    // Throws if insertPos is not in range.
-    static KeyEdge* createKeyClosedEdge(
+    /// \overload
+    /// Throws if insertPos is not in range.
+    static KeyEdge* createKeyEdge(
         core::Id id,
         VacGroup* parentGroup,
-        Int insertPos,
-        core::AnimTime t = {}) {
+        KeyVertex* startVertex,
+        KeyVertex* endVertex,
+        Int insertPos) {
 
         std::unique_ptr<KeyEdge> p = createUnlinkedKeyEdge(id);
-        return linkKeyClosedEdge(std::move(p), parentGroup, insertPos, t);
+        return linkKeyEdge(std::move(p), parentGroup, startVertex, endVertex, insertPos);
+    }
+
+    static KeyEdge* createKeyClosedEdge(core::Id id, VacGroup* parentGroup) {
+
+        std::unique_ptr<KeyEdge> p = createUnlinkedKeyEdge(id);
+        return linkKeyClosedEdge(std::move(p), parentGroup);
+    }
+
+    /// \overload
+    /// Throws if insertPos is not in range.
+    static KeyEdge*
+    createKeyClosedEdge(core::Id id, VacGroup* parentGroup, Int insertPos) {
+
+        std::unique_ptr<KeyEdge> p = createUnlinkedKeyEdge(id);
+        return linkKeyClosedEdge(std::move(p), parentGroup, insertPos);
     }
 
     static void setKeyVertexPositionUnchecked(KeyVertex* v, const geometry::Vec2d& pos);
+
+private:
+    static KeyVertex*
+    linkKeyVertex_(std::unique_ptr<KeyVertex>&& p, VacGroup* parentGroup, Int insertPos);
+
+    static KeyEdge* linkKeyEdgeUnchecked_(
+        std::unique_ptr<KeyEdge>&& p,
+        VacGroup* parentGroup,
+        KeyVertex* startVertex,
+        KeyVertex* endVertex);
+
+    static KeyEdge* linkKeyClosedEdgeNoInsert_(
+        std::unique_ptr<KeyEdge>&& p,
+        VacGroup* parentGroup);
 };
 
 } // namespace vgc::topology::detail
