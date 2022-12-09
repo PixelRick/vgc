@@ -25,6 +25,8 @@ const core::StringId layer("layer");
 const core::StringId vertex("vertex");
 const core::StringId edge("edge");
 
+const core::StringId startVertex("startVertex");
+const core::StringId endVertex("endVertex");
 const core::StringId position("position");
 const core::StringId positions("positions");
 

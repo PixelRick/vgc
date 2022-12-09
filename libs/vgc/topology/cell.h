@@ -114,21 +114,72 @@ private:
     geometry::Mat2d rotationScale_ = geometry::Mat2d::identity;
 };
 
-template<typename T, typename Child>
-class TreeParentCRTP;
+template<typename Derived, typename Child>
+class TreeParentBase;
 
-template<typename T, typename Parent>
-class TreeChildCRTP {
-private:
-    friend TreeParentCRTP<Parent, T>;
-    static_assert(std::is_base_of_v<TreeParentCRTP<Parent, T>, Parent>);
+template<typename Derived, typename Parent>
+class TreeChildBase;
 
-protected:
-    T* prev() const {
-        return next_;
+template<typename T>
+class TreeChildrenIterator {
+public:
+    using difference_type = Int;
+    using value_type = T;
+    using reference = T&;
+    using pointer = T*;
+    using iterator_category = std::forward_iterator_tag;
+
+    constexpr TreeChildrenIterator() noexcept = default;
+
+    explicit TreeChildrenIterator(T* p)
+        : p_(p) {
     }
 
-    T* next() const {
+    TreeChildrenIterator& operator++() {
+        p_ = p_->next();
+        return *this;
+    }
+
+    TreeChildrenIterator operator++(int) {
+        TreeChildrenIterator cpy(*this);
+        operator++();
+        return cpy;
+    }
+
+    T& operator*() const {
+        return *p_;
+    }
+
+    T* operator->() const {
+        return p_;
+    }
+
+    bool operator==(const TreeChildrenIterator& other) const {
+        return p_ == other.p_;
+    }
+
+    bool operator!=(const TreeChildrenIterator& other) const {
+        return p_ != other.p_;
+    }
+
+private:
+    T* p_ = nullptr;
+};
+
+// non-owning-tree child
+// nothing is done automatically on destruction
+template<typename Child, typename Parent = Child>
+class TreeChildBase {
+private:
+    friend TreeParentBase<Parent, Child>;
+    friend TreeChildrenIterator<TreeChildBase>;
+
+protected:
+    Child* previous() const {
+        return previous_;
+    }
+
+    Child* next() const {
         return next_;
     }
 
@@ -136,18 +187,31 @@ protected:
         return parent_;
     }
 
+    void unlink();
+
 private:
-    T* prev_ = nullptr;
-    T* next_ = nullptr;
+    Child* previous_ = nullptr;
+    Child* next_ = nullptr;
     Parent* parent_ = nullptr;
 };
 
-template<typename T, typename Child>
-class TreeParentCRTP {
+// non-owning-tree parent
+// nothing is done automatically on destruction
+template<typename Parent, typename Child = Parent>
+class TreeParentBase {
 private:
-    static_assert(std::is_base_of_v<TreeChildCRTP<Child, T>, Child>);
+    friend TreeChildBase<Child, Parent>;
+
+    using ChildBase = TreeChildBase<Child, Parent>;
 
 protected:
+    using Iterator = TreeChildrenIterator<Child>;
+
+    constexpr TreeParentBase() noexcept {
+        static_assert(std::is_base_of_v<ChildBase, Child>);
+        static_assert(std::is_base_of_v<ChildBase, Parent>);
+    }
+
     Child* firstChild() const {
         return firstChild_;
     }
@@ -156,30 +220,129 @@ protected:
         return lastChild_;
     }
 
+    Iterator begin() const {
+        return Iterator(firstChild_);
+    }
+
+    Iterator end() const {
+        return Iterator();
+    }
+
     Int numChildren() const {
         return numChildren_;
     }
 
-    //void append(T* x) {
-    //    if (x->Links::next_) {
-    //        x->Links::next_->Links::prev_ = x->Links::prev_;
-    //    }
-    //    // but how to update count ?
-    //}
+    void resetNoUnlink() {
+        numChildren_ = 0;
+        firstChild_ = nullptr;
+        lastChild_ = nullptr;
+    }
+
+    void appendChild(Child* x) {
+        insertChildUnchecked(nullptr, x);
+    }
+
+    // assumes nextSibling is nullptr or a child of this
+    void insertChildUnchecked(Child* nextSibling, Child* x) {
+
+        Child* const newNext = nextSibling;
+        if (x == newNext) {
+            return;
+        }
+
+        Child* const newPrevious = newNext ? newNext->previous_ : lastChild_;
+        if (x == newPrevious) {
+            return;
+        }
+
+        Parent* const oldParent = x->parent_;
+        Child* const oldPrevious = x->previous_;
+        Child* const oldNext = x->next_;
+
+        if (oldPrevious) {
+            oldPrevious->next_ = oldNext;
+        }
+        else if (oldParent) {
+            oldParent->firstChild_ = oldNext;
+        }
+
+        if (oldNext) {
+            oldNext->previous_ = oldPrevious;
+        }
+        else if (oldParent) {
+            oldParent->lastChild_ = oldPrevious;
+        }
+
+        if (newPrevious) {
+            newPrevious->next_ = x;
+        }
+        else {
+            firstChild_ = x;
+        }
+
+        if (newNext) {
+            newNext->previous_ = x;
+        }
+        else {
+            lastChild_ = x;
+        }
+
+        x->previous_ = newPrevious;
+        x->next_ = newNext;
+
+        if (oldParent != this) {
+            x->parent_ = static_cast<Parent*>(this);
+            ++numChildren_;
+            if (oldParent) {
+                --(oldParent->numChildren_);
+            }
+        }
+    }
 
 private:
-    Child* first_ = nullptr;
-    Child* last_ = nullptr;
+    Child* firstChild_ = nullptr;
+    Child* lastChild_ = nullptr;
     Int numChildren_ = 0;
 };
 
+template<typename Derived, typename Parent>
+void TreeChildBase<Derived, Parent>::unlink() {
+
+    using ChildBase = TreeChildBase<Derived, Parent>;
+
+    Parent* const oldParent = parent_;
+    Derived* const oldPrevious = previous_;
+    Derived* const oldNext = next_;
+
+    if (oldPrevious) {
+        oldPrevious->next_ = oldNext;
+        previous_ = nullptr;
+    }
+    else if (oldParent) {
+        oldParent->firstChild_ = oldNext;
+    }
+
+    if (oldNext) {
+        oldNext->previous_ = oldPrevious;
+        next_ = nullptr;
+    }
+    else if (oldParent) {
+        oldParent->lastChild_ = oldPrevious;
+    }
+
+    if (oldParent) {
+        --(oldParent->numChildren_);
+    }
+}
+
 } // namespace detail
 
-class VGC_TOPOLOGY_API VacNode : public detail::TreeChildCRTP<VacNode, VacGroup> {
+class VGC_TOPOLOGY_API VacNode : public detail::TreeChildBase<VacNode, VacGroup> {
 private:
     friend detail::Operations;
 
-    using TreeChildBase = detail::TreeChildCRTP<VacNode, VacGroup>;
+    using TreeChildBase = detail::TreeChildBase<VacNode, VacGroup>;
+    using Iterator = detail::TreeChildrenIterator<VacNode>;
 
 protected:
     VacNode(core::Id id) noexcept
@@ -198,8 +361,8 @@ public:
     VacNode(const VacNode&) = delete;
     VacNode& operator=(const VacNode&) = delete;
 
-    VacNode* prev() const {
-        return TreeChildBase::prev();
+    VacNode* previous() const {
+        return TreeChildBase::previous();
     }
 
     VacNode* next() const {
@@ -235,11 +398,11 @@ private:
 };
 
 class VGC_TOPOLOGY_API VacGroup : public VacNode,
-                                  public detail::TreeParentCRTP<VacGroup, VacNode> {
+                                  public detail::TreeParentBase<VacGroup, VacNode> {
 private:
     friend detail::Operations;
 
-    using TreeParentBase = detail::TreeParentCRTP<VacGroup, VacNode>;
+    using TreeParentBase = detail::TreeParentBase<VacGroup, VacNode>;
 
 public:
     ~VacGroup() override = default;
@@ -297,14 +460,15 @@ private:
     friend detail::Operations;
 
     Vac* vac_ = nullptr;
-    VacNode* firstChild_ = nullptr;
-    VacNode* lastChild_ = nullptr;
-    Int numChildren_ = 0;
 
     geometry::Mat3d transform_;
     // to speed-up working with cells connected from different groups
     geometry::Mat3d inverseTransform_;
     geometry::Mat3d transformFromRoot_;
+
+    void onChildrenDestroyed() {
+        TreeParentBase::resetNoUnlink();
+    }
 
     void setTransform_(const geometry::Mat3d& transform);
     void updateTransformFromRoot_();

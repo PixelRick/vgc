@@ -16,10 +16,39 @@
 
 #include <vgc/topology/operations.h>
 
-#include <vgc/topology/detail/operations.h>
+#include <vgc/topology/detail/operationsimpl.h>
 
-namespace vgc::topology {
+namespace vgc::topology::ops {
 
-//
+KeyEdge* createKeyEdge(
+    core::Id id,
+    VacGroup* parentGroup,
+    KeyVertex* startVertex,
+    KeyVertex* endVertex,
+    VacNode* nextSibling,
+    core::AnimTime t) {
 
-} // namespace vgc::topology
+    Vac* vac = parentGroup->vac();
+
+    if (vac != startVertex->vac()) {
+        throw LogicError("createKeyEdge: given `parentGroup` and `startVertex` are not "
+                         "in the same `Vac`.");
+    }
+    if (vac != endVertex->vac()) {
+        throw LogicError("createKeyEdge: given `parentGroup` and `endVertex` are not "
+                         "in the same `Vac`.");
+    }
+    if (t != startVertex->time()) {
+        throw LogicError(
+            "createKeyEdge: given `startVertex` is not at the given time `t`.");
+    }
+    if (t != endVertex->time()) {
+        throw LogicError(
+            "createKeyEdge: given `endVertex` is not at the given time `t`.");
+    }
+
+    return detail::Operations::createKeyEdge(
+        id, parentGroup, startVertex, endVertex, nextSibling, t);
+}
+
+} // namespace vgc::topology::ops

@@ -19,7 +19,7 @@ vgc_add_library(topology
         transform.h
         vac.h
 
-        detail/operations.h
+        detail/operationsimpl.h
 
     CPP_FILES
         cell.cpp
@@ -28,5 +28,5 @@ vgc_add_library(topology
         transform.cpp
         vac.cpp
 
-        detail/operations.cpp
+        detail/operationsimpl.cpp
 )

@@ -44,8 +44,8 @@ public:
 /// \class vgc::topology::RuntimeError
 /// \brief Raised when there is a logic error detected in vgc::topology.
 ///
-/// This exception is raised whenever there is a logic error detected in
-/// vgc::topology. This is the base class for all logic error exception classes in
+/// This exception is raised whenever there is a runtime error detected in
+/// vgc::topology. This is the base class for all runtime error exception classes in
 /// vgc::topology.
 ///
 class VGC_TOPOLOGY_API_EXCEPTION RuntimeError : public core::RuntimeError {
@@ -57,6 +57,24 @@ public:
     ///
     explicit RuntimeError(const std::string& reason)
         : core::RuntimeError(reason) {
+    }
+};
+
+/// \class vgc::topology::IdCollisionError
+/// \brief Raised when a collision of core::Id is detected in vgc::topology.
+///
+/// This exception is raised when creating an element with an id that is already
+/// in use by another element in a given structure.
+///
+class VGC_TOPOLOGY_API_EXCEPTION IdCollisionError : public RuntimeError {
+private:
+    VGC_CORE_EXCEPTIONS_DECLARE_ANCHOR
+
+public:
+    /// Constructs a IdCollisionError with the given `reason`.
+    ///
+    explicit IdCollisionError(const std::string& reason)
+        : RuntimeError(reason) {
     }
 };
 

@@ -27,7 +27,7 @@ VacPtr Vac::create() {
 
 void Vac::clear() {
     nodes_.clear();
-    root_.children_.clear();
+    root_.onChildrenDestroyed();
     root_.transform_ = geometry::Mat3d::identity;
     root_.inverseTransform_ = geometry::Mat3d::identity;
     root_.transformFromRoot_ = geometry::Mat3d::identity;

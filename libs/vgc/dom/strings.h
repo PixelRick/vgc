@@ -29,6 +29,8 @@ VGC_DOM_API extern const core::StringId layer;
 VGC_DOM_API extern const core::StringId vertex;
 VGC_DOM_API extern const core::StringId edge;
 
+VGC_DOM_API extern const core::StringId startVertex;
+VGC_DOM_API extern const core::StringId endVertex;
 VGC_DOM_API extern const core::StringId position;
 VGC_DOM_API extern const core::StringId positions;
 

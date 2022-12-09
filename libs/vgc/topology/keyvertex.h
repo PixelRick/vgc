@@ -24,30 +24,9 @@
 
 namespace vgc::topology {
 
-enum class KeyVertexGeometryParametersFlag : UInt16 {
-    None = 0x00,
-    ReadOnly = 0x01,
-};
-VGC_DEFINE_FLAGS(KeyVertexGeometryParametersFlags, KeyVertexGeometryParametersFlag)
-
 // dev note: position could be a variant<vec2d, func, provider>
 //           provider could have a dirty flag to not update data, especially important for
 //           big value types like curve geometry in edges.
-
-// Translated from dom or set manually via graph.
-class VGC_TOPOLOGY_API KeyVertexGeometryParameters {
-private:
-    friend detail::Operations;
-
-public:
-    geometry::Vec2d position() const {
-        return position_;
-    }
-
-private:
-    geometry::Vec2d position_;
-    KeyVertexGeometryParametersFlags flags_ = KeyVertexGeometryParametersFlag::None;
-};
 
 class VGC_TOPOLOGY_API KeyVertex : public KeyCell, public VertexCell {
 private:
@@ -64,16 +43,11 @@ public:
     }
 
     geometry::Vec2d position(core::AnimTime /*t*/) const override {
-        return geometryParameters_.position();
-    }
-
-    double junctionWidth() const {
-        return cachedJunctionWidth_;
+        return position_;
     }
 
 private:
-    KeyVertexGeometryParameters geometryParameters_;
-    mutable double cachedJunctionWidth_ = 0.0;
+    geometry::Vec2d position_;
 };
 
 } // namespace vgc::topology

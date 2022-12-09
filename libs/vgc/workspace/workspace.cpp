@@ -197,6 +197,14 @@ void Workspace::updateTreeAndDomFromVac_() {
     isDomBeingUpdated_ = false;
 }
 
+void Workspace::updateTreeFromDom_() {
+    //
+}
+
+void Workspace::rebuildTreeFromDom_() {
+    //
+}
+
 namespace detail {
 
 struct VacElementLists {
@@ -212,7 +220,35 @@ struct VacElementLists {
 
 } // namespace detail
 
+dom::Element* getElementRefAttribute(dom::Element* domElem, core::StringId name) {
+    const dom::Value& domValue = domElem->getAuthoredAttribute(name);
+    if (!domValue.has<dom::Path>()) {
+        VGC_ERROR(
+            LogVgcWorkspace,
+            core::format(
+                "Element `{}` requires a path attribute `{}`.",
+                domElem->tagName(),
+                name));
+        return nullptr;
+    }
+    const dom::Path& path = domValue.getPath();
+    dom::Element* vertexDomElement = domElem->elementFromPath(path);
+    if (!vertexDomElement) {
+        VGC_ERROR(
+            LogVgcWorkspace,
+            "Path attribute `{}` of element `{}` could not be resolved ({}).",
+            name,
+            domElem->tagName(),
+            path);
+        return nullptr;
+    }
+    return vertexDomElement;
+}
+
 void Workspace::rebuildVacFromTree_() {
+
+    namespace ss = dom::strings;
+
     if (!document_ || !vac_) {
         return;
     }
@@ -220,7 +256,7 @@ void Workspace::rebuildVacFromTree_() {
 
     vac_->clear();
     // now, all workspace elements have a dangling vac node pointer.
-    for (const std::pair<const core::Id, std::unique_ptr<Element>>& p : elementsById_) {
+    for (const std::pair<const core::Id, std::unique_ptr<Element>>& p : elements_) {
         p.second->vacNode_ = nullptr;
     }
 
@@ -229,38 +265,63 @@ void Workspace::rebuildVacFromTree_() {
 
     for (Element* e : ce.groups) {
         // create an unlinked VacGroup
-        core::Id id = e->domElement_->internalId();
-        std::unique_ptr<topology::VacGroup> node =
-            topology::ops::createUnlinkedVacGroup(id);
-        e->vacNode_ = node.get();
+        topology::VacGroup* node = topology::ops::createVacGroup(
+            e->domElement_->internalId(),
+            static_cast<topology::VacGroup*>(e->parent()->vacNode_));
+        e->vacNode_ = node;
         // todo: set attributes
         // ...
-        // link it
-        auto parentGroup = static_cast<topology::VacGroup*>(e->parent_->vacNode_);
-        topology::ops::linkVacGroupUnchecked(
-            std::move(node), vac_.get(), parentGroup, parentGroup->numChildren());
     }
 
+    std::set<Element*> parentsToOrderSync;
+
     for (Element* e : ce.keyVertices) {
-        core::Id id = e->domElement_->internalId();
-        std::unique_ptr<topology::KeyVertex> node =
-            topology::ops::createUnlinkedKeyVertex(id);
-        e->vacNode_ = node.get();
+        topology::KeyVertex* node = topology::ops::createKeyVertex(
+            e->domElement_->internalId(),
+            static_cast<topology::VacGroup*>(e->parent()->vacNode_));
+        e->vacNode_ = node;
         // todo: set attributes
         // ...
-        // link it
     }
 
     for (Element* e : ce.keyEdges) {
-        core::Id id = e->domElement_->internalId();
-        std::unique_ptr<topology::KeyEdge> node =
-            topology::ops::createUnlinkedKeyEdge(id);
-        e->vacNode_ = node.get();
-        elementsById_.emplace(id, std::move(node));
+        dom::Element* domElem = e->domElement_;
+        dom::Element* ev0 = getElementRefAttribute(domElem, ss::startVertex);
+        dom::Element* ev1 = getElementRefAttribute(domElem, ss::endVertex);
+        if (!ev0 || !ev1) {
+            continue;
+        }
+        if (ev0->tagName() != ss::vertex) {
+            core::format(
+                "Path attribute `{}` of element `{}` must refer to an element `{}`.",
+                ss::startVertex,
+                domElem->tagName(),
+                ss::vertex);
+        }
+        if (ev1->tagName() != ss::vertex) {
+            core::format(
+                "Path attribute `{}` of element `{}` must refer to an element `{}`.",
+                ss::endVertex,
+                domElem->tagName(),
+                ss::vertex);
+        }
+        Element* wv0 = elements_[ev0->internalId()].get();
+        Element* wv1 = elements_[ev1->internalId()].get();
+
+        auto v0 = dynamic_cast<topology::KeyVertex*>(wv0->vacNode_);
+        auto v1 = dynamic_cast<topology::KeyVertex*>(wv1->vacNode_);
+
+        topology::KeyEdge* node = topology::ops::createKeyEdge(
+            domElem->internalId(),
+            static_cast<topology::VacGroup*>(e->parent()->vacNode_),
+            v0,
+            v1);
+        e->vacNode_ = node;
         // todo: set attributes
         // ...
-        // link it
     }
+
+    //
 
     lastSyncedDomVersion_ = document_->version();
     lastSyncedVacVersion_ = vac_->version();

@@ -17,114 +17,95 @@
 #ifndef VGC_TOPOLOGY_OPERATIONS_H
 #define VGC_TOPOLOGY_OPERATIONS_H
 
-#include <vgc/topology/detail/operations.h>
+#include <vgc/core/id.h>
+#include <vgc/topology/api.h>
+#include <vgc/topology/detail/operationsimpl.h>
+#include <vgc/topology/exceptions.h>
 #include <vgc/topology/vac.h>
 
 namespace vgc::topology::ops {
 
-// VGC_TOPOLOGY_API
-
-inline std::unique_ptr<VacGroup> createUnlinkedVacGroup(core::Id id) {
-    return detail::Operations::createUnlinkedVacGroup(id);
+/// Throws `NotAChildError` if `nextSibling` is not a child of `parentGroup` or `nullptr`.
+/// Throws `IdCollisionError` if `id` is already used by a node of the `Vac` of `parentGroup`.
+///
+inline VacGroup*
+createVacGroup(core::Id id, VacGroup* parentGroup, VacNode* nextSibling = nullptr) {
+    return detail::Operations::createVacGroup(id, parentGroup, nextSibling);
 }
 
-inline std::unique_ptr<KeyVertex>
-createUnlinkedKeyVertex(core::Id id, core::AnimTime t = {}) {
-    return detail::Operations::createUnlinkedKeyVertex(id, t);
+/// Throws `NotAChildError` if `nextSibling` is not a child of `parentGroup` or `nullptr`.
+inline VacGroup* createVacGroup(VacGroup* parentGroup, VacNode* nextSibling = nullptr) {
+    return createVacGroup(core::genId(), parentGroup, nextSibling);
 }
 
-inline std::unique_ptr<KeyEdge>
-createUnlinkedKeyEdge(core::Id id, core::AnimTime t = {}) {
-    return detail::Operations::createUnlinkedKeyEdge(id, t);
-}
-
-// Throws if insertPos is not in range.
-inline VacGroup* linkVacGroupUnchecked(
-    std::unique_ptr<VacGroup>&& p,
-    Vac* vac,
-    VacGroup* parentGroup,
-    Int insertPos) {
-
-    return detail::Operations::linkVacGroupUnchecked(
-        std::move(p), vac, parentGroup, insertPos);
-}
-
-// Throws if insertPos is not in range.
-inline KeyVertex*
-linkKeyVertex(std::unique_ptr<KeyVertex>&& p, VacGroup* parentGroup, Int insertPos) {
-
-    return detail::Operations::linkKeyVertex(std::move(p), parentGroup, insertPos);
-}
-
-// Throws if insertPos is not in range.
-inline KeyEdge* linkKeyEdgeUnchecked(
-    std::unique_ptr<KeyEdge>&& p,
-    VacGroup* parentGroup,
-    Int insertPos,
-    KeyVertex* startVertex,
-    KeyVertex* endVertex) {
-
-    return detail::Operations::linkKeyEdgeUnchecked(
-        std::move(p), parentGroup, insertPos, startVertex, endVertex);
-}
-
-// Throws if insertPos is not in range.
-inline KeyEdge* linkKeyEdge(
-    std::unique_ptr<KeyEdge>&& p,
-    VacGroup* parentGroup,
-    Int insertPos,
-    KeyVertex* startVertex,
-    KeyVertex* endVertex) {
-
-    return detail::Operations::linkKeyEdge(
-        std::move(p), parentGroup, insertPos, startVertex, endVertex);
-}
-
-// Throws if insertPos is not in range.
-inline KeyEdge* linkKeyClosedEdge(
-    std::unique_ptr<KeyEdge>&& p,
-    VacGroup* parentGroup,
-    Int insertPos,
-    core::AnimTime t = {}) {
-
-    return detail::Operations::linkKeyClosedEdge(std::move(p), parentGroup, insertPos, t);
-}
-
-// Throws if insertPos is not in range.
+/// Throws `NotAChildError` if `nextSibling` is not a child of `parentGroup` or `nullptr`.
+/// Throws `IdCollisionError` if `id` is already used by a node of the `Vac` of `parentGroup`.
+///
 inline KeyVertex* createKeyVertex(
     core::Id id,
     VacGroup* parentGroup,
-    Int insertPos,
+    VacNode* nextSibling = nullptr,
     core::AnimTime t = {}) {
 
-    return detail::Operations::createKeyVertex(id, parentGroup, insertPos, t);
+    return detail::Operations::createKeyVertex(id, parentGroup, nextSibling, t);
 }
 
-// Throws if insertPos is not in range.
-inline KeyEdge* createKeyEdge(
+/// Throws `NotAChildError` if `nextSibling` is not a child of `parentGroup` or `nullptr`.
+inline KeyVertex* createKeyVertex(
+    VacGroup* parentGroup,
+    VacNode* nextSibling = nullptr,
+    core::AnimTime t = {}) {
+
+    return createKeyVertex(core::genId(), parentGroup, nextSibling, t);
+}
+
+/// Throws `NotAChildError` if `nextSibling` is not a child of `parentGroup` or `nullptr`.
+/// Throws `IdCollisionError` if `id` is already used by a node of the `Vac` of `parentGroup`.
+///
+VGC_TOPOLOGY_API
+KeyEdge* createKeyEdge(
     core::Id id,
     VacGroup* parentGroup,
-    Int insertPos,
     KeyVertex* startVertex,
-    KeyVertex* endVertex) {
+    KeyVertex* endVertex,
+    VacNode* nextSibling = nullptr,
+    core::AnimTime t = {});
 
-    return detail::Operations::createKeyEdge(
-        id, parentGroup, insertPos, startVertex, endVertex);
+/// Throws `NotAChildError` if `nextSibling` is not a child of `parentGroup` or `nullptr`.
+inline KeyEdge* createKeyEdge(
+    VacGroup* parentGroup,
+    KeyVertex* startVertex,
+    KeyVertex* endVertex,
+    VacNode* nextSibling = nullptr,
+    core::AnimTime t = {}) {
+
+    return createKeyEdge(
+        core::genId(), parentGroup, startVertex, endVertex, nextSibling, t);
 }
 
-// Throws if insertPos is not in range.
+/// Throws `NotAChildError` if `nextSibling` is not a child of `parentGroup` or `nullptr`.
+/// Throws `IdCollisionError` if `id` is already used by a node of the `Vac` of `parentGroup`.
+///
 inline KeyEdge* createKeyClosedEdge(
     core::Id id,
     VacGroup* parentGroup,
-    Int insertPos,
+    VacNode* nextSibling = nullptr,
     core::AnimTime t = {}) {
 
-    return detail::Operations::createKeyClosedEdge(id, parentGroup, insertPos, t);
+    return detail::Operations::createKeyClosedEdge(id, parentGroup, nextSibling, t);
+}
+
+/// Throws `NotAChildError` if `nextSibling` is not a child of `parentGroup` or `nullptr`.
+inline KeyEdge* createKeyClosedEdge(
+    VacGroup* parentGroup,
+    VacNode* nextSibling = nullptr,
+    core::AnimTime t = {}) {
+
+    return createKeyClosedEdge(core::genId(), parentGroup, nextSibling, t);
 }
 
 inline void setKeyVertexPosition(KeyVertex* v, const geometry::Vec2d& pos) {
-
-    return detail::Operations::setKeyVertexPositionUnchecked(v, pos);
+    return detail::Operations::setKeyVertexPosition(v, pos);
 }
 
 } // namespace vgc::topology::ops

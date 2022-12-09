@@ -103,7 +103,7 @@ protected:
         const;
 
 private:
-    std::unordered_map<core::Id, std::unique_ptr<Element>> elementsById_;
+    std::unordered_map<core::Id, std::unique_ptr<Element>> elements_;
     Element* vgcElement_;
 
     dom::DocumentPtr document_;

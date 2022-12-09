@@ -68,7 +68,12 @@ enum class ElementFlag : UInt16 {
 };
 VGC_DEFINE_FLAGS(ElementFlags, ElementFlag)
 
-class VGC_WORKSPACE_API Element {
+class VGC_WORKSPACE_API Element : public topology::detail::TreeChildBase<Element>,
+                                  public topology::detail::TreeParentBase<Element> {
+private:
+    using ChildBase = topology::detail::TreeChildBase<Element>;
+    using ParentBase = topology::detail::TreeParentBase<Element>;
+
 public:
     virtual ~Element() = default;
 
@@ -79,7 +84,7 @@ public:
 
 public:
     Element* parent() const {
-        return parent_;
+        return ChildBase::parent();
     }
 
     core::Id id() const {
@@ -102,28 +107,28 @@ public:
         return flags_;
     }
 
-    Element* prev() {
-        return next_;
+    Element* previous() {
+        return ChildBase::previous();
     }
 
     Element* next() {
-        return next_;
+        return ChildBase::next();
     }
 
     /// Returns bottom-most child in depth order.
     ///
     Element* firstChild() const {
-        return firstChild_;
+        return ParentBase::firstChild();
     }
 
     /// Returns top-most child in depth order.
     ///
     Element* lastChild() const {
-        return lastChild_;
+        return ParentBase::lastChild();
     }
 
     Int numChildren() const {
-        return numChildren_;
+        return ParentBase::numChildren();
     }
 
 private:
@@ -135,14 +140,6 @@ private:
 
     dom::Element* domElement_;
     topology::VacNode* vacNode_;
-
-    Element* prev_;
-    Element* next_;
-    Element* parent_ = nullptr;
-
-    Element* firstChild_;
-    Element* lastChild_;
-    Int numChildren_;
 
     ElementFlags flags_;
 };

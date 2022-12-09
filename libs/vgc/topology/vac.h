@@ -41,7 +41,7 @@ enum class VacNodeDiffFlag {
     Created             = 0x01,
     Reparented          = 0x02,
     ChildrenChanged     = 0x04,
-    ParametersChanged   = 0x08,
+    AttributeChanged    = 0x08,
     GeometryChanged     = 0x10,
     StarChanged         = 0x20,
     BoundaryChanged     = 0x40
