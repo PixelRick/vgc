@@ -26,14 +26,17 @@ class VGC_TOPOLOGY_API InbetweenVertex : public InbetweenCell, public VertexCell
 private:
     friend detail::Operations;
 
-public:
     explicit InbetweenVertex(core::Id id) noexcept
-        : VacCell(id, VacCellType::InbetweenVertex) {
+        : InbetweenCell(static_cast<VacCell*>(this))
+        , VertexCell(id, VacCellType::InbetweenVertex) {
     }
 
-    bool existsAt(core::AnimTime t) const override {
-        return InbetweenCell::existsAt(t);
-    }
+public:
+    using InbetweenCell::existsAt;
+    using VacCell::cellType;
+    using VacCell::existsAt;
+    using VacCell::spatialType;
+    using VacCell::vac;
 
     geometry::Vec2d position(core::AnimTime /*t*/) const override {
         // XXX todo interp

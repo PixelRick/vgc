@@ -26,14 +26,17 @@ class VGC_TOPOLOGY_API InbetweenFace : public InbetweenCell, public FaceCell {
 private:
     friend detail::Operations;
 
-public:
     explicit InbetweenFace(core::Id id) noexcept
-        : VacCell(id, VacCellType::InbetweenFace) {
+        : InbetweenCell(static_cast<VacCell*>(this))
+        , FaceCell(id, VacCellType::InbetweenFace) {
     }
 
-    bool existsAt(core::AnimTime t) const override {
-        return InbetweenCell::existsAt(t);
-    }
+public:
+    using InbetweenCell::existsAt;
+    using VacCell::cellType;
+    using VacCell::existsAt;
+    using VacCell::spatialType;
+    using VacCell::vac;
 };
 
 } // namespace vgc::topology

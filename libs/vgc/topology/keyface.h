@@ -28,14 +28,16 @@ private:
     friend detail::Operations;
 
     explicit KeyFace(core::Id id, core::AnimTime t) noexcept
-        : VacCell(id, VacCellType::KeyFace)
-        , KeyCell(t) {
+        : KeyCell(static_cast<VacCell*>(this), t)
+        , FaceCell(id, VacCellType::KeyFace) {
     }
 
 public:
-    bool existsAt(core::AnimTime t) const override {
-        return KeyCell::existsAt(t);
-    }
+    using KeyCell::existsAt;
+    using VacCell::cellType;
+    using VacCell::existsAt;
+    using VacCell::spatialType;
+    using VacCell::vac;
 };
 
 } // namespace vgc::topology

@@ -33,14 +33,16 @@ private:
     friend detail::Operations;
 
     explicit KeyVertex(core::Id id, core::AnimTime t) noexcept
-        : VacCell(id, VacCellType::KeyVertex)
-        , KeyCell(t) {
+        : KeyCell(static_cast<VacCell*>(this), t)
+        , VertexCell(id, VacCellType::KeyVertex) {
     }
 
 public:
-    bool existsAt(core::AnimTime t) const override {
-        return KeyCell::existsAt(t);
-    }
+    using KeyCell::existsAt;
+    using VacCell::cellType;
+    using VacCell::existsAt;
+    using VacCell::spatialType;
+    using VacCell::vac;
 
     geometry::Vec2d position(core::AnimTime /*t*/) const override {
         return position_;
@@ -49,6 +51,21 @@ public:
 private:
     geometry::Vec2d position_;
 };
+
+template<>
+inline constexpr KeyCell* static_cell_cast<KeyCell, KeyVertex>(KeyVertex* p) {
+    return static_cast<KeyCell*>(p);
+}
+
+template<>
+inline constexpr KeyCell* dynamic_cell_cast<KeyCell, KeyVertex>(KeyVertex* p) {
+    return static_cast<KeyCell*>(p);
+}
+
+template<>
+inline constexpr VacCell* dynamic_cell_cast<VacCell, VacCellProxy>(VacCellProxy* p) {
+    return p->cell();
+}
 
 } // namespace vgc::topology
 

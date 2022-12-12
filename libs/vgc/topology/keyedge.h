@@ -32,14 +32,16 @@ private:
     friend detail::Operations;
 
     explicit KeyEdge(core::Id id, core::AnimTime t) noexcept
-        : VacCell(id, VacCellType::KeyEdge)
-        , KeyCell(t) {
+        : KeyCell(static_cast<VacCell*>(this), t)
+        , EdgeCell(id, VacCellType::KeyEdge) {
     }
 
 public:
-    bool existsAt(core::AnimTime t) const override {
-        return KeyCell::existsAt(t);
-    }
+    using KeyCell::existsAt;
+    using VacCell::cellType;
+    using VacCell::existsAt;
+    using VacCell::spatialType;
+    using VacCell::vac;
 
     KeyVertex* startVertex() const {
         return startVertex_;

@@ -26,14 +26,17 @@ class VGC_TOPOLOGY_API InbetweenEdge : public InbetweenCell, public EdgeCell {
 private:
     friend detail::Operations;
 
-public:
     explicit InbetweenEdge(core::Id id) noexcept
-        : VacCell(id, VacCellType::InbetweenEdge) {
+        : InbetweenCell(static_cast<VacCell*>(this))
+        , EdgeCell(id, VacCellType::InbetweenEdge) {
     }
 
-    bool existsAt(core::AnimTime t) const override {
-        return InbetweenCell::existsAt(t);
-    }
+public:
+    using InbetweenCell::existsAt;
+    using VacCell::cellType;
+    using VacCell::existsAt;
+    using VacCell::spatialType;
+    using VacCell::vac;
 };
 
 } // namespace vgc::topology
