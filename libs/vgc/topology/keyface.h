@@ -23,21 +23,13 @@
 
 namespace vgc::topology {
 
-class VGC_TOPOLOGY_API KeyFace : public KeyCell, public FaceCell {
+class VGC_TOPOLOGY_API KeyFace : public SpatioTemporalCell<FaceCell, KeyCell> {
 private:
     friend detail::Operations;
 
     explicit KeyFace(core::Id id, core::AnimTime t) noexcept
-        : KeyCell(static_cast<VacCell*>(this), t)
-        , FaceCell(id, VacCellType::KeyFace) {
+        : SpatioTemporalCell(id, t) {
     }
-
-public:
-    using KeyCell::existsAt;
-    using VacCell::cellType;
-    using VacCell::existsAt;
-    using VacCell::spatialType;
-    using VacCell::vac;
 };
 
 } // namespace vgc::topology

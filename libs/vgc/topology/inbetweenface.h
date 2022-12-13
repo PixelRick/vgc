@@ -22,21 +22,15 @@
 
 namespace vgc::topology {
 
-class VGC_TOPOLOGY_API InbetweenFace : public InbetweenCell, public FaceCell {
+class VGC_TOPOLOGY_API InbetweenFace
+    : public SpatioTemporalCell<FaceCell, InbetweenCell> {
+
 private:
     friend detail::Operations;
 
     explicit InbetweenFace(core::Id id) noexcept
-        : InbetweenCell(static_cast<VacCell*>(this))
-        , FaceCell(id, VacCellType::InbetweenFace) {
+        : SpatioTemporalCell(id) {
     }
-
-public:
-    using InbetweenCell::existsAt;
-    using VacCell::cellType;
-    using VacCell::existsAt;
-    using VacCell::spatialType;
-    using VacCell::vac;
 };
 
 } // namespace vgc::topology

@@ -176,7 +176,7 @@ template<typename T, typename SFINAE = void>
 struct IsValidValueType : std::false_type {};
 
 template<typename T>
-struct IsValidValueType<T, core::MakeVoid<typename ValueTypeTraitsFromType<T>::Type>>
+struct IsValidValueType<T, core::RequiresValid<typename ValueTypeTraitsFromType<T>::Type>>
     : std::true_type {};
 
 template<typename T>

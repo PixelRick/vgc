@@ -27,22 +27,15 @@
 
 namespace vgc::topology {
 
-class VGC_TOPOLOGY_API KeyEdge : public KeyCell, public EdgeCell {
+class VGC_TOPOLOGY_API KeyEdge : public SpatioTemporalCell<EdgeCell, KeyCell> {
 private:
     friend detail::Operations;
 
     explicit KeyEdge(core::Id id, core::AnimTime t) noexcept
-        : KeyCell(static_cast<VacCell*>(this), t)
-        , EdgeCell(id, VacCellType::KeyEdge) {
+        : SpatioTemporalCell(id, t) {
     }
 
 public:
-    using KeyCell::existsAt;
-    using VacCell::cellType;
-    using VacCell::existsAt;
-    using VacCell::spatialType;
-    using VacCell::vac;
-
     KeyVertex* startVertex() const {
         return startVertex_;
     }

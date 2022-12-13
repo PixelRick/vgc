@@ -335,7 +335,7 @@ struct IsComplete_ : decltype(testIsComplete_<T>(0)) {};
 #define VGC_ASSERT_TYPE_IS_COMPLETE(type, message)                                       \
     do {                                                                                 \
         struct Tag;                                                                      \
-        static_assert(::vgc::core::detail::IsComplete_<type>::value, message);           \
+        static_assert(::vgc::core::detail::IsComplete_<type, Tag>::value, message);      \
     } while (0)
     
 

@@ -22,22 +22,17 @@
 
 namespace vgc::topology {
 
-class VGC_TOPOLOGY_API InbetweenVertex : public InbetweenCell, public VertexCell {
+class VGC_TOPOLOGY_API InbetweenVertex
+    : public SpatioTemporalCell<VertexCell, InbetweenCell> {
+
 private:
     friend detail::Operations;
 
     explicit InbetweenVertex(core::Id id) noexcept
-        : InbetweenCell(static_cast<VacCell*>(this))
-        , VertexCell(id, VacCellType::InbetweenVertex) {
+        : SpatioTemporalCell(id) {
     }
 
 public:
-    using InbetweenCell::existsAt;
-    using VacCell::cellType;
-    using VacCell::existsAt;
-    using VacCell::spatialType;
-    using VacCell::vac;
-
     geometry::Vec2d position(core::AnimTime /*t*/) const override {
         // XXX todo interp
         return geometry::Vec2d();

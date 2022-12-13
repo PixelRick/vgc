@@ -308,8 +308,10 @@ void Workspace::rebuildVacFromTree_() {
         Element* wv0 = elements_[ev0->internalId()].get();
         Element* wv1 = elements_[ev1->internalId()].get();
 
-        auto v0 = dynamic_cast<topology::KeyVertex*>(wv0->vacNode_);
-        auto v1 = dynamic_cast<topology::KeyVertex*>(wv1->vacNode_);
+        auto v0 = topology::static_cell_cast<topology::KeyVertex>(
+            static_cast<topology::VacCell*>(wv0->vacNode_));
+
+        auto v1 = toKeyVertex(wv1->vacNode_->toCellUnchecked());
 
         topology::KeyEdge* node = topology::ops::createKeyEdge(
             domElem->internalId(),
@@ -317,6 +319,7 @@ void Workspace::rebuildVacFromTree_() {
             v0,
             v1);
         e->vacNode_ = node;
+
         // todo: set attributes
         // ...
     }

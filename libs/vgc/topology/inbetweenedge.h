@@ -22,21 +22,15 @@
 
 namespace vgc::topology {
 
-class VGC_TOPOLOGY_API InbetweenEdge : public InbetweenCell, public EdgeCell {
+class VGC_TOPOLOGY_API InbetweenEdge
+    : public SpatioTemporalCell<EdgeCell, InbetweenCell> {
+
 private:
     friend detail::Operations;
 
     explicit InbetweenEdge(core::Id id) noexcept
-        : InbetweenCell(static_cast<VacCell*>(this))
-        , EdgeCell(id, VacCellType::InbetweenEdge) {
+        : SpatioTemporalCell(id) {
     }
-
-public:
-    using InbetweenCell::existsAt;
-    using VacCell::cellType;
-    using VacCell::existsAt;
-    using VacCell::spatialType;
-    using VacCell::vac;
 };
 
 } // namespace vgc::topology

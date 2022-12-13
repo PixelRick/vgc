@@ -80,6 +80,15 @@ enum class CellSpatialType : UInt8 {
 };
 // clang-format on
 
+/// \enum vgc::graph::CellTemporalType
+/// \brief Specifies the temporal type of a Cell.
+// clang-format off
+enum class CellTemporalType : UInt8 {
+    Key       = 0,
+    Inbetween = 1,
+};
+// clang-format on
+
 /// \enum vgc::graph::VacCellType
 /// \brief Specifies the type of a Vac Cell.
 // clang-format off
@@ -100,8 +109,13 @@ inline constexpr CellSpatialType vacCellTypeToSpatialType(VacCellType x) {
     return static_cast<CellSpatialType>(core::toUnderlying(x) & 3);
 }
 
-inline constexpr bool isVacKeyCellType(VacCellType x) {
-    return (core::toUnderlying(x) >> 2) == 0;
+inline constexpr CellTemporalType vacCellTypeToTemporalType(VacCellType x) {
+    return static_cast<CellTemporalType>((core::toUnderlying(x) >> 2) & 1);
+}
+
+inline constexpr VacCellType vacCellTypeCombine(CellSpatialType st, CellTemporalType tt) {
+    return static_cast<VacCellType>(
+        ((core::toUnderlying(tt) << 2) | core::toUnderlying(st)));
 }
 
 // Affine 2D transform for Vec2d.
@@ -387,6 +401,19 @@ public:
         return !isCell();
     }
 
+    inline VacCell* toCellUnchecked();
+
+    const VacCell* toCellUnchecked() const {
+        return const_cast<VacNode*>(this)->toCellUnchecked();
+        ;
+    }
+
+    inline VacGroup* toGroupUnchecked();
+
+    const VacGroup* toGroupUnchecked() const {
+        return const_cast<VacNode*>(this)->toGroupUnchecked();
+    }
+
 protected:
     VacCellType cellTypeUnchecked() const {
         return *cellType_;
@@ -519,8 +546,11 @@ private:
     }
 
 protected:
-    VacCell(core::Id id, VacCellType cellType) noexcept
-        : VacNode(id, cellType) {
+    VacCell(
+        core::Id id,
+        CellSpatialType spatialType,
+        CellTemporalType temporalType) noexcept
+        : VacNode(id, detail::vacCellTypeCombine(spatialType, temporalType)) {
     }
 
 public:
@@ -542,12 +572,17 @@ public:
         return detail::vacCellTypeToSpatialType(cellType());
     }
 
+    CellTemporalType temporalType() const {
+        return detail::vacCellTypeToTemporalType(cellType());
+    }
+
     bool isKeyCell() const {
-        return detail::isVacKeyCellType(cellType());
+        return detail::vacCellTypeToTemporalType(cellType()) == CellTemporalType::Key;
     }
 
     bool isInbetweenCell() const {
-        return !isKeyCell();
+        return detail::vacCellTypeToTemporalType(cellType())
+               == CellTemporalType::Inbetween;
     }
 
     virtual bool existsAt(core::AnimTime t) const = 0;
@@ -560,6 +595,14 @@ private:
     core::Array<VacCell*> star_;
 };
 
+inline VacCell* VacNode::toCellUnchecked() {
+    return static_cast<VacCell*>(this);
+}
+
+inline VacGroup* VacNode::toGroupUnchecked() {
+    return static_cast<VacGroup*>(this);
+}
+
 template<typename T>
 class VacCellProxy {
 protected:
@@ -568,6 +611,10 @@ protected:
 
 public:
     constexpr VacCell* cell();
+
+    constexpr const VacCell* cell() const {
+        return const_cast<VacCellProxy*>(this)->cell();
+    }
 
     Vac* vac() const {
         return cell()->vac();
@@ -579,6 +626,33 @@ public:
 
     CellSpatialType spatialType() const {
         return cell()->spatialType();
+    }
+
+    CellTemporalType temporalType() const {
+        return cell()->temporalType();
+    }
+};
+
+template<typename SpatialCell, typename TemporalCell>
+class SpatioTemporalCell : public TemporalCell, public SpatialCell {
+public:
+    template<typename... TemporalCellArgs>
+    SpatioTemporalCell(core::Id id, TemporalCellArgs&&... args)
+        : TemporalCell(std::forward<TemporalCellArgs>(args)...)
+        , SpatialCell(id, TemporalCell::temporalType()) {
+    }
+
+    using SpatialCell::spatialType;
+    using TemporalCell::temporalType;
+    using VacCell::cellType;
+    using VacCell::vac;
+
+    bool existsAt(core::AnimTime t) const final {
+        return TemporalCell::existsAt(t);
+    }
+
+    static constexpr VacCellType cellType() {
+        return detail::vacCellTypeCombine(spatialType(), temporalType());
     }
 };
 
@@ -593,6 +667,10 @@ protected:
     }
 
 public:
+    static constexpr CellTemporalType temporalType() {
+        return CellTemporalType::Key;
+    }
+
     constexpr core::AnimTime time() const {
         return time_;
     }
@@ -605,20 +683,6 @@ private:
     core::AnimTime time_;
 };
 
-namespace detail {
-
-// Same layout as KeyVertex, KeyEdge, KeyFace w.r.t. VacCell offset.
-struct KeyAny : KeyCell, VacCell {
-    KeyAny();
-};
-
-} // namespace detail
-
-template<>
-constexpr VacCell* VacCellProxy<KeyCell>::cell() {
-    return static_cast<VacCell*>(static_cast<detail::KeyAny*>(this));
-}
-
 class VGC_TOPOLOGY_API InbetweenCell : public VacCellProxy<InbetweenCell> {
 private:
     friend detail::Operations;
@@ -629,6 +693,10 @@ protected:
     }
 
 public:
+    static constexpr CellTemporalType temporalType() {
+        return CellTemporalType::Inbetween;
+    }
+
     // virtual api
 
     bool existsAt(core::AnimTime t) const {
@@ -639,28 +707,20 @@ private:
     core::AnimTimeRange timeRange_;
 };
 
-namespace detail {
-
-// Same layout as InbetweenVertex, InbetweenEdge, InbetweenFace w.r.t. VacCell offset.
-struct InbetweenAny : InbetweenCell, VacCell {
-    InbetweenAny();
-};
-
-} // namespace detail
-
-template<>
-constexpr VacCell* VacCellProxy<InbetweenCell>::cell() {
-    return static_cast<VacCell*>(static_cast<detail::InbetweenAny*>(this));
-}
-
 class VGC_TOPOLOGY_API VertexCell : public VacCell {
 private:
     friend detail::Operations;
 
 protected:
-    using VacCell::VacCell;
+    VertexCell(core::Id id, CellTemporalType temporalType) noexcept
+        : VacCell(id, spatialType(), temporalType) {
+    }
 
 public:
+    static constexpr CellSpatialType spatialType() {
+        return CellSpatialType::Vertex;
+    }
+
     virtual geometry::Vec2d position(core::AnimTime t) const = 0;
 };
 
@@ -669,9 +729,15 @@ private:
     friend detail::Operations;
 
 protected:
-    using VacCell::VacCell;
+    EdgeCell(core::Id id, CellTemporalType temporalType) noexcept
+        : VacCell(id, spatialType(), temporalType) {
+    }
 
 public:
+    static constexpr CellSpatialType spatialType() {
+        return CellSpatialType::Edge;
+    }
+
     // virtual api
 
     // note: Looks best to return an object so that we can change its impl
@@ -686,9 +752,15 @@ private:
     friend detail::Operations;
 
 protected:
-    using VacCell::VacCell;
+    FaceCell(core::Id id, CellTemporalType temporalType) noexcept
+        : VacCell(id, spatialType(), temporalType) {
+    }
 
 public:
+    static constexpr CellSpatialType spatialType() {
+        return CellSpatialType::Face;
+    }
+
     // virtual api
 };
 
@@ -696,352 +768,277 @@ class VGC_TOPOLOGY_API VertexUsage {
     // def depends on how we'll represent keyface boundaries
 };
 
-// static_cell_cast from VacCell
+/// Checks whether the type `T` is a Cell type.
+///
+template<typename T>
+inline constexpr bool isCell = std::
+    disjunction_v<std::is_base_of<VacCell, T>, core::IsTemplateBaseOf<VacCellProxy, T>>;
+
+namespace detail {
+
+struct DummySpatialCell : VacCell {};
+
+template<typename T, typename SFINAE = void>
+struct CellSpatialTraits {
+    static constexpr bool hasSpatialType = false;
+};
 
 template<typename T>
-inline constexpr T* static_cell_cast(VacCell* p) {
-    // authorized: the six final cell types and all their bases
-    VGC_ASSERT_TYPE_IS_COMPLETE(T, "Invalid static_cell_cast to incomplete type T.");
-    using U = std::remove_cv_t<T>;
-    if constexpr (std::is_base_of_v<VacCell, U>) {
-        return static_cast<T*>(p);
-    }
-    else if constexpr (std::is_same_v<U, KeyCell>) {
-        return static_cast<T*>(static_cast<detail::KeyAny*>(p));
-    }
-    else if constexpr (std::is_same_v<U, InbetweenCell>) {
-        return static_cast<T*>(static_cast<detail::InbetweenAny*>(p));
-    }
-    else {
-        static_assert(false, "Invalid static_cell_cast from VacCell to non-Cell type.");
-    }
-    return nullptr;
+struct CellSpatialTraits<
+    T,
+    core::Requires<std::disjunction_v<
+        std::is_base_of<VertexCell, T>,
+        std::is_base_of<EdgeCell, T>,
+        std::is_base_of<FaceCell, T>>>> {
+
+    static constexpr bool hasSpatialType = true;
+    static constexpr CellSpatialType spatialType = T::spatialType();
+};
+
+template<typename T, typename SFINAE = void>
+struct CellTemporalTraits {
+    static constexpr bool hasTemporalType = false;
+};
+
+template<typename T>
+struct CellTemporalTraits<
+    T,
+    core::Requires<std::disjunction_v<
+        std::is_base_of<KeyCell, T>,
+        std::is_base_of<InbetweenCell, T>>>> {
+
+    static constexpr bool hasTemporalType = true;
+    static constexpr CellTemporalType temporalType = T::temporalType();
+    using TemporalAny = SpatioTemporalCell<T, DummySpatialCell>;
+};
+
+} // namespace detail
+
+template<typename T, typename SFINAE = void>
+struct CellTraits : detail::CellSpatialTraits<T>, detail::CellTemporalTraits<T> {
+    static constexpr bool hasSpatioTemporalType = false;
+};
+
+template<typename T>
+struct CellTraits<
+    T,
+    core::Requires<
+        detail::CellSpatialTraits<T>::hasSpatialType
+        && detail::CellTemporalTraits<T>::hasTemporalType>>
+    : detail::CellSpatialTraits<T>, detail::CellTemporalTraits<T> {
+
+    static constexpr bool hasSpatioTemporalType = true;
+    static constexpr VacCellType cellType =
+        detail::vacCellTypeCombine(spatialType, temporalType);
+};
+
+template<typename T>
+constexpr VacCell* VacCellProxy<T>::cell() {
+    return static_cast<VacCell*>(static_cast<CellTraits<T>::TemporalAny*>(this));
 }
 
-template<typename T>
-inline constexpr T* dynamic_cell_cast(VacCell* p) {
-    // authorized: the six final cell types and all their bases
-    VGC_ASSERT_TYPE_IS_COMPLETE(T, "Invalid static_cell_cast to incomplete type T.");
-    using U = std::remove_cv_t<T>;
-    if constexpr (std::is_same_v<U, VacCell>) {
-        return static_cast<T*>(p);
+// Note: with C++20, ADL will work with explicitly instanciated template functions.
+template<typename To, typename From, VGC_REQUIRES((isCell<To> && isCell<From>))>
+constexpr To* static_cell_cast(From* p) {
+
+    // Check const to non-const
+    if constexpr (std::is_const_v<From> && !std::is_const_v<To>) {
+        static_assert(false, "Invalid static_cell_cast from const to non-const.")
     }
-    else if constexpr (std::is_same_v<U, KeyCell>) {
-        if (p->isKeyCell()) {
-            return static_cast<T*>(static_cast<detail::KeyAny*>(p));
-        }
+
+    // Check To and From are complete
+    VGC_ASSERT_TYPE_IS_COMPLETE(To, "Invalid static_cell_cast to incomplete type To.");
+    VGC_ASSERT_TYPE_IS_COMPLETE(
+        From, "Invalid static_cell_cast from incomplete type From.");
+
+    // Retrieve non-const To and From
+    using NcTo = std::remove_cv_t<To>;
+    using NcFrom = std::remove_cv_t<From>;
+
+    using ToTraits = CellTraits<NcTo>;
+    using FromTraits = CellTraits<NcFrom>;
+
+    if constexpr (std::is_convertible_v<From*, To*>) {
+        // trivial: identity or upcast
+        return p;
     }
-    else if constexpr (std::is_same_v<U, InbetweenCell>) {
-        if (p->isInbetweenCell()) {
-            return static_cast<T*>(static_cast<detail::InbetweenAny*>(p));
+    else if constexpr (std::is_base_of_v<NcFrom, NcTo>) {
+        // trivial: downcast
+        return static_cast<To*>(p);
+    }
+    else if constexpr (FromTraits::hasSpatialType || std::is_same_v<NcFrom, VacCell>) {
+        static_assert(
+            !FromTraits::hasTemporalType,
+            "Logic error in static_cell_cast: "
+            "spatio-temporal type `From` should have been handled by upcast.");
+        // check invalid cast: spatial type conflict
+        if constexpr (ToTraits::hasSpatialType) {
+            static_assert(
+                !ToTraits::hasTemporalType,
+                "Logic error in static_cell_cast: "
+                "spatio-temporal type `To` should have been handled by downcast.");
+            static_assert(
+                ToTraits::spatialType == FromTraits::spatialType,
+                "Invalid static_cell_cast with confliting spatial types.");
         }
+        // NcFrom is in {VertexCell, EdgeCell, FaceCell, VaCell}
+        // NcTo is in {KeyCell, InbetweenCell}
+        return static_cast<To*>(static_cast<typename ToTraits::TemporalAny*>(
+            static_cast<VacCell*>(const_cast<NcFrom*>(p))));
+    }
+    else if constexpr (FromTraits::hasTemporalType) {
+        static_assert(
+            !FromTraits::hasSpatialType,
+            "Logic error in static_cell_cast: "
+            "spatio-temporal type `From` should have been handled by upcast.");
+        // check invalid cast: temporal type conflict
+        if constexpr (ToTraits::hasTemporalType) {
+            static_assert(
+                !ToTraits::hasSpatialType,
+                "Logic error in static_cell_cast: "
+                "spatio-temporal type `To` should have been handled by downcast.");
+            static_assert(
+                ToTraits::temporalType == FromTraits::temporalType,
+                "Invalid static_cell_cast with confliting temporal types.");
+        }
+        // NcFrom is in {KeyCell, InbetweenCell}
+        // NcTo is in {VertexCell, EdgeCell, FaceCell, VacCell}
+        return static_cast<To*>(static_cast<VacCell*>(
+            static_cast<typename ToTraits::TemporalAny*>(const_cast<NcFrom*>(p))));
     }
     else {
-        switch (p->cellType()) {
-        case VacCellType::KeyVertex:
-            if constexpr (core::isAmong<U, VertexCell, KeyVertex>) {
-                return static_cast<T*>(static_cast<KeyVertex*>(p));
+        static_assert(false, "Logic error in static_cell_cast: case not handled.");
+    }
+}
+
+// Note: with C++20, ADL will work with explicitly instanciated template functions.
+template<typename To, typename From, VGC_REQUIRES((isCell<To> && isCell<From>))>
+constexpr To* dynamic_cell_cast(From* p) {
+
+    // Check const to non-const
+    if constexpr (std::is_const_v<From> && !std::is_const_v<To>) {
+        static_assert(false, "Invalid dynamic_cell_cast from const to non-const.")
+    }
+
+    // Check To and From are complete
+    VGC_ASSERT_TYPE_IS_COMPLETE(To, "Invalid dynamic_cell_cast to incomplete type To.");
+    VGC_ASSERT_TYPE_IS_COMPLETE(
+        From, "Invalid dynamic_cell_cast from incomplete type From.");
+
+    // Retrieve non-const To and From
+    using NcTo = std::remove_cv_t<To>;
+    using NcFrom = std::remove_cv_t<From>;
+
+    using ToTraits = CellTraits<NcTo>;
+    using FromTraits = CellTraits<NcFrom>;
+
+    if constexpr (std::is_convertible_v<From*, To*>) {
+        // trivial: identity or upcast
+        return p;
+    }
+    else if constexpr (ToTraits::hasSpatioTemporalType) {
+        // NcTo is in {KeyVertex, KeyEdge, KeyFace,
+        //             InbetweenVertex, InbetweenEdge, InbetweenFace}
+        // check invalid cast: spatial type conflict
+        if constexpr (FromTraits::hasSpatialType) {
+            static_assert(
+                ToTraits::spatialType == FromTraits::spatialType,
+                "Invalid dynamic_cell_cast with confliting spatial types.");
+        }
+        // check invalid cast: temporal type conflict
+        if constexpr (FromTraits::hasTemporalType) {
+            static_assert(
+                ToTraits::temporalType == FromTraits::temporalType,
+                "Invalid dynamic_cell_cast with confliting temporal types.");
+        }
+        if (p->cellType() == ToTraits::cellType) {
+            return static_cast<To*>(p);
+        }
+        return nullptr;
+    }
+    else if constexpr (ToTraits::hasSpatialType) {
+        // NcTo is in {VertexCell, EdgeCell, FaceCell}
+        // check invalid cast: spatial type conflict
+        if constexpr (FromTraits::hasSpatialType) {
+            static_assert(
+                ToTraits::spatialType == FromTraits::spatialType,
+                "Invalid dynamic_cell_cast with confliting spatial types.");
+        }
+        if (p->spatialType() == ToTraits::spatialType) {
+            if constexpr (FromTraits::hasTemporalType && !FromTraits::hasSpatialType) {
+                // NcFrom is in {KeyCell, InbetweenCell}
+                // example: KeyCell -> TemporalAny -> VacCell -> VertexCell
+                return static_cast<To*>(
+                    static_cast<VacCell*>(static_cast<typename FromTraits::TemporalAny*>(
+                        const_cast<NcFrom*>(p))));
             }
-            break;
-        case VacCellType::KeyEdge:
-            if constexpr (core::isAmong<U, EdgeCell, KeyEdge>) {
-                return static_cast<T*>(static_cast<KeyEdge*>(p));
+            else {
+                // NcFrom is in {VertexCell, EdgeCell, FaceCell, VacCell}
+                return static_cast<To*>(p);
             }
-            break;
-        case VacCellType::KeyFace:
-            if constexpr (core::isAmong<U, FaceCell, KeyFace>) {
-                return static_cast<T*>(static_cast<KeyFace*>(p));
+        }
+        return nullptr;
+    }
+    else if constexpr (ToTraits::hasTemporalType) {
+        // NcTo is in {KeyCell, InbetweenCell}
+        // check invalid cast: temporal type conflict
+        if constexpr (FromTraits::hasTemporalType) {
+            static_assert(
+                ToTraits::temporalType == FromTraits::temporalType,
+                "Invalid dynamic_cell_cast with confliting temporal types.");
+        }
+        if (p->temporalType() == ToTraits::temporalType) {
+            if constexpr (!FromTraits::hasTemporalType) {
+                // NcFrom is in {VertexCell, EdgeCell, FaceCell, VacCell}
+                // example: VertexCell -> VacCell -> TemporalAny -> KeyCell
+                return static_cast<To*>(static_cast<typename ToTraits::TemporalAny*>(
+                    static_cast<VacCell*>(const_cast<NcFrom*>(p))));
             }
-            break;
-        case VacCellType::InbetweenVertex:
-            if constexpr (core::isAmong<U, VertexCell, InbetweenVertex>) {
-                return static_cast<T*>(static_cast<InbetweenVertex*>(p));
+            else {
+                // NcFrom is in {KeyCell, InbetweenCell}
+                return static_cast<To*>(p);
             }
-            break;
-        case VacCellType::InbetweenEdge:
-            if constexpr (core::isAmong<U, EdgeCell, InbetweenEdge>) {
-                return static_cast<T*>(static_cast<InbetweenEdge*>(p));
-            }
-            break;
-        case VacCellType::InbetweenFace:
-            if constexpr (core::isAmong<U, FaceCell, InbetweenFace>) {
-                return static_cast<T*>(static_cast<InbetweenFace*>(p));
-            }
-            break;
         }
+        return nullptr;
     }
-    return nullptr;
-}
-
-// static_cell_cast from KeyCell/InbetweenCell
-
-template<typename T>
-inline constexpr T* static_cell_cast(KeyCell* p) {
-    // authorized: the 3 final key cell types and all their bases
-    VGC_ASSERT_TYPE_IS_COMPLETE(T, "Invalid static_cell_cast to incomplete type T.");
-    using U = std::remove_cv_t<T>;
-    if constexpr (core::isAmong<U, KeyCell, KeyVertex, KeyEdge, KeyFace>) {
-        return static_cast<T*>(p);
-    }
-    else if constexpr (core::isAmong<U, VacCell, VertexCell, EdgeCell, FaceCell>) {
-        return static_cast<T*>(static_cast<detail::KeyAny*>(p));
-    }
-    else {
+    else if constexpr (std::is_same_v<NcTo, VacCell>) {
+        // NcTo is in {VacCell}
+        // NcFrom is in {KeyCell, InbetweenCell}
         static_assert(
-            false,
-            "Invalid static_cell_cast from KeyCell to InbetweenCell-derived type.");
-    }
-    return nullptr;
-}
-
-template<typename T>
-inline constexpr T* static_cell_cast(InbetweenCell* p) {
-    // authorized: the 3 final inbetween cell types and all their bases
-    VGC_ASSERT_TYPE_IS_COMPLETE(T, "Invalid static_cell_cast to incomplete type T.");
-    using U = std::remove_cv_t<T>;
-    if constexpr (
-        core::isAmong<U, InbetweenCell, InbetweenVertex, InbetweenEdge, InbetweenFace>) {
-
-        return static_cast<T*>(p);
-    }
-    else if constexpr (core::isAmong<U, VacCell, VertexCell, EdgeCell, FaceCell>) {
-        return static_cast<T*>(static_cast<detail::InbetweenAny*>(p));
+            FromTraits::hasTemporalType && !FromTraits::hasSpatialType,
+            "Logic error in dynamic_cell_cast: unexpected code path.");
+        return static_cast<To*>(
+            static_cast<typename FromTraits::TemporalAny*>(const_cast<NcFrom*>(p)));
     }
     else {
-        static_assert(
-            false,
-            "Invalid static_cell_cast from InbetweenCell to KeyCell-derived type.");
-    }
-    return nullptr;
-}
-
-template<typename T>
-inline constexpr T* dynamic_cell_cast(KeyCell* p) {
-    // authorized: the 3 final key cell types and all their bases
-    VGC_ASSERT_TYPE_IS_COMPLETE(T, "Invalid static_cell_cast to incomplete type T.");
-    using U = std::remove_cv_t<T>;
-    if constexpr (std::is_same_v<U, KeyCell>) {
-        return static_cast<T*>(p);
-    }
-    else if constexpr (std::is_same_v<U, VacCell>) {
-        return static_cast<T*>(static_cast<detail::KeyAny*>(p));
-    }
-    else if constexpr (std::isAmong<U, VertexCell, KeyVertex>) {
-        if (p->cellType() == VacCellType::KeyVertex) {
-            return static_cast<T*>(static_cast<KeyVertex*>(p));
-        }
-    }
-    else if constexpr (std::isAmong<U, EdgeCell, KeyEdge>) {
-        if (p->cellType() == VacCellType::KeyEdge) {
-            return static_cast<T*>(static_cast<KeyEdge*>(p));
-        }
-    }
-    else if constexpr (std::isAmong<U, FaceCell, KeyFace>) {
-        if (p->cellType() == VacCellType::KeyFace) {
-            return static_cast<T*>(static_cast<KeyFace*>(p));
-        }
-    }
-    else {
-        static_assert(
-            false,
-            "Invalid static_cell_cast from KeyCell to InbetweenCell-derived type.");
-    }
-    return nullptr;
-}
-
-template<typename T>
-inline constexpr T* dynamic_cell_cast(InbetweenCell* p) {
-    // authorized: the 3 final inbetween cell types and all their bases
-    VGC_ASSERT_TYPE_IS_COMPLETE(T, "Invalid static_cell_cast to incomplete type T.");
-    using U = std::remove_cv_t<T>;
-    if constexpr (std::is_same_v<U, InbetweenCell>) {
-        return static_cast<T*>(p);
-    }
-    else if constexpr (std::is_same_v<U, VacCell>) {
-        return static_cast<T*>(static_cast<detail::InbetweenAny*>(p));
-    }
-    else if constexpr (std::isAmong<U, VertexCell, InbetweenVertex>) {
-        if (p->cellType() == VacCellType::InbetweenVertex) {
-            return static_cast<T*>(static_cast<InbetweenVertex*>(p));
-        }
-    }
-    else if constexpr (std::isAmong<U, EdgeCell, InbetweenEdge>) {
-        if (p->cellType() == VacCellType::InbetweenEdge) {
-            return static_cast<T*>(static_cast<InbetweenEdge*>(p));
-        }
-    }
-    else if constexpr (std::isAmong<U, FaceCell, InbetweenFace>) {
-        if (p->cellType() == VacCellType::InbetweenFace) {
-            return static_cast<T*>(static_cast<InbetweenFace*>(p));
-        }
-    }
-    else {
-        static_assert(
-            false,
-            "Invalid static_cell_cast from InbetweenCell to KeyCell-derived type.");
-    }
-    return nullptr;
-}
-
-// VertexCell/EdgeCell/FaceCell
-
-template<typename T>
-inline constexpr T* static_cell_cast(VertexCell* p) {
-    //  authorized: VacCell, VertexCell, KeyCell, InbetweenCell, KeyVertex, InbetweenVertex
-    using U = std::remove_cv_t<T>;
-    if constexpr (std::is_base_of_v<U, VertexCell>) {
-        return static_cast<T*>(p);
-    }
-    else if constexpr (std::is_base_of_v<VertexCell, U>) {
-        return static_cast<T*>(p);
-    }
-    else if constexpr (std::is_same_v<U, KeyCell>) {
-        return static_cast<T*>(static_cast<KeyVertex*>(p));
-    }
-    else if constexpr (std::is_same_v<U, InbetweenCell>) {
-        return static_cast<T*>(static_cast<InbetweenVertex*>(p));
-    }
-    else {
-        static_assert(
-            false,
-            "Invalid static_cell_cast from VertexCell to edge or face cell type T.");
-    }
-    return nullptr;
-}
-
-template<typename T>
-inline constexpr T* static_cell_cast(EdgeCell* p) {
-    //  authorized: VacCell, EdgeCell, KeyCell, InbetweenCell, KeyEdge, InbetweenEdge
-    using U = std::remove_cv_t<T>;
-    if constexpr (std::is_base_of_v<U, EdgeCell>) {
-        return static_cast<T*>(p);
-    }
-    else if constexpr (std::is_base_of_v<EdgeCell, U>) {
-        return static_cast<T*>(p);
-    }
-    else if constexpr (std::is_same_v<U, KeyCell>) {
-        return static_cast<T*>(static_cast<KeyEdge*>(p));
-    }
-    else if constexpr (std::is_same_v<U, InbetweenCell>) {
-        return static_cast<T*>(static_cast<InbetweenEdge*>(p));
-    }
-    else {
-        static_assert(
-            false,
-            "Invalid static_cell_cast from EdgeCell to vertex or face cell type T.");
-    }
-    return nullptr;
-}
-
-template<typename T>
-inline constexpr T* static_cell_cast(FaceCell* p) {
-    //  authorized: VacCell, FaceCell, KeyCell, InbetweenCell, KeyFace, InbetweenFace
-    using U = std::remove_cv_t<T>;
-    if constexpr (std::is_base_of_v<U, FaceCell>) {
-        return static_cast<T*>(p);
-    }
-    else if constexpr (std::is_base_of_v<FaceCell, U>) {
-        return static_cast<T*>(p);
-    }
-    else if constexpr (std::is_same_v<U, KeyCell>) {
-        return static_cast<T*>(static_cast<KeyFace*>(p));
-    }
-    else if constexpr (std::is_same_v<U, InbetweenCell>) {
-        return static_cast<T*>(static_cast<InbetweenFace*>(p));
-    }
-    else {
-        static_assert(
-            false,
-            "Invalid static_cell_cast from FaceCell to vertex or edge cell type T.");
-    }
-    return nullptr;
-}
-
-// WIP:
-
-template<typename T>
-inline constexpr T* dynamic_cell_cast(VertexCell* p) {
-    // authorized: VacCell, KeyCell, InbetweenCell, KeyVertex, InbetweenVertex
-    VGC_ASSERT_TYPE_IS_COMPLETE(T, "Invalid static_cell_cast to incomplete type T.");
-    using U = std::remove_cv_t<T>;
-    if constexpr (std::is_base_of_v<U, VertexCell>) {
-        return static_cast<T*>(p);
-    }
-    else if constexpr (core::isAmong<U, KeyCell, KeyVertex>) {
-
-        return static_cast<T*>(static_cast<KeyVertex*>(p));
-    }
-    else if constexpr (core::isAmong<U, InbetweenCell, InbetweenVertex>) {
-
-        return static_cast<T*>(static_cast<Inbetween*>(p));
-    }
-    else if constexpr (std::is_same_v<U, KeyCell>) {
-        return p->isKeyCell() ? static_cast<T*>(static_cast<KeyVertex*>(p)) : nullptr;
-    }
-    else if constexpr (std::is_same_v<U, InbetweenCell>) {
-        return p->isInbetweenCell() ? static_cast<T*>(static_cast<KeyVertex*>(p))
-                                    : nullptr;
-    }
-    return nullptr;
-}
-
-template<typename T>
-inline constexpr T* static_cell_cast(KeyCell* p) {
-    //  authorized: VacCell, XCell, KeyX
-    VGC_ASSERT_TYPE_IS_COMPLETE(T, "Invalid static_cell_cast to incomplete type T.");
-    using U = std::remove_cv_t<T>;
-    if constexpr (std::is_base_of_v<VacCell, U>) {
-        return static_cast<T*>(p);
-    }
-    else if constexpr (std::is_same_v<U, KeyCell>) {
-        return p->isKeyCell() ? static_cast<KeyCell*>(static_cast<KeyVertex*>(p))
-                              : nullptr;
-    }
-    else if constexpr (std::is_same_v<U, InbetweenCell>) {
-        return p->isInbetweenCell() ? static_cast<KeyCell*>(static_cast<KeyVertex*>(p))
-                                    : nullptr;
-    }
-    return nullptr;
-}
-
-template<typename T>
-inline constexpr T* static_cell_cast(KeyVertex* p) {
-    //  authorized: VacCell, KeyCell, VertexCell
-    using U = std::remove_cv_t<T>;
-    if constexpr (std::is_base_of_v<U, KeyVertex>) {
-        return static_cast<T*>(p);
-    }
-    else {
-        constexpr size_t s = sizeof(T);
-        static_assert(!"bad static_cell_cast.");
+        static_assert(false, "Logic error in dynamic_cell_cast: case not handled.");
     }
 }
 
-template<typename T>
-inline constexpr T* static_cell_cast(InbetweenVertex* p) {
-    if constexpr ()
-}
-
-template<>
-inline VacCell* dynamic_cell_cast<VacCell, VertexCell>(VertexCell* p) {
-    return static_cast<VacCell*>(p);
-}
-
-template<>
-inline KeyCell* dynamic_cell_cast<KeyCell, VertexCell>(VertexCell* p) {
-    if (p->isKeyCell()) {
-        return static_cast<KeyCell*>(static_cast<detail::KeyVertex_*>(p));
+#define VGC_TOPOLOGY_DEFINE_CAST(To)                                                     \
+    template<typename From>                                                              \
+    constexpr To* to##To(From* p) {                                                      \
+        return dynamic_cell_cast<To, From>(p);                                           \
+    }                                                                                    \
+    template<typename From>                                                              \
+    constexpr To* to##To##Unchecked(From* p) {                                           \
+        return static_cell_cast<To, From>(p);                                            \
     }
-    return nullptr;
-}
 
-template<>
-inline VertexCell* dynamic_cell_cast<VertexCell, KeyCell>(KeyCell* p) {
-    if (p->spatialType() == CellSpatialType::Vertex) {
-        return static_cast<VertexCell*>(static_cast<detail::KeyVertex_*>(p));
-    }
-    return nullptr;
-}
+VGC_TOPOLOGY_DEFINE_CAST(VacCell)
+VGC_TOPOLOGY_DEFINE_CAST(VertexCell)
+VGC_TOPOLOGY_DEFINE_CAST(EdgeCell)
+VGC_TOPOLOGY_DEFINE_CAST(FaceCell)
+VGC_TOPOLOGY_DEFINE_CAST(KeyCell)
+VGC_TOPOLOGY_DEFINE_CAST(KeyVertex)
+VGC_TOPOLOGY_DEFINE_CAST(KeyEdge)
+VGC_TOPOLOGY_DEFINE_CAST(KeyFace)
+VGC_TOPOLOGY_DEFINE_CAST(InbetweenCell)
+VGC_TOPOLOGY_DEFINE_CAST(InbetweenVertex)
+VGC_TOPOLOGY_DEFINE_CAST(InbetweenEdge)
+VGC_TOPOLOGY_DEFINE_CAST(InbetweenFace)
+
+#undef VGC_TOPOLOGY_DEFINE_CAST
 
 } // namespace vgc::topology
 
