@@ -503,68 +503,141 @@ private:
     void updateTransformFromRoot_();
 };
 
+#define VGC_TOPOLOGY_UNSAFE_CAST_METHOD_NAME(ToType) to##ToType##Unchecked
+#define VGC_TOPOLOGY_SAFE_CAST_METHOD_NAME(ToType) to##ToType
+
 #define VGC_TOPOLOGY_DEFINE_CELL_CAST_METHOD(To)                                         \
     template<typename To_ = To, VGC_REQUIRES(std::is_same_v<To_, To>)>                   \
-    To* to##To() {                                                                       \
+    To* VGC_TOPOLOGY_SAFE_CAST_METHOD_NAME(To)() {                                       \
         return dynamic_cell_cast<To_>(this);                                             \
     }                                                                                    \
     template<typename To_ = To, VGC_REQUIRES(std::is_same_v<To_, To>)>                   \
-    const To* to##To() const {                                                           \
+    const To* VGC_TOPOLOGY_SAFE_CAST_METHOD_NAME(To)() const {                           \
         return dynamic_cell_cast<const To_>(this);                                       \
     }                                                                                    \
     template<typename To_ = To, VGC_REQUIRES(std::is_same_v<To_, To>)>                   \
-    constexpr To* to##To##Unchecked() {                                                  \
+    constexpr To* VGC_TOPOLOGY_UNSAFE_CAST_METHOD_NAME(To)() {                           \
         return static_cell_cast<To_>(this);                                              \
     }                                                                                    \
     template<typename To_ = To, VGC_REQUIRES(std::is_same_v<To_, To>)>                   \
-    constexpr const To* to##To##Unchecked() const {                                      \
+    constexpr const To* VGC_TOPOLOGY_UNSAFE_CAST_METHOD_NAME(To)() const {               \
         return static_cell_cast<const To_>(this);                                        \
     }
+
+#define VGC_TOPOLOGY_DEFINE_CELL_CAST_METHOD_DELETED(To)                                 \
+    To* VGC_TOPOLOGY_SAFE_CAST_METHOD_NAME(To)() = delete;                               \
+    const To* VGC_TOPOLOGY_SAFE_CAST_METHOD_NAME(To)() const = delete;                   \
+    constexpr To* VGC_TOPOLOGY_UNSAFE_CAST_METHOD_NAME(To)() = delete;                   \
+    constexpr const To* VGC_TOPOLOGY_UNSAFE_CAST_METHOD_NAME(To)() const = delete;
 
 #define VGC_TOPOLOGY_DEFINE_CELL_UPCAST_METHOD(To)                                       \
     template<typename To_ = To, VGC_REQUIRES(std::is_same_v<To_, To>)>                   \
-    To* to##To() {                                                                       \
+    To* VGC_TOPOLOGY_SAFE_CAST_METHOD_NAME(To)() {                                       \
         return static_cell_cast<To_>(this);                                              \
     }                                                                                    \
     template<typename To_ = To, VGC_REQUIRES(std::is_same_v<To_, To>)>                   \
-    const To* to##To() const {                                                           \
+    const To* VGC_TOPOLOGY_SAFE_CAST_METHOD_NAME(To)() const {                           \
         return static_cell_cast<const To_>(this);                                        \
-    }
+    }                                                                                    \
+    To* VGC_TOPOLOGY_UNSAFE_CAST_METHOD_NAME(To)() = delete;                             \
+    const To* VGC_TOPOLOGY_UNSAFE_CAST_METHOD_NAME(To)() const = delete;
+
+#define VGC_TOPOLOGY_SPATIAL_NAME_ALTERNATIVE_Vertex_1 Edge
+#define VGC_TOPOLOGY_SPATIAL_NAME_ALTERNATIVE_Vertex_2 Face
+#define VGC_TOPOLOGY_SPATIAL_NAME_ALTERNATIVE_Edge_1 Vertex
+#define VGC_TOPOLOGY_SPATIAL_NAME_ALTERNATIVE_Edge_2 Face
+#define VGC_TOPOLOGY_SPATIAL_NAME_ALTERNATIVE_Face_1 Vertex
+#define VGC_TOPOLOGY_SPATIAL_NAME_ALTERNATIVE_Face_2 Edge
+#define VGC_TOPOLOGY_TEMPORAL_NAME_ALTERNATIVE_Key Inbetween
+#define VGC_TOPOLOGY_TEMPORAL_NAME_ALTERNATIVE_Inbetween Key
+
+// X: VacCell
+// X -> VacCell
+// X -> [Key|Inbetween]Cell
+// X -> [Vertex|Edge|Face]Cell
+// X -> [Key|Inbetween][Vertex|Edge|Face]
+#define VGC_TOPOLOGY_DEFINE_BASE_CELL_CAST_METHODS()                                     \
+    VGC_TOPOLOGY_DEFINE_CELL_UPCAST_METHOD(VacCell)                                      \
+    VGC_TOPOLOGY_DEFINE_CELL_CAST_METHOD(KeyCell)                                        \
+    VGC_TOPOLOGY_DEFINE_CELL_CAST_METHOD(InbetweenCell)                                  \
+    VGC_TOPOLOGY_DEFINE_CELL_CAST_METHOD(VertexCell)                                     \
+    VGC_TOPOLOGY_DEFINE_CELL_CAST_METHOD(EdgeCell)                                       \
+    VGC_TOPOLOGY_DEFINE_CELL_CAST_METHOD(FaceCell)                                       \
+    VGC_TOPOLOGY_DEFINE_CELL_CAST_METHOD(KeyVertex)                                      \
+    VGC_TOPOLOGY_DEFINE_CELL_CAST_METHOD(KeyEdge)                                        \
+    VGC_TOPOLOGY_DEFINE_CELL_CAST_METHOD(KeyFace)                                        \
+    VGC_TOPOLOGY_DEFINE_CELL_CAST_METHOD(InbetweenVertex)                                \
+    VGC_TOPOLOGY_DEFINE_CELL_CAST_METHOD(InbetweenEdge)                                  \
+    VGC_TOPOLOGY_DEFINE_CELL_CAST_METHOD(InbetweenFace)
 
 // X: Key|Inbetween
-// XCell -> VacCell
+// XCell -> VacCell (inherited)
 // XCell -> X[Vertex|Edge|Face]
 // XCell -> [Vertex|Edge|Face]Cell
 #define VGC_TOPOLOGY_DEFINE_TEMPORAL_CELL_CAST_METHODS(Name)                             \
-    VGC_TOPOLOGY_DEFINE_CELL_UPCAST_METHOD(VacCell)                                      \
+    /* toVacCell() inherited */                                                          \
+    VGC_TOPOLOGY_DEFINE_CELL_UPCAST_METHOD(Name##Cell)                                   \
+    VGC_TOPOLOGY_DEFINE_CELL_CAST_METHOD(VertexCell)                                     \
+    VGC_TOPOLOGY_DEFINE_CELL_CAST_METHOD(EdgeCell)                                       \
+    VGC_TOPOLOGY_DEFINE_CELL_CAST_METHOD(FaceCell)                                       \
     VGC_TOPOLOGY_DEFINE_CELL_CAST_METHOD(Name##Vertex)                                   \
     VGC_TOPOLOGY_DEFINE_CELL_CAST_METHOD(Name##Edge)                                     \
     VGC_TOPOLOGY_DEFINE_CELL_CAST_METHOD(Name##Face)                                     \
-    VGC_TOPOLOGY_DEFINE_CELL_CAST_METHOD(VertexCell)                                     \
-    VGC_TOPOLOGY_DEFINE_CELL_CAST_METHOD(EdgeCell)                                       \
-    VGC_TOPOLOGY_DEFINE_CELL_CAST_METHOD(FaceCell)
+    VGC_TOPOLOGY_DEFINE_TEMPORAL_CELL_CAST_DELETED_METHODS_(                             \
+        VGC_TOPOLOGY_TEMPORAL_NAME_ALTERNATIVE_##Name)
+#define VGC_TOPOLOGY_DEFINE_TEMPORAL_CELL_CAST_DELETED_METHODS_(OtherName)               \
+    VGC_TOPOLOGY_DEFINE_CELL_CAST_METHOD_DELETED(VGC_PP_CAT(OtherName, Cell))            \
+    VGC_TOPOLOGY_DEFINE_CELL_CAST_METHOD_DELETED(VGC_PP_CAT(OtherName, Vertex))          \
+    VGC_TOPOLOGY_DEFINE_CELL_CAST_METHOD_DELETED(VGC_PP_CAT(OtherName, Edge))            \
+    VGC_TOPOLOGY_DEFINE_CELL_CAST_METHOD_DELETED(VGC_PP_CAT(OtherName, Face))
 
 // X: Vertex|Edge|Face
 // XCell -> VacCell
 // XCell -> [Key|Inbetween]Cell
 // XCell -> [Key|Inbetween]X
 #define VGC_TOPOLOGY_DEFINE_SPATIAL_CELL_CAST_METHODS(Name)                              \
-    VGC_TOPOLOGY_DEFINE_CELL_UPCAST_METHOD(VacCell)                                      \
+    /* toVacCell() inherited */                                                          \
+    VGC_TOPOLOGY_DEFINE_CELL_UPCAST_METHOD(Name##Cell)                                   \
     VGC_TOPOLOGY_DEFINE_CELL_CAST_METHOD(KeyCell)                                        \
     VGC_TOPOLOGY_DEFINE_CELL_CAST_METHOD(InbetweenCell)                                  \
     VGC_TOPOLOGY_DEFINE_CELL_CAST_METHOD(Key##Name)                                      \
-    VGC_TOPOLOGY_DEFINE_CELL_CAST_METHOD(Inbetween##Name)
+    VGC_TOPOLOGY_DEFINE_CELL_CAST_METHOD(Inbetween##Name)                                \
+    VGC_TOPOLOGY_DEFINE_SPATIAL_CELL_CAST_DELETED_METHODS_(                              \
+        VGC_TOPOLOGY_SPATIAL_NAME_ALTERNATIVE_##Name##_1)                                \
+    VGC_TOPOLOGY_DEFINE_SPATIAL_CELL_CAST_DELETED_METHODS_(                              \
+        VGC_TOPOLOGY_SPATIAL_NAME_ALTERNATIVE_##Name##_2)
+#define VGC_TOPOLOGY_DEFINE_SPATIAL_CELL_CAST_DELETED_METHODS_(OtherName)                \
+    VGC_TOPOLOGY_DEFINE_CELL_CAST_METHOD_DELETED(VGC_PP_CAT(OtherName, Cell))            \
+    VGC_TOPOLOGY_DEFINE_CELL_CAST_METHOD_DELETED(VGC_PP_CAT(Key, OtherName))             \
+    VGC_TOPOLOGY_DEFINE_CELL_CAST_METHOD_DELETED(VGC_PP_CAT(Inbetween, OtherName))
 
 // T: [Key|Inbetween]
 // S: [Vertex|Edge|Face]
 // X: TS
-// X -> VacCell
+// X -> VacCell (inherited)
 // X -> TCell
 // X -> SCell
 #define VGC_TOPOLOGY_DEFINE_SPATIOTEMPORAL_CELL_CAST_METHODS(TName, SName)               \
-    VGC_TOPOLOGY_DEFINE_CELL_UPCAST_METHOD(VacCell)                                      \
-    VGC_TOPOLOGY_DEFINE_CELL_UPCAST_METHOD(TName##Cell)                                  \
-    VGC_TOPOLOGY_DEFINE_CELL_UPCAST_METHOD(SName##Cell)
+    /* toVacCell() inherited */                                                          \
+    using TName##Cell::toKeyCell;                                                        \
+    using TName##Cell::toInbetweenCell;                                                  \
+    using SName##Cell::toVertexCell;                                                     \
+    using SName##Cell::toEdgeCell;                                                       \
+    using SName##Cell::toFaceCell;                                                       \
+    VGC_TOPOLOGY_DEFINE_CELL_UPCAST_METHOD(TName##SName)                                 \
+    VGC_TOPOLOGY_DEFINE_SPATIOTEMPORAL_CELL_CAST_DELETED_METHODS_(                       \
+        TName,                                                                           \
+        VGC_TOPOLOGY_TEMPORAL_NAME_ALTERNATIVE_##TName,                                  \
+        SName,                                                                           \
+        VGC_TOPOLOGY_SPATIAL_NAME_ALTERNATIVE_##SName##_1,                               \
+        VGC_TOPOLOGY_SPATIAL_NAME_ALTERNATIVE_##SName##_2)
+#define VGC_TOPOLOGY_DEFINE_SPATIOTEMPORAL_CELL_CAST_DELETED_METHODS_(                   \
+    TName, OtherTName, SName, OtherSName1, OtherSName2)                                  \
+    VGC_TOPOLOGY_DEFINE_CELL_CAST_METHOD_DELETED(VGC_PP_CAT(TName, OtherSName1))         \
+    VGC_TOPOLOGY_DEFINE_CELL_CAST_METHOD_DELETED(VGC_PP_CAT(TName, OtherSName2))         \
+    VGC_TOPOLOGY_DEFINE_CELL_CAST_METHOD_DELETED(VGC_PP_CAT(OtherTName, Vertex))         \
+    VGC_TOPOLOGY_DEFINE_CELL_CAST_METHOD_DELETED(VGC_PP_CAT(OtherTName, Edge))           \
+    VGC_TOPOLOGY_DEFINE_CELL_CAST_METHOD_DELETED(VGC_PP_CAT(OtherTName, Face))
 
 // boundaries:
 //  key vertex  -> none
