@@ -271,6 +271,16 @@ public:
     ///
     void clearAttribute(core::StringId name);
 
+    /// Returns the parent `Element` of this `Element`.
+    /// Returns nullptr if the parent of this `Element` is not an `Element`.
+    ///
+    /// \sa lastChildElement(), previousSiblingElement(), and nextSiblingElement().
+    ///
+    Element* parentElement() const {
+        Node* const p = parent();
+        return (p->nodeType() == NodeType::Element) ? static_cast<Element*>(p) : nullptr;
+    }
+
     /// Returns the first child `Element` of this `Element`.
     /// Returns nullptr if this `Element` has no child `Element`.
     ///

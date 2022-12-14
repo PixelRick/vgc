@@ -201,8 +201,32 @@ void Workspace::updateTreeFromDom_() {
     //
 }
 
+dom::Element* elementDFSNext(dom::Element* e) {
+    dom::Element* res = nullptr;
+    if (e) {
+        res = e->firstChildElement();
+        if (!res) {
+            res = e->nextSiblingElement();
+            if (!res) {
+                res = e->parentElement();
+            }
+        }
+    }
+    return res;
+}
+
 void Workspace::rebuildTreeFromDom_() {
-    //
+    // reset tree
+    elements_.clear();
+    vgcElement_ = nullptr;
+
+    if (!document_) {
+        return;
+    }
+
+    //vgcElement_;
+    //document_->rootElement();
+    //dom::Element* root
 }
 
 namespace detail {
@@ -249,7 +273,7 @@ void Workspace::rebuildVacFromTree_() {
 
     namespace ss = dom::strings;
 
-    if (!document_ || !vac_) {
+    if (!document_ || !vac_ || !vgcElement_) {
         return;
     }
     isVacBeingUpdated_ = true;
