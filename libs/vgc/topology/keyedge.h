@@ -36,6 +36,8 @@ private:
     }
 
 public:
+    VGC_TOPOLOGY_DEFINE_SPATIOTEMPORAL_CELL_CAST_METHODS(Key, Edge)
+
     KeyVertex* startVertex() const {
         return startVertex_;
     }

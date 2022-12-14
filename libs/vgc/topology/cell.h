@@ -503,6 +503,69 @@ private:
     void updateTransformFromRoot_();
 };
 
+#define VGC_TOPOLOGY_DEFINE_CELL_CAST_METHOD(To)                                         \
+    template<typename To_ = To, VGC_REQUIRES(std::is_same_v<To_, To>)>                   \
+    To* to##To() {                                                                       \
+        return dynamic_cell_cast<To_>(this);                                             \
+    }                                                                                    \
+    template<typename To_ = To, VGC_REQUIRES(std::is_same_v<To_, To>)>                   \
+    const To* to##To() const {                                                           \
+        return dynamic_cell_cast<const To_>(this);                                       \
+    }                                                                                    \
+    template<typename To_ = To, VGC_REQUIRES(std::is_same_v<To_, To>)>                   \
+    constexpr To* to##To##Unchecked() {                                                  \
+        return static_cell_cast<To_>(this);                                              \
+    }                                                                                    \
+    template<typename To_ = To, VGC_REQUIRES(std::is_same_v<To_, To>)>                   \
+    constexpr const To* to##To##Unchecked() const {                                      \
+        return static_cell_cast<const To_>(this);                                        \
+    }
+
+#define VGC_TOPOLOGY_DEFINE_CELL_UPCAST_METHOD(To)                                       \
+    template<typename To_ = To, VGC_REQUIRES(std::is_same_v<To_, To>)>                   \
+    To* to##To() {                                                                       \
+        return static_cell_cast<To_>(this);                                              \
+    }                                                                                    \
+    template<typename To_ = To, VGC_REQUIRES(std::is_same_v<To_, To>)>                   \
+    const To* to##To() const {                                                           \
+        return static_cell_cast<const To_>(this);                                        \
+    }
+
+// X: Key|Inbetween
+// XCell -> VacCell
+// XCell -> X[Vertex|Edge|Face]
+// XCell -> [Vertex|Edge|Face]Cell
+#define VGC_TOPOLOGY_DEFINE_TEMPORAL_CELL_CAST_METHODS(Name)                             \
+    VGC_TOPOLOGY_DEFINE_CELL_UPCAST_METHOD(VacCell)                                      \
+    VGC_TOPOLOGY_DEFINE_CELL_CAST_METHOD(Name##Vertex)                                   \
+    VGC_TOPOLOGY_DEFINE_CELL_CAST_METHOD(Name##Edge)                                     \
+    VGC_TOPOLOGY_DEFINE_CELL_CAST_METHOD(Name##Face)                                     \
+    VGC_TOPOLOGY_DEFINE_CELL_CAST_METHOD(VertexCell)                                     \
+    VGC_TOPOLOGY_DEFINE_CELL_CAST_METHOD(EdgeCell)                                       \
+    VGC_TOPOLOGY_DEFINE_CELL_CAST_METHOD(FaceCell)
+
+// X: Vertex|Edge|Face
+// XCell -> VacCell
+// XCell -> [Key|Inbetween]Cell
+// XCell -> [Key|Inbetween]X
+#define VGC_TOPOLOGY_DEFINE_SPATIAL_CELL_CAST_METHODS(Name)                              \
+    VGC_TOPOLOGY_DEFINE_CELL_UPCAST_METHOD(VacCell)                                      \
+    VGC_TOPOLOGY_DEFINE_CELL_CAST_METHOD(KeyCell)                                        \
+    VGC_TOPOLOGY_DEFINE_CELL_CAST_METHOD(InbetweenCell)                                  \
+    VGC_TOPOLOGY_DEFINE_CELL_CAST_METHOD(Key##Name)                                      \
+    VGC_TOPOLOGY_DEFINE_CELL_CAST_METHOD(Inbetween##Name)
+
+// T: [Key|Inbetween]
+// S: [Vertex|Edge|Face]
+// X: TS
+// X -> VacCell
+// X -> TCell
+// X -> SCell
+#define VGC_TOPOLOGY_DEFINE_SPATIOTEMPORAL_CELL_CAST_METHODS(TName, SName)               \
+    VGC_TOPOLOGY_DEFINE_CELL_UPCAST_METHOD(VacCell)                                      \
+    VGC_TOPOLOGY_DEFINE_CELL_UPCAST_METHOD(TName##Cell)                                  \
+    VGC_TOPOLOGY_DEFINE_CELL_UPCAST_METHOD(SName##Cell)
+
 // boundaries:
 //  key vertex  -> none
 //  key edge    -> 2 key vertices
@@ -590,6 +653,18 @@ public:
     const core::Array<VacCell*>& star() const {
         return star_;
     }
+
+    VGC_TOPOLOGY_DEFINE_CELL_CAST_METHOD(VertexCell)
+    VGC_TOPOLOGY_DEFINE_CELL_CAST_METHOD(EdgeCell)
+    VGC_TOPOLOGY_DEFINE_CELL_CAST_METHOD(FaceCell)
+    VGC_TOPOLOGY_DEFINE_CELL_CAST_METHOD(KeyCell)
+    VGC_TOPOLOGY_DEFINE_CELL_CAST_METHOD(InbetweenCell)
+    VGC_TOPOLOGY_DEFINE_CELL_CAST_METHOD(KeyVertex)
+    VGC_TOPOLOGY_DEFINE_CELL_CAST_METHOD(KeyEdge)
+    VGC_TOPOLOGY_DEFINE_CELL_CAST_METHOD(KeyFace)
+    VGC_TOPOLOGY_DEFINE_CELL_CAST_METHOD(InbetweenVertex)
+    VGC_TOPOLOGY_DEFINE_CELL_CAST_METHOD(InbetweenEdge)
+    VGC_TOPOLOGY_DEFINE_CELL_CAST_METHOD(InbetweenFace)
 
 private:
     core::Array<VacCell*> star_;
@@ -679,6 +754,8 @@ public:
         return t == time_;
     }
 
+    VGC_TOPOLOGY_DEFINE_TEMPORAL_CELL_CAST_METHODS(Key)
+
 private:
     core::AnimTime time_;
 };
@@ -703,6 +780,8 @@ public:
         return timeRange_.contains(t);
     }
 
+    VGC_TOPOLOGY_DEFINE_TEMPORAL_CELL_CAST_METHODS(Inbetween)
+
 private:
     core::AnimTimeRange timeRange_;
 };
@@ -721,6 +800,8 @@ public:
         return CellSpatialType::Vertex;
     }
 
+    VGC_TOPOLOGY_DEFINE_SPATIAL_CELL_CAST_METHODS(Vertex)
+
     virtual geometry::Vec2d position(core::AnimTime t) const = 0;
 };
 
@@ -737,6 +818,8 @@ public:
     static constexpr CellSpatialType spatialType() {
         return CellSpatialType::Edge;
     }
+
+    VGC_TOPOLOGY_DEFINE_SPATIAL_CELL_CAST_METHODS(Edge)
 
     // virtual api
 
@@ -760,6 +843,8 @@ public:
     static constexpr CellSpatialType spatialType() {
         return CellSpatialType::Face;
     }
+
+    VGC_TOPOLOGY_DEFINE_SPATIAL_CELL_CAST_METHODS(Face)
 
     // virtual api
 };
@@ -1024,7 +1109,6 @@ constexpr To* dynamic_cell_cast(From* p) {
     constexpr To* to##To##Unchecked(From* p) {                                           \
         return static_cell_cast<To, From>(p);                                            \
     }
-
 VGC_TOPOLOGY_DEFINE_CAST(VacCell)
 VGC_TOPOLOGY_DEFINE_CAST(VertexCell)
 VGC_TOPOLOGY_DEFINE_CAST(EdgeCell)
@@ -1037,7 +1121,6 @@ VGC_TOPOLOGY_DEFINE_CAST(InbetweenCell)
 VGC_TOPOLOGY_DEFINE_CAST(InbetweenVertex)
 VGC_TOPOLOGY_DEFINE_CAST(InbetweenEdge)
 VGC_TOPOLOGY_DEFINE_CAST(InbetweenFace)
-
 #undef VGC_TOPOLOGY_DEFINE_CAST
 
 } // namespace vgc::topology

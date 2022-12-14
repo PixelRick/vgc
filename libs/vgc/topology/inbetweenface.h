@@ -31,6 +31,9 @@ private:
     explicit InbetweenFace(core::Id id) noexcept
         : SpatioTemporalCell(id) {
     }
+
+public:
+    VGC_TOPOLOGY_DEFINE_SPATIOTEMPORAL_CELL_CAST_METHODS(Inbetween, Face)
 };
 
 } // namespace vgc::topology

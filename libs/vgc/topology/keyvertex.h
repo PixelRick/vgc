@@ -37,6 +37,8 @@ private:
     }
 
 public:
+    VGC_TOPOLOGY_DEFINE_SPATIOTEMPORAL_CELL_CAST_METHODS(Key, Vertex)
+
     geometry::Vec2d position(core::AnimTime /*t*/) const override {
         return position_;
     }

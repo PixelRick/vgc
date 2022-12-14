@@ -33,6 +33,8 @@ private:
     }
 
 public:
+    VGC_TOPOLOGY_DEFINE_SPATIOTEMPORAL_CELL_CAST_METHODS(Inbetween, Vertex)
+
     geometry::Vec2d position(core::AnimTime /*t*/) const override {
         // XXX todo interp
         return geometry::Vec2d();

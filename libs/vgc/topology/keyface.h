@@ -30,6 +30,9 @@ private:
     explicit KeyFace(core::Id id, core::AnimTime t) noexcept
         : SpatioTemporalCell(id, t) {
     }
+
+public:
+    VGC_TOPOLOGY_DEFINE_SPATIOTEMPORAL_CELL_CAST_METHODS(Key, Face)
 };
 
 } // namespace vgc::topology

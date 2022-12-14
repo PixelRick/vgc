@@ -311,7 +311,7 @@ void Workspace::rebuildVacFromTree_() {
         auto v0 = topology::static_cell_cast<topology::KeyVertex>(
             static_cast<topology::VacCell*>(wv0->vacNode_));
 
-        auto v1 = toKeyVertex(wv1->vacNode_->toCellUnchecked());
+        auto v1 = wv1->vacNode_->toCellUnchecked()->toKeyVertexUnchecked();
 
         topology::KeyEdge* node = topology::ops::createKeyEdge(
             domElem->internalId(),
@@ -345,6 +345,8 @@ void Workspace::fillVacElementListsUsingTagNameRecursive(
     else if (tagName == ss::layer) {
         ce.groups.append(e);
     }
+
+    //if (e->next())
 }
 
 } // namespace vgc::workspace
