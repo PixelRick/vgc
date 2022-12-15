@@ -99,12 +99,14 @@ protected:
     void rebuildTreeFromDom_();
     void rebuildVacFromTree_();
 
-    void fillVacElementListsUsingTagNameRecursive(Element* e, detail::VacElementLists& ce)
-        const;
+    void
+    fillVacElementListsUsingTagName(Element* root, detail::VacElementLists& ce) const;
 
 private:
     std::unordered_map<core::Id, std::unique_ptr<Element>> elements_;
     Element* vgcElement_;
+
+    Element* createElement(dom::Element* domElement, Element* parent);
 
     dom::DocumentPtr document_;
     topology::VacPtr vac_;

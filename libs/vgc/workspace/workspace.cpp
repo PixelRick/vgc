@@ -201,21 +201,78 @@ void Workspace::updateTreeFromDom_() {
     //
 }
 
-dom::Element* elementDFSNext(dom::Element* e) {
-    dom::Element* res = nullptr;
-    if (e) {
-        res = e->firstChildElement();
-        if (!res) {
-            res = e->nextSiblingElement();
-            if (!res) {
-                res = e->parentElement();
-            }
+// Assumes (parent == it->parent()).
+void iterDFSBreadth(Element*& it, Element*& parent) {
+    Element* next = nullptr;
+    // breadth next
+    while (it) {
+        next = it->next();
+        if (next) {
+            it = next;
+            return;
+        }
+        // go up
+        it = parent;
+        if (parent) {
+            parent = parent->parent();
         }
     }
-    return res;
+}
+
+// Assumes (parent == it->parent()).
+void iterDFS(Element*& it, Element*& parent) {
+    Element* next = nullptr;
+    // depth first
+    next = it->firstChild();
+    if (next) {
+        parent = it;
+        it = next;
+        return;
+    }
+    // breadth next
+    iterDFSBreadth(it, parent);
+}
+
+void iterDFS(Element*& it, Element*& parent, bool skipChildren) {
+    if (skipChildren) {
+        iterDFSBreadth(it, parent);
+    }
+    else {
+        iterDFS(it, parent);
+    }
+}
+
+// Updates parent.
+// Assumes (parent == it->parent()).
+dom::Element* rebuildTreeFromDomIter(Element* it, Element*& parent) {
+    dom::Element* e = it->domElement();
+    dom::Element* next = nullptr;
+    // depth first
+    next = e->firstChildElement();
+    if (next) {
+        parent = it;
+        return next;
+    }
+    // breadth next
+    while (e) {
+        next = e->nextSiblingElement();
+        if (next) {
+            return next;
+        }
+        // go up
+        if (!parent) {
+            return nullptr;
+        }
+        e = parent->domElement();
+        parent = parent->parent();
+    }
+    return next;
 }
 
 void Workspace::rebuildTreeFromDom_() {
+
+    namespace ss = dom::strings;
+
     // reset tree
     elements_.clear();
     vgcElement_ = nullptr;
@@ -224,9 +281,20 @@ void Workspace::rebuildTreeFromDom_() {
         return;
     }
 
-    //vgcElement_;
-    //document_->rootElement();
-    //dom::Element* root
+    dom::Element* domVgcElement = document_->rootElement();
+    if (!domVgcElement || domVgcElement->tagName() != ss::vgc) {
+        return;
+    }
+    vgcElement_ = createElement(domVgcElement, nullptr);
+
+    Element* p = nullptr;
+    Element* e = vgcElement_;
+    dom::Element* domElement = rebuildTreeFromDomIter(e, p);
+    while (domElement) {
+        // XXX later use a factory
+        e = createElement(domElement, p);
+        domElement = rebuildTreeFromDomIter(e, p);
+    }
 }
 
 namespace detail {
@@ -285,7 +353,7 @@ void Workspace::rebuildVacFromTree_() {
     }
 
     detail::VacElementLists ce;
-    fillVacElementListsUsingTagNameRecursive(vgcElement_, ce);
+    fillVacElementListsUsingTagName(vgcElement_, ce);
 
     for (Element* e : ce.groups) {
         // create an unlinked VacGroup
@@ -354,23 +422,48 @@ void Workspace::rebuildVacFromTree_() {
     lastSyncedVacVersion_ = vac_->version();
 }
 
-void Workspace::fillVacElementListsUsingTagNameRecursive(
-    Element* e,
+void Workspace::fillVacElementListsUsingTagName(
+    Element* root,
     detail::VacElementLists& ce) const {
 
     namespace ss = dom::strings;
-    core::StringId tagName = e->domElement_->tagName();
-    if (tagName == ss::vertex) {
-        ce.keyVertices.append(e);
-    }
-    else if (tagName == ss::edge) {
-        ce.keyEdges.append(e);
-    }
-    else if (tagName == ss::layer) {
-        ce.groups.append(e);
-    }
 
-    //if (e->next())
+    Element* rootParent = root->parent();
+    Element* parent = rootParent;
+    Element* e = root;
+    do { // while (parent != rootParent)
+        bool skipChildren = true;
+
+        core::StringId tagName = e->domElement_->tagName();
+        if (tagName == ss::vertex) {
+            ce.keyVertices.append(e);
+        }
+        else if (tagName == ss::edge) {
+            ce.keyEdges.append(e);
+        }
+        else if (tagName == ss::layer) {
+            ce.groups.append(e);
+            skipChildren = false;
+        }
+
+        iterDFS(e, parent, skipChildren);
+    } while (parent != rootParent);
+}
+
+Element* Workspace::createElement(dom::Element* domElement, Element* parent) {
+    if (!domElement) {
+        return nullptr;
+    }
+    const auto& p = elements_.emplace(domElement->internalId(), std::make_unique<Element>(domElement));
+    if (!p.second) {
+        // XXX should probably throw
+        return nullptr;
+    }
+    Element* e = p.first->second.get();
+    if (parent) {
+        parent->appendChild(e);
+    }
+    return e;
 }
 
 } // namespace vgc::workspace

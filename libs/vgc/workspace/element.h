@@ -77,9 +77,9 @@ private:
 public:
     virtual ~Element() = default;
 
-    Element(dom::Element* domElement, topology::VacNode* vacNode)
+    Element(dom::Element* domElement)
         : domElement_(domElement)
-        , vacNode_(vacNode) {
+        , vacNode_(nullptr) {
     }
 
 public:
@@ -138,8 +138,8 @@ private:
     // if vacNode_ != nullptr then vacNode_->id() == id_.
     core::Id id_ = -1;
 
-    dom::Element* domElement_;
-    topology::VacNode* vacNode_;
+    dom::Element* domElement_ = nullptr;
+    topology::VacNode* vacNode_ = nullptr;
 
     ElementFlags flags_;
 };

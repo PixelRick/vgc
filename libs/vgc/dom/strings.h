@@ -25,6 +25,7 @@ namespace vgc::dom::strings {
 VGC_DOM_API extern const core::StringId name;
 VGC_DOM_API extern const core::StringId id;
 
+VGC_DOM_API extern const core::StringId vgc;
 VGC_DOM_API extern const core::StringId layer;
 VGC_DOM_API extern const core::StringId vertex;
 VGC_DOM_API extern const core::StringId edge;
