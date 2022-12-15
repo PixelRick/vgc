@@ -59,12 +59,28 @@ public:
     //    return EdgeSampling(-1);
     //}
 
+    // XXX temporary, we should use geometry_.
+    const geometry::Vec2dArray& points() const {
+        return points_ ? *points_ : fallbackPoints_;
+    }
+
+    // XXX temporary, we should use geometry_.
+    const core::DoubleArray& widths() const {
+        return widths_ ? *widths_ : fallbackWidths_;
+    }
+
 private:
     KeyVertex* startVertex_ = nullptr;
     KeyVertex* endVertex_ = nullptr;
 
     // position and orientation when not bound to vertices ?
     //detail::Transform2d transform_;
+
+    // XXX temporary, we should use geometry_.
+    std::shared_ptr<const geometry::Vec2dArray> points_;
+    std::shared_ptr<const core::DoubleArray> widths_;
+    geometry::Vec2dArray fallbackPoints_;
+    core::DoubleArray fallbackWidths_;
 
     std::unique_ptr<KeyEdgeGeometry> geometry_ = {};
     bool isClosed_ = false;

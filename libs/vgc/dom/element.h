@@ -253,15 +253,24 @@ public:
         return authoredAttributes_;
     }
 
-    /// Gets the authored value of the given attribute.
+    /// Gets the authored value of the attribute named `name`.
     /// Returns an invalid value if the attribute does not exist.
     ///
     const Value& getAuthoredAttribute(core::StringId name) const;
 
-    /// Gets the value of the given attribute. Emits a warning and returns an
+    /// Gets the value of the attribute named `name`. Emits a warning and returns an
     /// invalid value if the attribute neither is authored nor has a default value.
     ///
     const Value& getAttribute(core::StringId name) const;
+
+    /// Gets the element referred to by the path attribute named `name`.
+    /// Emits a warning and returns `nullptr` the path cannot be resolved, or `tagNameFilter` is not
+    /// empty and does not match the element tag name.
+    /// Returns nullptr if the attribute is optional and not set.
+    /// Throws if the attribute is not a path according to schema.
+    ///
+    Element*
+    getRefAttribute(core::StringId name, core::StringId tagNameFilter = {}) const;
 
     /// Sets the value of the given attribute.
     ///

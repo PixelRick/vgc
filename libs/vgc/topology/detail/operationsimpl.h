@@ -57,6 +57,11 @@ public:
         core::AnimTime t = {});
 
     static void setKeyVertexPosition(KeyVertex* v, const geometry::Vec2d& pos);
+
+    static void
+    setKeyEdgeCurvePoints(KeyEdge* e, const geometry::SharedConstVec2dArray& points);
+    static void
+    setKeyEdgeCurveWidths(KeyEdge* e, const core::SharedConstDoubleArray& widths);
 };
 
 } // namespace vgc::topology::detail

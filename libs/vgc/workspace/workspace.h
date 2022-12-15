@@ -108,6 +108,11 @@ private:
 
     Element* createElement(dom::Element* domElement, Element* parent);
 
+    Element* getRefAttribute(
+        dom::Element* domElement,
+        core::StringId name,
+        core::StringId tagNameFilter = {}) const;
+
     dom::DocumentPtr document_;
     topology::VacPtr vac_;
     bool isDomBeingUpdated_ = false;

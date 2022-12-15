@@ -33,7 +33,7 @@ VacGroup*
 Operations::createVacGroup(core::Id id, VacGroup* parentGroup, VacNode* nextSibling) {
 
     Vac* vac = parentGroup->vac();
-    VacGroup* p = new VacGroup(id);
+    VacGroup* p = new VacGroup(vac, id);
     vac->nodes_[p->id_] = std::unique_ptr<VacGroup>(p);
     parentGroup->insertChildUnchecked(nextSibling, p);
 
@@ -137,6 +137,38 @@ void Operations::setKeyVertexPosition(KeyVertex* v, const geometry::Vec2d& pos) 
         // update diff
         if (vac->diffEnabled_) {
             vac->diff_.onNodeDiff(v, VacNodeDiffFlag::GeometryChanged);
+        }
+    }
+}
+
+void Operations::setKeyEdgeCurvePoints(
+    KeyEdge* e,
+    const geometry::SharedConstVec2dArray& points) {
+
+    e->points_ = points.getShared();
+    Vac* vac = e->vac();
+    if (vac) {
+        // inc version
+        vac->incrementVersion();
+        // update diff
+        if (vac->diffEnabled_) {
+            vac->diff_.onNodeDiff(e, VacNodeDiffFlag::GeometryChanged);
+        }
+    }
+}
+
+void Operations::setKeyEdgeCurveWidths(
+    KeyEdge* e,
+    const core::SharedConstDoubleArray& widths) {
+
+    e->widths_ = widths.getShared();
+    Vac* vac = e->vac();
+    if (vac) {
+        // inc version
+        vac->incrementVersion();
+        // update diff
+        if (vac->diffEnabled_) {
+            vac->diff_.onNodeDiff(e, VacNodeDiffFlag::GeometryChanged);
         }
     }
 }

@@ -436,8 +436,9 @@ private:
 public:
     ~VacGroup() override = default;
 
-    explicit VacGroup(core::Id id) noexcept
-        : VacNode(id) {
+    explicit VacGroup(Vac* vac, core::Id id) noexcept
+        : VacNode(id)
+        , vac_(vac) {
     }
 
     // Root Node constructor.

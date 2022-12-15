@@ -202,6 +202,7 @@ void Workspace::updateTreeFromDom_() {
 }
 
 // Assumes (parent == it->parent()).
+// todo: stop iter, to iterate in a sub-tree
 void iterDFSBreadth(Element*& it, Element*& parent) {
     Element* next = nullptr;
     // breadth next
@@ -220,6 +221,7 @@ void iterDFSBreadth(Element*& it, Element*& parent) {
 }
 
 // Assumes (parent == it->parent()).
+// todo: stop iter, to iterate in a sub-tree
 void iterDFS(Element*& it, Element*& parent) {
     Element* next = nullptr;
     // depth first
@@ -233,6 +235,7 @@ void iterDFS(Element*& it, Element*& parent) {
     iterDFSBreadth(it, parent);
 }
 
+// todo: stop iter, to iterate in a sub-tree
 void iterDFS(Element*& it, Element*& parent, bool skipChildren) {
     if (skipChildren) {
         iterDFSBreadth(it, parent);
@@ -312,29 +315,18 @@ struct VacElementLists {
 
 } // namespace detail
 
-dom::Element* getElementRefAttribute(dom::Element* domElem, core::StringId name) {
-    const dom::Value& domValue = domElem->getAuthoredAttribute(name);
-    if (!domValue.has<dom::Path>()) {
-        VGC_ERROR(
-            LogVgcWorkspace,
-            core::format(
-                "Element `{}` requires a path attribute `{}`.",
-                domElem->tagName(),
-                name));
+Element* Workspace::getRefAttribute(
+    dom::Element* domElement,
+    core::StringId name,
+    core::StringId tagNameFilter) const {
+
+    dom::Element* domTargetElement = domElement->getRefAttribute(name, tagNameFilter);
+    if (!domTargetElement) {
         return nullptr;
     }
-    const dom::Path& path = domValue.getPath();
-    dom::Element* vertexDomElement = domElem->elementFromPath(path);
-    if (!vertexDomElement) {
-        VGC_ERROR(
-            LogVgcWorkspace,
-            "Path attribute `{}` of element `{}` could not be resolved ({}).",
-            name,
-            domElem->tagName(),
-            path);
-        return nullptr;
-    }
-    return vertexDomElement;
+
+    auto it = elements_.find(domTargetElement->internalId());
+    return it->second.get();
 }
 
 void Workspace::rebuildVacFromTree_() {
@@ -355,12 +347,15 @@ void Workspace::rebuildVacFromTree_() {
     detail::VacElementLists ce;
     fillVacElementListsUsingTagName(vgcElement_, ce);
 
+    vgcElement_->vacNode_ = vac_->rootGroup();
+
     for (Element* e : ce.groups) {
-        // create an unlinked VacGroup
-        topology::VacGroup* node = topology::ops::createVacGroup(
-            e->domElement_->internalId(),
-            static_cast<topology::VacGroup*>(e->parent()->vacNode_));
-        e->vacNode_ = node;
+        dom::Element* const domElem = e->domElement();
+
+        topology::VacGroup* g = topology::ops::createVacGroup(
+            domElem->internalId(), e->parent()->vacNode()->toGroupUnchecked());
+        e->vacNode_ = g;
+
         // todo: set attributes
         // ...
     }
@@ -368,55 +363,53 @@ void Workspace::rebuildVacFromTree_() {
     std::set<Element*> parentsToOrderSync;
 
     for (Element* e : ce.keyVertices) {
-        topology::KeyVertex* node = topology::ops::createKeyVertex(
-            e->domElement_->internalId(),
-            static_cast<topology::VacGroup*>(e->parent()->vacNode_));
-        e->vacNode_ = node;
-        // todo: set attributes
-        // ...
+        dom::Element* const domElem = e->domElement();
+
+        topology::KeyVertex* kv = topology::ops::createKeyVertex(
+            domElem->internalId(), e->parent()->vacNode()->toGroupUnchecked());
+        e->vacNode_ = kv;
+
+        const auto& position = domElem->getAttribute(ss::position).getVec2d();
+        topology::ops::setKeyVertexPosition(kv, position);
     }
 
     for (Element* e : ce.keyEdges) {
-        dom::Element* domElem = e->domElement_;
-        dom::Element* ev0 = getElementRefAttribute(domElem, ss::startVertex);
-        dom::Element* ev1 = getElementRefAttribute(domElem, ss::endVertex);
-        if (!ev0 || !ev1) {
-            continue;
+        dom::Element* const domElem = e->domElement();
+
+        Element* ev0 = getRefAttribute(domElem, ss::startVertex, ss::vertex);
+        Element* ev1 = getRefAttribute(domElem, ss::endVertex, ss::vertex);
+        if (!ev0) {
+            ev0 = ev1;
         }
-        if (ev0->tagName() != ss::vertex) {
-            core::format(
-                "Path attribute `{}` of element `{}` must refer to an element `{}`.",
-                ss::startVertex,
-                domElem->tagName(),
-                ss::vertex);
+        if (!ev1) {
+            ev1 = ev0;
         }
-        if (ev1->tagName() != ss::vertex) {
-            core::format(
-                "Path attribute `{}` of element `{}` must refer to an element `{}`.",
-                ss::endVertex,
-                domElem->tagName(),
-                ss::vertex);
+
+        topology::KeyEdge* ke = nullptr;
+        if (ev0) {
+            topology::KeyVertex* v0 =
+                ev0->vacNode()->toCellUnchecked()->toKeyVertexUnchecked();
+            topology::KeyVertex* v1 =
+                ev0->vacNode()->toCellUnchecked()->toKeyVertexUnchecked();
+            ke = topology::ops::createKeyEdge(
+                domElem->internalId(),
+                e->parent()->vacNode()->toGroupUnchecked(),
+                v0,
+                v1);
         }
-        Element* wv0 = elements_[ev0->internalId()].get();
-        Element* wv1 = elements_[ev1->internalId()].get();
+        else {
+            ke = topology::ops::createKeyClosedEdge(
+                domElem->internalId(), e->parent()->vacNode()->toGroupUnchecked());
+        }
+        e->vacNode_ = ke;
 
-        auto v0 = topology::static_cell_cast<topology::KeyVertex>(
-            static_cast<topology::VacCell*>(wv0->vacNode_));
-
-        auto v1 = wv1->vacNode_->toCellUnchecked()->toKeyVertexUnchecked();
-
-        topology::KeyEdge* node = topology::ops::createKeyEdge(
-            domElem->internalId(),
-            static_cast<topology::VacGroup*>(e->parent()->vacNode_),
-            v0,
-            v1);
-        e->vacNode_ = node;
-
-        // todo: set attributes
-        // ...
+        const auto& points = domElem->getAttribute(ss::positions).getVec2dArray();
+        topology::ops::setKeyEdgeCurvePoints(ke, points);
+        const auto& widths = domElem->getAttribute(ss::widths).getDoubleArray();
+        topology::ops::setKeyEdgeCurveWidths(ke, widths);
     }
 
-    //
+    // todo: sync children order in all groups
 
     lastSyncedDomVersion_ = document_->version();
     lastSyncedVacVersion_ = vac_->version();
@@ -428,10 +421,10 @@ void Workspace::fillVacElementListsUsingTagName(
 
     namespace ss = dom::strings;
 
-    Element* rootParent = root->parent();
-    Element* parent = rootParent;
-    Element* e = root;
-    do { // while (parent != rootParent)
+    Element* parent = root;
+    Element* e = root->firstChild();
+
+    while (e) {
         bool skipChildren = true;
 
         core::StringId tagName = e->domElement_->tagName();
@@ -447,19 +440,21 @@ void Workspace::fillVacElementListsUsingTagName(
         }
 
         iterDFS(e, parent, skipChildren);
-    } while (parent != rootParent);
+    }
 }
 
 Element* Workspace::createElement(dom::Element* domElement, Element* parent) {
     if (!domElement) {
         return nullptr;
     }
-    const auto& p = elements_.emplace(domElement->internalId(), std::make_unique<Element>(domElement));
+    const auto& p = elements_.emplace(
+        domElement->internalId(), std::make_unique<Element>(domElement));
     if (!p.second) {
         // XXX should probably throw
         return nullptr;
     }
     Element* e = p.first->second.get();
+    e->id_ = domElement->internalId();
     if (parent) {
         parent->appendChild(e);
     }

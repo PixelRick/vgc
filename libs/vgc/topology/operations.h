@@ -108,6 +108,16 @@ inline void setKeyVertexPosition(KeyVertex* v, const geometry::Vec2d& pos) {
     return detail::Operations::setKeyVertexPosition(v, pos);
 }
 
+inline void
+setKeyEdgeCurvePoints(KeyEdge* e, const geometry::SharedConstVec2dArray& points) {
+    return detail::Operations::setKeyEdgeCurvePoints(e, points);
+}
+
+inline void
+setKeyEdgeCurveWidths(KeyEdge* e, const core::SharedConstDoubleArray& widths) {
+    return detail::Operations::setKeyEdgeCurveWidths(e, widths);
+}
+
 } // namespace vgc::topology::ops
 
 #endif // VGC_TOPOLOGY_OPERATIONS_H

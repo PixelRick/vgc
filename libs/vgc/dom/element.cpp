@@ -98,16 +98,67 @@ const Value& Element::getAttribute(core::StringId name) const {
     if (const AuthoredAttribute* authored = findAuthoredAttribute_(name)) {
         return authored->value();
     }
-    /*
-     * TODO: find default value from schema.
-    else if (const AttributeSpec* builtIn = findBuiltInAttribute_(name)) {
-        return builtIn->defaultValue();
-    }
-    */
     else {
-        VGC_WARNING(LogVgcDom, "Attribute is neither authored nor have a default value.");
-        return Value::invalid();
+        const ElementSpec* es = schema().findElementSpec(tagName_);
+        const AttributeSpec* as = es->findAttributeSpec(name);
+
+        if (as) {
+            return as->defaultValue();
+        }
+        else {
+            VGC_WARNING(
+                LogVgcDom, "Attribute is neither authored nor have a default value.");
+            return Value::invalid();
+        }
     }
+}
+
+/*
+/// Emits a warning and returns `nullptr` the path cannot be resolved, or `tagNameFilter` is not
+/// empty and does not match the element tag name.
+/// Returns nullptr if the attribute is optional and not set.
+/// Throws if the attribute is not a path according to schema.
+*/
+Element*
+Element::getRefAttribute(core::StringId name, core::StringId tagNameFilter) const {
+
+    const dom::Value& value = getAttribute(name);
+
+    // handle optional attribute
+    // XXX we should check value type too
+    if (value.isNone()) {
+        return nullptr;
+    }
+
+    // cast as path and throws if it is not one
+    const dom::Path& path = value.getPath();
+
+    // resolve path (relative to this element if the path is relative
+    dom::Element* element = elementFromPath(path);
+
+    if (!element) {
+        VGC_WARNING(
+            LogVgcDom,
+            "Path in attribute `{}` of element `{}` could not be resolved ({}).",
+            name,
+            tagName(),
+            path);
+        return nullptr;
+    }
+
+    if (!tagNameFilter.isEmpty() && element->tagName() != tagNameFilter) {
+        VGC_WARNING(
+            LogVgcDom,
+            "Path in attribute `{}` of element `{}` resolved to an element `{}` but `{}` "
+            "was expected.",
+            name,
+            tagName(),
+            element->tagName(),
+            tagNameFilter);
+        return nullptr;
+    }
+
+    return element;
 }
 
 void Element::setAttribute(core::StringId name, const Value& value) {
