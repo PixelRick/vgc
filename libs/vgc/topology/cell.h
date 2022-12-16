@@ -216,8 +216,6 @@ private:
 template<typename Parent, typename Child = Parent>
 class TreeParentBase {
 private:
-    friend TreeChildBase<Child, Parent>;
-
     using ChildBase = TreeChildBase<Child, Parent>;
 
 protected:
@@ -225,6 +223,7 @@ protected:
 
     constexpr TreeParentBase() noexcept {
         static_assert(std::is_base_of_v<ChildBase, Child>);
+        static_assert(std::is_base_of_v<ChildBase, Parent>);
         static_assert(std::is_base_of_v<ChildBase, Parent>);
     }
 
@@ -350,6 +349,57 @@ void TreeChildBase<Derived, Parent>::unlink() {
         --(oldParent->numChildren_);
     }
 }
+
+template<typename Derived>
+class TreeNodeBase : public topology::detail::TreeChildBase<Derived>,
+                     public topology::detail::TreeParentBase<Derived> {
+private:
+    template<typename Node>
+    friend struct TreeNodeGetters<Node>;
+};
+
+template<typename Node>
+struct DefaultTreeNodeGetters {
+    static Node* parent(Node* n) {
+        return n->parent();
+    }
+    static Node* previous(Node* n) {
+        return n->previous();
+    }
+    static Node* next(Node* n) {
+        return n->next();
+    }
+    static Node* firstChild(Node* n) {
+        return n->firstChild();
+    }
+    static Node* lastChild(Node* n) {
+        return n->lastChild();
+    }
+};
+
+template<typename Node, typename SFINAE = void>
+struct GetTreeLinksGetter_;
+
+template<typename Node>
+struct GetTreeLinksGetter_<Node, core::RequiresValid<typename Node::TreeNodeGetters>> {
+    using type = typename Node::TreeLinksGetter;
+};
+
+template<typename Node, typename SFINAE = void>
+struct TreeLinksGetter_;
+
+template<typename Node>
+struct TreeLinksGetter_<
+    Node,
+    core::Requires<core::isTemplateBaseOf<TreeNodeBase, Node>>> {
+
+    using type = DefaultTreeNodeGetters<Node>;
+};
+
+//RequiresValid
+
+template<typename Node>
+using TreeLinksGetter = typename TreeLinksGetter_<Node>::type;
 
 } // namespace detail
 

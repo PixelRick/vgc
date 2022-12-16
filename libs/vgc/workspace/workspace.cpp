@@ -14,6 +14,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <functional>
+
 #include <vgc/dom/strings.h>
 #include <vgc/topology/operations.h>
 #include <vgc/topology/vac.h>
@@ -202,9 +204,9 @@ void Workspace::updateTreeFromDom_() {
 }
 
 // Assumes (parent == it->parent()).
-// todo: stop iter, to iterate in a sub-tree
-void iterDFSBreadth(Element*& it, Element*& parent) {
-    Element* next = nullptr;
+template<typename Node, typename Accessors = topology::detail::TreeNodeGetters<Node>>
+void iterDfsPreOrderSkipChildren(Node*& it, Int& depth, Node* root) {
+    Node* next = nullptr;
     // breadth next
     while (it) {
         next = it->next();
@@ -213,35 +215,51 @@ void iterDFSBreadth(Element*& it, Element*& parent) {
             return;
         }
         // go up
-        it = parent;
-        if (parent) {
-            parent = parent->parent();
+        Node* p = it->parent();
+        it = p;
+        --depth;
+        if (it == root) {
+            it = nullptr;
+            return;
+        }
+        if (p) {
+            p = p->parent();
         }
     }
 }
 
 // Assumes (parent == it->parent()).
-// todo: stop iter, to iterate in a sub-tree
-void iterDFS(Element*& it, Element*& parent) {
-    Element* next = nullptr;
+template<typename Node, typename Accessors = topology::detail::TreeNodeAccessors<Node>>
+void iterDfsPreOrder(Node*& it, Int& depth, Node* root) {
+    Node* next = nullptr;
     // depth first
     next = it->firstChild();
     if (next) {
-        parent = it;
+        ++depth;
         it = next;
         return;
     }
     // breadth next
-    iterDFSBreadth(it, parent);
+    iterDfsPreOrderSkipChildren(it, depth, root);
 }
 
-// todo: stop iter, to iterate in a sub-tree
-void iterDFS(Element*& it, Element*& parent, bool skipChildren) {
+template<typename Node, typename Accessors = topology::detail::TreeNodeAccessors<Node>>
+void iterDfsPreOrder(Node*& it, Int& depth, Node* root, bool skipChildren) {
     if (skipChildren) {
-        iterDFSBreadth(it, parent);
+        iterDfsPreOrderSkipChildren(it, depth, root);
     }
     else {
-        iterDFS(it, parent);
+        iterDfsPreOrder(it, depth, root);
+    }
+}
+
+template<typename Node, typename Accessors = topology::detail::TreeNodeAccessors<Node>>
+void visitDfsPreOrder(Node* root, std::function<void(core::TypeIdentity<Node>*, Int)> f) {
+    Node* e = root;
+    Int depth = 0;
+    while (e) {
+        f(e, depth);
+        iterDfsPreOrder(e, depth, root);
     }
 }
 
@@ -303,7 +321,7 @@ void Workspace::rebuildTreeFromDom_() {
 namespace detail {
 
 struct VacElementLists {
-    // groups are in DFS order
+    // groups are in Dfs order
     core::Array<Element*> groups;
     core::Array<Element*> keyVertices;
     core::Array<Element*> keyEdges;
@@ -411,6 +429,11 @@ void Workspace::rebuildVacFromTree_() {
 
     // todo: sync children order in all groups
 
+    // debug print
+    visitDfsPreOrder(vgcElement_, [](Element* e, Int depth) {
+        VGC_DEBUG_TMP("{:>{}}<{} id=\"{}\">", "", depth * 2, e->tagName(), e->id());
+    });
+
     lastSyncedDomVersion_ = document_->version();
     lastSyncedVacVersion_ = vac_->version();
 }
@@ -421,8 +444,8 @@ void Workspace::fillVacElementListsUsingTagName(
 
     namespace ss = dom::strings;
 
-    Element* parent = root;
     Element* e = root->firstChild();
+    Int depth = 1;
 
     while (e) {
         bool skipChildren = true;
@@ -439,7 +462,7 @@ void Workspace::fillVacElementListsUsingTagName(
             skipChildren = false;
         }
 
-        iterDFS(e, parent, skipChildren);
+        iterDfsPreOrder(e, depth, root, skipChildren);
     }
 }
 

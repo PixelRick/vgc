@@ -68,11 +68,9 @@ enum class ElementFlag : UInt16 {
 };
 VGC_DEFINE_FLAGS(ElementFlags, ElementFlag)
 
-class VGC_WORKSPACE_API Element : public topology::detail::TreeChildBase<Element>,
-                                  public topology::detail::TreeParentBase<Element> {
+class VGC_WORKSPACE_API Element : public topology::detail::TreeNodeBase<Element> {
 private:
-    using ChildBase = topology::detail::TreeChildBase<Element>;
-    using ParentBase = topology::detail::TreeParentBase<Element>;
+    using Base = topology::detail::TreeNodeBase<Element>;
 
 public:
     virtual ~Element() = default;
@@ -84,7 +82,7 @@ public:
 
 public:
     Element* parent() const {
-        return ChildBase::parent();
+        return Base::parent();
     }
 
     core::Id id() const {
@@ -108,27 +106,27 @@ public:
     }
 
     Element* previous() {
-        return ChildBase::previous();
+        return Base::previous();
     }
 
     Element* next() {
-        return ChildBase::next();
+        return Base::next();
     }
 
     /// Returns bottom-most child in depth order.
     ///
     Element* firstChild() const {
-        return ParentBase::firstChild();
+        return Base::firstChild();
     }
 
     /// Returns top-most child in depth order.
     ///
     Element* lastChild() const {
-        return ParentBase::lastChild();
+        return Base::lastChild();
     }
 
     Int numChildren() const {
-        return ParentBase::numChildren();
+        return Base::numChildren();
     }
 
 private:
