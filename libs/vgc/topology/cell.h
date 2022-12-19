@@ -217,6 +217,7 @@ template<typename Parent, typename Child = Parent>
 class TreeParentBase {
 private:
     using ChildBase = TreeChildBase<Child, Parent>;
+    friend ChildBase;
 
 protected:
     using Iterator = TreeChildrenIterator<Child>;
@@ -350,16 +351,8 @@ void TreeChildBase<Derived, Parent>::unlink() {
     }
 }
 
-template<typename Derived>
-class TreeNodeBase : public topology::detail::TreeChildBase<Derived>,
-                     public topology::detail::TreeParentBase<Derived> {
-private:
-    template<typename Node>
-    friend struct TreeNodeGetters<Node>;
-};
-
 template<typename Node>
-struct DefaultTreeNodeGetters {
+struct DefaultTreeLinksGetter {
     static Node* parent(Node* n) {
         return n->parent();
     }
@@ -381,25 +374,25 @@ template<typename Node, typename SFINAE = void>
 struct GetTreeLinksGetter_;
 
 template<typename Node>
-struct GetTreeLinksGetter_<Node, core::RequiresValid<typename Node::TreeNodeGetters>> {
+struct GetTreeLinksGetter_<Node, core::RequiresValid<typename Node::TreeLinksGetter>> {
     using type = typename Node::TreeLinksGetter;
 };
 
-template<typename Node, typename SFINAE = void>
-struct TreeLinksGetter_;
+template<typename Derived>
+class TreeNodeBase : public topology::detail::TreeChildBase<Derived>,
+                     public topology::detail::TreeParentBase<Derived> {
+private:
+    template<typename Node>
+    friend struct DefaultTreeLinksGetter;
 
-template<typename Node>
-struct TreeLinksGetter_<
-    Node,
-    core::Requires<core::isTemplateBaseOf<TreeNodeBase, Node>>> {
-
-    using type = DefaultTreeNodeGetters<Node>;
+public:
+    using TreeLinksGetter = DefaultTreeLinksGetter<Derived>;
 };
 
 //RequiresValid
 
 template<typename Node>
-using TreeLinksGetter = typename TreeLinksGetter_<Node>::type;
+using TreeLinksGetter = typename GetTreeLinksGetter_<Node>::type;
 
 } // namespace detail
 

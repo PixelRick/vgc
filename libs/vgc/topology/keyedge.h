@@ -69,6 +69,11 @@ public:
         return widths_ ? *widths_ : fallbackWidths_;
     }
 
+    // XXX temporary, we should use geometry_.
+    Int64 dataVersion() const {
+        return dataVersion_;
+    }
+
 private:
     KeyVertex* startVertex_ = nullptr;
     KeyVertex* endVertex_ = nullptr;
@@ -76,11 +81,12 @@ private:
     // position and orientation when not bound to vertices ?
     //detail::Transform2d transform_;
 
-    // XXX temporary, we should use geometry_.
+    // XXX temporary, we should use "KeyEdgeGeometry geometry_".
     std::shared_ptr<const geometry::Vec2dArray> points_;
     std::shared_ptr<const core::DoubleArray> widths_;
     geometry::Vec2dArray fallbackPoints_;
     core::DoubleArray fallbackWidths_;
+    Int64 dataVersion_ = 0;
 
     std::unique_ptr<KeyEdgeGeometry> geometry_ = {};
     bool isClosed_ = false;

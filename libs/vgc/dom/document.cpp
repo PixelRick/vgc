@@ -37,7 +37,7 @@ Document::Document()
     , xmlVersion_("1.0")
     , xmlEncoding_("UTF-8")
     , xmlStandalone_(false)
-    , version_(core::genId()) {
+    , versionId_(core::genId()) {
 
     generateXmlDeclaration_();
 }

@@ -146,6 +146,7 @@ void Operations::setKeyEdgeCurvePoints(
     const geometry::SharedConstVec2dArray& points) {
 
     e->points_ = points.getShared();
+    ++e->dataVersion_;
     Vac* vac = e->vac();
     if (vac) {
         // inc version
@@ -162,6 +163,7 @@ void Operations::setKeyEdgeCurveWidths(
     const core::SharedConstDoubleArray& widths) {
 
     e->widths_ = widths.getShared();
+    ++e->dataVersion_;
     Vac* vac = e->vac();
     if (vac) {
         // inc version

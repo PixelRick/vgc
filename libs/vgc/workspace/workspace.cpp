@@ -51,7 +51,7 @@ WorkspacePtr Workspace::create(dom::DocumentPtr document) {
 
 void Workspace::sync() {
 
-    bool domChanged = document_ && (document_->version() != lastSyncedDomVersion_);
+    bool domChanged = document_ && (document_->versionId() != lastSyncedDomVersionId_);
     bool vacChanged = vac_->version() != lastSyncedVacVersion_;
 
     if (domChanged && vacChanged) {
@@ -204,18 +204,20 @@ void Workspace::updateTreeFromDom_() {
 }
 
 // Assumes (parent == it->parent()).
-template<typename Node, typename Accessors = topology::detail::TreeNodeGetters<Node>>
-void iterDfsPreOrderSkipChildren(Node*& it, Int& depth, Node* root) {
+template<
+    typename Node,
+    typename TreeLinksGetter = topology::detail::TreeLinksGetter<Node>>
+void iterDfsPreOrderSkipChildren(Node*& it, Int& depth, core::TypeIdentity<Node>* root) {
     Node* next = nullptr;
     // breadth next
     while (it) {
-        next = it->next();
+        next = TreeLinksGetter::next(it);
         if (next) {
             it = next;
             return;
         }
         // go up
-        Node* p = it->parent();
+        Node* p = TreeLinksGetter::parent(it);
         it = p;
         --depth;
         if (it == root) {
@@ -223,17 +225,19 @@ void iterDfsPreOrderSkipChildren(Node*& it, Int& depth, Node* root) {
             return;
         }
         if (p) {
-            p = p->parent();
+            p = TreeLinksGetter::parent(p);
         }
     }
 }
 
 // Assumes (parent == it->parent()).
-template<typename Node, typename Accessors = topology::detail::TreeNodeAccessors<Node>>
-void iterDfsPreOrder(Node*& it, Int& depth, Node* root) {
+template<
+    typename Node,
+    typename TreeLinksGetter = topology::detail::TreeLinksGetter<Node>>
+void iterDfsPreOrder(Node*& it, Int& depth, core::TypeIdentity<Node>* root) {
     Node* next = nullptr;
     // depth first
-    next = it->firstChild();
+    next = TreeLinksGetter::firstChild(it);
     if (next) {
         ++depth;
         it = next;
@@ -243,8 +247,15 @@ void iterDfsPreOrder(Node*& it, Int& depth, Node* root) {
     iterDfsPreOrderSkipChildren(it, depth, root);
 }
 
-template<typename Node, typename Accessors = topology::detail::TreeNodeAccessors<Node>>
-void iterDfsPreOrder(Node*& it, Int& depth, Node* root, bool skipChildren) {
+template<
+    typename Node,
+    typename TreeLinksGetter = topology::detail::TreeLinksGetter<Node>>
+void iterDfsPreOrder(
+    Node*& it,
+    Int& depth,
+    core::TypeIdentity<Node>* root,
+    bool skipChildren) {
+
     if (skipChildren) {
         iterDfsPreOrderSkipChildren(it, depth, root);
     }
@@ -253,7 +264,9 @@ void iterDfsPreOrder(Node*& it, Int& depth, Node* root, bool skipChildren) {
     }
 }
 
-template<typename Node, typename Accessors = topology::detail::TreeNodeAccessors<Node>>
+template<
+    typename Node,
+    typename TreeLinksGetter = topology::detail::TreeLinksGetter<Node>>
 void visitDfsPreOrder(Node* root, std::function<void(core::TypeIdentity<Node>*, Int)> f) {
     Node* e = root;
     Int depth = 0;
@@ -428,13 +441,18 @@ void Workspace::rebuildVacFromTree_() {
     }
 
     // todo: sync children order in all groups
+    Element* e = vgcElement_;
+    Int depth = 0;
+    while (e) {
+        iterDfsPreOrder(e, depth, vgcElement_);
+    }
 
     // debug print
     visitDfsPreOrder(vgcElement_, [](Element* e, Int depth) {
         VGC_DEBUG_TMP("{:>{}}<{} id=\"{}\">", "", depth * 2, e->tagName(), e->id());
     });
 
-    lastSyncedDomVersion_ = document_->version();
+    lastSyncedDomVersionId_ = document_->versionId();
     lastSyncedVacVersion_ = vac_->version();
 }
 

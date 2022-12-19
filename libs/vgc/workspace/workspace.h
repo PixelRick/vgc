@@ -117,7 +117,7 @@ private:
     topology::VacPtr vac_;
     bool isDomBeingUpdated_ = false;
     bool isVacBeingUpdated_ = false;
-    core::Id lastSyncedDomVersion_ = {};
+    core::Id lastSyncedDomVersionId_ = {};
     Int64 lastSyncedVacVersion_ = -1;
 };
 

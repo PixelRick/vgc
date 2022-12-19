@@ -353,8 +353,8 @@ public:
         return history_.get();
     }
 
-    core::Id version() const {
-        return version_;
+    core::Id versionId() const {
+        return versionId_;
     }
 
     bool emitPendingDiff();
@@ -391,7 +391,7 @@ private:
     //friend class Element;
 
     core::HistoryPtr history_;
-    core::Id version_;
+    core::Id versionId_;
     Diff pendingDiff_;
     core::Array<NodePtr> pendingDiffKeepAllocPointers_;
     std::unordered_map<Node*, NodeRelatives> previousRelativesMap_;
