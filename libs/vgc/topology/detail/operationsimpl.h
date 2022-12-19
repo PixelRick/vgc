@@ -56,6 +56,9 @@ public:
         VacNode* nextSibling = nullptr,
         core::AnimTime t = {});
 
+    static void
+    moveToGroup(VacNode* node, VacGroup* parentGroup, VacNode* nextSibling = nullptr);
+
     static void setKeyVertexPosition(KeyVertex* v, const geometry::Vec2d& pos);
 
     static void

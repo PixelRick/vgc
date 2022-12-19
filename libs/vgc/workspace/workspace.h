@@ -21,18 +21,13 @@
 #include <unordered_map>
 
 #include <vgc/core/animtime.h>
+#include <vgc/core/flags.h>
 #include <vgc/core/id.h>
 #include <vgc/core/object.h>
 #include <vgc/dom/document.h>
 #include <vgc/topology/vac.h>
 #include <vgc/workspace/api.h>
 #include <vgc/workspace/element.h>
-
-namespace vgc::graphics {
-
-class Engine;
-
-} // namespace vgc::graphics
 
 namespace vgc::workspace {
 
@@ -43,6 +38,58 @@ namespace detail {
 struct VacElementLists;
 
 } // namespace detail
+
+// clang-format off
+enum class ElementDiffFlag {
+    Created             = 0x01,
+    Reparented          = 0x02,
+    ChildrenChanged     = 0x04,
+    AttributeChanged    = 0x08,
+    GeometryChanged     = 0x10,
+    CellStarChanged     = 0x20,
+    CellBoundaryChanged = 0x40
+};
+VGC_DEFINE_FLAGS(ElementDiffFlags, ElementDiffFlag)
+// clang-format on
+
+class VGC_WORKSPACE_API Diff {
+public:
+    Diff() = default;
+
+    void reset() {
+        removedElements_.clear();
+        elementDiffs_.clear();
+    }
+
+    bool isEmpty() const {
+        return removedElements_.empty() && elementDiffs_.empty();
+    }
+
+    const std::unordered_map<Element*, ElementDiffFlags>& nodeDiffs() const {
+        return elementDiffs_;
+    }
+
+    const core::Array<core::Id>& removedNodes() const {
+        return removedElements_;
+    }
+
+    // XXX ops helpers
+
+    void onNodeRemoved(Element* element) {
+        elementDiffs_.erase(element);
+        removedElements_.append(element->id());
+        // XXX can it happen that we re-add a node with a same id ?
+    }
+
+    void onElementDiff(Element* element, ElementDiffFlags diffFlags) {
+        // XXX can it happen that we re-add a node with a same id as a removed node ?
+        elementDiffs_[element].set(diffFlags);
+    }
+
+private:
+    std::unordered_map<Element*, ElementDiffFlags> elementDiffs_;
+    core::Array<core::Id> removedElements_;
+};
 
 /// \class vgc::workspace::Workspace
 /// \brief Represents a workspace to manage, manipulate and visit a vector graphics scene.
@@ -78,7 +125,7 @@ public:
 
     void sync();
 
-    VGC_SIGNAL(changed);
+    VGC_SIGNAL(changed, (const Diff&, diff));
 
     VGC_SLOT(onDocumentDiff, onDocumentDiff_)
     VGC_SLOT(onVacDiff, onVacDiff_)

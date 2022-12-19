@@ -46,9 +46,8 @@ enum class VacNodeDiffFlag {
     StarChanged         = 0x20,
     BoundaryChanged     = 0x40
 };
-
-// clang-format on
 VGC_DEFINE_FLAGS(VacNodeDiffFlags, VacNodeDiffFlag)
+// clang-format on
 
 class VGC_TOPOLOGY_API VacDiff {
 public:

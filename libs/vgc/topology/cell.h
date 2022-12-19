@@ -254,21 +254,21 @@ protected:
         lastChild_ = nullptr;
     }
 
-    void appendChild(Child* x) {
-        insertChildUnchecked(nullptr, x);
+    bool appendChild(Child* x) {
+        return insertChildUnchecked(nullptr, x);
     }
 
     // assumes nextSibling is nullptr or a child of this
-    void insertChildUnchecked(Child* nextSibling, Child* x) {
+    bool insertChildUnchecked(Child* nextSibling, Child* x) {
 
         Child* const newNext = nextSibling;
         if (x == newNext) {
-            return;
+            return false;
         }
 
         Child* const newPrevious = newNext ? newNext->previous_ : lastChild_;
         if (x == newPrevious) {
-            return;
+            return false;
         }
 
         Parent* const oldParent = x->parent_;
@@ -313,6 +313,8 @@ protected:
                 --(oldParent->numChildren_);
             }
         }
+
+        return true;
     }
 
 private:

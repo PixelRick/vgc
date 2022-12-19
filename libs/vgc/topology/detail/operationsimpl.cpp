@@ -126,6 +126,25 @@ KeyEdge* Operations::createKeyClosedEdge(
     return p;
 }
 
+void Operations::moveToGroup(VacNode* node, VacGroup* parentGroup, VacNode* nextSibling) {
+
+    Vac* vac = parentGroup->vac();
+    VacGroup* oldParent = node->parentGroup();
+    bool inserted = parentGroup->insertChildUnchecked(nextSibling, node);
+    if (!inserted) {
+        return;
+    }
+
+    // diff
+    vac->incrementVersion();
+    if (vac->diffEnabled_) {
+        if (oldParent != parentGroup) {
+            vac->diff_.onNodeDiff(node, VacNodeDiffFlag::Reparented);
+        }
+        vac->diff_.onNodeDiff(parentGroup, VacNodeDiffFlag::ChildrenChanged);
+    }
+}
+
 // dev note: update boundary before star
 
 void Operations::setKeyVertexPosition(KeyVertex* v, const geometry::Vec2d& pos) {

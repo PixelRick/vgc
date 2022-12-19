@@ -104,6 +104,13 @@ inline KeyEdge* createKeyClosedEdge(
     return createKeyClosedEdge(core::genId(), parentGroup, nextSibling, t);
 }
 
+/// Throws `NotAChildError` if `nextSibling` is not a child of `parentGroup` or `nullptr`.
+// XXX should check if node belongs to same vac.
+inline void
+moveToGroup(VacNode* node, VacGroup* parentGroup, VacNode* nextSibling = nullptr) {
+    return detail::Operations::moveToGroup(node, parentGroup, nextSibling);
+}
+
 inline void setKeyVertexPosition(KeyVertex* v, const geometry::Vec2d& pos) {
     return detail::Operations::setKeyVertexPosition(v, pos);
 }

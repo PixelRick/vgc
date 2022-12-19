@@ -444,6 +444,25 @@ void Workspace::rebuildVacFromTree_() {
     Element* e = vgcElement_;
     Int depth = 0;
     while (e) {
+        topology::VacNode* node = e->vacNode();
+        if (!node) {
+            continue;
+        }
+
+        if (node->isGroup()) {
+            Element* child = e->firstChildVacElement();
+            if (child) {
+                topology::VacGroup* g = static_cast<topology::VacGroup*>(node);
+                topology::ops::moveToGroup(child->vacNode(), g, g->firstChild());
+            }
+        }
+
+        if (e->parent()) {
+            Element* next = e->nextVacElement();
+            topology::ops::moveToGroup(
+                node, node->parentGroup(), (next ? next->vacNode() : nullptr));
+        }
+
         iterDfsPreOrder(e, depth, vgcElement_);
     }
 

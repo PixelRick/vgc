@@ -105,18 +105,44 @@ public:
         return flags_;
     }
 
-    Element* previous() {
+    Element* previous() const {
         return Base::previous();
     }
 
-    Element* next() {
+    Element* next() const {
         return Base::next();
+    }
+
+    Element* nextVacElement() const {
+        Element* e = next();
+        topology::VacNode* n = nullptr;
+        if (e) {
+            n = e->vacNode();
+            while (!n && e) {
+                e = e->next();
+                n = e->vacNode();
+            }
+        }
+        return e;
     }
 
     /// Returns bottom-most child in depth order.
     ///
     Element* firstChild() const {
         return Base::firstChild();
+    }
+
+    Element* firstChildVacElement() const {
+        Element* c = firstChild();
+        topology::VacNode* n = nullptr;
+        if (c) {
+            n = c->vacNode();
+            while (!n && c) {
+                c = c->next();
+                n = c->vacNode();
+            }
+        }
+        return c;
     }
 
     /// Returns top-most child in depth order.

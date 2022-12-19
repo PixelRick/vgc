@@ -153,8 +153,7 @@ private:
     core::UndoGroup* drawCurveUndoGroup_ = nullptr;
     core::ConnectionHandle workspaceChangedConnectionHandle_;
 
-    void onWorkspaceChanged_();
-    //void onDocumentChanged_(const dom::Diff& diff);
+    void onWorkspaceChanged_(const workspace::Diff& diff);
 
     // Moving camera
     bool isSketching_ = false;

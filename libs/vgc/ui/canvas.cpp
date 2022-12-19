@@ -123,9 +123,9 @@ Canvas::Canvas(workspace::Workspace* workspace)
 
     setClippingEnabled(true);
 
-    if (document_) {
-        documentChangedConnectionHandle_ = document_->changed().connect(
-            [this](const dom::Diff& diff) { this->onDocumentChanged_(diff); });
+    if (workspace_) {
+        workspaceChangedConnectionHandle_ = workspace_->changed().connect(
+            [this](const workspace::Diff& diff) { this->onWorkspaceChanged_(diff); });
     }
 
     addStyleClass(strings::Canvas);
@@ -143,6 +143,7 @@ void Canvas::setWorkspace(workspace::Workspace* workspace) {
 
     if (workspaceChangedConnectionHandle_) {
         workspace_->disconnect(workspaceChangedConnectionHandle_);
+        workspaceChangedConnectionHandle_ = {};
     }
 
     workspace_ = workspace;
@@ -191,7 +192,8 @@ bool Canvas::onKeyPress(KeyEvent* event) {
     // not handled here, including modifiers.
 }
 
-void Canvas::onWorkspaceChanged_() {
+void Canvas::onWorkspaceChanged_(const workspace::Diff& /*diff*/) {
+
     requestRepaint();
 }
 
@@ -763,7 +765,6 @@ void Canvas::onPaintDraw(graphics::Engine* engine, PaintOptions /*options*/) {
 
 void Canvas::onPaintDestroy(graphics::Engine*) {
     bgGeometry_.reset();
-    bgFillRS_.reset();
     for (EdgeGraphics& r : edgeGraphics_) {
         destroyEdgeGraphics_(r);
     }
