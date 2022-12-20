@@ -99,21 +99,22 @@ const Schema& schema() {
         { "colorpalette", {
             // No attributes
         }},
+        { "layer", {
+        }},
         { "path", "p", {
             {"color", core::colors::black},
             {"positions", geometry::Vec2dArray()},
             {"widths", core::DoubleArray()},
         }},
         { "vertex", "v", {
-            {"color", core::colors::black},
             {"position", geometry::Vec2d()},
         }},
         { "edge", "e", {
             {"color", core::colors::black},
             {"positions", geometry::Vec2dArray()},
             {"widths", core::DoubleArray()},
-            {"startVertex", dom::Path()},
-            {"endVertex", dom::Path()},
+            {"startvertex", std::optional<dom::Path>()},
+            {"endvertex", std::optional<dom::Path>()},
         }},
         { "user", {
             // No attributes
