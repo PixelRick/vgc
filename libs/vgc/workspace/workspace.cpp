@@ -413,8 +413,8 @@ void Workspace::rebuildVacFromTree_() {
     for (Element* e : ce.keyEdges) {
         dom::Element* const domElem = e->domElement();
 
-        Element* ev0 = getRefAttribute(domElem, ss::startVertex, ss::vertex);
-        Element* ev1 = getRefAttribute(domElem, ss::endVertex, ss::vertex);
+        Element* ev0 = getRefAttribute(domElem, ss::startvertex, ss::vertex);
+        Element* ev1 = getRefAttribute(domElem, ss::endvertex, ss::vertex);
         if (!ev0) {
             ev0 = ev1;
         }
@@ -473,9 +473,9 @@ void Workspace::rebuildVacFromTree_() {
     }
 
     // debug print
-    visitDfsPreOrder(vgcElement_, [](Element* e, Int depth) {
-        VGC_DEBUG_TMP("{:>{}}<{} id=\"{}\">", "", depth * 2, e->tagName(), e->id());
-    });
+    //visitDfsPreOrder(vgcElement_, [](Element* e, Int depth) {
+    //    VGC_DEBUG_TMP("{:>{}}<{} id=\"{}\">", "", depth * 2, e->tagName(), e->id());
+    //});
 
     lastSyncedDomVersionId_ = document_->versionId();
     lastSyncedVacVersion_ = vac_->version();

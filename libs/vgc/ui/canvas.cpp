@@ -123,7 +123,6 @@ Canvas::Canvas(workspace::Workspace* workspace)
 
     setClippingEnabled(true);
 
-
     if (workspace_) {
         workspace_->changed().connect(onWorkspaceChanged());
         // XXX to remove
@@ -223,7 +222,7 @@ void Canvas::onDocumentChanged_(const dom::Diff& diff) {
 
     namespace ss = dom::strings;
 
-    VGC_DEBUG_TMP("onDocumentChanged_");
+    //VGC_DEBUG_TMP("onDocumentChanged_");
 
     auto isEdge = [](dom::Element* e) {
         core::StringId tagName = e->tagName();
@@ -310,7 +309,7 @@ void Canvas::onDocumentChanged_(const dom::Diff& diff) {
                 }
             }
             else {
-                VGC_DEBUG_TMP("pb");
+                //VGC_DEBUG_TMP("pb");
             }
         }
     }
@@ -532,8 +531,8 @@ void Canvas::startCurve_(const geometry::Vec2d& p, double width) {
     edge->setAttribute(ss::positions, geometry::Vec2dArray());
     edge->setAttribute(ss::widths, core::DoubleArray());
     edge->setAttribute(ss::color, currentColor_);
-    edge->setAttribute(ss::startVertex, v0->getPathFromId());
-    edge->setAttribute(ss::endVertex, v1->getPathFromId());
+    edge->setAttribute(ss::startvertex, v0->getPathFromId());
+    edge->setAttribute(ss::endvertex, v1->getPathFromId());
 
     endVertex_ = v1;
     edge_ = edge;
@@ -557,7 +556,7 @@ void Canvas::continueCurve_(const geometry::Vec2d& p, double width) {
         edge_->setAttribute(ss::positions, points_);
         edge_->setAttribute(ss::widths, widths_);
 
-        VGC_DEBUG_TMP("workspace_->sync()");
+        //VGC_DEBUG_TMP("workspace_->sync()");
         workspace_->sync();
     }
 }
