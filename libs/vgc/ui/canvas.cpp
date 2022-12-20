@@ -123,9 +123,12 @@ Canvas::Canvas(workspace::Workspace* workspace)
 
     setClippingEnabled(true);
 
+
     if (workspace_) {
-        workspaceChangedConnectionHandle_ = workspace_->changed().connect(
-            [this](const workspace::Diff& diff) { this->onWorkspaceChanged_(diff); });
+        workspace_->changed().connect(onWorkspaceChanged());
+        // XXX to remove
+        workspace_->document()->emitPendingDiff();
+        workspace_->document()->changed().connect(onDocumentChanged());
     }
 
     addStyleClass(strings::Canvas);
@@ -141,17 +144,37 @@ void Canvas::setWorkspace(workspace::Workspace* workspace) {
 
     clearGraphics_();
 
-    if (workspaceChangedConnectionHandle_) {
-        workspace_->disconnect(workspaceChangedConnectionHandle_);
-        workspaceChangedConnectionHandle_ = {};
+    if (workspace_) {
+        workspace_->disconnect(this);
+        // XXX to remove
+        workspace_->document()->disconnect(this);
     }
 
     workspace_ = workspace;
     if (workspace_) {
-        workspaceChangedConnectionHandle_ =
-            workspace_->changed().connect(this->onWorkspaceChanged());
+        workspace_->changed().connect(onWorkspaceChanged());
+        // XXX to remove
+        workspace_->document()->changed().connect(onDocumentChanged());
 
-        // XXX flag for full redraw
+        namespace ss = dom::strings;
+
+        auto isEdge = [](dom::Element* e) {
+            core::StringId tagName = e->tagName();
+            return tagName == PATH || tagName == ss::edge;
+        };
+
+        dom::Element* root = workspace_->document()->rootElement();
+
+        for (dom::Node* node : root->children()) {
+            dom::Element* e = dom::Element::cast(node);
+            if (!(e && isEdge(e))) {
+                continue;
+            }
+            if (e->parent() == root) {
+                auto graphicsIt = getOrCreateEdgeGraphics_(e);
+                toUpdate_.insert(graphicsIt);
+            }
+        }
     }
 
     requestRepaint();
@@ -192,101 +215,121 @@ bool Canvas::onKeyPress(KeyEvent* event) {
     // not handled here, including modifiers.
 }
 
-void Canvas::onWorkspaceChanged_(const workspace::Diff& /*diff*/) {
-
-    requestRepaint();
+void Canvas::onWorkspaceChanged_() {
+    //
 }
 
-//void Canvas::onDocumentChanged_(const dom::Diff& diff) {
-//    for (dom::Node* node : diff.removedNodes()) {
-//        dom::Element* e = dom::Element::cast(node);
-//        if (!(e && e->tagName() == PATH)) {
-//            continue;
-//        }
-//        auto it = edgeGraphicsMap_.find(e);
-//        if (it != edgeGraphicsMap_.end()) {
-//            removedEdgeGraphics_.splice(
-//                removedEdgeGraphics_.begin(), edgeGraphics_, it->second);
-//            edgeGraphicsMap_.erase(it);
-//        }
-//    }
-//
-//    bool needsSort = false;
-//
-//    dom::Element* root = workspace_->rootElement();
-//    for (dom::Node* node : diff.reparentedNodes()) {
-//        dom::Element* e = dom::Element::cast(node);
-//        if (!(e && e->tagName() == PATH)) {
-//            continue;
-//        }
-//        if (e->parent() == root) {
-//            needsSort = true;
-//            auto it = appendEdgeGraphics_(e);
-//            toUpdate_.insert(it);
-//        }
-//        else {
-//            auto it = edgeGraphicsMap_.find(e);
-//            if (it != edgeGraphicsMap_.end()) {
-//                removedEdgeGraphics_.splice(
-//                    removedEdgeGraphics_.begin(), edgeGraphics_, it->second);
-//                edgeGraphicsMap_.erase(it);
-//            }
-//        }
-//    }
-//
-//    for (dom::Node* node : diff.createdNodes()) {
-//        dom::Element* e = dom::Element::cast(node);
-//        if (!(e && e->tagName() == PATH)) {
-//            continue;
-//        }
-//        if (e->parent() == root) {
-//            needsSort = true;
-//            auto it = appendEdgeGraphics_(e);
-//            toUpdate_.insert(it);
-//        }
-//    }
-//
-//    if (!needsSort) {
-//        for (dom::Node* node : diff.childrenReorderedNodes()) {
-//            if (node == root) {
-//                needsSort = true;
-//                break;
-//            }
-//        }
-//    }
-//
-//    if (needsSort) {
-//        auto insert = edgeGraphics_.begin();
-//        for (dom::Node* node : root->children()) {
-//            dom::Element* e = dom::Element::cast(node);
-//            if (!(e && e->tagName() == PATH)) {
-//                continue;
-//            }
-//            auto it = edgeGraphicsMap_[e]; // works unless there is a bug
-//            if (insert == it) {
-//                ++insert;
-//            }
-//            else {
-//                edgeGraphics_.splice(insert, edgeGraphics_, it);
-//            }
-//        }
-//    }
-//
-//    // XXX it's possible that update is done twice if the element is both modified and reparented..
-//
-//    const auto& modifiedElements = diff.modifiedElements();
-//    for (EdgeGraphicsIterator it = edgeGraphics_.begin(); it != edgeGraphics_.end();
-//         ++it) {
-//
-//        auto it2 = modifiedElements.find(it->element);
-//        if (it2 != modifiedElements.end()) {
-//            toUpdate_.insert(it);
-//        }
-//    }
-//
-//    // ask for redraw
-//    requestRepaint();
-//}
+void Canvas::onDocumentChanged_(const dom::Diff& diff) {
+
+    namespace ss = dom::strings;
+
+    VGC_DEBUG_TMP("onDocumentChanged_");
+
+    auto isEdge = [](dom::Element* e) {
+        core::StringId tagName = e->tagName();
+        return tagName == PATH || tagName == ss::edge;
+    };
+
+    for (dom::Node* node : diff.removedNodes()) {
+        dom::Element* e = dom::Element::cast(node);
+        if (!(e && isEdge(e))) {
+            continue;
+        }
+        auto it = edgeGraphicsMap_.find(e);
+        if (it != edgeGraphicsMap_.end()) {
+            removedEdgeGraphics_.splice(
+                removedEdgeGraphics_.begin(), edgeGraphics_, it->second);
+            edgeGraphicsMap_.erase(it);
+        }
+    }
+
+    bool needsSort = false;
+
+    dom::Element* root = workspace_->document()->rootElement();
+
+    for (dom::Node* node : diff.createdNodes()) {
+        dom::Element* e = dom::Element::cast(node);
+        if (!(e && isEdge(e))) {
+            continue;
+        }
+        if (e->parent() == root) {
+            needsSort = true;
+            auto graphicsIt = getOrCreateEdgeGraphics_(e);
+            toUpdate_.insert(graphicsIt);
+        }
+    }
+
+    for (dom::Node* node : diff.reparentedNodes()) {
+        dom::Element* e = dom::Element::cast(node);
+        if (!(e && isEdge(e))) {
+            continue;
+        }
+        auto it = edgeGraphicsMap_.find(e);
+        if (it != edgeGraphicsMap_.end()) {
+            if (e->parent() != root) {
+                removedEdgeGraphics_.splice(
+                    removedEdgeGraphics_.begin(), edgeGraphics_, it->second);
+                edgeGraphicsMap_.erase(it);
+            }
+            else {
+                needsSort = true;
+            }
+        }
+        else if (e->parent() == root) {
+            needsSort = true;
+            auto graphicsIt = getOrCreateEdgeGraphics_(e);
+            toUpdate_.insert(graphicsIt);
+        }
+    }
+
+    if (!needsSort) {
+        for (dom::Node* node : diff.childrenReorderedNodes()) {
+            if (node == root) {
+                needsSort = true;
+                break;
+            }
+        }
+    }
+
+    if (needsSort) {
+        auto insertIt = edgeGraphics_.begin();
+        for (dom::Node* node : root->children()) {
+            dom::Element* e = dom::Element::cast(node);
+            if (!(e && isEdge(e))) {
+                continue;
+            }
+            auto it = edgeGraphicsMap_.find(e);
+            if (it != edgeGraphicsMap_.end()) {
+                EdgeGraphicsIterator graphicsIt = it->second;
+                if (insertIt == graphicsIt) {
+                    ++insertIt;
+                }
+                else {
+                    edgeGraphics_.splice(insertIt, edgeGraphics_, graphicsIt);
+                    insertIt = graphicsIt;
+                }
+            }
+            else {
+                VGC_DEBUG_TMP("pb");
+            }
+        }
+    }
+
+    // XXX it's possible that update is done twice if the element is both modified and reparented..
+
+    const auto& modifiedElements = diff.modifiedElements();
+    for (EdgeGraphicsIterator it = edgeGraphics_.begin(); it != edgeGraphics_.end();
+         ++it) {
+
+        auto it2 = modifiedElements.find(it->element);
+        if (it2 != modifiedElements.end()) {
+            toUpdate_.insert(it);
+        }
+    }
+
+    // ask for redraw
+    requestRepaint();
+}
 
 void Canvas::clearGraphics_() {
     for (EdgeGraphics& r : edgeGraphics_) {
@@ -317,10 +360,15 @@ void Canvas::updateEdgeGraphics_(graphics::Engine* engine) {
     updateTask_.stop();
 }
 
-Canvas::EdgeGraphicsIterator Canvas::appendEdgeGraphics_(dom::Element* element) {
-    auto it = edgeGraphics_.emplace(edgeGraphics_.end(), EdgeGraphics(element));
-    edgeGraphicsMap_.emplace(element, it);
-    return it;
+Canvas::EdgeGraphicsIterator Canvas::getOrCreateEdgeGraphics_(dom::Element* element) {
+    auto it = edgeGraphicsMap_.find(element);
+    if (it == edgeGraphicsMap_.end()) {
+        auto newEdgeGraphicsIterator =
+            edgeGraphics_.emplace(edgeGraphics_.end(), EdgeGraphics(element));
+        edgeGraphicsMap_.emplace(element, newEdgeGraphicsIterator);
+        return newEdgeGraphicsIterator;
+    }
+    return it->second;
 }
 
 void Canvas::updateEdgeGraphics_(graphics::Engine* engine, EdgeGraphics& r) {
@@ -458,9 +506,12 @@ void Canvas::startCurve_(const geometry::Vec2d& p, double width) {
         return;
     }
 
+    namespace ss = dom::strings;
+
     // XXX CLEAN
     static core::StringId Draw_Curve("Draw Curve");
-    drawCurveUndoGroup_ = workspace_->document()->history()->createUndoGroup(Draw_Curve);
+    core::History* history = workspace_->history();
+    drawCurveUndoGroup_ = history->createUndoGroup(Draw_Curve);
 
     drawCurveUndoGroup_->undone().connect([this](core::UndoGroup*, bool /*isAbort*/) {
         // isAbort should be true since we have no sub-group
@@ -468,12 +519,24 @@ void Canvas::startCurve_(const geometry::Vec2d& p, double width) {
         drawCurveUndoGroup_ = nullptr;
     });
 
-    dom::Element* root = workspace_->document()->rootElement();
-    dom::Element* path = dom::Element::create(root, PATH);
+    workspace::Element* wVgc = workspace_->vgcElement();
+    dom::Element* dVgc = wVgc->domElement();
 
-    path->setAttribute(POSITIONS, geometry::Vec2dArray());
-    path->setAttribute(WIDTHS, core::DoubleArray());
-    path->setAttribute(COLOR, currentColor_);
+    dom::Element* v0 = dom::Element::create(dVgc, ss::vertex);
+    dom::Element* v1 = dom::Element::create(dVgc, ss::vertex);
+    dom::Element* edge = dom::Element::create(dVgc, ss::edge);
+
+    v0->setAttribute(ss::position, p);
+    v1->setAttribute(ss::position, p);
+
+    edge->setAttribute(ss::positions, geometry::Vec2dArray());
+    edge->setAttribute(ss::widths, core::DoubleArray());
+    edge->setAttribute(ss::color, currentColor_);
+    edge->setAttribute(ss::startVertex, v0->getPathFromId());
+    edge->setAttribute(ss::endVertex, v1->getPathFromId());
+
+    endVertex_ = v1;
+    edge_ = edge;
 
     continueCurve_(p, width);
 }
@@ -483,28 +546,18 @@ void Canvas::continueCurve_(const geometry::Vec2d& p, double width) {
         return;
     }
 
-    // XXX CLEAN
-    dom::Element* root = workspace_->document()->rootElement();
-    dom::Element* path = root->lastChildElement();
+    namespace ss = dom::strings;
 
-    if (path) {
-        // Should I make this more efficient? If so, we have a few choices:
-        // duplicate the API of arrays within value and provide fine-grain
-        // "changed" signals. And/or allow to pass a lambda that modifies the
-        // underlying value. The dom::Value will call the lambda to mutate the
-        // value, then emit a generic changed signal. I could also let clients
-        // freely mutate the value and trusteing them in sending a changed
-        // signal themselves.
+    if (edge_) {
+        points_.append(p);
+        widths_.append(width);
 
-        geometry::Vec2dArray positions = path->getAttribute(POSITIONS).getVec2dArray();
-        core::DoubleArray widths = path->getAttribute(WIDTHS).getDoubleArray();
+        endVertex_->setAttribute(ss::position, p);
 
-        positions.append(p);
-        widths.append(width);
+        edge_->setAttribute(ss::positions, points_);
+        edge_->setAttribute(ss::widths, widths_);
 
-        path->setAttribute(POSITIONS, std::move(positions));
-        path->setAttribute(WIDTHS, std::move(widths));
-
+        VGC_DEBUG_TMP("workspace_->sync()");
         workspace_->sync();
     }
 }
@@ -647,6 +700,10 @@ bool Canvas::onMouseRelease(MouseEvent* event) {
         drawCurveUndoGroup_->close();
         drawCurveUndoGroup_ = nullptr;
     }
+    endVertex_ = nullptr;
+    edge_ = nullptr;
+    points_.clear();
+    widths_.clear();
 
     mousePressed_ = false;
 

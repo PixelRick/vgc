@@ -78,24 +78,24 @@ private:
 class VGC_DOM_API Operation : public core::Operation {
 protected:
     Operation()
-        : newDocumentVersionId_(core::genId()) {
+        : doneDocumentVersionId_(core::genId()) {
     }
 
-    core::Id oldDocumentVersionId() const {
-        return oldDocumentVersionId_;
+    core::Id undoneDocumentVersionId() const {
+        return undoneDocumentVersionId_;
     }
 
-    void setOldDocumentVersionId(core::Id versionId) {
-        oldDocumentVersionId_ = versionId;
+    void setUndoneDocumentVersionId(core::Id versionId) {
+        undoneDocumentVersionId_ = versionId;
     }
 
-    core::Id newDocumentVersionId() const {
-        return newDocumentVersionId_;
+    core::Id doneDocumentVersionId() const {
+        return doneDocumentVersionId_;
     }
 
 private:
-    core::Id oldDocumentVersionId_ = {};
-    core::Id newDocumentVersionId_;
+    core::Id undoneDocumentVersionId_ = {};
+    core::Id doneDocumentVersionId_;
 };
 
 class VGC_DOM_API CreateElementOperation : public Operation {

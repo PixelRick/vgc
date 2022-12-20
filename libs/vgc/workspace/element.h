@@ -23,6 +23,8 @@
 #include <vgc/core/id.h>
 #include <vgc/core/stringid.h>
 #include <vgc/dom/element.h>
+#include <vgc/geometry/rect2d.h>
+#include <vgc/geometry/vec2d.h>
 #include <vgc/graphics/engine.h>
 #include <vgc/topology/vac.h>
 #include <vgc/workspace/api.h>
@@ -59,17 +61,34 @@ namespace vgc::workspace {
 //    effect params (effect group ?)
 //
 
+// Editable component (control points..)
+struct Component {};
+
+/// \enum vgc::ui::PaintOption
+/// \brief Specifies element paint options.
+///
+enum class PaintOption : UInt64 {
+    None = 0x00,
+    Selected = 0x01,
+    Outline = 0x02,
+    Draft = 0x04,
+};
+VGC_DEFINE_FLAGS(PaintOptions, PaintOption)
+
 enum class ElementFlag : UInt16 {
     None = 0x00,
     // these will be in the schema too
-    Visible = 0x01,
-    Locked = 0x02,
-    Implicit = 0x03,
+    VisibleInRender = 0x01,
+    VisibleInEditor = 0x02,
+    Locked = 0x04,
+    Implicit = 0x08,
 };
 VGC_DEFINE_FLAGS(ElementFlags, ElementFlag)
 
 class VGC_WORKSPACE_API Element : public topology::detail::TreeNodeBase<Element> {
 private:
+    friend class Workspace;
+
     using Base = topology::detail::TreeNodeBase<Element>;
 
 public:
@@ -115,15 +134,7 @@ public:
 
     Element* nextVacElement() const {
         Element* e = next();
-        topology::VacNode* n = nullptr;
-        if (e) {
-            n = e->vacNode();
-            while (!n && e) {
-                e = e->next();
-                n = e->vacNode();
-            }
-        }
-        return e;
+        return findFirstSiblingVacElement_(e);
     }
 
     /// Returns bottom-most child in depth order.
@@ -133,16 +144,8 @@ public:
     }
 
     Element* firstChildVacElement() const {
-        Element* c = firstChild();
-        topology::VacNode* n = nullptr;
-        if (c) {
-            n = c->vacNode();
-            while (!n && c) {
-                c = c->next();
-                n = c->vacNode();
-            }
-        }
-        return c;
+        Element* e = firstChild();
+        return findFirstSiblingVacElement_(e);
     }
 
     /// Returns top-most child in depth order.
@@ -155,9 +158,28 @@ public:
         return Base::numChildren();
     }
 
-private:
-    friend class Workspace;
+    void paint(
+        graphics::Engine* engine,
+        core::AnimTime t = {},
+        PaintOptions flags = PaintOption::None) {
 
+        paint_(engine, t, flags);
+    }
+
+protected:
+    virtual geometry::Rect2d boundingBox();
+
+    virtual void onDomElementChanged();
+    virtual void onVacNodeChanged();
+
+    virtual void prepareForFrame_(core::AnimTime t = {});
+
+    virtual void paint_(
+        graphics::Engine* engine,
+        core::AnimTime t = {},
+        PaintOptions flags = PaintOption::None);
+
+private:
     // uniquely identifies an element
     // if vacNode_ != nullptr then vacNode_->id() == id_.
     core::Id id_ = -1;
@@ -166,6 +188,19 @@ private:
     topology::VacNode* vacNode_ = nullptr;
 
     ElementFlags flags_;
+
+    static Element* findFirstSiblingVacElement_(Element* start) {
+        topology::VacNode* n = nullptr;
+        Element* e = start;
+        if (e) {
+            n = e->vacNode();
+            while (!n && e) {
+                e = e->next();
+                n = e->vacNode();
+            }
+        }
+        return e;
+    }
 };
 
 } // namespace vgc::workspace

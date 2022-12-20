@@ -137,6 +137,7 @@ protected:
     //
 
     VGC_SLOT(onWorkspaceChanged, onWorkspaceChanged_)
+    VGC_SLOT(onDocumentChanged, onDocumentChanged_)
 
 private:
     // Flags
@@ -150,10 +151,9 @@ private:
 
     // Scene
     workspace::Workspace* workspace_;
-    core::UndoGroup* drawCurveUndoGroup_ = nullptr;
-    core::ConnectionHandle workspaceChangedConnectionHandle_;
 
-    void onWorkspaceChanged_(const workspace::Diff& diff);
+    void onWorkspaceChanged_();
+    void onDocumentChanged_(const dom::Diff& diff);
 
     // Moving camera
     bool isSketching_ = false;
@@ -162,6 +162,13 @@ private:
     bool isZooming_ = false;
     geometry::Vec2d mousePosAtPress_ = {};
     geometry::Camera2d cameraAtPress_;
+
+    // Curve draw
+    core::UndoGroup* drawCurveUndoGroup_ = nullptr;
+    dom::Element* endVertex_ = nullptr;
+    dom::Element* edge_ = nullptr;
+    geometry::Vec2dArray points_;
+    core::DoubleArray widths_;
 
     // Graphics resources
 
@@ -174,30 +181,6 @@ private:
     //   -> a square dom element has components in the graph
     //   -> components that have no 1-to-1 relationship with an
     //      element should be recognizable as such.
-
-    struct Component {};
-
-    // VertexComponent
-    // EdgeComponent
-    // CellComponent
-
-    struct ComponentGeometry {
-        dom::Element* element;
-        core::Array<Component> components;
-    };
-
-    // Component (drawn and selectable..)
-
-    struct CurveGraphics {
-        graphics::BufferPtr controlPoints_;
-        graphics::BufferPtr thickline_;
-    };
-
-    struct StrokeGraphics {
-        graphics::BufferPtr meshVertices_;
-        graphics::BufferPtr meshUVSTs_;
-        graphics::BufferPtr meshIndices_;
-    };
 
     struct EdgeGraphics {
         explicit EdgeGraphics(dom::Element* element)
@@ -240,7 +223,7 @@ private:
 
     void clearGraphics_();
     void updateEdgeGraphics_(graphics::Engine* engine);
-    EdgeGraphicsIterator appendEdgeGraphics_(dom::Element* element);
+    EdgeGraphicsIterator getOrCreateEdgeGraphics_(dom::Element* element);
     void updateEdgeGraphics_(graphics::Engine* engine, EdgeGraphics& r);
     static void destroyEdgeGraphics_(EdgeGraphics& r);
 

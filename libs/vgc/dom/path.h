@@ -217,7 +217,7 @@ public:
     friend void write(OStream& out, const Path& path) {
         fmt::memory_buffer b;
         path.writeTo_(b);
-        write(out, b.begin(), static_cast<std::streamsize>(b.size()));
+        write(out, std::string_view(b.begin(), static_cast<std::streamsize>(b.size())));
     }
 
 private:

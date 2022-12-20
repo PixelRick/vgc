@@ -22,6 +22,7 @@
 #include <vgc/dom/api.h>
 #include <vgc/dom/attribute.h>
 #include <vgc/dom/node.h>
+#include <vgc/dom/path.h>
 #include <vgc/dom/strings.h>
 #include <vgc/dom/value.h>
 
@@ -246,6 +247,10 @@ public:
     /// document.
     ///
     core::StringId getOrCreateId() const;
+
+    Path getPathFromId() const {
+        return Path::fromId(getOrCreateId());
+    }
 
     /// Returns the authored attributes of this element.
     ///

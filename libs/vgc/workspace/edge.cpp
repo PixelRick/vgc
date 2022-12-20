@@ -14,29 +14,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <vgc/workspace/element.h>
+#include <vgc/workspace/edge.h>
 
 namespace vgc::workspace {
 
-geometry::Rect2d Element::boundingBox() {
+geometry::Rect2d KeyEdge::boundingBox() {
     return geometry::Rect2d::empty;
 }
 
-void Element::onDomElementChanged() {
+void KeyEdge::onDomElementChanged() {
 }
 
-void Element::onVacNodeChanged() {
+void KeyEdge::onVacNodeChanged() {
 }
 
-void Element::prepareForFrame_(core::AnimTime /*t*/) {
-}
-
-void Element::paint_(
+void KeyEdge::paint_(
     graphics::Engine* /*engine*/,
     core::AnimTime /*t*/,
     PaintOptions /*flags*/) {
-
-    // XXX make it pure virtual once the factory is in.
 }
 
 } // namespace vgc::workspace

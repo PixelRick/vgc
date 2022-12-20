@@ -201,6 +201,7 @@ void Workspace::updateTreeAndDomFromVac_() {
 
 void Workspace::updateTreeFromDom_() {
     //
+    rebuildTreeFromDom_();
 }
 
 // Assumes (parent == it->parent()).
@@ -306,6 +307,11 @@ dom::Element* rebuildTreeFromDomIter(Element* it, Element*& parent) {
 void Workspace::rebuildTreeFromDom_() {
 
     namespace ss = dom::strings;
+
+    // flush dom diff
+    isDomBeingUpdated_ = true;
+    document_->emitPendingDiff();
+    isDomBeingUpdated_ = false;
 
     // reset tree
     elements_.clear();

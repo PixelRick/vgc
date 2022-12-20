@@ -14,29 +14,44 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#ifndef VGC_WORKSPACE_LAYER_H
+#define VGC_WORKSPACE_LAYER_H
+
+#include <vgc/core/arithmetic.h>
+#include <vgc/core/array.h>
+#include <vgc/dom/element.h>
+#include <vgc/graphics/engine.h>
+#include <vgc/topology/vac.h>
+#include <vgc/workspace/api.h>
 #include <vgc/workspace/element.h>
 
 namespace vgc::workspace {
 
-geometry::Rect2d Element::boundingBox() {
-    return geometry::Rect2d::empty;
-}
+class VGC_WORKSPACE_API Layer : public Element {
+private:
+    friend class Workspace;
 
-void Element::onDomElementChanged() {
-}
+public:
+    ~Layer() override = default;
 
-void Element::onVacNodeChanged() {
-}
+    Layer(dom::Element* domElement)
+        : Element(domElement) {
+    }
 
-void Element::prepareForFrame_(core::AnimTime /*t*/) {
-}
+protected:
+    geometry::Rect2d boundingBox() override;
 
-void Element::paint_(
-    graphics::Engine* /*engine*/,
-    core::AnimTime /*t*/,
-    PaintOptions /*flags*/) {
+    void onDomElementChanged() override;
+    void onVacNodeChanged() override;
 
-    // XXX make it pure virtual once the factory is in.
-}
+    void paint_(
+        graphics::Engine* engine,
+        core::AnimTime t,
+        PaintOptions flags = PaintOption::None) override;
+
+private:
+};
 
 } // namespace vgc::workspace
+
+#endif // VGC_WORKSPACE_LAYER_H

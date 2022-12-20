@@ -14,29 +14,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <vgc/workspace/element.h>
+#include <vgc/workspace/layer.h>
 
 namespace vgc::workspace {
 
-geometry::Rect2d Element::boundingBox() {
+geometry::Rect2d Layer::boundingBox() {
     return geometry::Rect2d::empty;
 }
 
-void Element::onDomElementChanged() {
+void Layer::onDomElementChanged() {
+}
+void Layer::onVacNodeChanged() {
 }
 
-void Element::onVacNodeChanged() {
-}
-
-void Element::prepareForFrame_(core::AnimTime /*t*/) {
-}
-
-void Element::paint_(
+void Layer::paint_(
     graphics::Engine* /*engine*/,
     core::AnimTime /*t*/,
     PaintOptions /*flags*/) {
-
-    // XXX make it pure virtual once the factory is in.
 }
 
 } // namespace vgc::workspace
