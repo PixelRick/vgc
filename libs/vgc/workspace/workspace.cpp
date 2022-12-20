@@ -15,14 +15,38 @@
 // limitations under the License.
 
 #include <functional>
+#include <memory>
 
 #include <vgc/dom/strings.h>
 #include <vgc/topology/operations.h>
 #include <vgc/topology/vac.h>
+#include <vgc/workspace/edge.h>
+#include <vgc/workspace/layer.h>
 #include <vgc/workspace/logcategories.h>
+#include <vgc/workspace/vertex.h>
 #include <vgc/workspace/workspace.h>
 
 namespace vgc::workspace {
+
+void ElementFactory::registerCreator(core::StringId tagName, Creator creator) {
+    instance_()->creators_[tagName] = creator;
+}
+
+std::unique_ptr<Element> ElementFactory::create(dom::Element* domElement) {
+    ElementFactory* factory = instance_();
+    auto it = factory->creators_.find(domElement->tagName());
+    if (it != factory->creators_.end()) {
+        return it->second(domElement);
+    }
+    else {
+        return std::make_unique<Element>(domElement);
+    }
+}
+
+ElementFactory* ElementFactory::instance_() {
+    static ElementFactory* instance = new ElementFactory();
+    return instance;
+}
 
 Workspace::Workspace(dom::DocumentPtr document)
     : document_(document) {
@@ -36,8 +60,22 @@ Workspace::Workspace(dom::DocumentPtr document)
     rebuildVacFromTree_();
 }
 
+std::once_flag initOnceFlag;
+
+template<typename T>
+std::unique_ptr<Element> makeUniqueElement(dom::Element* domElement) {
+    return std::make_unique<T>(domElement);
+}
+
 /* static */
 WorkspacePtr Workspace::create(dom::DocumentPtr document) {
+
+    namespace ss = dom::strings;
+
+    std::call_once(initOnceFlag, []() {
+        ElementFactory::registerCreator(ss::edge, &makeUniqueElement<KeyEdge>);
+    });
+
     return WorkspacePtr(new Workspace(document));
 }
 
@@ -513,8 +551,8 @@ Element* Workspace::createElement(dom::Element* domElement, Element* parent) {
     if (!domElement) {
         return nullptr;
     }
-    const auto& p = elements_.emplace(
-        domElement->internalId(), std::make_unique<Element>(domElement));
+    const auto& p =
+        elements_.emplace(domElement->internalId(), ElementFactory::create(domElement));
     if (!p.second) {
         // XXX should probably throw
         return nullptr;

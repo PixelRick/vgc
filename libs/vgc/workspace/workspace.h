@@ -40,6 +40,20 @@ struct VacElementLists;
 
 } // namespace detail
 
+class VGC_WORKSPACE_API ElementFactory {
+public:
+    using Creator = std::unique_ptr<Element> (*)(dom::Element* element);
+
+    static void registerCreator(core::StringId tagName, Creator creator);
+
+    static std::unique_ptr<Element> create(dom::Element* element);
+
+private:
+    std::unordered_map<core::StringId, Creator> creators_;
+
+    static ElementFactory* instance_();
+};
+
 /// \class vgc::workspace::Workspace
 /// \brief Represents a workspace to manage, manipulate and visit a vector graphics scene.
 ///

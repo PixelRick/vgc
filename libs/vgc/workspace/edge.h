@@ -63,6 +63,8 @@ public:
 
     KeyEdge(dom::Element* domElement)
         : Element(domElement) {
+
+        VGC_DEBUG_TMP("workspace::KeyEdge()");
     }
 
     topology::KeyEdge* vacKeyEdge() const {
