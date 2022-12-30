@@ -44,7 +44,6 @@ public:
 
 protected:
     void onDomElementChanged() override;
-    void onVacNodeChanged() override;
 
     void prepareForFrame_(core::AnimTime t) override;
 

@@ -26,6 +26,9 @@ VacPtr Vac::create() {
 }
 
 void Vac::clear() {
+    for (const auto& it : nodes_) {
+        onNodeAboutToBeRemoved().emit(it.second.get());
+    }
     nodes_.clear();
     root_.onChildrenDestroyed();
     root_.transform_ = geometry::Mat3d::identity;

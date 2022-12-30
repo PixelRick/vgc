@@ -14,13 +14,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// This file was automatically generated, please do not edit directly.
-// Instead, edit tools/triangle2x.cpp then run tools/generate.py.
+#ifndef VGC_TOPOLOGY_LOGCATEGORIES_H
+#define VGC_TOPOLOGY_LOGCATEGORIES_H
 
-// clang-format off
+#include <vgc/core/logging.h>
+#include <vgc/topology/api.h>
 
-#include <vgc/geometry/triangle2d.h>
+namespace vgc::topology {
 
-namespace vgc::geometry {
+VGC_DECLARE_LOG_CATEGORY(VGC_TOPOLOGY_API, LogVgcTopology, Debug)
 
-} // namespace vgc::geometry
+} // namespace vgc::topology
+
+#endif // VGC_TOPOLOGY_LOGCATEGORIES_H

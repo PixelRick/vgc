@@ -25,9 +25,6 @@ geometry::Rect2d KeyEdge::boundingBox() {
 void KeyEdge::onDomElementChanged() {
 }
 
-void KeyEdge::onVacNodeChanged() {
-}
-
 void KeyEdge::paint_(
     graphics::Engine* /*engine*/,
     core::AnimTime /*t*/,

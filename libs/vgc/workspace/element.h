@@ -26,6 +26,7 @@
 #include <vgc/geometry/rect2d.h>
 #include <vgc/geometry/vec2d.h>
 #include <vgc/graphics/engine.h>
+#include <vgc/topology/operations.h>
 #include <vgc/topology/vac.h>
 #include <vgc/workspace/api.h>
 
@@ -108,10 +109,12 @@ public:
         return id_;
     }
 
+    // the returned pointer can be dangling if the workspace is not synced with its dom
     dom::Element* domElement() const {
         return domElement_;
     }
 
+    // the returned pointer can be dangling if the workspace is not synced with its vac
     topology::VacNode* vacNode() const {
         return vacNode_;
     }
@@ -170,7 +173,6 @@ protected:
     virtual geometry::Rect2d boundingBox();
 
     virtual void onDomElementChanged();
-    virtual void onVacNodeChanged();
 
     virtual void prepareForFrame_(core::AnimTime t = {});
 
@@ -184,7 +186,9 @@ private:
     // if vacNode_ != nullptr then vacNode_->id() == id_.
     core::Id id_ = -1;
 
+    // this pointer is not safe to use when tree is not synced with dom
     dom::Element* domElement_ = nullptr;
+    // this pointer is not safe to use when tree is not synced with vac
     topology::VacNode* vacNode_ = nullptr;
 
     ElementFlags flags_;
@@ -200,6 +204,13 @@ private:
             }
         }
         return e;
+    }
+
+    void removeVacNode_() {
+        if (vacNode_) {
+            topology::ops::removeNode(vacNode_, false);
+            vacNode_ = nullptr;
+        }
     }
 };
 

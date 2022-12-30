@@ -24,8 +24,6 @@ geometry::Rect2d Layer::boundingBox() {
 
 void Layer::onDomElementChanged() {
 }
-void Layer::onVacNodeChanged() {
-}
 
 void Layer::paint_(
     graphics::Engine* /*engine*/,

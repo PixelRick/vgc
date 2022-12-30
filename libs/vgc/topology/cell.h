@@ -162,12 +162,12 @@ public:
         return cpy;
     }
 
-    T& operator*() const {
-        return *p_;
+    T* const& operator*() const {
+        return p_;
     }
 
-    T* operator->() const {
-        return p_;
+    T* const* operator->() const {
+        return &p_;
     }
 
     bool operator==(const TreeChildrenIterator& other) const {
@@ -248,7 +248,7 @@ protected:
         return numChildren_;
     }
 
-    void resetNoUnlink() {
+    void resetChildrenNoUnlink() {
         numChildren_ = 0;
         firstChild_ = nullptr;
         lastChild_ = nullptr;
@@ -348,6 +348,7 @@ void TreeChildBase<Derived, Parent>::unlink() {
 
     if (oldParent) {
         --(oldParent->numChildren_);
+        parent_ = nullptr;
     }
 }
 
@@ -401,7 +402,6 @@ private:
     friend detail::Operations;
 
     using TreeChildBase = detail::TreeChildBase<VacNode, VacGroup>;
-    using Iterator = detail::TreeChildrenIterator<VacNode>;
 
 protected:
     VacNode(core::Id id) noexcept
@@ -436,6 +436,8 @@ public:
         return id_;
     }
 
+    inline Vac* vac() const;
+
     bool isCell() const {
         return cellType_.has_value();
     }
@@ -444,11 +446,26 @@ public:
         return !isCell();
     }
 
+    VacCell* toCell() {
+        return isCell() ? toCellUnchecked() : nullptr;
+    }
+
+    const VacCell* toCell() const {
+        return const_cast<VacNode*>(this)->toCell();
+    }
+
     inline VacCell* toCellUnchecked();
 
     const VacCell* toCellUnchecked() const {
         return const_cast<VacNode*>(this)->toCellUnchecked();
-        ;
+    }
+
+    VacGroup* toGroup() {
+        return isGroup() ? toGroupUnchecked() : nullptr;
+    }
+
+    const VacGroup* toGroup() const {
+        return const_cast<VacNode*>(this)->toGroup();
     }
 
     inline VacGroup* toGroupUnchecked();
@@ -467,6 +484,8 @@ private:
 
     core::Id id_ = -1;
     const std::optional<VacCellType> cellType_;
+    // used during removal operations
+    bool isBeingDestroyed_ = false;
 };
 
 class VGC_TOPOLOGY_API VacGroup : public VacNode,
@@ -477,6 +496,8 @@ private:
     using TreeParentBase = detail::TreeParentBase<VacGroup, VacNode>;
 
 public:
+    using Iterator = detail::TreeChildrenIterator<VacNode>;
+
     ~VacGroup() override = default;
 
     explicit VacGroup(Vac* vac, core::Id id) noexcept
@@ -510,6 +531,14 @@ public:
         return TreeParentBase::numChildren();
     }
 
+    Iterator begin() const {
+        return TreeParentBase::begin();
+    }
+
+    Iterator end() const {
+        return TreeParentBase::end();
+    }
+
     const geometry::Mat3d& transform() const {
         return transform_;
     }
@@ -540,7 +569,7 @@ private:
     geometry::Mat3d transformFromRoot_;
 
     void onChildrenDestroyed() {
-        TreeParentBase::resetNoUnlink();
+        TreeParentBase::resetChildrenNoUnlink();
     }
 
     void setTransform_(const geometry::Mat3d& transform);
@@ -721,6 +750,31 @@ constexpr To* dynamic_cell_cast(From* p);
 //  ib face     -> animcycl = planar graph with key verts, ib verts, key edges, ib edges
 //
 
+class CellRangeView {
+private:
+    using Container = core::Array<VacCell*>;
+
+    friend VacCell;
+
+    CellRangeView(const Container& container)
+        : container_(container) {
+    }
+
+public:
+    using ConstIterator = Container::const_iterator;
+
+    ConstIterator begin() const {
+        return container_.begin();
+    }
+
+    ConstIterator end() const {
+        return container_.end();
+    }
+
+private:
+    const Container& container_;
+};
+
 class VGC_TOPOLOGY_API VacCell : public VacNode {
 private:
     friend detail::Operations;
@@ -782,8 +836,12 @@ public:
 
     virtual bool existsAt(core::AnimTime t) const = 0;
 
-    const core::Array<VacCell*>& star() const {
-        return star_;
+    CellRangeView star() const {
+        return CellRangeView(star_);
+    }
+
+    CellRangeView boundary() const {
+        return CellRangeView(boundary_);
     }
 
     VGC_TOPOLOGY_DEFINE_CELL_CAST_METHOD(VertexCell)
@@ -800,7 +858,20 @@ public:
 
 private:
     core::Array<VacCell*> star_;
+    core::Array<VacCell*> boundary_;
+
+    bool insertStar_(VacCell* cell) {
+        if (!star_.contains(cell)) {
+            star_.append(cell);
+            return true;
+        }
+        return false;
+    }
 };
+
+inline Vac* VacNode::vac() const {
+    return isCell() ? toCellUnchecked()->vac() : toGroupUnchecked()->vac();
+}
 
 inline VacCell* VacNode::toCellUnchecked() {
     return static_cast<VacCell*>(this);

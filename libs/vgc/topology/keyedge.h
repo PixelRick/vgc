@@ -38,6 +38,9 @@ private:
 public:
     VGC_TOPOLOGY_DEFINE_SPATIOTEMPORAL_CELL_CAST_METHODS(Key, Edge)
 
+    using SharedConstPoints = std::shared_ptr<const geometry::Vec2dArray>;
+    using SharedConstWidths = std::shared_ptr<const core::DoubleArray>;
+
     KeyVertex* startVertex() const {
         return startVertex_;
     }
@@ -82,8 +85,8 @@ private:
     //detail::Transform2d transform_;
 
     // XXX temporary, we should use "KeyEdgeGeometry geometry_".
-    std::shared_ptr<const geometry::Vec2dArray> points_;
-    std::shared_ptr<const core::DoubleArray> widths_;
+    SharedConstPoints points_;
+    SharedConstWidths widths_;
     geometry::Vec2dArray fallbackPoints_;
     core::DoubleArray fallbackWidths_;
     Int64 dataVersion_ = 0;

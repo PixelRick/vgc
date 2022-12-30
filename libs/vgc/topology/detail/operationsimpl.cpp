@@ -16,6 +16,7 @@
 
 #include <vgc/topology/detail/operationsimpl.h>
 #include <vgc/topology/exceptions.h>
+#include <vgc/topology/logcategories.h>
 
 namespace vgc::topology::detail {
 
@@ -84,6 +85,7 @@ KeyEdge* Operations::createKeyEdge(
     // init cell
     p->startVertex_ = startVertex;
     p->endVertex_ = endVertex;
+    p->boundary_.assign({startVertex, endVertex});
     // add edge to new vertices star
     startVertex->star_.emplaceLast(p);
     if (endVertex != startVertex) {
@@ -126,6 +128,131 @@ KeyEdge* Operations::createKeyClosedEdge(
     return p;
 }
 
+void Operations::removeNode(VacNode* node, bool removeFreeVertices) {
+
+    Vac* vac = node->vac();
+    VacDiff& diff = vac->diff_;
+    const bool diffEnabled = vac->diffEnabled_;
+    const bool isRoot = (vac->rootGroup() == node);
+
+    std::unordered_set<VacNode*> toRemoveNodes;
+
+    // only remove `node` if it is not the root node
+    if (!isRoot) {
+        toRemoveNodes.insert(node);
+    }
+
+    // collect all dependent nodes
+    collectDependentNodes_(node, toRemoveNodes);
+
+    std::unordered_set<VacNode*> freeKeyVertices;
+    std::unordered_set<VacNode*> freeInbetweenVertices;
+
+    // signal and flag removal
+    for (VacNode* n : toRemoveNodes) {
+        vac->onNodeAboutToBeRemoved().emit(n);
+        n->isBeingDestroyed_ = true;
+    }
+
+    auto hasEmptyStar = [](VacCell* cell) {
+        bool isStarEmpty = true;
+        for (VacCell* starCell : cell->star()) {
+            if (!starCell->isBeingDestroyed_) {
+                isStarEmpty = false;
+                break;
+            }
+        }
+        return isStarEmpty;
+    };
+
+    for (VacNode* n : toRemoveNodes) {
+        if (n->isCell()) {
+            VacCell* cell = n->toCellUnchecked();
+            for (VacCell* boundaryCell : cell->boundary()) {
+                // skip if cell is flag'd for removal
+                if (boundaryCell->isBeingDestroyed_) {
+                    continue;
+                }
+                if (removeFreeVertices
+                    && boundaryCell->spatialType() == CellSpatialType::Vertex
+                    && hasEmptyStar(boundaryCell)) {
+
+                    switch (boundaryCell->cellType()) {
+                    case VacCellType::KeyVertex:
+                        freeKeyVertices.insert(boundaryCell);
+                        break;
+                    case VacCellType::InbetweenVertex:
+                        freeInbetweenVertices.insert(boundaryCell);
+                        break;
+                    default:
+                        break;
+                    }
+
+                    boundaryCell->isBeingDestroyed_ = true;
+                }
+                if (!boundaryCell->isBeingDestroyed_) {
+                    boundaryCell->star_.removeOne(cell);
+                    if (diffEnabled) {
+                        diff.onNodeDiff(boundaryCell, VacNodeDiffFlag::StarChanged);
+                    }
+                }
+            }
+        }
+    }
+
+    if (removeFreeVertices) {
+        // it requires a second pass since inbetween vertices are in star of key vertices
+        for (VacNode* node : freeInbetweenVertices) {
+            VacCell* cell = node->toCellUnchecked();
+            for (VacCell* boundaryCell : cell->boundary()) {
+                if (boundaryCell->isBeingDestroyed_) {
+                    continue;
+                }
+                if (hasEmptyStar(boundaryCell)) {
+                    freeKeyVertices.insert(boundaryCell->toKeyVertexUnchecked());
+                    boundaryCell->isBeingDestroyed_ = true;
+                }
+                else {
+                    boundaryCell->star_.removeOne(cell);
+                    if (diffEnabled) {
+                        diff.onNodeDiff(boundaryCell, VacNodeDiffFlag::StarChanged);
+                    }
+                }
+            }
+        }
+        toRemoveNodes.merge(freeKeyVertices);
+        toRemoveNodes.merge(freeInbetweenVertices);
+    }
+
+    for (VacNode* n : toRemoveNodes) {
+        if (diffEnabled) {
+            VacGroup* parentGroup = n->parentGroup();
+            if (parentGroup) {
+                diff.onNodeDiff(parentGroup, VacNodeDiffFlag::ChildrenChanged);
+            }
+            diff.onNodeRemoved(n);
+        }
+        node->unlink();
+        vac->nodes_.erase(n->id());
+    }
+
+    if (isRoot) {
+        // we did not remove root group but cleared its children
+        VacGroup* g = node->toGroupUnchecked();
+        if (g->numChildren()) {
+            g->resetChildrenNoUnlink();
+            if (diffEnabled) {
+                diff.onNodeDiff(node, VacNodeDiffFlag::ChildrenChanged);
+            }
+        }
+    }
+}
+
+void Operations::removeNodeSmart(VacNode* node, bool removeFreeVertices) {
+    // todo later
+    throw core::RuntimeError("not implemented");
+}
+
 void Operations::moveToGroup(VacNode* node, VacGroup* parentGroup, VacNode* nextSibling) {
 
     Vac* vac = parentGroup->vac();
@@ -164,7 +291,13 @@ void Operations::setKeyEdgeCurvePoints(
     KeyEdge* e,
     const geometry::SharedConstVec2dArray& points) {
 
-    e->points_ = points.getShared();
+    KeyEdge::SharedConstPoints sPoints = points.getShared();
+    if (sPoints == e->points_) {
+        // same data
+        return;
+    }
+
+    e->points_ = std::move(sPoints);
     ++e->dataVersion_;
     Vac* vac = e->vac();
     if (vac) {
@@ -181,7 +314,13 @@ void Operations::setKeyEdgeCurveWidths(
     KeyEdge* e,
     const core::SharedConstDoubleArray& widths) {
 
-    e->widths_ = widths.getShared();
+    KeyEdge::SharedConstWidths sWidths = widths.getShared();
+    if (sWidths == e->widths_) {
+        // same data
+        return;
+    }
+
+    e->widths_ = std::move(sWidths);
     ++e->dataVersion_;
     Vac* vac = e->vac();
     if (vac) {
@@ -190,6 +329,28 @@ void Operations::setKeyEdgeCurveWidths(
         // update diff
         if (vac->diffEnabled_) {
             vac->diff_.onNodeDiff(e, VacNodeDiffFlag::GeometryChanged);
+        }
+    }
+}
+
+void Operations::collectDependentNodes_(
+    VacNode* node,
+    std::unordered_set<VacNode*>& dependentNodes) {
+
+    if (node->isGroup()) {
+        VacGroup* g = node->toGroupUnchecked();
+        for (VacNode* n : *g) {
+            if (dependentNodes.insert(n).second) {
+                collectDependentNodes_(n, dependentNodes);
+            }
+        }
+    }
+    else {
+        VacCell* c = node->toCellUnchecked();
+        for (VacNode* n : c->star()) {
+            if (dependentNodes.insert(n).second) {
+                collectDependentNodes_(n, dependentNodes);
+            }
         }
     }
 }

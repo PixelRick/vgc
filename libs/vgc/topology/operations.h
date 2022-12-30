@@ -104,6 +104,14 @@ inline KeyEdge* createKeyClosedEdge(
     return createKeyClosedEdge(core::genId(), parentGroup, nextSibling, t);
 }
 
+inline void removeNode(VacNode* node, bool removeFreeVertices) {
+    detail::Operations::removeNode(node, removeFreeVertices);
+}
+
+inline void removeNodeSmart(VacNode* node, bool removeFreeVertices) {
+    detail::Operations::removeNodeSmart(node, removeFreeVertices);
+}
+
 /// Throws `NotAChildError` if `nextSibling` is not a child of `parentGroup` or `nullptr`.
 // XXX should check if node belongs to same vac.
 inline void

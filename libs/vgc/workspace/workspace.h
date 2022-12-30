@@ -40,20 +40,6 @@ struct VacElementLists;
 
 } // namespace detail
 
-class VGC_WORKSPACE_API ElementFactory {
-public:
-    using Creator = std::unique_ptr<Element> (*)(dom::Element* element);
-
-    static void registerCreator(core::StringId tagName, Creator creator);
-
-    static std::unique_ptr<Element> create(dom::Element* element);
-
-private:
-    std::unordered_map<core::StringId, Creator> creators_;
-
-    static ElementFactory* instance_();
-};
-
 /// \class vgc::workspace::Workspace
 /// \brief Represents a workspace to manage, manipulate and visit a vector graphics scene.
 ///
@@ -64,15 +50,12 @@ private:
     Workspace(dom::DocumentPtr document);
 
 public:
+    using ElementCreator = std::unique_ptr<Element> (*)(dom::Element* element);
+
     static WorkspacePtr create(dom::DocumentPtr document);
 
-    /*RenderObject*
-    getOrCreateRenderObject(core::Id id, graphics::Engine* engine, core::AnimTime t);*/
-
-    //RenderObject* getOrCreateRenderObject(
-    //    Renderable* renderable,
-    //    graphics::Engine* engine,
-    //    core::AnimTime t);
+    static void
+    registerElementClass(core::StringId tagName, ElementCreator elementCreator);
 
     dom::Document* document() const {
         return document_.get();
@@ -90,42 +73,42 @@ public:
         return vgcElement_;
     }
 
+    Element* find(core::Id id) const {
+        auto it = elements_.find(id);
+        return it != elements_.end() ? it->second.get() : nullptr;
+    }
+
     void sync();
+    void rebuildFromDom();
+    //void rebuildFromVac();
 
     VGC_SIGNAL(changed);
 
-    VGC_SLOT(onDocumentDiff, onDocumentDiff_)
-    VGC_SLOT(onVacDiff, onVacDiff_)
+    VGC_SLOT(onDocumentDiff, onDocumentDiff_);
+    VGC_SLOT(onVacDiff, onVacDiff_);
+    VGC_SLOT(onVacNodeAboutToBeRemoved, onVacNodeAboutToBeRemoved_);
 
 protected:
-    /*RenderObjectMap* getRenderObjectMap(graphics::Engine* engine, core::AnimTime t) {
-        return renderObjectByIdByTimeByEngine_[engine][t].get();
-    }*/
+    Element* getElementFromPathAttribute(
+        dom::Element* domElement,
+        core::StringId attrName,
+        core::StringId tagNameFilter = {}) const;
 
-    void onDocumentDiff_(const dom::Diff& diff);
-    void onVacDiff_(const topology::VacDiff& diff);
-
-    void updateTreeAndVacFromDom_();
-    void updateTreeAndDomFromVac_();
-
-    void updateTreeFromDom_();
-
-    void rebuildTreeFromDom_();
-    void rebuildVacFromTree_();
-
-    void
-    fillVacElementListsUsingTagName(Element* root, detail::VacElementLists& ce) const;
+    virtual void onDocumentDiff_(const dom::Diff& diff);
+    virtual void onVacDiff_(const topology::VacDiff& diff);
 
 private:
+    static std::unordered_map<core::StringId, ElementCreator>& elementCreators();
+
     std::unordered_map<core::Id, std::unique_ptr<Element>> elements_;
     Element* vgcElement_;
 
-    Element* createElement(dom::Element* domElement, Element* parent);
+    Element* createAppendElement_(dom::Element* domElement, Element* parent);
 
-    Element* getRefAttribute(
-        dom::Element* domElement,
-        core::StringId name,
-        core::StringId tagNameFilter = {}) const;
+    void onVacNodeAboutToBeRemoved_(topology::VacNode* node);
+
+    void
+    fillVacElementListsUsingTagName_(Element* root, detail::VacElementLists& ce) const;
 
     dom::DocumentPtr document_;
     topology::VacPtr vac_;
@@ -133,6 +116,25 @@ private:
     bool isVacBeingUpdated_ = false;
     core::Id lastSyncedDomVersionId_ = {};
     Int64 lastSyncedVacVersion_ = -1;
+
+    void rebuildTreeFromDom_();
+    void rebuildDomFromTree_();
+
+    void rebuildTreeFromVac_();
+    void rebuildVacFromTree_();
+
+    void rebuildVacGroup_(Element* e);
+    void rebuildKeyVertex_(Element* e);
+    bool rebuildKeyEdge_(Element* e, bool force = false);
+
+    bool haveKeyEdgeBoundaryPathsChanged_(Element* e);
+
+    void updateVacHierarchyFromTree_();
+
+    void updateTreeAndVacFromDom_(const dom::Diff& diff);
+    void updateTreeAndDomFromVac_(const topology::VacDiff& diff);
+
+    void debugPrintTree_();
 };
 
 } // namespace vgc::workspace

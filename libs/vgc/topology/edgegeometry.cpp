@@ -14,26 +14,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <vgc/workspace/element.h>
+#include <vgc/topology/edgegeometry.h>
 
-namespace vgc::workspace {
+namespace vgc::topology {
 
-geometry::Rect2d Element::boundingBox() {
-    return geometry::Rect2d::empty;
+void KeyEdgeInterpolatedPointsGeometry::snapToVertices(
+    const geometry::Vec2d& start,
+    const geometry::Vec2d& end) {
+
+    //
 }
 
-void Element::onDomElementChanged() {
+EdgeBezierQuadSampling
+KeyEdgeInterpolatedPointsGeometry::computeSampling(const SamplingParameters& parameters) {
+    //
+    return EdgeBezierQuadSampling(core::genId());
 }
 
-void Element::prepareForFrame_(core::AnimTime /*t*/) {
-}
-
-void Element::paint_(
-    graphics::Engine* /*engine*/,
-    core::AnimTime /*t*/,
-    PaintOptions /*flags*/) {
-
-    // XXX make it pure virtual once the factory is in.
-}
-
-} // namespace vgc::workspace
+} // namespace vgc::topology

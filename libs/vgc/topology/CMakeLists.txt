@@ -15,6 +15,7 @@ vgc_add_library(topology
         keyedge.h
         keyface.h
         keyvertex.h
+        logcategories.h
         operations.h
         transform.h
         vac.h
@@ -23,7 +24,9 @@ vgc_add_library(topology
 
     CPP_FILES
         cell.cpp
+        edgegeometry.cpp
         exceptions.cpp
+        logcategories.cpp
         operations.cpp
         transform.cpp
         vac.cpp

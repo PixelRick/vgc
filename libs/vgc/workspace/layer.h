@@ -42,7 +42,6 @@ protected:
     geometry::Rect2d boundingBox() override;
 
     void onDomElementChanged() override;
-    void onVacNodeChanged() override;
 
     void paint_(
         graphics::Engine* engine,

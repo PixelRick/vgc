@@ -17,6 +17,8 @@
 #ifndef VGC_TOPOLOGY_DETAIL_OPERATIONS_H
 #define VGC_TOPOLOGY_DETAIL_OPERATIONS_H
 
+#include <unordered_set>
+
 #include <vgc/topology/vac.h>
 
 namespace vgc::topology::detail {
@@ -56,6 +58,9 @@ public:
         VacNode* nextSibling = nullptr,
         core::AnimTime t = {});
 
+    static void removeNode(VacNode* node, bool removeFreeVertices);
+    static void removeNodeSmart(VacNode* node, bool removeFreeVertices);
+
     static void
     moveToGroup(VacNode* node, VacGroup* parentGroup, VacNode* nextSibling = nullptr);
 
@@ -65,6 +70,10 @@ public:
     setKeyEdgeCurvePoints(KeyEdge* e, const geometry::SharedConstVec2dArray& points);
     static void
     setKeyEdgeCurveWidths(KeyEdge* e, const core::SharedConstDoubleArray& widths);
+
+private:
+    static void
+    collectDependentNodes_(VacNode* node, std::unordered_set<VacNode*>& dependentNodes);
 };
 
 } // namespace vgc::topology::detail

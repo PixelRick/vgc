@@ -38,13 +38,12 @@ VGC_DECLARE_OBJECT(Vac);
 
 // clang-format off
 enum class VacNodeDiffFlag {
-    Created             = 0x01,
-    Reparented          = 0x02,
-    ChildrenChanged     = 0x04,
-    AttributeChanged    = 0x08,
-    GeometryChanged     = 0x10,
-    StarChanged         = 0x20,
-    BoundaryChanged     = 0x40
+    Created                 = 0x01,
+    Reparented              = 0x02,
+    ChildrenChanged         = 0x04,
+    AttributeChanged        = 0x08,
+    GeometryChanged         = 0x10,
+    StarChanged             = 0x20,
 };
 VGC_DEFINE_FLAGS(VacNodeDiffFlags, VacNodeDiffFlag)
 // clang-format on
@@ -147,8 +146,13 @@ public:
         ++version_;
     }
 
+    const VacDiff& pendingDiff() {
+        return diff_;
+    }
+
     bool emitPendingDiff();
 
+    VGC_SIGNAL(onNodeAboutToBeRemoved, (VacNode*, node))
     VGC_SIGNAL(changed, (const VacDiff&, diff))
 
 protected:

@@ -21,9 +21,6 @@ namespace vgc::workspace {
 void Vertex::onDomElementChanged() {
 }
 
-void Vertex::onVacNodeChanged() {
-}
-
 void Vertex::prepareForFrame_(core::AnimTime /*t*/) {
 }
 

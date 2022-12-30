@@ -51,6 +51,8 @@ private:
     // to be moved to curve.h.
     // array of Vec2d, points at odd indices are the middle control points.
     // maybe better in curve.h
+    //core::Array<geometry::Vec2d> points_;
+    //core::Array<double> widths_;
 };
 
 // generic parameters for all models
@@ -90,7 +92,6 @@ private:
 // inbetweening -> common ancestor for best identification of interest points
 //
 
-// XXX deprecated for new design 2022-12-07
 class VGC_TOPOLOGY_API KeyEdgeGeometry {
 private:
     friend detail::Operations;
@@ -101,10 +102,7 @@ public:
     virtual ~KeyEdgeGeometry() = default;
 
 public:
-    // public api impl
-
-    // `point` must be in object space
-    virtual bool contains(const geometry::Vec2d& /*point*/) = 0;
+    // public api
 
     // vertices in object space
     virtual void
@@ -133,8 +131,7 @@ VGC_DEFINE_FLAGS(
     KeyEdgeInterpolatedPointsGeometryFlags,
     KeyEdgeInterpolatedPointsGeometryFlag)
 
-// XXX deprecated for new design 2022-12-07
-class VGC_TOPOLOGY_API KeyEdgeInterpolatedPointsGeometry {
+class VGC_TOPOLOGY_API KeyEdgeInterpolatedPointsGeometry : public KeyEdgeGeometry {
 private:
     friend detail::Operations;
 
@@ -144,8 +141,6 @@ public:
     virtual ~KeyEdgeInterpolatedPointsGeometry() = default;
 
 public:
-    // public api impl
-
     const geometry::SharedConstVec2dArray& points() const {
         return points_;
     }
@@ -165,6 +160,18 @@ public:
     void setWidths(const core::SharedConstDoubleArray& widths) {
         widths_ = widths;
     }
+
+    // public api impl
+
+    // vertices in object space
+    void
+    snapToVertices(const geometry::Vec2d& start, const geometry::Vec2d& end) override;
+
+    // ideally, for inbetweening we would like a sampling that is good in 2 spaces:
+    // - the common ancestor group space for best morphing
+    // - the canvas space for best rendering
+
+    EdgeBezierQuadSampling computeSampling(const SamplingParameters& parameters) override;
 
 protected:
     //virtual EdgeSampling computeSampling() = 0;

@@ -275,7 +275,7 @@ public:
     /// Throws if the attribute is not a path according to schema.
     ///
     Element*
-    getRefAttribute(core::StringId name, core::StringId tagNameFilter = {}) const;
+    getElementFromPathAttribute(core::StringId name, core::StringId tagNameFilter = {}) const;
 
     /// Sets the value of the given attribute.
     ///
