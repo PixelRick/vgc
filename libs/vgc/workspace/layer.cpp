@@ -22,7 +22,7 @@ geometry::Rect2d Layer::boundingBox() {
     return geometry::Rect2d::empty;
 }
 
-void Layer::onDomElementChanged() {
+void Layer::onDomAttributesChanged() {
 }
 
 void Layer::paint_(

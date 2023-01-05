@@ -18,13 +18,32 @@
 
 namespace vgc::workspace {
 
-void Vertex::onDomElementChanged() {
+geometry::Rect2d KeyVertex::boundingBox(core::AnimTime t) {
+    geometry::Vec2d pos = vacKeyVertex()->position({});
+    return geometry::Rect2d(pos, pos);
 }
 
-void Vertex::prepareForFrame_(core::AnimTime /*t*/) {
+void KeyVertex::onDomAttributesChanged() {
 }
 
-void Vertex::paint_(
+void KeyVertex::paint_(
+    graphics::Engine* /*engine*/,
+    core::AnimTime /*t*/,
+    PaintOptions /*flags*/) {
+}
+
+geometry::Rect2d InbetweenVertex::boundingBox(core::AnimTime t) {
+    geometry::Vec2d pos = vacInbetweenVertex()->position(t);
+    return geometry::Rect2d(pos, pos);
+}
+
+void InbetweenVertex::onDomAttributesChanged() {
+}
+
+void InbetweenVertex::prepareForFrame_(core::AnimTime t) {
+}
+
+void InbetweenVertex::paint_(
     graphics::Engine* /*engine*/,
     core::AnimTime /*t*/,
     PaintOptions /*flags*/) {

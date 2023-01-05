@@ -22,7 +22,7 @@ geometry::Rect2d Element::boundingBox() {
     return geometry::Rect2d::empty;
 }
 
-void Element::onDomElementChanged() {
+void Element::onDomAttributesChanged() {
 }
 
 void Element::prepareForFrame_(core::AnimTime /*t*/) {

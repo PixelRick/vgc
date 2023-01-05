@@ -18,11 +18,11 @@
 
 namespace vgc::workspace {
 
-geometry::Rect2d KeyEdge::boundingBox() {
+geometry::Rect2d KeyEdge::boundingBox(core::AnimTime t) {
     return geometry::Rect2d::empty;
 }
 
-void KeyEdge::onDomElementChanged() {
+void KeyEdge::onDomAttributesChanged() {
 }
 
 void KeyEdge::paint_(

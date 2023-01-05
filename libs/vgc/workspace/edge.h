@@ -54,7 +54,23 @@ struct EdgeGraphics {
     bool inited_ = false;
 };
 
-class VGC_WORKSPACE_API KeyEdge : public Element {
+class VGC_WORKSPACE_API Edge : public Element {
+private:
+    friend class Workspace;
+
+protected:
+    Edge(dom::Element* domElement)
+        : Element(domElement) {
+    }
+
+public:
+    topology::EdgeCell* vacEdge() const {
+        topology::VacNode* n = vacNode();
+        return n ? n->toCellUnchecked()->toEdgeCellUnchecked() : nullptr;
+    }
+};
+
+class VGC_WORKSPACE_API KeyEdge : public Edge {
 private:
     friend class Workspace;
 
@@ -62,9 +78,7 @@ public:
     ~KeyEdge() override = default;
 
     KeyEdge(dom::Element* domElement)
-        : Element(domElement) {
-
-        VGC_DEBUG_TMP("workspace::KeyEdge()");
+        : Edge(domElement) {
     }
 
     topology::KeyEdge* vacKeyEdge() const {
@@ -73,9 +87,9 @@ public:
     }
 
 protected:
-    geometry::Rect2d boundingBox() override;
+    geometry::Rect2d boundingBox(core::AnimTime t) override;
 
-    void onDomElementChanged() override;
+    void onDomAttributesChanged() override;
 
     void paint_(
         graphics::Engine* engine,

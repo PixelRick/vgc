@@ -30,27 +30,76 @@ class VGC_WORKSPACE_API Vertex : public Element {
 private:
     friend class Workspace;
 
-public:
-    ~Vertex() override = default;
-
+protected:
     Vertex(dom::Element* domElement)
         : Element(domElement) {
     }
 
+public:
     topology::VertexCell* vacVertex() const {
         topology::VacNode* n = vacNode();
         return n ? n->toCellUnchecked()->toVertexCellUnchecked() : nullptr;
     }
+};
+
+class VGC_WORKSPACE_API KeyVertex : public Vertex {
+private:
+    friend class Workspace;
+
+public:
+    ~KeyVertex() override = default;
+
+    KeyVertex(dom::Element* domElement)
+        : Vertex(domElement) {
+    }
+
+    topology::KeyVertex* vacKeyVertex() const {
+        topology::VacNode* n = vacNode();
+        return n ? n->toCellUnchecked()->toKeyVertexUnchecked() : nullptr;
+    }
 
 protected:
-    void onDomElementChanged() override;
+    geometry::Rect2d boundingBox(core::AnimTime t) override;
 
-    void prepareForFrame_(core::AnimTime t) override;
+    void onDomAttributesChanged() override;
 
     void paint_(
         graphics::Engine* engine,
         core::AnimTime t,
         PaintOptions flags = PaintOption::None) override;
+
+private:
+};
+
+class VGC_WORKSPACE_API InbetweenVertex : public Vertex {
+private:
+    friend class Workspace;
+
+public:
+    ~InbetweenVertex() override = default;
+
+    InbetweenVertex(dom::Element* domElement)
+        : Vertex(domElement) {
+    }
+
+    topology::InbetweenVertex* vacInbetweenVertex() const {
+        topology::VacNode* n = vacNode();
+        return n ? n->toCellUnchecked()->toInbetweenVertexUnchecked() : nullptr;
+    }
+
+protected:
+    geometry::Rect2d boundingBox(core::AnimTime t) override;
+
+    void onDomAttributesChanged() override;
+
+    void prepareForFrame_(core::AnimTime t = {}) override;
+
+    void paint_(
+        graphics::Engine* engine,
+        core::AnimTime t,
+        PaintOptions flags = PaintOption::None) override;
+
+private:
 };
 
 } // namespace vgc::workspace

@@ -170,9 +170,9 @@ public:
     }
 
 protected:
-    virtual geometry::Rect2d boundingBox();
+    virtual geometry::Rect2d boundingBox(core::AnimTime t = {});
 
-    virtual void onDomElementChanged();
+    virtual void onDomAttributesChanged();
 
     virtual void prepareForFrame_(core::AnimTime t = {});
 
