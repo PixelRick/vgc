@@ -40,7 +40,7 @@ geometry::Rect2d Element::boundingBox(core::AnimTime /*t*/) const {
     return geometry::Rect2d::empty;
 }
 
-void Element::updateFromDom_(Workspace* workspace) {
+void Element::updateFromDom_(Workspace* /*workspace*/) {
 }
 
 void Element::prepareForFrame_(core::AnimTime /*t*/) {
