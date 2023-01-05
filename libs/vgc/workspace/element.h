@@ -29,6 +29,7 @@
 #include <vgc/topology/operations.h>
 #include <vgc/topology/vac.h>
 #include <vgc/workspace/api.h>
+#include <vgc/workspace/logcategories.h>
 
 namespace vgc::workspace {
 
@@ -86,25 +87,25 @@ enum class ElementFlag : UInt16 {
 };
 VGC_DEFINE_FLAGS(ElementFlags, ElementFlag)
 
+class Workspace;
+class VacElement;
+
 class VGC_WORKSPACE_API Element : public topology::detail::TreeNodeBase<Element> {
 private:
-    friend class Workspace;
+    friend Workspace;
+    friend VacElement;
 
     using Base = topology::detail::TreeNodeBase<Element>;
+
+protected:
+    Element(dom::Element* domElement)
+        : domElement_(domElement) {
+    }
 
 public:
     virtual ~Element() = default;
 
-    Element(dom::Element* domElement)
-        : domElement_(domElement)
-        , vacNode_(nullptr) {
-    }
-
 public:
-    Element* parent() const {
-        return Base::parent();
-    }
-
     core::Id id() const {
         return id_;
     }
@@ -114,10 +115,11 @@ public:
         return domElement_;
     }
 
-    // the returned pointer can be dangling if the workspace is not synced with its vac
-    topology::VacNode* vacNode() const {
-        return vacNode_;
+    bool isVacElement() const {
+        return isVacElement_;
     }
+
+    inline topology::VacNode* vacNode() const;
 
     core::StringId tagName() const {
         return domElement_->tagName();
@@ -127,6 +129,12 @@ public:
         return flags_;
     }
 
+    Element* parent() const {
+        return Base::parent();
+    }
+
+    inline VacElement* parentVacElement() const;
+
     Element* previous() const {
         return Base::previous();
     }
@@ -135,7 +143,7 @@ public:
         return Base::next();
     }
 
-    Element* nextVacElement() const {
+    VacElement* nextVacElement() const {
         Element* e = next();
         return findFirstSiblingVacElement_(e);
     }
@@ -146,7 +154,7 @@ public:
         return Base::firstChild();
     }
 
-    Element* firstChildVacElement() const {
+    VacElement* firstChildVacElement() const {
         Element* e = firstChild();
         return findFirstSiblingVacElement_(e);
     }
@@ -161,25 +169,28 @@ public:
         return Base::numChildren();
     }
 
+    // XXX keep workspace pointer in element ?
+    bool updateFromDom(Workspace* workspace);
+
     void paint(
         graphics::Engine* engine,
         core::AnimTime t = {},
-        PaintOptions flags = PaintOption::None) {
+        PaintOptions flags = PaintOption::None) const {
 
         paint_(engine, t, flags);
     }
 
 protected:
-    virtual geometry::Rect2d boundingBox(core::AnimTime t = {});
+    virtual geometry::Rect2d boundingBox(core::AnimTime t = {}) const;
 
-    virtual void onDomAttributesChanged();
+    virtual void updateFromDom_(Workspace* workspace);
 
     virtual void prepareForFrame_(core::AnimTime t = {});
 
     virtual void paint_(
         graphics::Engine* engine,
         core::AnimTime t = {},
-        PaintOptions flags = PaintOption::None);
+        PaintOptions flags = PaintOption::None) const;
 
 private:
     // uniquely identifies an element
@@ -187,32 +198,61 @@ private:
     core::Id id_ = -1;
 
     // this pointer is not safe to use when tree is not synced with dom
-    dom::Element* domElement_ = nullptr;
-    // this pointer is not safe to use when tree is not synced with vac
-    topology::VacNode* vacNode_ = nullptr;
+    dom::Element* domElement_;
+    core::Id domVersion_ = {};
 
     ElementFlags flags_;
+    bool isVacElement_ = false;
+    bool isBeingUpdated_ = false;
 
-    static Element* findFirstSiblingVacElement_(Element* start) {
-        topology::VacNode* n = nullptr;
-        Element* e = start;
-        if (e) {
-            n = e->vacNode();
-            while (!n && e) {
-                e = e->next();
-                n = e->vacNode();
-            }
-        }
-        return e;
-    }
+    static VacElement* findFirstSiblingVacElement_(Element* start);
+};
 
-    void removeVacNode_() {
-        if (vacNode_) {
-            topology::ops::removeNode(vacNode_, false);
-            vacNode_ = nullptr;
-        }
+class VGC_WORKSPACE_API UnknownElement final : public Element {
+private:
+    friend class Workspace;
+
+public:
+    ~UnknownElement() override = default;
+
+    UnknownElement(dom::Element* domElement)
+        : Element(domElement) {
     }
 };
+
+class VGC_WORKSPACE_API VacElement : public Element {
+private:
+    friend class Workspace;
+
+public:
+    ~VacElement() override;
+
+    VacElement(dom::Element* domElement)
+        : Element(domElement)
+        , vacNode_(nullptr) {
+
+        isVacElement_ = true;
+    }
+
+public:
+    // the returned pointer can be dangling if the workspace is not synced with its vac
+    topology::VacNode* vacNode() const {
+        return vacNode_;
+    }
+
+protected:
+    // this pointer is not safe to use when tree is not synced with vac
+    topology::VacNode* vacNode_ = nullptr;
+};
+
+topology::VacNode* Element::vacNode() const {
+    return isVacElement() ? static_cast<const VacElement*>(this)->vacNode() : nullptr;
+}
+
+VacElement* Element::parentVacElement() const {
+    Element* e = parent();
+    return e->isVacElement() ? static_cast<VacElement*>(e) : nullptr;
+}
 
 } // namespace vgc::workspace
 

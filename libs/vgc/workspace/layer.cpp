@@ -15,20 +15,36 @@
 // limitations under the License.
 
 #include <vgc/workspace/layer.h>
+#include <vgc/workspace/workspace.h>
 
 namespace vgc::workspace {
 
-geometry::Rect2d Layer::boundingBox() {
+geometry::Rect2d Layer::boundingBox(core::AnimTime /*t*/) const {
+    // todo, union of children
     return geometry::Rect2d::empty;
 }
 
-void Layer::onDomAttributesChanged() {
+void Layer::updateFromDom_(Workspace* /*workspace*/) {
+    dom::Element* const domElement = this->domElement();
+
+    topology::VacGroup* g = nullptr;
+    if (!vacNode_) {
+        g = topology::ops::createVacGroup(
+            domElement->internalId(), parentVacElement()->vacNode()->toGroupUnchecked());
+        vacNode_ = g;
+    }
+    else {
+        g = vacNode()->toCellUnchecked()->toGroupUnchecked();
+    }
+
+    // todo: set attributes
+    // ...
 }
 
 void Layer::paint_(
     graphics::Engine* /*engine*/,
     core::AnimTime /*t*/,
-    PaintOptions /*flags*/) {
+    PaintOptions /*flags*/) const {
 }
 
 } // namespace vgc::workspace

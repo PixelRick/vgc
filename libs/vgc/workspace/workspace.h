@@ -78,9 +78,18 @@ public:
         return it != elements_.end() ? it->second.get() : nullptr;
     }
 
+    Element* find(const dom::Element* e) const {
+        return e ? find(e->internalId()) : nullptr;
+    }
+
     void sync();
     void rebuildFromDom();
     //void rebuildFromVac();
+
+    Element* getElementFromPathAttribute(
+        dom::Element* domElement,
+        core::StringId attrName,
+        core::StringId tagNameFilter = {}) const;
 
     VGC_SIGNAL(changed);
 
@@ -89,11 +98,6 @@ public:
     VGC_SLOT(onVacNodeAboutToBeRemoved, onVacNodeAboutToBeRemoved_);
 
 protected:
-    Element* getElementFromPathAttribute(
-        dom::Element* domElement,
-        core::StringId attrName,
-        core::StringId tagNameFilter = {}) const;
-
     virtual void onDocumentDiff_(const dom::Diff& diff);
     virtual void onVacDiff_(const topology::VacDiff& diff);
 
@@ -101,7 +105,7 @@ private:
     static std::unordered_map<core::StringId, ElementCreator>& elementCreators();
 
     std::unordered_map<core::Id, std::unique_ptr<Element>> elements_;
-    Element* vgcElement_;
+    VacElement* vgcElement_;
 
     Element* createAppendElement_(dom::Element* domElement, Element* parent);
 
@@ -123,11 +127,11 @@ private:
     void rebuildTreeFromVac_();
     void rebuildVacFromTree_();
 
-    void rebuildVacGroup_(Element* e);
-    void rebuildKeyVertex_(Element* e);
-    bool rebuildKeyEdge_(Element* e, bool force = false);
+    //void rebuildVacGroup_(Element* e);
+    //void rebuildKeyVertex_(Element* e);
+    //bool rebuildKeyEdge_(Element* e, bool force = false);
 
-    bool haveKeyEdgeBoundaryPathsChanged_(Element* e);
+    //bool haveKeyEdgeBoundaryPathsChanged_(Element* e);
 
     void updateVacHierarchyFromTree_();
 

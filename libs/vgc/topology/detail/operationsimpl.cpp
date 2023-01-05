@@ -202,8 +202,8 @@ void Operations::removeNode(VacNode* node, bool removeFreeVertices) {
 
     if (removeFreeVertices) {
         // it requires a second pass since inbetween vertices are in star of key vertices
-        for (VacNode* node : freeInbetweenVertices) {
-            VacCell* cell = node->toCellUnchecked();
+        for (VacNode* vn : freeInbetweenVertices) {
+            VacCell* cell = vn->toCellUnchecked();
             for (VacCell* boundaryCell : cell->boundary()) {
                 if (boundaryCell->isBeingDestroyed_) {
                     continue;
@@ -232,7 +232,7 @@ void Operations::removeNode(VacNode* node, bool removeFreeVertices) {
             }
             diff.onNodeRemoved(n);
         }
-        node->unlink();
+        n->unlink();
         vac->nodes_.erase(n->id());
     }
 
@@ -248,7 +248,7 @@ void Operations::removeNode(VacNode* node, bool removeFreeVertices) {
     }
 }
 
-void Operations::removeNodeSmart(VacNode* node, bool removeFreeVertices) {
+void Operations::removeNodeSmart(VacNode* /*node*/, bool /*removeFreeVertices*/) {
     // todo later
     throw core::RuntimeError("not implemented");
 }

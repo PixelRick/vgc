@@ -19,14 +19,14 @@
 namespace vgc::topology {
 
 void KeyEdgeInterpolatedPointsGeometry::snapToVertices(
-    const geometry::Vec2d& start,
-    const geometry::Vec2d& end) {
+    const geometry::Vec2d& /*start*/,
+    const geometry::Vec2d& /*end*/) {
 
     //
 }
 
-EdgeBezierQuadSampling
-KeyEdgeInterpolatedPointsGeometry::computeSampling(const SamplingParameters& parameters) {
+EdgeBezierQuadSampling KeyEdgeInterpolatedPointsGeometry::computeSampling(
+    const SamplingParameters& /*parameters*/) {
     //
     return EdgeBezierQuadSampling(core::genId());
 }

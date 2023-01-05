@@ -24,6 +24,7 @@
 #include <vgc/topology/vac.h>
 #include <vgc/workspace/api.h>
 #include <vgc/workspace/element.h>
+#include <vgc/workspace/vertex.h>
 
 namespace vgc::workspace {
 
@@ -54,13 +55,13 @@ struct EdgeGraphics {
     bool inited_ = false;
 };
 
-class VGC_WORKSPACE_API Edge : public Element {
+class VGC_WORKSPACE_API Edge : public VacElement {
 private:
     friend class Workspace;
 
 protected:
     Edge(dom::Element* domElement)
-        : Element(domElement) {
+        : VacElement(domElement) {
     }
 
 public:
@@ -87,14 +88,14 @@ public:
     }
 
 protected:
-    geometry::Rect2d boundingBox(core::AnimTime t) override;
+    geometry::Rect2d boundingBox(core::AnimTime t) const override;
 
-    void onDomAttributesChanged() override;
+    void updateFromDom_(Workspace* workspace) override;
 
     void paint_(
         graphics::Engine* engine,
         core::AnimTime t,
-        PaintOptions flags = PaintOption::None) override;
+        PaintOptions flags = PaintOption::None) const override;
 
 private:
     // need an invalidation mechanism

@@ -15,38 +15,54 @@
 // limitations under the License.
 
 #include <vgc/workspace/vertex.h>
+#include <vgc/workspace/workspace.h>
 
 namespace vgc::workspace {
 
-geometry::Rect2d KeyVertex::boundingBox(core::AnimTime t) {
+geometry::Rect2d KeyVertex::boundingBox(core::AnimTime /*t*/) const {
     geometry::Vec2d pos = vacKeyVertex()->position({});
     return geometry::Rect2d(pos, pos);
 }
 
-void KeyVertex::onDomAttributesChanged() {
+void KeyVertex::updateFromDom_(Workspace* /*workspace*/) {
+    namespace ds = dom::strings;
+    dom::Element* const domElement = this->domElement();
+
+    topology::KeyVertex* kv = nullptr;
+    if (!vacNode_) {
+        kv = topology::ops::createKeyVertex(
+            domElement->internalId(), parentVacElement()->vacNode()->toGroupUnchecked());
+        vacNode_ = kv;
+    }
+    else {
+        kv = vacNode_->toCellUnchecked()->toKeyVertexUnchecked();
+    }
+
+    const auto& position = domElement->getAttribute(ds::position).getVec2d();
+    topology::ops::setKeyVertexPosition(kv, position);
 }
 
 void KeyVertex::paint_(
     graphics::Engine* /*engine*/,
     core::AnimTime /*t*/,
-    PaintOptions /*flags*/) {
+    PaintOptions /*flags*/) const {
 }
 
-geometry::Rect2d InbetweenVertex::boundingBox(core::AnimTime t) {
+geometry::Rect2d InbetweenVertex::boundingBox(core::AnimTime t) const {
     geometry::Vec2d pos = vacInbetweenVertex()->position(t);
     return geometry::Rect2d(pos, pos);
 }
 
-void InbetweenVertex::onDomAttributesChanged() {
+void InbetweenVertex::updateFromDom_(Workspace* /*workspace*/) {
 }
 
-void InbetweenVertex::prepareForFrame_(core::AnimTime t) {
+void InbetweenVertex::prepareForFrame_(core::AnimTime /*t*/) {
 }
 
 void InbetweenVertex::paint_(
     graphics::Engine* /*engine*/,
     core::AnimTime /*t*/,
-    PaintOptions /*flags*/) {
+    PaintOptions /*flags*/) const {
 }
 
 } // namespace vgc::workspace

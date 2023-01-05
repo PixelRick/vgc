@@ -168,6 +168,8 @@ WorkspacePtr Workspace::create(dom::DocumentPtr document) {
     namespace ds = dom::strings;
 
     std::call_once(initOnceFlag, []() {
+        registerElementClass(ds::vertex, &makeUniqueElement<KeyVertex>);
+        //registerElementClass(ds::edge, &makeUniqueElement<KeyEdge>);
         registerElementClass(ds::edge, &makeUniqueElement<KeyEdge>);
     });
 
@@ -275,14 +277,12 @@ Element* Workspace::createAppendElement_(dom::Element* domElement, Element* pare
                 LogVgcWorkspace,
                 "Element creator for \"{}\" failed to create the element.",
                 domElement->tagName());
-            // XXX throw or fallback to ErrorElement or nullptr ?
-            // XXX use ErrorElement (to be displayed as an error in the outliner)
-            u = std::make_unique<Element>(domElement);
+            // XXX throw or fallback to UnknownElement or nullptr ?
+            u = std::make_unique<UnknownElement>(domElement);
         }
     }
     else {
-        // XXX use ErrorElement (to be displayed as an error in the outliner)
-        u = std::make_unique<Element>(domElement);
+        u = std::make_unique<UnknownElement>(domElement);
     }
 
     Element* e = u.get();
@@ -303,7 +303,10 @@ Element* Workspace::createAppendElement_(dom::Element* domElement, Element* pare
 void Workspace::onVacNodeAboutToBeRemoved_(topology::VacNode* node) {
     auto it = elements_.find(node->id());
     if (it != elements_.end()) {
-        it->second->vacNode_ = nullptr;
+        Element* e = it->second.get();
+        if (e->isVacElement()) {
+            static_cast<VacElement*>(e)->vacNode_ = nullptr;
+        }
     }
 }
 
@@ -396,7 +399,10 @@ void Workspace::rebuildTreeFromDom_() {
     if (!domVgcElement || domVgcElement->tagName() != ds::vgc) {
         return;
     }
-    vgcElement_ = createAppendElement_(domVgcElement, nullptr);
+
+    Element* vgcElement = createAppendElement_(domVgcElement, nullptr);
+    VGC_ASSERT(vgcElement->isVacElement());
+    vgcElement_ = static_cast<VacElement*>(vgcElement);
 
     Element* p = nullptr;
     Element* e = vgcElement_;
@@ -435,24 +441,32 @@ void Workspace::rebuildVacFromTree_() {
     vac_->clear();
     lastSyncedVacVersion_ = -1;
 
+    vgcElement_->vacNode_ = vac_->rootGroup();
+
     // all workspace elements vac node pointers should be null
     // thanks to `onVacNodeAboutToBeRemoved`
 
-    detail::VacElementLists ce;
-    fillVacElementListsUsingTagName_(vgcElement_, ce);
+    //detail::VacElementLists ce;
+    //fillVacElementListsUsingTagName_(vgcElement_, ce);
+    //
+    //for (Element* e : ce.groups) {
+    //    e->updateFromDom();
+    //}
+    //
+    //for (Element* e : ce.keyVertices) {
+    //    e->updateFromDom();
+    //}
+    //
+    //for (Element* e : ce.keyEdges) {
+    //    e->updateFromDom();
+    //}
 
-    vgcElement_->vacNode_ = vac_->rootGroup();
-
-    for (Element* e : ce.groups) {
-        rebuildVacGroup_(e);
-    }
-
-    for (Element* e : ce.keyVertices) {
-        rebuildKeyVertex_(e);
-    }
-
-    for (Element* e : ce.keyEdges) {
-        rebuildKeyEdge_(e, true);
+    Element* root = vgcElement_->firstChild();
+    Element* e = root->firstChild();
+    Int depth = 1;
+    while (e) {
+        e->updateFromDom(this);
+        iterDfsPreOrder(e, depth, root);
     }
 
     updateVacHierarchyFromTree_();
@@ -473,7 +487,7 @@ void Workspace::updateVacHierarchyFromTree_() {
         }
 
         if (node->isGroup()) {
-            Element* child = e->firstChildVacElement();
+            VacElement* child = e->firstChildVacElement();
             if (child) {
                 topology::VacGroup* g = static_cast<topology::VacGroup*>(node);
                 topology::ops::moveToGroup(child->vacNode(), g, g->firstChild());
@@ -481,7 +495,7 @@ void Workspace::updateVacHierarchyFromTree_() {
         }
 
         if (e->parent()) {
-            Element* next = e->nextVacElement();
+            VacElement* next = e->nextVacElement();
             topology::ops::moveToGroup(
                 node, node->parentGroup(), (next ? next->vacNode() : nullptr));
         }
@@ -490,155 +504,38 @@ void Workspace::updateVacHierarchyFromTree_() {
     }
 }
 
-void Workspace::rebuildVacGroup_(Element* e) {
-    dom::Element* const domElem = e->domElement();
-
-    e->removeVacNode_();
-
-    topology::VacGroup* g = topology::ops::createVacGroup(
-        domElem->internalId(), e->parent()->vacNode()->toGroupUnchecked());
-    e->vacNode_ = g;
-
-    // todo: set attributes
-    // ...
-}
-
-void Workspace::rebuildKeyVertex_(Element* e) {
-
-    namespace ds = dom::strings;
-    dom::Element* const domElem = e->domElement();
-
-    e->removeVacNode_();
-
-    topology::KeyVertex* kv = topology::ops::createKeyVertex(
-        domElem->internalId(), e->parent()->vacNode()->toGroupUnchecked());
-    e->vacNode_ = kv;
-
-    const auto& position = domElem->getAttribute(ds::position).getVec2d();
-    topology::ops::setKeyVertexPosition(kv, position);
-}
-
-bool Workspace::rebuildKeyEdge_(Element* e, bool force) {
-
-    namespace ds = dom::strings;
-    dom::Element* const domElem = e->domElement();
-
-    bool rebuilt = false;
-
-    topology::VacNode* oldVacNode = e->vacNode();
-    topology::KeyEdge* oldKe = nullptr;
-    topology::KeyVertex* oldKv0 = nullptr;
-    topology::KeyVertex* oldKv1 = nullptr;
-    if (oldVacNode) {
-        oldKe = oldVacNode->toCellUnchecked()->toKeyEdgeUnchecked();
-        oldKv0 = oldKe->startVertex();
-        oldKv1 = oldKe->endVertex();
-    }
-
-    Element* ev0 = getElementFromPathAttribute(domElem, ds::startvertex, ds::vertex);
-    Element* ev1 = getElementFromPathAttribute(domElem, ds::endvertex, ds::vertex);
-    if (!ev0) {
-        ev0 = ev1;
-    }
-    if (!ev1) {
-        ev1 = ev0;
-    }
-
-    topology::KeyEdge* ke = nullptr;
-    if (ev0) {
-        topology::KeyVertex* kv0 =
-            ev0->vacNode()->toCellUnchecked()->toKeyVertexUnchecked();
-        topology::KeyVertex* kv1 =
-            ev1->vacNode()->toCellUnchecked()->toKeyVertexUnchecked();
-
-        if (oldKe) {
-            if (!force && ev0->vacNode() == oldKv0 && ev1->vacNode() == oldKv1) {
-                // key edge already built with required boundary
-                ke = oldKe;
-            }
-            else {
-                topology::ops::removeNode(oldKe, false);
-                e->vacNode_ = nullptr;
-            }
-        }
-
-        if (!ke) {
-            ke = topology::ops::createKeyEdge(
-                domElem->internalId(),
-                e->parent()->vacNode()->toGroupUnchecked(),
-                kv0,
-                kv1);
-            e->vacNode_ = ke;
-            rebuilt = true;
-        }
-    }
-    else {
-        if (oldKe) {
-            if (!force && !oldKv0 && !oldKv1) {
-                // key edge already built with required boundary
-                ke = oldKe;
-            }
-            else {
-                topology::ops::removeNode(oldKe, false);
-                e->vacNode_ = nullptr;
-            }
-        }
-
-        if (!ke) {
-            ke = topology::ops::createKeyClosedEdge(
-                domElem->internalId(), e->parent()->vacNode()->toGroupUnchecked());
-            rebuilt = true;
-        }
-    }
-    e->vacNode_ = ke;
-
-    const auto& points = domElem->getAttribute(ds::positions).getVec2dArray();
-    const auto& widths = domElem->getAttribute(ds::widths).getDoubleArray();
-
-    // these do nothing if the data didn't change
-    topology::ops::setKeyEdgeCurvePoints(ke, points);
-    topology::ops::setKeyEdgeCurveWidths(ke, widths);
-
-    // XXX should we snap here ?
-    //     group view matrices may not be ready..
-    //     maybe we could add two init functions to workspace::Element
-    //     one for intrinsic data, one for dependent data.
-
-    return rebuilt;
-}
-
-bool Workspace::haveKeyEdgeBoundaryPathsChanged_(Element* e) {
-    topology::VacNode* node = e->vacNode();
-    if (!node) {
-        return false;
-    }
-
-    namespace ds = dom::strings;
-    dom::Element* const domElem = e->domElement();
-
-    Element* ev0 = getElementFromPathAttribute(domElem, ds::startvertex, ds::vertex);
-    Element* ev1 = getElementFromPathAttribute(domElem, ds::endvertex, ds::vertex);
-
-    topology::KeyEdge* kv = node->toCellUnchecked()->toKeyEdgeUnchecked();
-    if (ev0) {
-        if (ev0->vacNode() != kv->startVertex()) {
-            return true;
-        }
-    }
-    else if (kv->startVertex()) {
-        return true;
-    }
-    if (ev1) {
-        if (ev1->vacNode() != kv->endVertex()) {
-            return true;
-        }
-    }
-    else if (kv->endVertex()) {
-        return true;
-    }
-
-    return false;
-}
+//bool Workspace::haveKeyEdgeBoundaryPathsChanged_(Element* e) {
+//    topology::VacNode* node = e->vacNode();
+//    if (!node) {
+//        return false;
+//    }
+//
+//    namespace ds = dom::strings;
+//    dom::Element* const domElem = e->domElement();
+//
+//    Element* ev0 = getElementFromPathAttribute(domElem, ds::startvertex, ds::vertex);
+//    Element* ev1 = getElementFromPathAttribute(domElem, ds::endvertex, ds::vertex);
+//
+//    topology::KeyEdge* kv = node->toCellUnchecked()->toKeyEdgeUnchecked();
+//    if (ev0) {
+//        if (ev0->vacNode() != kv->startVertex()) {
+//            return true;
+//        }
+//    }
+//    else if (kv->startVertex()) {
+//        return true;
+//    }
+//    if (ev1) {
+//        if (ev1->vacNode() != kv->endVertex()) {
+//            return true;
+//        }
+//    }
+//    else if (kv->endVertex()) {
+//        return true;
+//    }
+//
+//    return false;
+//}
 
 void Workspace::updateTreeAndVacFromDom_(const dom::Diff& diff) {
     if (!document_) {
@@ -674,16 +571,7 @@ void Workspace::updateTreeAndVacFromDom_(const dom::Diff& diff) {
         if (!domElement) {
             continue;
         }
-
-        auto it = elements_.find(domElement->internalId());
-        if (it == elements_.end()) {
-            continue;
-        }
-
-        Element* e = it->second.get();
-        e->removeVacNode_();
-
-        elements_.erase(it);
+        elements_.erase(domElement->internalId());
     }
 
     // next create everything
@@ -696,7 +584,7 @@ void Workspace::updateTreeAndVacFromDom_(const dom::Diff& diff) {
         if (!domParentElement) {
             continue;
         }
-        Element* parent = find(domParentElement->internalId());
+        Element* parent = find(domParentElement);
         if (!parent) {
             // XXX warn ? createdNodes should be in valid build order
             //            and vgc element should already exist.
@@ -704,50 +592,94 @@ void Workspace::updateTreeAndVacFromDom_(const dom::Diff& diff) {
         }
         // will be reordered afterwards
         Element* e = createAppendElement_(domElement, parent);
+        e->updateFromDom(this);
     }
 
-    // now reorder
-    // todo
+    // now reparent+reorder tree from dom
+    for (dom::Node* n : diff.reparentedNodes()) {
+        dom::Element* domElement = dom::Element::cast(n);
+        if (!domElement) {
+            continue;
+        }
+        dom::Element* domParentElement = domElement->parentElement();
+        Element* e = find(domElement);
+        if (!e) {
+            // XXX error ?
+            continue;
+        }
+        Element* parent = find(domParentElement);
+        if (!parent) {
+            // XXX error ?
+            continue;
+        }
+    }
+
+    // reorder
+    //Element* root = vgcElement_;
+    //Element* e = root;
+    //Int depth = 0;
+    //while (e) {
+    //    topology::VacNode* node = e->vacNode();
+    //    if (!node) {
+    //        continue;
+    //    }
+    //
+    //    if (node->isGroup()) {
+    //        VacElement* child = e->firstChildVacElement();
+    //        if (child) {
+    //            topology::VacGroup* g = static_cast<topology::VacGroup*>(node);
+    //            topology::ops::moveToGroup(child->vacNode(), g, g->firstChild());
+    //        }
+    //    }
+    //
+    //    if (e->parent()) {
+    //        VacElement* next = e->nextVacElement();
+    //        topology::ops::moveToGroup(
+    //            node, node->parentGroup(), (next ? next->vacNode() : nullptr));
+    //    }
+    //
+    //    iterDfsPreOrder(e, depth, root);
+    //}
 
     // problem: there are modified nodes that could need new nodes
     //          and there are new nodes that could need modified nodes
 
-    const auto& modifiedElements = diff.modifiedElements();
-
-    // XXX we have an update order, maybe we could generalize it to
-    //     other and custom elements ?
-
-    detail::VacElementLists ce;
-    fillVacElementListsUsingTagName_(vgcElement_, ce);
-
-    for (Element* e : ce.groups) {
-        if (!e->vacNode()) {
-            rebuildVacGroup_(e);
-        }
-    }
-
-    for (Element* e : ce.keyVertices) {
-        if (!e->vacNode()) {
-            rebuildKeyVertex_(e);
-        }
-    }
-
-    for (Element* e : ce.keyEdges) {
-        // this can remove vac nodes!
-        // it could also required nodes that don't exist yet.
-        rebuildKeyEdge_(e, false);
-    }
-
-    for (const auto& me : diff.modifiedElements()) {
-        dom::Element* domElement = me.first;
-        //const std::set<core::StringId>& attrNames = me.second;
-        //if (attrNames.find(ds::id) != attrNames.end()) {
-        //}
-
-        Element* e = find(domElement->internalId());
-
-        // call virtual update ?
-    }
+    //const auto& modifiedElements = diff.modifiedElements();
+    //
+    //// XXX we have an update order, maybe we could generalize it to
+    ////     other and custom elements ?
+    //
+    //detail::VacElementLists ce;
+    //fillVacElementListsUsingTagName_(vgcElement_, ce);
+    //
+    //for (Element* e : ce.groups) {
+    //    if (!e->vacNode()) {
+    //        rebuildVacGroup_(e);
+    //    }
+    //}
+    //
+    //for (Element* e : ce.keyVertices) {
+    //    if (!e->vacNode()) {
+    //        rebuildKeyVertex_(e);
+    //    }
+    //}
+    //
+    //for (Element* e : ce.keyEdges) {
+    //    // this can remove vac nodes!
+    //    // it could also required nodes that don't exist yet.
+    //    rebuildKeyEdge_(e, false);
+    //}
+    //
+    //for (const auto& me : diff.modifiedElements()) {
+    //    dom::Element* domElement = me.first;
+    //    //const std::set<core::StringId>& attrNames = me.second;
+    //    //if (attrNames.find(ds::id) != attrNames.end()) {
+    //    //}
+    //
+    //    Element* e = find(domElement->internalId());
+    //
+    //    // call virtual update ?
+    //}
 
     // XXX later we could have a map of dependencies in dom directly ?
     //     looking at all Path attributes of a node gives its dependency nodes
@@ -832,7 +764,7 @@ void Workspace::updateTreeAndVacFromDom_(const dom::Diff& diff) {
     //std::set<topology::VacCell*> aliveStar;
 }
 
-void Workspace::updateTreeAndDomFromVac_(const topology::VacDiff& diff) {
+void Workspace::updateTreeAndDomFromVac_(const topology::VacDiff& /*diff*/) {
     if (!document_) {
         VGC_ERROR(LogVgcWorkspace, "DOM is null.")
         return;
@@ -845,7 +777,7 @@ void Workspace::updateTreeAndDomFromVac_(const topology::VacDiff& diff) {
 }
 
 void Workspace::debugPrintTree_() {
-    visitDfsPreOrder(vgcElement_, [](Element* e, Int depth) {
+    visitDfsPreOrder<Element>(vgcElement_, [](Element* e, Int depth) {
         VGC_DEBUG_TMP("{:>{}}<{} id=\"{}\">", "", depth * 2, e->tagName(), e->id());
     });
 }

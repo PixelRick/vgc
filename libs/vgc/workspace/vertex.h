@@ -26,13 +26,13 @@
 
 namespace vgc::workspace {
 
-class VGC_WORKSPACE_API Vertex : public Element {
+class VGC_WORKSPACE_API Vertex : public VacElement {
 private:
     friend class Workspace;
 
 protected:
     Vertex(dom::Element* domElement)
-        : Element(domElement) {
+        : VacElement(domElement) {
     }
 
 public:
@@ -59,14 +59,14 @@ public:
     }
 
 protected:
-    geometry::Rect2d boundingBox(core::AnimTime t) override;
+    geometry::Rect2d boundingBox(core::AnimTime t) const override;
 
-    void onDomAttributesChanged() override;
+    void updateFromDom_(Workspace* workspace) override;
 
     void paint_(
         graphics::Engine* engine,
         core::AnimTime t,
-        PaintOptions flags = PaintOption::None) override;
+        PaintOptions flags = PaintOption::None) const override;
 
 private:
 };
@@ -88,16 +88,15 @@ public:
     }
 
 protected:
-    geometry::Rect2d boundingBox(core::AnimTime t) override;
+    geometry::Rect2d boundingBox(core::AnimTime t) const override;
 
-    void onDomAttributesChanged() override;
-
+    void updateFromDom_(Workspace* workspace) override;
     void prepareForFrame_(core::AnimTime t = {}) override;
 
     void paint_(
         graphics::Engine* engine,
         core::AnimTime t,
-        PaintOptions flags = PaintOption::None) override;
+        PaintOptions flags = PaintOption::None) const override;
 
 private:
 };

@@ -27,7 +27,7 @@
 
 namespace vgc::workspace {
 
-class VGC_WORKSPACE_API Layer : public Element {
+class VGC_WORKSPACE_API Layer : public VacElement {
 private:
     friend class Workspace;
 
@@ -35,18 +35,18 @@ public:
     ~Layer() override = default;
 
     Layer(dom::Element* domElement)
-        : Element(domElement) {
+        : VacElement(domElement) {
     }
 
 protected:
-    geometry::Rect2d boundingBox() override;
+    geometry::Rect2d boundingBox(core::AnimTime t) const override;
 
-    void onDomAttributesChanged() override;
+    void updateFromDom_(Workspace* workspace) override;
 
     void paint_(
         graphics::Engine* engine,
         core::AnimTime t,
-        PaintOptions flags = PaintOption::None) override;
+        PaintOptions flags = PaintOption::None) const override;
 
 private:
 };
