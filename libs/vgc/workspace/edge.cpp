@@ -19,7 +19,7 @@
 
 namespace vgc::workspace {
 
-geometry::Rect2d KeyEdge::boundingBox(core::AnimTime t) const {
+geometry::Rect2d KeyEdge::boundingBox(core::AnimTime /*t*/) const {
     return geometry::Rect2d::empty;
 }
 
@@ -90,11 +90,13 @@ void KeyEdge::updateFromDom_(Workspace* workspace) {
                 domElement->internalId(), parentGroup, kv0, kv1);
         }
         else {
+            // XXX warning if kv0 || kv1 ?
             ke =
                 topology::ops::createKeyClosedEdge(domElement->internalId(), parentGroup);
         }
         vacNode_ = ke;
     }
+    // XXX warning on null parent group ?
 
     if (ke) {
         const auto& points = domElement->getAttribute(ds::positions).getVec2dArray();

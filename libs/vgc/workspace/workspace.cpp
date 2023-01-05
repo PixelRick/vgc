@@ -546,17 +546,7 @@ void Workspace::updateTreeAndVacFromDom_(const dom::Diff& diff) {
 
     VGC_ASSERT(vac_->version() == lastSyncedVacVersion_);
 
-    //namespace ds = dom::strings;
-
     namespace ds = dom::strings;
-
-    /*
-    core::Array<Node*> createdNodes_;
-    core::Array<Node*> removedNodes_;
-    std::set<Node*> reparentedNodes_;
-    std::set<Node*> childrenReorderedNodes_;
-    std::unordered_map<Element*, std::set<core::StringId>> modifiedElements_;
-    */
 
     // impl goal: we want to keep as much cached data as possible.
     //            we want the vac to be valid -> using only its operators
@@ -574,7 +564,7 @@ void Workspace::updateTreeAndVacFromDom_(const dom::Diff& diff) {
         elements_.erase(domElement->internalId());
     }
 
-    // next create everything
+    // create new elements
     for (dom::Node* n : diff.createdNodes()) {
         dom::Element* domElement = dom::Element::cast(n);
         if (!domElement) {
@@ -591,177 +581,45 @@ void Workspace::updateTreeAndVacFromDom_(const dom::Diff& diff) {
             continue;
         }
         // will be reordered afterwards
-        Element* e = createAppendElement_(domElement, parent);
-        e->updateFromDom(this);
+        createAppendElement_(domElement, parent);
     }
 
-    // now reparent+reorder tree from dom
-    for (dom::Node* n : diff.reparentedNodes()) {
+    // update tree hierarchy from dom
+    for (dom::Node* n : diff.childrenReorderedNodes()) {
         dom::Element* domElement = dom::Element::cast(n);
         if (!domElement) {
             continue;
         }
-        dom::Element* domParentElement = domElement->parentElement();
         Element* e = find(domElement);
         if (!e) {
             // XXX error ?
             continue;
         }
-        Element* parent = find(domParentElement);
-        if (!parent) {
-            // XXX error ?
-            continue;
+
+        Element* child = e->firstChild();
+        dom::Element* domChild = domElement->firstChildElement();
+        while (domChild) {
+            if (!child || child->domElement() != domChild) {
+                Element* firstChild = find(domChild);
+                VGC_ASSERT(firstChild);
+                e->insertChildUnchecked(child, firstChild);
+                child = firstChild;
+            }
+            child = child->nextVacElement();
+            domChild = domChild->nextSiblingElement();
         }
     }
 
-    // reorder
-    //Element* root = vgcElement_;
-    //Element* e = root;
-    //Int depth = 0;
-    //while (e) {
-    //    topology::VacNode* node = e->vacNode();
-    //    if (!node) {
-    //        continue;
-    //    }
-    //
-    //    if (node->isGroup()) {
-    //        VacElement* child = e->firstChildVacElement();
-    //        if (child) {
-    //            topology::VacGroup* g = static_cast<topology::VacGroup*>(node);
-    //            topology::ops::moveToGroup(child->vacNode(), g, g->firstChild());
-    //        }
-    //    }
-    //
-    //    if (e->parent()) {
-    //        VacElement* next = e->nextVacElement();
-    //        topology::ops::moveToGroup(
-    //            node, node->parentGroup(), (next ? next->vacNode() : nullptr));
-    //    }
-    //
-    //    iterDfsPreOrder(e, depth, root);
-    //}
+    // update everything (paths may have changed.. etc)
+    Element* root = vgcElement_;
+    Element* e = root;
+    Int depth = 0;
+    while (e) {
+        e->updateFromDom(this);
+        iterDfsPreOrder(e, depth, root);
+    }
 
-    // problem: there are modified nodes that could need new nodes
-    //          and there are new nodes that could need modified nodes
-
-    //const auto& modifiedElements = diff.modifiedElements();
-    //
-    //// XXX we have an update order, maybe we could generalize it to
-    ////     other and custom elements ?
-    //
-    //detail::VacElementLists ce;
-    //fillVacElementListsUsingTagName_(vgcElement_, ce);
-    //
-    //for (Element* e : ce.groups) {
-    //    if (!e->vacNode()) {
-    //        rebuildVacGroup_(e);
-    //    }
-    //}
-    //
-    //for (Element* e : ce.keyVertices) {
-    //    if (!e->vacNode()) {
-    //        rebuildKeyVertex_(e);
-    //    }
-    //}
-    //
-    //for (Element* e : ce.keyEdges) {
-    //    // this can remove vac nodes!
-    //    // it could also required nodes that don't exist yet.
-    //    rebuildKeyEdge_(e, false);
-    //}
-    //
-    //for (const auto& me : diff.modifiedElements()) {
-    //    dom::Element* domElement = me.first;
-    //    //const std::set<core::StringId>& attrNames = me.second;
-    //    //if (attrNames.find(ds::id) != attrNames.end()) {
-    //    //}
-    //
-    //    Element* e = find(domElement->internalId());
-    //
-    //    // call virtual update ?
-    //}
-
-    // XXX later we could have a map of dependencies in dom directly ?
-    //     looking at all Path attributes of a node gives its dependency nodes
-
-    // XXX it becomes tricky with relative paths, we should also check star when reparented
-    // haveKeyEdgeBoundaryPathsChanged_
-
-    // first create everything new
-    // processing order:
-    //
-    //  std::unordered_map<Element*, std::set<core::StringId>> modifiedElements_;
-    //  -> invalidate and delete desynced vac parts.
-    //  -> add the destroyed cells to a pending rebuild and link list.
-    //
-    //  core::Array<Node*> createdNodes_;
-    //  -> but don't link them yet. add
-    //  -> add the destroyed cells to a pending link list.
-    //
-    //  std::unordered_map<Element*, std::set<core::StringId>> modifiedElements_;
-    //  std::set<Node*> reparentedNodes_;
-    //  core::Array<Node*> removedNodes_;
-    //  std::set<Node*> childrenReorderedNodes_;
-    //
-
-    //core::Array<std::unique_ptr<topology::VacCell>> createdCells;
-
-    //for (dom::Node* n : diff.createdNodes()) {
-    //    dom::Element* e = dom::Element::cast(n);
-    //    if (!e) {
-    //        continue;
-    //    }
-    //    if (e->tagName() == ss::vertex) {
-    //        std::unique_ptr<topology::KeyVertex> v =
-    //            topology::ops::createUnlinkedKeyVertex(e->internalId(), core::AnimTime());
-    //        /*
-    //            {"color", core::colors::black},
-    //            {"position", geometry::Vec2d()},
-    //        */
-    //        topology::ops::setKeyVertexPosition(
-    //            v.get(), e->getAttribute(ss::position).getVec2d());
-
-    //        // XXX create graphics obj
-    //    }
-    //    else if (e->tagName() == ss::edge) {
-    //        std::unique_ptr<topology::KeyEdge> v =
-    //            topology::ops::createUnlinkedKeyEdge(e->internalId(), core::AnimTime());
-    //        /*
-    //            {"color", core::colors::black},
-    //            {"positions", geometry::Vec2dArray()},
-    //            {"widths", core::DoubleArray()},
-    //            {"startVertex", dom::Path()},
-    //            {"endVertex", dom::Path()},
-    //        */
-
-    //        // will we deal with scripts here or will dom do it itself ?
-    //    }
-    //    else if (e->tagName() == ss::layer) {
-    //        std::unique_ptr<topology::VacGroup> g =
-    //            topology::ops::createUnlinkedVacGroup(e->internalId());
-    //    }
-    //}
-
-    //for (const auto& me : diff.modifiedElements()) {
-    //    dom::Element* e = me.first;
-    //    const std::set<core::StringId>& attrs = me.second;
-    //    if (!e) {
-    //        continue;
-    //    }
-    //    if (e->tagName() == ss::vertex) {
-    //        //
-    //    }
-    //    else if (e->tagName() == ss::edge) {
-    //        // What if startVertex or endVertex changes ?
-    //        // It is not really a valid vac operation.
-    //        //
-    //    }
-    //    else if (e->tagName() == ss::layer) {
-    //        //
-    //    }
-    //}
-
-    //std::set<topology::VacCell*> aliveStar;
+    updateVacHierarchyFromTree_();
 }
 
 void Workspace::updateTreeAndDomFromVac_(const topology::VacDiff& /*diff*/) {
