@@ -27,6 +27,12 @@
 
 namespace vgc::dom {
 
+/// \class vgc::dom::Optional
+/// \brief Used to define an optional attribute.
+///
+template<typename T>
+class Optional {};
+
 /// \class vgc::dom::AttributeSpec
 /// \brief Specifies the name and default value of a built-in attribute.
 ///
@@ -53,7 +59,7 @@ public:
     /// Creates a built-in attribute.
     ///
     template<typename T, VGC_REQUIRES(dom::isCompatibleValueType<T>)>
-    AttributeSpec(std::string_view name, const std::optional<T>& /*optionalValue*/)
+    AttributeSpec(std::string_view name, const Optional<T>& /*optionalValue*/)
         : name_(core::StringId(name))
         , defaultValue_(Value::none())
         , valueType_(ValueType::Invalid) {

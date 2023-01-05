@@ -113,8 +113,8 @@ const Schema& schema() {
             {"color", core::colors::black},
             {"positions", geometry::Vec2dArray()},
             {"widths", core::DoubleArray()},
-            {"startvertex", std::optional<dom::Path>()},
-            {"endvertex", std::optional<dom::Path>()},
+            {"startvertex", NoneOr<Path>()},
+            {"endvertex", NoneOr<Path>()},
         }},
         { "user", {
             // No attributes

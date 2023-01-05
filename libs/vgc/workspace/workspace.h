@@ -105,6 +105,8 @@ private:
     static std::unordered_map<core::StringId, ElementCreator>& elementCreators();
 
     std::unordered_map<core::Id, std::unique_ptr<Element>> elements_;
+    core::Array<Element*> elementsWithInvalidAttributes_;
+
     VacElement* vgcElement_;
 
     Element* createAppendElement_(dom::Element* domElement, Element* parent);

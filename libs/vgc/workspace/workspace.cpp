@@ -277,12 +277,12 @@ Element* Workspace::createAppendElement_(dom::Element* domElement, Element* pare
                 LogVgcWorkspace,
                 "Element creator for \"{}\" failed to create the element.",
                 domElement->tagName());
-            // XXX throw or fallback to UnknownElement or nullptr ?
-            u = std::make_unique<UnknownElement>(domElement);
+            // XXX throw or fallback to UnsupportedElement or nullptr ?
+            u = std::make_unique<UnsupportedElement>(domElement);
         }
     }
     else {
-        u = std::make_unique<UnknownElement>(domElement);
+        u = std::make_unique<UnsupportedElement>(domElement);
     }
 
     Element* e = u.get();

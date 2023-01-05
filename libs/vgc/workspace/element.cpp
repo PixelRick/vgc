@@ -26,12 +26,11 @@ bool Element::updateFromDom(Workspace* workspace) {
         return false;
     }
     // if not already up-to-date
-    core::Id domVersion = domElement()->document()->versionId();
-    if (domVersion_ != domVersion) {
+    if (!inSyncWithDom_) {
         isBeingUpdated_ = true;
         updateFromDom_(workspace);
         isBeingUpdated_ = false;
-        domVersion_ = domVersion;
+        inSyncWithDom_ = true;
     }
     return true;
 }

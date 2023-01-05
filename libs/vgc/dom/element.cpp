@@ -124,18 +124,22 @@ Element* Element::getElementFromPathAttribute(
     core::StringId tagNameFilter) const {
 
     const dom::Value& value = getAttribute(name);
+    const dom::Path* pathPtr = nullptr;
 
-    // handle optional attribute
-    // XXX we should check value type too
-    if (value.isNone()) {
-        return nullptr;
+    if (value.type() == dom::ValueType::NoneOrPath) {
+        const dom::NoneOr<dom::Path>& noneOrPath = value.getNoneOrPath();
+        if (!noneOrPath.has_value()) {
+            return nullptr;
+        }
+        pathPtr = &noneOrPath.value();
+    }
+    else {
+        // cast as path and throws if it is not one
+        pathPtr = &value.getPath();
     }
 
-    // cast as path and throws if it is not one
-    const dom::Path& path = value.getPath();
-
     // resolve path (relative to this element if the path is relative
-    dom::Element* element = elementFromPath(path);
+    dom::Element* element = elementFromPath(*pathPtr);
 
     if (!element) {
         VGC_WARNING(
@@ -143,7 +147,7 @@ Element* Element::getElementFromPathAttribute(
             "Path in attribute `{}` of element `{}` could not be resolved ({}).",
             name,
             tagName(),
-            path);
+            *pathPtr);
         return nullptr;
     }
 

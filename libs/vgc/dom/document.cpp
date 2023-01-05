@@ -847,6 +847,7 @@ bool Document::emitPendingDiff() {
         NodeRelatives newRelatives(node);
         if (oldRelatives.parent_ != newRelatives.parent_) {
             pendingDiff_.reparentedNodes_.insert(node);
+            //pendingDiff_.childrenReorderedNodes_.insert(newRelatives.parent_);
         }
         else if (
             oldRelatives.nextSibling_ != newRelatives.nextSibling_

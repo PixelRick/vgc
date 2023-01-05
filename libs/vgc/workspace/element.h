@@ -199,23 +199,24 @@ private:
 
     // this pointer is not safe to use when tree is not synced with dom
     dom::Element* domElement_;
-    core::Id domVersion_ = {};
+    bool inSyncWithDom_ = false;
 
     ElementFlags flags_;
     bool isVacElement_ = false;
+    bool hasInvalidAttributes_ = false;
     bool isBeingUpdated_ = false;
 
     static VacElement* findFirstSiblingVacElement_(Element* start);
 };
 
-class VGC_WORKSPACE_API UnknownElement final : public Element {
+class VGC_WORKSPACE_API UnsupportedElement final : public Element {
 private:
     friend class Workspace;
 
 public:
-    ~UnknownElement() override = default;
+    ~UnsupportedElement() override = default;
 
-    UnknownElement(dom::Element* domElement)
+    UnsupportedElement(dom::Element* domElement)
         : Element(domElement) {
     }
 };
