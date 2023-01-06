@@ -49,6 +49,8 @@ private:
 
     Workspace(dom::DocumentPtr document);
 
+    void onDestroyed() override;
+
 public:
     using ElementCreator = std::unique_ptr<Element> (*)(dom::Element* element);
 

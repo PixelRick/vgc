@@ -151,6 +151,22 @@ Workspace::Workspace(dom::DocumentPtr document)
     rebuildVacFromTree_();
 }
 
+void Workspace::onDestroyed() {
+
+    vac_->changed().disconnect(this);
+    vac_->onNodeAboutToBeRemoved().disconnect(this);
+    for (const auto& p : elements_) {
+        Element* e = p.second.get();
+        if (e->isVacElement()) {
+            static_cast<VacElement*>(e)->vacNode_ = nullptr;
+        }
+    }
+    vac_ = nullptr;
+    document_ = nullptr;
+
+    SuperClass::onDestroyed();
+}
+
 namespace {
 
 std::once_flag initOnceFlag;
@@ -168,6 +184,8 @@ WorkspacePtr Workspace::create(dom::DocumentPtr document) {
     namespace ds = dom::strings;
 
     std::call_once(initOnceFlag, []() {
+        registerElementClass(ds::vgc, &makeUniqueElement<Layer>);
+        registerElementClass(ds::layer, &makeUniqueElement<Layer>);
         registerElementClass(ds::vertex, &makeUniqueElement<KeyVertex>);
         //registerElementClass(ds::edge, &makeUniqueElement<KeyEdge>);
         registerElementClass(ds::edge, &makeUniqueElement<KeyEdge>);
@@ -437,8 +455,6 @@ void Workspace::rebuildVacFromTree_() {
     // reset vac
     vac_->clear();
     vac_->emitPendingDiff();
-
-    vac_->clear();
     lastSyncedVacVersion_ = -1;
 
     vgcElement_->vacNode_ = vac_->rootGroup();
@@ -461,7 +477,7 @@ void Workspace::rebuildVacFromTree_() {
     //    e->updateFromDom();
     //}
 
-    Element* root = vgcElement_->firstChild();
+    Element* root = vgcElement_;
     Element* e = root->firstChild();
     Int depth = 1;
     while (e) {
@@ -620,6 +636,9 @@ void Workspace::updateTreeAndVacFromDom_(const dom::Diff& diff) {
     }
 
     updateVacHierarchyFromTree_();
+
+    lastSyncedDomVersionId_ = document_->versionId();
+    lastSyncedVacVersion_ = vac_->version();
 }
 
 void Workspace::updateTreeAndDomFromVac_(const topology::VacDiff& /*diff*/) {

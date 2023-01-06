@@ -148,9 +148,8 @@ void Operations::removeNode(VacNode* node, bool removeFreeVertices) {
     std::unordered_set<VacNode*> freeKeyVertices;
     std::unordered_set<VacNode*> freeInbetweenVertices;
 
-    // signal and flag removal
+    // flag removal
     for (VacNode* n : toRemoveNodes) {
-        vac->onNodeAboutToBeRemoved().emit(n);
         n->isBeingDestroyed_ = true;
     }
 
@@ -222,6 +221,10 @@ void Operations::removeNode(VacNode* node, bool removeFreeVertices) {
         }
         toRemoveNodes.merge(freeKeyVertices);
         toRemoveNodes.merge(freeInbetweenVertices);
+    }
+
+    for (VacNode* n : toRemoveNodes) {
+        vac->onNodeAboutToBeRemoved().emit(n);
     }
 
     for (VacNode* n : toRemoveNodes) {
