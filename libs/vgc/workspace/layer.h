@@ -41,7 +41,7 @@ public:
 protected:
     geometry::Rect2d boundingBox(core::AnimTime t) const override;
 
-    void updateFromDom_(Workspace* workspace) override;
+    ElementUpdateResult updateFromDom_(Workspace* workspace) override;
 
     void paint_(
         graphics::Engine* engine,

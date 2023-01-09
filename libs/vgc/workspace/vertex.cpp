@@ -24,7 +24,7 @@ geometry::Rect2d KeyVertex::boundingBox(core::AnimTime /*t*/) const {
     return geometry::Rect2d(pos, pos);
 }
 
-void KeyVertex::updateFromDom_(Workspace* /*workspace*/) {
+ElementUpdateResult KeyVertex::updateFromDom_(Workspace* /*workspace*/) {
     namespace ds = dom::strings;
     dom::Element* const domElement = this->domElement();
 
@@ -40,6 +40,7 @@ void KeyVertex::updateFromDom_(Workspace* /*workspace*/) {
 
     const auto& position = domElement->getAttribute(ds::position).getVec2d();
     topology::ops::setKeyVertexPosition(kv, position);
+    return ElementUpdateResult::Success;
 }
 
 void KeyVertex::paint_(
@@ -53,7 +54,8 @@ geometry::Rect2d InbetweenVertex::boundingBox(core::AnimTime t) const {
     return geometry::Rect2d(pos, pos);
 }
 
-void InbetweenVertex::updateFromDom_(Workspace* /*workspace*/) {
+ElementUpdateResult InbetweenVertex::updateFromDom_(Workspace* /*workspace*/) {
+    return ElementUpdateResult::Success;
 }
 
 void InbetweenVertex::prepareForFrame_(core::AnimTime /*t*/) {

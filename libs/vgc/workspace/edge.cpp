@@ -23,7 +23,7 @@ geometry::Rect2d KeyEdge::boundingBox(core::AnimTime /*t*/) const {
     return geometry::Rect2d::empty;
 }
 
-void KeyEdge::updateFromDom_(Workspace* workspace) {
+ElementUpdateResult KeyEdge::updateFromDom_(Workspace* workspace) {
     namespace ds = dom::strings;
     dom::Element* const domElement = this->domElement();
 
@@ -47,21 +47,21 @@ void KeyEdge::updateFromDom_(Workspace* workspace) {
 
     // update dependencies (vertices)
     if (ve0) {
-        ve0->updateFromDom(workspace);
+        workspace->updateElementFromDom(ve0);
         topology::VacNode* vn0 = ve0->vacNode();
         if (vn0) {
             kv0 = vn0->toCellUnchecked()->toKeyVertexUnchecked();
         }
     }
     if (ve1) {
-        ve1->updateFromDom(workspace);
+        workspace->updateElementFromDom(ve1);
         topology::VacNode* vn1 = ve1->vacNode();
         if (vn1) {
             kv1 = vn1->toCellUnchecked()->toKeyVertexUnchecked();
         }
     }
     if (parentElement) {
-        parentElement->updateFromDom(workspace);
+        workspace->updateElementFromDom(parentElement);
         topology::VacNode* parentNode = parentElement->vacNode();
         if (parentNode) {
             // checked cast to group, could be something invalid
@@ -110,7 +110,11 @@ void KeyEdge::updateFromDom_(Workspace* workspace) {
         //     group view matrices may not be ready..
         //     maybe we could add two init functions to workspace::Element
         //     one for intrinsic data, one for dependent data.
+
+        return ElementUpdateResult::Success;
     }
+
+    return ElementUpdateResult::InvalidAttribute;
 }
 
 void KeyEdge::paint_(

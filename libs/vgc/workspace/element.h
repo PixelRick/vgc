@@ -90,6 +90,13 @@ VGC_DEFINE_FLAGS(ElementFlags, ElementFlag)
 class Workspace;
 class VacElement;
 
+enum class ElementUpdateResult : UInt8 {
+    Success,
+    InvalidAttribute,
+    UnresolvedDependency,
+    ErrorInDependency,
+};
+
 class VGC_WORKSPACE_API Element : public topology::detail::TreeNodeBase<Element> {
 private:
     friend Workspace;
@@ -127,6 +134,10 @@ public:
 
     ElementFlags flags() const {
         return flags_;
+    }
+
+    bool isInSyncWithDom() const {
+        return isInSyncWithDom_;
     }
 
     Element* parent() const {
@@ -169,9 +180,6 @@ public:
         return Base::numChildren();
     }
 
-    // XXX keep workspace pointer in element ?
-    bool updateFromDom(Workspace* workspace);
-
     void paint(
         graphics::Engine* engine,
         core::AnimTime t = {},
@@ -183,7 +191,7 @@ public:
 protected:
     virtual geometry::Rect2d boundingBox(core::AnimTime t = {}) const;
 
-    virtual void updateFromDom_(Workspace* workspace);
+    virtual ElementUpdateResult updateFromDom_(Workspace* workspace);
 
     virtual void prepareForFrame_(core::AnimTime t = {});
 
@@ -199,12 +207,13 @@ private:
 
     // this pointer is not safe to use when tree is not synced with dom
     dom::Element* domElement_;
-    bool inSyncWithDom_ = false;
+    bool isInSyncWithDom_ = false;
 
     ElementFlags flags_;
     bool isVacElement_ = false;
-    bool hasInvalidAttributes_ = false;
+
     bool isBeingUpdated_ = false;
+    ElementUpdateResult lastUpdateResult_ = {};
 
     static VacElement* findFirstSiblingVacElement_(Element* start);
 };

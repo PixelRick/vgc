@@ -88,6 +88,8 @@ public:
     void rebuildFromDom();
     //void rebuildFromVac();
 
+    bool updateElementFromDom(Element* element);
+
     Element* getElementFromPathAttribute(
         dom::Element* domElement,
         core::StringId attrName,
@@ -107,7 +109,8 @@ private:
     static std::unordered_map<core::StringId, ElementCreator>& elementCreators();
 
     std::unordered_map<core::Id, std::unique_ptr<Element>> elements_;
-    core::Array<Element*> elementsWithInvalidAttributes_;
+    core::Array<Element*> elementsWithUnresolvedPaths_;
+    core::Array<Element*> elementsOutOfSync_;
 
     VacElement* vgcElement_;
 

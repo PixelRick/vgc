@@ -17,29 +17,16 @@
 #include <vgc/dom/document.h>
 #include <vgc/dom/element.h>
 #include <vgc/workspace/element.h>
+#include <vgc/workspace/workspace.h>
 
 namespace vgc::workspace {
-
-bool Element::updateFromDom(Workspace* workspace) {
-    if (isBeingUpdated_) {
-        VGC_ERROR(LogVgcWorkspace, "Cyclic update dependency detected.");
-        return false;
-    }
-    // if not already up-to-date
-    if (!inSyncWithDom_) {
-        isBeingUpdated_ = true;
-        updateFromDom_(workspace);
-        isBeingUpdated_ = false;
-        inSyncWithDom_ = true;
-    }
-    return true;
-}
 
 geometry::Rect2d Element::boundingBox(core::AnimTime /*t*/) const {
     return geometry::Rect2d::empty;
 }
 
-void Element::updateFromDom_(Workspace* /*workspace*/) {
+ElementUpdateResult Element::updateFromDom_(Workspace* /*workspace*/) {
+    return ElementUpdateResult::Success;
 }
 
 void Element::prepareForFrame_(core::AnimTime /*t*/) {

@@ -318,12 +318,46 @@ Element* Workspace::createAppendElement_(dom::Element* domElement, Element* pare
     return e;
 }
 
+bool Workspace::updateElementFromDom(Element* element) {
+    if (element->isBeingUpdated_) {
+        VGC_ERROR(LogVgcWorkspace, "Cyclic update dependency detected.");
+        return false;
+    }
+    // if not already up-to-date
+    if (!element->isInSyncWithDom_
+        || element->lastUpdateResult_ == ElementUpdateResult::UnresolvedDependencyPath) {
+
+        element->isBeingUpdated_ = true;
+
+        if (element->lastUpdateResult_ == ElementUpdateResult::UnresolvedDependencyPath) {
+            elementsWithUnresolvedPaths_.removeOne(element);
+        }
+
+        const ElementUpdateResult result = element->updateFromDom_(this);
+        switch (result) {
+        case ElementUpdateResult::UnresolvedDependencyPath:
+            elementsWithUnresolvedPaths_.emplaceLast(element);
+            break;
+        case ElementUpdateResult::InvalidAttribute:
+        case ElementUpdateResult::Success:
+            elementsOutOfSync_.removeOne(element);
+            break;
+        }
+        element->lastUpdateResult_ = result;
+
+        element->isBeingUpdated_ = false;
+        element->isInSyncWithDom_ = true;
+    }
+    return true;
+}
+
 void Workspace::onVacNodeAboutToBeRemoved_(topology::VacNode* node) {
     auto it = elements_.find(node->id());
     if (it != elements_.end()) {
-        Element* e = it->second.get();
-        if (e->isVacElement()) {
-            static_cast<VacElement*>(e)->vacNode_ = nullptr;
+        Element* element = it->second.get();
+        if (element->isVacElement()) {
+            static_cast<VacElement*>(element)->vacNode_ = nullptr;
+            elementsOutOfSync_.emplaceLast(element);
         }
     }
 }
@@ -478,11 +512,11 @@ void Workspace::rebuildVacFromTree_() {
     //}
 
     Element* root = vgcElement_;
-    Element* e = root->firstChild();
+    Element* element = root->firstChild();
     Int depth = 1;
-    while (e) {
-        e->updateFromDom(this);
-        iterDfsPreOrder(e, depth, root);
+    while (element) {
+        updateElementFromDom(element);
+        iterDfsPreOrder(element, depth, root);
     }
 
     updateVacHierarchyFromTree_();
@@ -567,13 +601,16 @@ void Workspace::updateTreeAndVacFromDom_(const dom::Diff& diff) {
     // impl goal: we want to keep as much cached data as possible.
     //            we want the vac to be valid -> using only its operators
     //            limits bugs to their implementation.
-    // the current function isn't to be called a lot so it probably does not
-    // have to be optimized.
+
+    bool needsFullUpdate =
+        (diff.removedNodes().length() > 0) || (diff.reparentedNodes().size() > 0);
+
+    std::set<Element*> parentsToOrderSync;
 
     // first we remove what has to be removed
     // this can remove dependent vac nodes (star).
-    for (dom::Node* n : diff.removedNodes()) {
-        dom::Element* domElement = dom::Element::cast(n);
+    for (dom::Node* node : diff.removedNodes()) {
+        dom::Element* domElement = dom::Element::cast(node);
         if (!domElement) {
             continue;
         }
@@ -581,8 +618,8 @@ void Workspace::updateTreeAndVacFromDom_(const dom::Diff& diff) {
     }
 
     // create new elements
-    for (dom::Node* n : diff.createdNodes()) {
-        dom::Element* domElement = dom::Element::cast(n);
+    for (dom::Node* node : diff.createdNodes()) {
+        dom::Element* domElement = dom::Element::cast(node);
         if (!domElement) {
             continue;
         }
@@ -597,28 +634,49 @@ void Workspace::updateTreeAndVacFromDom_(const dom::Diff& diff) {
             continue;
         }
         // will be reordered afterwards
-        createAppendElement_(domElement, parent);
+        Element* element = createAppendElement_(domElement, parent);
+        element->isInSyncWithDom_ = false;
+        elementsOutOfSync_.emplaceLast(element);
+        parentsToOrderSync.insert(parent);
     }
 
-    // update tree hierarchy from dom
-    for (dom::Node* n : diff.childrenReorderedNodes()) {
-        dom::Element* domElement = dom::Element::cast(n);
+    for (dom::Node* node : diff.reparentedNodes()) {
+        dom::Element* domElement = dom::Element::cast(node);
         if (!domElement) {
             continue;
         }
-        Element* e = find(domElement);
-        if (!e) {
+        dom::Element* domParentElement = domElement->parentElement();
+        if (!domParentElement) {
+            continue;
+        }
+        Element* parent = find(domParentElement);
+        if (parent) {
+            parentsToOrderSync.insert(parent);
+        }
+    }
+
+    for (dom::Node* node : diff.childrenReorderedNodes()) {
+        dom::Element* domElement = dom::Element::cast(node);
+        if (!domElement) {
+            continue;
+        }
+        Element* element = find(domElement);
+        if (!element) {
             // XXX error ?
             continue;
         }
+        parentsToOrderSync.insert(element);
+    }
 
-        Element* child = e->firstChild();
-        dom::Element* domChild = domElement->firstChildElement();
+    // update tree hierarchy from dom
+    for (Element* element : parentsToOrderSync) {
+        Element* child = element->firstChild();
+        dom::Element* domChild = element->domElement()->firstChildElement();
         while (domChild) {
             if (!child || child->domElement() != domChild) {
                 Element* firstChild = find(domChild);
                 VGC_ASSERT(firstChild);
-                e->insertChildUnchecked(child, firstChild);
+                element->insertChildUnchecked(child, firstChild);
                 child = firstChild;
             }
             child = child->nextVacElement();
@@ -627,12 +685,26 @@ void Workspace::updateTreeAndVacFromDom_(const dom::Diff& diff) {
     }
 
     // update everything (paths may have changed.. etc)
-    Element* root = vgcElement_;
-    Element* e = root;
-    Int depth = 0;
-    while (e) {
-        e->updateFromDom(this);
-        iterDfsPreOrder(e, depth, root);
+    if (needsFullUpdate) {
+        Element* root = vgcElement_;
+        Element* element = root;
+        Int depth = 0;
+        while (element) {
+            updateElementFromDom(element);
+            iterDfsPreOrder(element, depth, root);
+        }
+    }
+    else {
+        for (const auto& it : diff.modifiedElements()) {
+            Element* element = find(it.first);
+            if (element) {
+                element->isInSyncWithDom_ = false;
+                elementsOutOfSync_.emplaceLast(element);
+            }
+        }
+        for (Element* element : elementsOutOfSync_) {
+            updateElementFromDom(element);
+        }
     }
 
     updateVacHierarchyFromTree_();
