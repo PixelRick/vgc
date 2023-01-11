@@ -283,18 +283,18 @@ public:
     /// Returns the number of control points of the curve.
     ///
     Int numPoints() const {
-        return positionData_.get().length();
+        return positionData_ ? positionData_->length() : 0;
     }
 
     /// Returns the position data of the curve.
     ///
-    const Vec2dArray& positionData() const {
+    const Vec2dArray* positionData() const {
         return positionData_;
     }
 
     /// Sets the position data of the curve.
     ///
-    void setPositionData(const SharedConstVec2dArray& positionData) {
+    void setPositionData(const Vec2dArray* positionData) {
         positionData_ = positionData;
     }
 
@@ -306,13 +306,13 @@ public:
 
     /// Returns the width data of the curve.
     ///
-    const core::DoubleArray& widthData() const {
+    const core::DoubleArray* widthData() const {
         return widthData_;
     }
 
     /// Sets the width data of the curve.
     ///
-    void setWidthData(const core::SharedConstDoubleArray& widthData) {
+    void setWidthData(const core::DoubleArray* widthData) {
         widthData_ = widthData;
         onWidthDataChanged_();
     }
@@ -436,11 +436,11 @@ public:
 private:
     // Representation of the centerline of the curve
     Type type_;
-    SharedConstVec2dArray positionData_;
+    const Vec2dArray* positionData_;
 
     // Representation of the width of the curve
     AttributeVariability widthVariability_;
-    core::SharedConstDoubleArray widthData_;
+    const core::DoubleArray* widthData_;
     double averageWidth_ = 0;
     //double maxWidth_ = 0;
 

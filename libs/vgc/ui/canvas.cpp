@@ -30,6 +30,7 @@
 #include <vgc/ui/logcategories.h>
 #include <vgc/ui/qtutil.h>
 #include <vgc/ui/strings.h>
+#include <vgc/workspace/edge.h>
 
 #include <vgc/ui/detail/paintutil.h>
 
@@ -107,12 +108,6 @@ QCursor crossCursor() {
 Canvas::Canvas(workspace::Workspace* workspace)
     : Widget()
     , workspace_(workspace)
-    , mousePressed_(false)
-    , tabletPressed_(false)
-    , polygonMode_(0)
-    , showControlPoints_(false)
-    , requestedTesselationMode_(2)
-    , currentTesselationMode_(2)
     , renderTask_("Render")
     , updateTask_("Update")
     , drawTask_("Draw") {
@@ -141,8 +136,6 @@ SelectionList Canvas::getSelectableItemsAt(const geometry::Vec2f& /*position*/) 
 
 void Canvas::setWorkspace(workspace::Workspace* workspace) {
 
-    clearGraphics_();
-
     if (workspace_) {
         workspace_->disconnect(this);
         // XXX to remove
@@ -154,26 +147,6 @@ void Canvas::setWorkspace(workspace::Workspace* workspace) {
         workspace_->changed().connect(onWorkspaceChanged());
         // XXX to remove
         workspace_->document()->changed().connect(onDocumentChanged());
-
-        namespace ds = dom::strings;
-
-        auto isEdge = [](dom::Element* e) {
-            core::StringId tagName = e->tagName();
-            return tagName == PATH || tagName == ds::edge;
-        };
-
-        dom::Element* root = workspace_->document()->rootElement();
-
-        for (dom::Node* node : root->children()) {
-            dom::Element* e = dom::Element::cast(node);
-            if (!(e && isEdge(e))) {
-                continue;
-            }
-            if (e->parent() == root) {
-                auto graphicsIt = getOrCreateEdgeGraphics_(e);
-                toUpdate_.insert(graphicsIt);
-            }
-        }
     }
 
     requestRepaint();
@@ -215,287 +188,12 @@ bool Canvas::onKeyPress(KeyEvent* event) {
 }
 
 void Canvas::onWorkspaceChanged_() {
-    //
-}
-
-void Canvas::onDocumentChanged_(const dom::Diff& diff) {
-
-    namespace ds = dom::strings;
-
-    auto isEdge = [](dom::Element* e) {
-        core::StringId tagName = e->tagName();
-        return tagName == PATH || tagName == ds::edge;
-    };
-
-    for (dom::Node* node : diff.removedNodes()) {
-        dom::Element* e = dom::Element::cast(node);
-        if (!(e && isEdge(e))) {
-            continue;
-        }
-        auto it = edgeGraphicsMap_.find(e);
-        if (it != edgeGraphicsMap_.end()) {
-            removedEdgeGraphics_.splice(
-                removedEdgeGraphics_.begin(), edgeGraphics_, it->second);
-            edgeGraphicsMap_.erase(it);
-        }
-    }
-
-    bool needsSort = false;
-
-    dom::Element* root = workspace_->document()->rootElement();
-
-    for (dom::Node* node : diff.createdNodes()) {
-        dom::Element* e = dom::Element::cast(node);
-        if (!(e && isEdge(e))) {
-            continue;
-        }
-        if (e->parent() == root) {
-            needsSort = true;
-            auto graphicsIt = getOrCreateEdgeGraphics_(e);
-            toUpdate_.insert(graphicsIt);
-        }
-    }
-
-    for (dom::Node* node : diff.reparentedNodes()) {
-        dom::Element* e = dom::Element::cast(node);
-        if (!(e && isEdge(e))) {
-            continue;
-        }
-        auto it = edgeGraphicsMap_.find(e);
-        if (it != edgeGraphicsMap_.end()) {
-            if (e->parent() != root) {
-                removedEdgeGraphics_.splice(
-                    removedEdgeGraphics_.begin(), edgeGraphics_, it->second);
-                edgeGraphicsMap_.erase(it);
-            }
-            else {
-                needsSort = true;
-            }
-        }
-        else if (e->parent() == root) {
-            needsSort = true;
-            auto graphicsIt = getOrCreateEdgeGraphics_(e);
-            toUpdate_.insert(graphicsIt);
-        }
-    }
-
-    if (!needsSort) {
-        for (dom::Node* node : diff.childrenReorderedNodes()) {
-            if (node == root) {
-                needsSort = true;
-                break;
-            }
-        }
-    }
-
-    if (needsSort) {
-        auto insertIt = edgeGraphics_.begin();
-        for (dom::Node* node : root->children()) {
-            dom::Element* e = dom::Element::cast(node);
-            if (!(e && isEdge(e))) {
-                continue;
-            }
-            auto it = edgeGraphicsMap_.find(e);
-            if (it != edgeGraphicsMap_.end()) {
-                EdgeGraphicsIterator graphicsIt = it->second;
-                if (insertIt == graphicsIt) {
-                    ++insertIt;
-                }
-                else {
-                    edgeGraphics_.splice(insertIt, edgeGraphics_, graphicsIt);
-                    insertIt = graphicsIt;
-                }
-            }
-            else {
-                throw LogicError("Edge graphics object is not in map.");
-            }
-        }
-    }
-
-    // XXX it's possible that update is done twice if the element is both modified and reparented..
-
-    const auto& modifiedElements = diff.modifiedElements();
-    for (EdgeGraphicsIterator it = edgeGraphics_.begin(); it != edgeGraphics_.end();
-         ++it) {
-
-        auto it2 = modifiedElements.find(it->element);
-        if (it2 != modifiedElements.end()) {
-            toUpdate_.insert(it);
-        }
-    }
 
     // ask for redraw
     requestRepaint();
 }
 
-void Canvas::clearGraphics_() {
-    for (EdgeGraphics& r : edgeGraphics_) {
-        destroyEdgeGraphics_(r);
-    }
-    edgeGraphics_.clear();
-    edgeGraphicsMap_.clear();
-}
-
-void Canvas::updateEdgeGraphics_(graphics::Engine* engine) {
-    updateTask_.start();
-
-    removedEdgeGraphics_.clear();
-    bool tesselationModeChanged = requestedTesselationMode_ != currentTesselationMode_;
-    if (tesselationModeChanged) {
-        currentTesselationMode_ = requestedTesselationMode_;
-        for (EdgeGraphics& r : edgeGraphics_) {
-            updateEdgeGraphics_(engine, r);
-        }
-    }
-    else {
-        for (auto it : toUpdate_) {
-            updateEdgeGraphics_(engine, *it);
-        }
-    }
-    toUpdate_.clear();
-
-    updateTask_.stop();
-}
-
-Canvas::EdgeGraphicsIterator Canvas::getOrCreateEdgeGraphics_(dom::Element* element) {
-    auto it = edgeGraphicsMap_.find(element);
-    if (it == edgeGraphicsMap_.end()) {
-        auto newEdgeGraphicsIterator =
-            edgeGraphics_.emplace(edgeGraphics_.end(), EdgeGraphics(element));
-        edgeGraphicsMap_.emplace(element, newEdgeGraphicsIterator);
-        return newEdgeGraphicsIterator;
-    }
-    return it->second;
-}
-
-void Canvas::updateEdgeGraphics_(graphics::Engine* engine, EdgeGraphics& r) {
-    using namespace graphics;
-    if (!r.inited_) {
-        // XXX use indexing when triangulate() implements indices.
-        r.strokeGeometry_ =
-            engine->createDynamicTriangleStripView(BuiltinGeometryLayout::XY_iRGBA);
-
-        r.pointsGeometry_ = engine->createDynamicTriangleStripView(
-            BuiltinGeometryLayout::XYDxDy_iXYRotRGBA);
-
-        r.dispLineGeometry_ = engine->createDynamicTriangleStripView(
-            BuiltinGeometryLayout::XYDxDy_iXYRotRGBA);
-
-        r.inited_ = true;
-    }
-
-    dom::Element* path = r.element;
-    geometry::SharedConstVec2dArray positions =
-        path->getAttribute(POSITIONS).getVec2dArray();
-    core::SharedConstDoubleArray widths = path->getAttribute(WIDTHS).getDoubleArray();
-    core::Color color = path->getAttribute(COLOR).getColor();
-
-    // Convert the dom::Path to a geometry::Curve
-    // XXX move this logic to dom::Path
-
-    VGC_CORE_ASSERT(positions.get().size() == widths.get().size());
-    //Int nPoints = positions.get().length();
-    geometry::Curve curve;
-    curve.setColor(color);
-    curve.setPositionData(positions);
-    curve.setWidthData(widths);
-
-    geometry::Vec2fArray strokeVertices;
-    core::Array<geometry::Vec4f> pointVertices;
-    core::FloatArray pointInstData;
-    core::Array<geometry::Vec4f> lineVertices;
-    core::FloatArray lineInstData;
-
-    float pointHalfSize = 5.f;
-    float lineHalfSize = 2.f;
-
-    double maxAngle = 0.05;
-    int minQuads = 1;
-    int maxQuads = 64;
-    if (requestedTesselationMode_ <= 2) {
-        if (requestedTesselationMode_ == 0) {
-            maxQuads = 1;
-        }
-        else if (requestedTesselationMode_ == 1) {
-            minQuads = 10;
-            maxQuads = 10;
-        }
-        geometry::CurveSamplingParameters samplingParams = {};
-        samplingParams.setMaxAngle(maxAngle * 0.5); // matches triangulate()
-        samplingParams.setMinIntraSegmentSamples(minQuads - 1);
-        samplingParams.setMaxIntraSegmentSamples(maxQuads - 1);
-        core::Array<geometry::CurveSample> samples;
-        curve.sampleRange(samplingParams, samples);
-        for (const geometry::CurveSample& s : samples) {
-            geometry::Vec2d p0 = s.leftPoint();
-            strokeVertices.emplaceLast(geometry::Vec2f(p0));
-            geometry::Vec2d p1 = s.rightPoint();
-            strokeVertices.emplaceLast(geometry::Vec2f(p1));
-            geometry::Vec2f p = geometry::Vec2f(s.position());
-            geometry::Vec2f n = geometry::Vec2f(s.normal());
-            // clang-format off
-            lineVertices.emplaceLast(p.x(), p.y(), -lineHalfSize * n.x(), -lineHalfSize * n.y());
-            lineVertices.emplaceLast(p.x(), p.y(),  lineHalfSize * n.x(),  lineHalfSize * n.y());
-            // clang-format on
-        }
-    }
-    else {
-        geometry::Vec2dArray triangles = curve.triangulate(maxAngle, 1, 64);
-        for (const geometry::Vec2d& p : triangles) {
-            strokeVertices.emplaceLast(geometry::Vec2f(p));
-        }
-    }
-
-    engine->updateBufferData(
-        r.strokeGeometry_->vertexBuffer(0), //
-        std::move(strokeVertices));
-    engine->updateBufferData(
-        r.strokeGeometry_->vertexBuffer(1), //
-        core::Array<float>({color.r(), color.g(), color.b(), color.a()}));
-
-    lineInstData.extend({0.f, 0.f, 1.f, 0.02f, 0.64f, 1.0f, 1.f});
-
-    engine->updateBufferData(
-        r.dispLineGeometry_->vertexBuffer(0), std::move(lineVertices));
-    engine->updateBufferData(
-        r.dispLineGeometry_->vertexBuffer(1), std::move(lineInstData));
-
-    // clang-format off
-    pointVertices.extend({
-        {0, 0, -pointHalfSize, -pointHalfSize},
-        {0, 0, -pointHalfSize,  pointHalfSize},
-        {0, 0,  pointHalfSize, -pointHalfSize},
-        {0, 0,  pointHalfSize,  pointHalfSize} });
-    // clang-format on
-
-    const geometry::Vec2dArray& d = curve.positionData();
-    Int numPoints = core::int_cast<GLsizei>(d.length());
-    const float dl = 1.f / numPoints;
-    for (Int j = 0; j < numPoints; ++j) {
-        geometry::Vec2d dp = d[j];
-        float l = j * dl;
-        pointInstData.extend(
-            {static_cast<float>(dp.x()),
-             static_cast<float>(dp.y()),
-             0.f,
-             (l > 0.5f ? 2 * (1.f - l) : 1.f),
-             0.f,
-             (l < 0.5f ? 2 * l : 1.f),
-             1.f});
-    }
-    r.numPoints = numPoints;
-
-    engine->updateBufferData(
-        r.pointsGeometry_->vertexBuffer(0), std::move(pointVertices));
-    engine->updateBufferData(
-        r.pointsGeometry_->vertexBuffer(1), std::move(pointInstData));
-}
-
-void Canvas::destroyEdgeGraphics_(EdgeGraphics& r) {
-    r.strokeGeometry_.reset();
-    r.pointsGeometry_.reset();
-    r.dispLineGeometry_.reset();
-    r.inited_ = false;
+void Canvas::onDocumentChanged_(const dom::Diff& diff) {
 }
 
 void Canvas::startCurve_(const geometry::Vec2d& p, double width) {
@@ -745,8 +443,6 @@ void Canvas::onPaintDraw(graphics::Engine* engine, PaintOptions /*options*/) {
 
     namespace gs = graphics::strings;
 
-    updateEdgeGraphics_(engine);
-
     drawTask_.start();
 
     auto modifiedParameters = graphics::PipelineParameter::RasterizerState;
@@ -794,21 +490,28 @@ void Canvas::onPaintDraw(graphics::Engine* engine, PaintOptions /*options*/) {
         static_cast<float>(cameraView(3, 3)));
     engine->pushViewMatrix(vm * cameraViewf);
 
-    // Draw triangles
-
-    for (EdgeGraphics& r : edgeGraphics_) {
-        engine->draw(r.strokeGeometry_, -1, 0);
-    }
-
-    engine->setProgram(graphics::BuiltinProgram::SreenSpaceDisplacement);
-
-    // Draw control points
-    if (showControlPoints_) {
-        for (EdgeGraphics& r : edgeGraphics_) {
-            engine->draw(r.dispLineGeometry_, -1, 0);
-            engine->draw(r.pointsGeometry_, -1, r.numPoints);
+    // render visit
+    // todo:
+    //  - use transforms
+    //  - setup target for layers (painting a layer means using its result)
+    bool paintOutline = showControlPoints_;
+    workspace_->visitDfsPreOrder([=](workspace::Element* e, Int depth) {
+        if (!e) {
+            return;
         }
-    }
+        if (e->isVacElement()) {
+            // todo: should we use an enum to avoid dynamic_cast ?
+            // if an error happens with the Element creation we cannot rely on vac node type.
+            auto edge = dynamic_cast<workspace::KeyEdge*>(e);
+            if (edge) {
+                edge->setTesselationMode(requestedTesselationMode_);
+            }
+        }
+        e->paint(engine);
+        if (paintOutline) {
+            e->paint(engine, {}, workspace::PaintOption::Outline);
+        }
+    });
 
     engine->popViewMatrix();
     engine->popPipelineParameters(modifiedParameters);
@@ -818,9 +521,6 @@ void Canvas::onPaintDraw(graphics::Engine* engine, PaintOptions /*options*/) {
 
 void Canvas::onPaintDestroy(graphics::Engine*) {
     bgGeometry_.reset();
-    for (EdgeGraphics& r : edgeGraphics_) {
-        destroyEdgeGraphics_(r);
-    }
     fillRS_.reset();
     wireframeRS_.reset();
 }

@@ -25,11 +25,11 @@ geometry::Rect2d Element::boundingBox(core::AnimTime /*t*/) const {
     return geometry::Rect2d::empty;
 }
 
-ElementUpdateResult Element::updateFromDom_(Workspace* /*workspace*/) {
-    return ElementUpdateResult::Success;
+ElementError Element::updateFromDom_(Workspace* /*workspace*/) {
+    return ElementError::None;
 }
 
-void Element::prepareForFrame_(core::AnimTime /*t*/) {
+void Element::preparePaint_(core::AnimTime /*t*/, PaintOptions /*flags*/) {
 }
 
 void Element::paint_(

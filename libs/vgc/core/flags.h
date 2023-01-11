@@ -33,6 +33,16 @@ public:
         : v_(v) {
     }
 
+    constexpr Flags(std::initializer_list<Enum> values) noexcept
+        : v_() {
+
+        UnderlyingType x = {};
+        for (const Enum& value : values) {
+            x |= ::vgc::core::toUnderlying(value);
+        }
+        v_ = static_cast<Enum>(x);
+    }
+
     constexpr UnderlyingType toUnderlying() const noexcept {
         return ::vgc::core::toUnderlying(v_);
     }

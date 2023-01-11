@@ -31,18 +31,42 @@ namespace vgc::workspace {
 // Component (drawn and selectable..)
 
 struct CurveGraphics {
+
+    void clear() {
+        controlPoints.reset();
+        thickPolyline.reset();
+        numPoints = 0;
+    }
+
     graphics::BufferPtr controlPoints;
     graphics::BufferPtr thickPolyline;
     Int numPoints = 0;
 };
 
 struct StrokeGraphics {
+
+    void clear() {
+        meshVertices.reset();
+        meshUVSTs.reset();
+        meshIndices.reset();
+    }
+
     graphics::BufferPtr meshVertices;
     graphics::BufferPtr meshUVSTs;
     graphics::BufferPtr meshIndices;
 };
 
 struct EdgeGraphics {
+
+    void clear() {
+        curveGraphics_.clear();
+        pointsGeometry_.reset();
+        centerlineGeometry_.reset();
+        strokeGraphics_.clear();
+        strokeGeometry_.reset();
+        selectionGeometry_.reset();
+    }
+
     // Center line & Control points
     CurveGraphics curveGraphics_;
     graphics::GeometryViewPtr pointsGeometry_;
@@ -51,8 +75,7 @@ struct EdgeGraphics {
     // Stroke
     StrokeGraphics strokeGraphics_;
     graphics::GeometryViewPtr strokeGeometry_;
-
-    bool inited_ = false;
+    graphics::GeometryViewPtr selectionGeometry_;
 };
 
 class VGC_WORKSPACE_API Edge : public VacElement {
@@ -87,10 +110,16 @@ public:
         return n ? n->toCellUnchecked()->toKeyEdgeUnchecked() : nullptr;
     }
 
+    void setTesselationMode(int mode) {
+        edgeTesselationModeRequested_ = core::clamp(mode, 0, 2);
+    }
+
 protected:
     geometry::Rect2d boundingBox(core::AnimTime t) const override;
 
-    ElementUpdateResult updateFromDom_(Workspace* workspace) override;
+    ElementError updateFromDom_(Workspace* workspace) override;
+
+    void preparePaint_(core::AnimTime t, PaintOptions flags) override;
 
     void paint_(
         graphics::Engine* engine,
@@ -99,7 +128,17 @@ protected:
 
 private:
     // need an invalidation mechanism
-    EdgeGraphics cachedGraphics_;
+    mutable EdgeGraphics cachedGraphics_;
+
+    // local data to build graphics resource, kept as copy
+    // should this be in vac ?
+    geometry::Vec2fArray strokeVertices_;
+    core::FloatArray pointInstData_;
+    core::Array<geometry::Vec4f> lineVertices_;
+    int edgeTesselationMode_ = -1;
+    int edgeTesselationModeRequested_ = 2;
+
+    void updateGeometry_();
 };
 
 } // namespace vgc::workspace

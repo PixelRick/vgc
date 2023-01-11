@@ -95,6 +95,8 @@ public:
         core::StringId attrName,
         core::StringId tagNameFilter = {}) const;
 
+    void visitDfsPreOrder(std::function<void(Element*, Int)> f);
+
     VGC_SIGNAL(changed);
 
     VGC_SLOT(onDocumentDiff, onDocumentDiff_);
@@ -109,7 +111,7 @@ private:
     static std::unordered_map<core::StringId, ElementCreator>& elementCreators();
 
     std::unordered_map<core::Id, std::unique_ptr<Element>> elements_;
-    core::Array<Element*> elementsWithUnresolvedPaths_;
+    core::Array<Element*> elementsWithDependencyErrors_;
     core::Array<Element*> elementsOutOfSync_;
 
     VacElement* vgcElement_;

@@ -138,6 +138,10 @@ void visitDfsPreOrder(Node* root, std::function<void(core::TypeIdentity<Node>*, 
 
 } // namespace
 
+void Workspace::visitDfsPreOrder(std::function<void(Element*, Int)> f) {
+    workspace::visitDfsPreOrder<Element>(vgcElement(), std::move(f));
+}
+
 Workspace::Workspace(dom::DocumentPtr document)
     : document_(document) {
 
@@ -325,26 +329,27 @@ bool Workspace::updateElementFromDom(Element* element) {
     }
     // if not already up-to-date
     if (!element->isInSyncWithDom_
-        || element->lastUpdateResult_ == ElementUpdateResult::UnresolvedDependencyPath) {
+        || element->error_ == ElementError::UnresolvedDependency) {
 
         element->isBeingUpdated_ = true;
+        const ElementError result = element->updateFromDom_(this);
 
-        if (element->lastUpdateResult_ == ElementUpdateResult::UnresolvedDependencyPath) {
-            elementsWithUnresolvedPaths_.removeOne(element);
+        if (result != element->error_) {
+            if (element->error_ == ElementError::UnresolvedDependency) {
+                elementsWithDependencyErrors_.removeOne(element);
+            }
+            switch (result) {
+            case ElementError::UnresolvedDependency:
+                elementsWithDependencyErrors_.emplaceLast(element);
+                break;
+            case ElementError::InvalidAttribute:
+            case ElementError::None:
+                elementsOutOfSync_.removeOne(element);
+                break;
+            }
         }
 
-        const ElementUpdateResult result = element->updateFromDom_(this);
-        switch (result) {
-        case ElementUpdateResult::UnresolvedDependencyPath:
-            elementsWithUnresolvedPaths_.emplaceLast(element);
-            break;
-        case ElementUpdateResult::InvalidAttribute:
-        case ElementUpdateResult::Success:
-            elementsOutOfSync_.removeOne(element);
-            break;
-        }
-        element->lastUpdateResult_ = result;
-
+        element->error_ = result;
         element->isBeingUpdated_ = false;
         element->isInSyncWithDom_ = true;
     }
@@ -523,6 +528,7 @@ void Workspace::rebuildVacFromTree_() {
 
     lastSyncedDomVersionId_ = document_->versionId();
     lastSyncedVacVersion_ = vac_->version();
+    changed().emit();
 }
 
 void Workspace::updateVacHierarchyFromTree_() {
@@ -711,6 +717,7 @@ void Workspace::updateTreeAndVacFromDom_(const dom::Diff& diff) {
 
     lastSyncedDomVersionId_ = document_->versionId();
     lastSyncedVacVersion_ = vac_->version();
+    changed().emit();
 }
 
 void Workspace::updateTreeAndDomFromVac_(const topology::VacDiff& /*diff*/) {
@@ -726,7 +733,7 @@ void Workspace::updateTreeAndDomFromVac_(const topology::VacDiff& /*diff*/) {
 }
 
 void Workspace::debugPrintTree_() {
-    visitDfsPreOrder<Element>(vgcElement_, [](Element* e, Int depth) {
+    visitDfsPreOrder([](Element* e, Int depth) {
         VGC_DEBUG_TMP("{:>{}}<{} id=\"{}\">", "", depth * 2, e->tagName(), e->id());
     });
 }

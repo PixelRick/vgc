@@ -40,8 +40,9 @@ void wrap_curve(py::module& m) {
             py::overload_cast<const Vec2d&, double>(&This::addControlPoint))*/
 
         .def("__repr__", [](const This& c) {
-            return "<Curve containing "                          //
-                   + std::to_string(c.positionData().size() / 2) //
+            return "<Curve containing " //
+                   + std::to_string(
+                       c.positionData() ? (c.positionData()->size() / 2) : 0) //
                    + " control points>";
         });
 }

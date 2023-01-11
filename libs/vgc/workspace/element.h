@@ -71,9 +71,9 @@ struct Component {};
 ///
 enum class PaintOption : UInt64 {
     None = 0x00,
-    Selected = 0x01,
-    Outline = 0x02,
-    Draft = 0x04,
+    Draft = 0x02,
+    Selected = 0x04,
+    Outline = 0x08,
 };
 VGC_DEFINE_FLAGS(PaintOptions, PaintOption)
 
@@ -87,15 +87,15 @@ enum class ElementFlag : UInt16 {
 };
 VGC_DEFINE_FLAGS(ElementFlags, ElementFlag)
 
-class Workspace;
-class VacElement;
-
-enum class ElementUpdateResult : UInt8 {
-    Success,
+enum class ElementError : UInt8 {
+    None,
     InvalidAttribute,
     UnresolvedDependency,
     ErrorInDependency,
 };
+
+class Workspace;
+class VacElement;
 
 class VGC_WORKSPACE_API Element : public topology::detail::TreeNodeBase<Element> {
 private:
@@ -191,9 +191,10 @@ public:
 protected:
     virtual geometry::Rect2d boundingBox(core::AnimTime t = {}) const;
 
-    virtual ElementUpdateResult updateFromDom_(Workspace* workspace);
+    virtual ElementError updateFromDom_(Workspace* workspace);
 
-    virtual void prepareForFrame_(core::AnimTime t = {});
+    virtual void
+    preparePaint_(core::AnimTime t = {}, PaintOptions flags = PaintOption::None);
 
     virtual void paint_(
         graphics::Engine* engine,
@@ -213,7 +214,7 @@ private:
     bool isVacElement_ = false;
 
     bool isBeingUpdated_ = false;
-    ElementUpdateResult lastUpdateResult_ = {};
+    ElementError error_ = {};
 
     static VacElement* findFirstSiblingVacElement_(Element* start);
 };

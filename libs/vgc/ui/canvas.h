@@ -171,7 +171,6 @@ private:
     core::DoubleArray widths_;
 
     // Graphics resources
-
     // VgcGraph
     //   -> hit tests (tesselation as needed)
     //   -> render 2d (tesselation as needed)
@@ -182,50 +181,7 @@ private:
     //   -> components that have no 1-to-1 relationship with an
     //      element should be recognizable as such.
 
-    struct EdgeGraphics {
-        explicit EdgeGraphics(dom::Element* element)
-            : element(element) {
-        }
-
-        // Stroke
-        graphics::GeometryViewPtr strokeGeometry_;
-
-        // Fill
-        //graphics::GeometryViewPtr fillGeometry_;
-
-        // Control Points
-        graphics::GeometryViewPtr pointsGeometry_;
-        Int numPoints = 0;
-
-        // Line
-        graphics::GeometryViewPtr dispLineGeometry_;
-
-        bool inited_ = false;
-        dom::Element* element;
-    };
-
-    using EdgeGraphicsIterator = std::list<EdgeGraphics>::iterator;
-
-    std::list<EdgeGraphics> edgeGraphics_; // in draw order
-    std::list<EdgeGraphics> removedEdgeGraphics_;
-    std::map<dom::Element*, EdgeGraphicsIterator> edgeGraphicsMap_;
     graphics::GeometryViewPtr bgGeometry_;
-
-    struct unwrapped_less {
-        template<typename It>
-        bool operator()(const It& lh, const It& rh) const {
-            return &*lh < &*rh;
-        }
-    };
-
-    std::set<EdgeGraphicsIterator, unwrapped_less> toUpdate_;
-    //bool needsSort_ = false;
-
-    void clearGraphics_();
-    void updateEdgeGraphics_(graphics::Engine* engine);
-    EdgeGraphicsIterator getOrCreateEdgeGraphics_(dom::Element* element);
-    void updateEdgeGraphics_(graphics::Engine* engine, EdgeGraphics& r);
-    static void destroyEdgeGraphics_(EdgeGraphics& r);
 
     // Make sure to disallow concurrent usage of the mouse and the tablet to
     // avoid conflicts. This also acts as a work around the following Qt bugs:
@@ -242,29 +198,29 @@ private:
     // 2. We ignore mouseReleaseEvent() if the value of event->button() is
     //    different from its value in mousePressEvent().
     //
-    bool mousePressed_; // whether there's been a mouse press event
+    bool mousePressed_ = false; // whether there's been a mouse press event
     // with no matching mouse release event.
-    bool tabletPressed_; // whether there's been a tablet press event
+    bool tabletPressed_ = false; // whether there's been a tablet press event
     // with no matching tablet release event.
-    MouseButton mouseButtonAtPress_; // value of event->button at press
+    MouseButton mouseButtonAtPress_ =
+        ui::MouseButton::None; // value of event->button at press
 
     // Polygon mode. This is selected with the n/t/f keys.
     // XXX This is a temporary quick method to switch between
     // render modes. A more engineered method will come later.
-    int polygonMode_; // 0: fill; 1: lines (i.e., not exactly like OpenGL)
+    int polygonMode_ = 0; // 0: fill; 1: lines (i.e., not exactly like OpenGL)
     graphics::RasterizerStatePtr fillRS_;
     graphics::RasterizerStatePtr wireframeRS_;
 
     // Show control points. This is toggled with the "p" key.
     // XXX This is a temporary quick method to switch between
     // render modes. A more engineered method will come later.
-    bool showControlPoints_;
+    bool showControlPoints_ = false;
 
     // Tesselation mode. This is selected with the i/u/a keys.
     // XXX This is a temporary quick method to switch between
     // tesselation modes. A more engineered method will come later.
-    int requestedTesselationMode_; // 0: none; 1: uniform; 2: adaptive
-    int currentTesselationMode_;
+    int requestedTesselationMode_ = 2; // 0: none; 1: uniform; 2: adaptive
 
     // XXX This is a temporary test, will be deferred to separate classes. Here
     // is an example of how responsibilities could be separated:

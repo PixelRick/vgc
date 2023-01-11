@@ -24,7 +24,7 @@ geometry::Rect2d Layer::boundingBox(core::AnimTime /*t*/) const {
     return geometry::Rect2d::empty;
 }
 
-ElementUpdateResult Layer::updateFromDom_(Workspace* /*workspace*/) {
+ElementError Layer::updateFromDom_(Workspace* /*workspace*/) {
     dom::Element* const domElement = this->domElement();
 
     topology::VacGroup* g = nullptr;
@@ -40,7 +40,7 @@ ElementUpdateResult Layer::updateFromDom_(Workspace* /*workspace*/) {
     // todo: set attributes
     // ...
 
-    return ElementUpdateResult::Success;
+    return ElementError::None;
 }
 
 void Layer::paint_(
