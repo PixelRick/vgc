@@ -147,8 +147,8 @@ void visitDfs(
     Int depth = 0;
     Node* node = root;
     while (node) {
-        // depth first
         if (preOrderFn(node, depth)) {
+            // depth first, go down
             Node* firstChild = TreeLinksGetter::firstChild(node);
             if (firstChild) {
                 ++depth;
@@ -156,7 +156,7 @@ void visitDfs(
                 continue;
             }
         }
-        postOrderFn(node, depth);
+        postOrderFn(node, depth); // post-order leaf
         // breadth next
         Node* next = nullptr;
         while (node) {
@@ -175,7 +175,7 @@ void visitDfs(
             --depth;
             node = parent;
             if (node) {
-                postOrderFn(node, depth);
+                postOrderFn(node, depth); // post-order parent
                 parent = TreeLinksGetter::parent(node);
             }
         }
