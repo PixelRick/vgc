@@ -136,10 +136,63 @@ void visitDfsPreOrder(Node* root, std::function<void(core::TypeIdentity<Node>*, 
     }
 }
 
+template<
+    typename Node,
+    typename TreeLinksGetter = topology::detail::TreeLinksGetter<Node>>
+void visitDfs(
+    Node* root,
+    std::function<bool(core::TypeIdentity<Node>*, Int)> preOrderFn,
+    std::function<void(core::TypeIdentity<Node>*, Int)> postOrderFn) {
+
+    Int depth = 0;
+    Node* node = root;
+    while (node) {
+        // depth first
+        if (preOrderFn(node, depth)) {
+            Node* firstChild = TreeLinksGetter::firstChild(node);
+            if (firstChild) {
+                ++depth;
+                node = firstChild;
+                continue;
+            }
+        }
+        postOrderFn(node, depth);
+        // breadth next
+        Node* next = nullptr;
+        while (node) {
+            next = TreeLinksGetter::next(node);
+            if (next) {
+                node = next;
+                break;
+            }
+            // go up
+            Node* parent = TreeLinksGetter::parent(node);
+            if (parent == root) {
+                node = nullptr;
+                depth = 0;
+                break;
+            }
+            --depth;
+            node = parent;
+            if (node) {
+                postOrderFn(node, depth);
+                parent = TreeLinksGetter::parent(node);
+            }
+        }
+    }
+}
+
 } // namespace
 
-void Workspace::visitDfsPreOrder(std::function<void(Element*, Int)> f) {
-    workspace::visitDfsPreOrder<Element>(vgcElement(), std::move(f));
+void Workspace::visitDfsPreOrder(std::function<void(Element*, Int)> preOrderFn) {
+    workspace::visitDfsPreOrder<Element>(vgcElement(), std::move(preOrderFn));
+}
+
+void Workspace::visitDfs(
+    std::function<bool(Element*, Int)> preOrderFn,
+    std::function<void(Element*, Int)> postOrderFn) {
+    workspace::visitDfs<Element>(
+        vgcElement(), std::move(preOrderFn), std::move(postOrderFn));
 }
 
 Workspace::Workspace(dom::DocumentPtr document)

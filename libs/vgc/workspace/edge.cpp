@@ -138,6 +138,8 @@ void KeyEdge::paint_(graphics::Engine* engine, core::AnimTime /*t*/, PaintOption
 
     constexpr PaintOptions strokeOptions = {PaintOption::Selected, PaintOption::Draft};
 
+    // XXX todo: reuse geometry objects, create buffers separately (attributes waiting in EdgeGraphics).
+
     if (flags.hasAny(strokeOptions)
         || !flags.has(PaintOption::Outline) && !cachedGraphics_.strokeGeometry_) {
         cachedGraphics_.strokeGeometry_ =

@@ -95,7 +95,10 @@ public:
         core::StringId attrName,
         core::StringId tagNameFilter = {}) const;
 
-    void visitDfsPreOrder(std::function<void(Element*, Int)> f);
+    void visitDfsPreOrder(std::function<void(Element*, Int)> preOrderFn);
+    void visitDfs(
+        std::function<bool(Element*, Int)> preOrderFn,
+        std::function<void(Element*, Int)> postOrderFn);
 
     VGC_SIGNAL(changed);
 
