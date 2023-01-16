@@ -110,8 +110,9 @@ private:
     using Base = topology::detail::TreeNodeBase<Element>;
 
 protected:
-    Element(dom::Element* domElement)
-        : domElement_(domElement) {
+    Element(Workspace* workspace, dom::Element* domElement)
+        : workspace_(workspace)
+        , domElement_(domElement) {
     }
 
 public:
@@ -201,9 +202,9 @@ public:
         paint_(engine, t, flags);
     }
 
-protected:
     virtual geometry::Rect2d boundingBox(core::AnimTime t = {}) const;
 
+protected:
     virtual ElementError updateFromDom_(Workspace* workspace);
 
     void addDependency(Element* dependency);
@@ -225,6 +226,7 @@ protected:
         PaintOptions flags = PaintOption::None) const;
 
 private:
+    const Workspace* workspace_;
     // uniquely identifies an element
     // if vacNode_ != nullptr then vacNode_->id() == id_.
     core::Id id_ = -1;
@@ -252,8 +254,8 @@ private:
 public:
     ~UnsupportedElement() override = default;
 
-    UnsupportedElement(dom::Element* domElement)
-        : Element(domElement) {
+    UnsupportedElement(Workspace* workspace, dom::Element* domElement)
+        : Element(workspace, domElement) {
     }
 };
 
@@ -264,8 +266,8 @@ private:
 public:
     ~VacElement() override;
 
-    VacElement(dom::Element* domElement)
-        : Element(domElement)
+    VacElement(Workspace* workspace, dom::Element* domElement)
+        : Element(workspace, domElement)
         , vacNode_(nullptr) {
 
         isVacElement_ = true;

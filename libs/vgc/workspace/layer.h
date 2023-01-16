@@ -34,13 +34,13 @@ private:
 public:
     ~Layer() override = default;
 
-    Layer(dom::Element* domElement)
-        : VacElement(domElement) {
+    Layer(Workspace* workspace, dom::Element* domElement)
+        : VacElement(workspace, domElement) {
     }
 
-protected:
     geometry::Rect2d boundingBox(core::AnimTime t) const override;
 
+protected:
     ElementError updateFromDom_(Workspace* workspace) override;
 
     void paint_(

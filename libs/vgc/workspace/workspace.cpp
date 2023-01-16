@@ -229,8 +229,9 @@ namespace {
 std::once_flag initOnceFlag;
 
 template<typename T>
-std::unique_ptr<Element> makeUniqueElement(dom::Element* domElement) {
-    return std::make_unique<T>(domElement);
+std::unique_ptr<Element>
+makeUniqueElement(Workspace* workspace, dom::Element* domElement) {
+    return std::make_unique<T>(workspace, domElement);
 }
 
 } // namespace
@@ -290,7 +291,8 @@ Element* Workspace::getElementFromPathAttribute(
     core::StringId tagNameFilter) const {
 
     dom::Element* domTargetElement =
-        domElement->getElementFromPathAttribute(attrName, tagNameFilter);
+        domElement->getElementFromPathAttribute(attrName, tagNameFilter)
+            .value_or(nullptr);
     if (!domTargetElement) {
         return nullptr;
     }
@@ -346,18 +348,18 @@ Element* Workspace::createAppendElement_(dom::Element* domElement, Element* pare
     auto& creators = elementCreators();
     auto it = creators.find(domElement->tagName());
     if (it != creators.end()) {
-        u = it->second(domElement);
+        u = it->second(this, domElement);
         if (!u) {
             VGC_ERROR(
                 LogVgcWorkspace,
                 "Element creator for \"{}\" failed to create the element.",
                 domElement->tagName());
             // XXX throw or fallback to UnsupportedElement or nullptr ?
-            u = std::make_unique<UnsupportedElement>(domElement);
+            u = std::make_unique<UnsupportedElement>(this, domElement);
         }
     }
     else {
-        u = std::make_unique<UnsupportedElement>(domElement);
+        u = std::make_unique<UnsupportedElement>(this, domElement);
     }
 
     Element* e = u.get();

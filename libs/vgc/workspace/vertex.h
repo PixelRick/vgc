@@ -31,8 +31,8 @@ private:
     friend class Workspace;
 
 protected:
-    Vertex(dom::Element* domElement)
-        : VacElement(domElement) {
+    Vertex(Workspace* workspace, dom::Element* domElement)
+        : VacElement(workspace, domElement) {
     }
 
 public:
@@ -40,6 +40,8 @@ public:
         topology::VacNode* n = vacNode();
         return n ? n->toCellUnchecked()->toVertexCellUnchecked() : nullptr;
     }
+
+    virtual void updateJoins(core::AnimTime t);
 };
 
 class VGC_WORKSPACE_API KeyVertex : public Vertex {
@@ -49,8 +51,8 @@ private:
 public:
     ~KeyVertex() override = default;
 
-    KeyVertex(dom::Element* domElement)
-        : Vertex(domElement) {
+    KeyVertex(Workspace* workspace, dom::Element* domElement)
+        : Vertex(workspace, domElement) {
     }
 
     topology::KeyVertex* vacKeyVertex() const {
@@ -58,9 +60,12 @@ public:
         return n ? n->toCellUnchecked()->toKeyVertexUnchecked() : nullptr;
     }
 
-protected:
+    void updateJoins();
+    void updateJoins(core::AnimTime t) override;
+
     geometry::Rect2d boundingBox(core::AnimTime t) const override;
 
+protected:
     ElementError updateFromDom_(Workspace* workspace) override;
 
     void paint_(
@@ -69,6 +74,7 @@ protected:
         PaintOptions flags = PaintOption::None) const override;
 
 private:
+    void updateJoins_();
 };
 
 class VGC_WORKSPACE_API InbetweenVertex : public Vertex {
@@ -78,8 +84,8 @@ private:
 public:
     ~InbetweenVertex() override = default;
 
-    InbetweenVertex(dom::Element* domElement)
-        : Vertex(domElement) {
+    InbetweenVertex(Workspace* workspace, dom::Element* domElement)
+        : Vertex(workspace, domElement) {
     }
 
     topology::InbetweenVertex* vacInbetweenVertex() const {
@@ -87,9 +93,9 @@ public:
         return n ? n->toCellUnchecked()->toInbetweenVertexUnchecked() : nullptr;
     }
 
-protected:
     geometry::Rect2d boundingBox(core::AnimTime t) const override;
 
+protected:
     ElementError updateFromDom_(Workspace* workspace) override;
     void preparePaint_(core::AnimTime t, PaintOptions flags) override;
 

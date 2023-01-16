@@ -33,27 +33,27 @@ namespace vgc::workspace {
 struct CurveGraphics {
 
     void clear() {
-        controlPoints.reset();
-        thickPolyline.reset();
-        numPoints = 0;
+        controlPoints_.reset();
+        thickPolyline_.reset();
+        numPoints_ = 0;
     }
 
-    graphics::BufferPtr controlPoints;
-    graphics::BufferPtr thickPolyline;
-    Int numPoints = 0;
+    graphics::BufferPtr controlPoints_;
+    graphics::BufferPtr thickPolyline_;
+    Int numPoints_ = 0;
 };
 
 struct StrokeGraphics {
 
     void clear() {
-        meshVertices.reset();
-        meshUVSTs.reset();
-        meshIndices.reset();
+        meshVertices_.reset();
+        meshUVSTs_.reset();
+        meshIndices_.reset();
     }
 
-    graphics::BufferPtr meshVertices;
-    graphics::BufferPtr meshUVSTs;
-    graphics::BufferPtr meshIndices;
+    graphics::BufferPtr meshVertices_;
+    graphics::BufferPtr meshUVSTs_;
+    graphics::BufferPtr meshIndices_;
 };
 
 struct EdgeGraphics {
@@ -78,13 +78,28 @@ struct EdgeGraphics {
     graphics::GeometryViewPtr selectionGeometry_;
 };
 
+struct EdgeGeometryComputationCache {
+
+    void clear() {
+        strokeVertices_.clear();
+        pointInstData_.clear();
+        lineVertices_.clear();
+        edgeTesselationMode_ = -1;
+    }
+
+    geometry::Vec2fArray strokeVertices_;
+    core::FloatArray pointInstData_;
+    core::Array<geometry::Vec4f> lineVertices_;
+    int edgeTesselationMode_ = -1;
+};
+
 class VGC_WORKSPACE_API Edge : public VacElement {
 private:
     friend class Workspace;
 
 protected:
-    Edge(dom::Element* domElement)
-        : VacElement(domElement) {
+    Edge(Workspace* workspace, dom::Element* domElement)
+        : VacElement(workspace, domElement) {
     }
 
 public:
@@ -92,6 +107,8 @@ public:
         topology::VacNode* n = vacNode();
         return n ? n->toCellUnchecked()->toEdgeCellUnchecked() : nullptr;
     }
+
+    virtual void updateGeometry(core::AnimTime t);
 };
 
 class VGC_WORKSPACE_API KeyEdge : public Edge {
@@ -101,8 +118,8 @@ private:
 public:
     ~KeyEdge() override = default;
 
-    KeyEdge(dom::Element* domElement)
-        : Edge(domElement) {
+    KeyEdge(Workspace* workspace, dom::Element* domElement)
+        : Edge(workspace, domElement) {
     }
 
     topology::KeyEdge* vacKeyEdge() const {
@@ -114,9 +131,12 @@ public:
         edgeTesselationModeRequested_ = core::clamp(mode, 0, 2);
     }
 
-protected:
+    void updateGeometry();
+    void updateGeometry(core::AnimTime t) override;
+
     geometry::Rect2d boundingBox(core::AnimTime t) const override;
 
+protected:
     ElementError updateFromDom_(Workspace* workspace) override;
 
     void preparePaint_(core::AnimTime t, PaintOptions flags) override;
@@ -127,19 +147,16 @@ protected:
         PaintOptions flags = PaintOption::None) const override;
 
 private:
-    Vertex* v0_ = nullptr;
-    Vertex* v1_ = nullptr;
+    KeyVertex* v0_ = nullptr;
+    KeyVertex* v1_ = nullptr;
 
     // need an invalidation mechanism
     mutable EdgeGraphics cachedGraphics_;
+    int edgeTesselationModeRequested_ = 2;
 
     // local data to build graphics resource, kept as copy
     // should this be in vac ?
-    geometry::Vec2fArray strokeVertices_;
-    core::FloatArray pointInstData_;
-    core::Array<geometry::Vec4f> lineVertices_;
-    int edgeTesselationMode_ = -1;
-    int edgeTesselationModeRequested_ = 2;
+    EdgeGeometryComputationCache geometry_;
 
     //void onUpdateError_();
     void updateGeometry_();

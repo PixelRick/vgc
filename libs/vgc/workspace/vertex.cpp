@@ -19,6 +19,17 @@
 
 namespace vgc::workspace {
 
+void Vertex::updateJoins(core::AnimTime t) {
+}
+
+void KeyVertex::updateJoins() {
+    updateJoins_();
+}
+
+void KeyVertex::updateJoins(core::AnimTime t) {
+    updateJoins_();
+}
+
 geometry::Rect2d KeyVertex::boundingBox(core::AnimTime /*t*/) const {
     geometry::Vec2d pos = vacKeyVertex()->position({});
     return geometry::Rect2d(pos, pos);
@@ -40,6 +51,9 @@ ElementError KeyVertex::updateFromDom_(Workspace* /*workspace*/) {
 
     const auto& position = domElement->getAttribute(ds::position).getVec2d();
     topology::ops::setKeyVertexPosition(kv, position);
+
+    notifyChanges();
+
     return ElementError::None;
 }
 
@@ -47,6 +61,9 @@ void KeyVertex::paint_(
     graphics::Engine* /*engine*/,
     core::AnimTime /*t*/,
     PaintOptions /*flags*/) const {
+}
+
+void KeyVertex::updateJoins_() {
 }
 
 geometry::Rect2d InbetweenVertex::boundingBox(core::AnimTime t) const {

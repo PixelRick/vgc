@@ -19,6 +19,17 @@
 
 namespace vgc::workspace {
 
+void Edge::updateGeometry(core::AnimTime t) {
+}
+
+void KeyEdge::updateGeometry() {
+    updateGeometry_();
+}
+
+void KeyEdge::updateGeometry(core::AnimTime t) {
+    updateGeometry_();
+}
+
 geometry::Rect2d KeyEdge::boundingBox(core::AnimTime /*t*/) const {
     return geometry::Rect2d::empty;
 }
@@ -39,8 +50,8 @@ ElementError KeyEdge::updateFromDom_(Workspace* workspace) {
     replaceDependency(v0_, ve0);
     replaceDependency(v1_, ve1);
     // XXX impl custom safe cast
-    v0_ = dynamic_cast<Vertex*>(ve0);
-    v1_ = dynamic_cast<Vertex*>(ve1);
+    v0_ = dynamic_cast<KeyVertex*>(ve0);
+    v1_ = dynamic_cast<KeyVertex*>(ve1);
 
     // what's the cleanest way to report/notify that this edge has actually changed.
     // what are the different categories of changes that matter to dependents ?
@@ -111,7 +122,7 @@ ElementError KeyEdge::updateFromDom_(Workspace* workspace) {
         topology::KeyVertex* oldKv1 = ke->endVertex();
         if (kv0 != oldKv0 || kv1 != oldKv1) {
             // dirty geometry
-            edgeTesselationMode_ = -1;
+            geometry_.clear();
             // remove current node
             topology::ops::removeNode(vacNode_, false);
             vacNode_ = nullptr;
@@ -140,7 +151,7 @@ ElementError KeyEdge::updateFromDom_(Workspace* workspace) {
             topology::ops::setKeyEdgeCurvePoints(ke, points);
             topology::ops::setKeyEdgeCurveWidths(ke, widths);
             // dirty geometry
-            edgeTesselationMode_ = -1;
+            geometry_.clear();
         }
 
         // XXX should we snap here ?
@@ -169,6 +180,7 @@ void KeyEdge::paint_(graphics::Engine* engine, core::AnimTime /*t*/, PaintOption
     namespace ds = dom::strings;
 
     const dom::Element* const domElement = this->domElement();
+    // XXX "implicit" cells' domElement would be the composite ?
 
     constexpr PaintOptions strokeOptions = {PaintOption::Selected, PaintOption::Draft};
 
@@ -191,7 +203,7 @@ void KeyEdge::paint_(graphics::Engine* engine, core::AnimTime /*t*/, PaintOption
 
         engine->updateBufferData(
             cachedGraphics_.strokeGeometry_->vertexBuffer(0), //
-            strokeVertices_);
+            geometry_.strokeVertices_);
         engine->updateBufferData(
             cachedGraphics_.strokeGeometry_->vertexBuffer(1), //
             core::Array<float>({color.r(), color.g(), color.b(), color.a()}));
@@ -211,7 +223,8 @@ void KeyEdge::paint_(graphics::Engine* engine, core::AnimTime /*t*/, PaintOption
         lineInstData.extend({0.f, 0.f, 1.f, 0.02f, 0.64f, 1.0f, 1.f});
 
         engine->updateBufferData(
-            cachedGraphics_.centerlineGeometry_->vertexBuffer(0), lineVertices_);
+            cachedGraphics_.centerlineGeometry_->vertexBuffer(0),
+            geometry_.lineVertices_);
         engine->updateBufferData(
             cachedGraphics_.centerlineGeometry_->vertexBuffer(1),
             std::move(lineInstData));
@@ -238,7 +251,7 @@ void KeyEdge::paint_(graphics::Engine* engine, core::AnimTime /*t*/, PaintOption
         engine->updateBufferData(
             cachedGraphics_.pointsGeometry_->vertexBuffer(0), std::move(pointVertices));
         engine->updateBufferData(
-            cachedGraphics_.pointsGeometry_->vertexBuffer(1), pointInstData_);
+            cachedGraphics_.pointsGeometry_->vertexBuffer(1), geometry_.pointInstData_);
     }
 
     if (flags.has(PaintOption::Selected)) {
@@ -253,7 +266,8 @@ void KeyEdge::paint_(graphics::Engine* engine, core::AnimTime /*t*/, PaintOption
     if (flags.has(PaintOption::Outline)) {
         engine->setProgram(graphics::BuiltinProgram::SreenSpaceDisplacement);
         engine->draw(cachedGraphics_.centerlineGeometry_, -1, 0);
-        engine->draw(cachedGraphics_.pointsGeometry_, -1, pointInstData_.length());
+        engine->draw(
+            cachedGraphics_.pointsGeometry_, -1, geometry_.pointInstData_.length());
     }
 }
 
@@ -266,14 +280,12 @@ void KeyEdge::updateGeometry_() {
     }
 
     // check if we need an update
-    if (edgeTesselationModeRequested_ == edgeTesselationMode_) {
+    if (edgeTesselationModeRequested_ == geometry_.edgeTesselationMode_) {
         return;
     }
-    edgeTesselationMode_ = edgeTesselationModeRequested_;
 
-    strokeVertices_.clear();
-    pointInstData_.clear();
-    lineVertices_.clear();
+    geometry_.clear();
+    geometry_.edgeTesselationMode_ = edgeTesselationModeRequested_;
 
     geometry::Curve curve;
     curve.setPositionData(&ke->points());
@@ -301,21 +313,21 @@ void KeyEdge::updateGeometry_() {
         curve.sampleRange(samplingParams, samples);
         for (const geometry::CurveSample& s : samples) {
             geometry::Vec2d p0 = s.leftPoint();
-            strokeVertices_.emplaceLast(geometry::Vec2f(p0));
+            geometry_.strokeVertices_.emplaceLast(geometry::Vec2f(p0));
             geometry::Vec2d p1 = s.rightPoint();
-            strokeVertices_.emplaceLast(geometry::Vec2f(p1));
+            geometry_.strokeVertices_.emplaceLast(geometry::Vec2f(p1));
             geometry::Vec2f p = geometry::Vec2f(s.position());
             geometry::Vec2f n = geometry::Vec2f(s.normal());
             // clang-format off
-            lineVertices_.emplaceLast(p.x(), p.y(), -lineHalfSize * n.x(), -lineHalfSize * n.y());
-            lineVertices_.emplaceLast(p.x(), p.y(),  lineHalfSize * n.x(),  lineHalfSize * n.y());
+            geometry_.lineVertices_.emplaceLast(p.x(), p.y(), -lineHalfSize * n.x(), -lineHalfSize * n.y());
+            geometry_.lineVertices_.emplaceLast(p.x(), p.y(),  lineHalfSize * n.x(),  lineHalfSize * n.y());
             // clang-format on
         }
     }
     else {
         geometry::Vec2dArray triangles = curve.triangulate(maxAngle, 1, 64);
         for (const geometry::Vec2d& p : triangles) {
-            strokeVertices_.emplaceLast(geometry::Vec2f(p));
+            geometry_.strokeVertices_.emplaceLast(geometry::Vec2f(p));
         }
     }
 
@@ -325,7 +337,7 @@ void KeyEdge::updateGeometry_() {
     for (Int j = 0; j < numPoints; ++j) {
         geometry::Vec2d dp = d[j];
         float l = j * dl;
-        pointInstData_.extend(
+        geometry_.pointInstData_.extend(
             {static_cast<float>(dp.x()),
              static_cast<float>(dp.y()),
              0.f,
@@ -333,6 +345,14 @@ void KeyEdge::updateGeometry_() {
              0.f,
              (l < 0.5f ? 2 * l : 1.f),
              1.f});
+    }
+
+    // XXX shouldn't do it for draft -> add quality enum for current cached geometry
+    if (v0_) {
+        v0_->updateJoins();
+    }
+    if (v1_) {
+        v1_->updateJoins();
     }
 
     cachedGraphics_.clear();
