@@ -27,21 +27,38 @@ ElementError KeyEdge::updateFromDom_(Workspace* workspace) {
     namespace ds = dom::strings;
     dom::Element* const domElement = this->domElement();
 
-    // dirty geometry
-    edgeTesselationMode_ = -1;
-
-    Element* ve0 =
+    std::optional<Element*> ve0opt =
         workspace->getElementFromPathAttribute(domElement, ds::startvertex, ds::vertex);
-    Element* ve1 =
+    std::optional<Element*> ve1opt =
         workspace->getElementFromPathAttribute(domElement, ds::endvertex, ds::vertex);
-    Element* parentElement = this->parent();
 
-    // fallback to closed edge if only ev0 or ev1 is present
-    if (!ve0) {
-        ve0 = ve1;
+    Element* parentElement = this->parent();
+    Element* ve0 = ve0opt.value_or(nullptr);
+    Element* ve1 = ve1opt.value_or(nullptr);
+
+    replaceDependency(v0_, ve0);
+    replaceDependency(v1_, ve1);
+    // XXX impl custom safe cast
+    v0_ = dynamic_cast<Vertex*>(ve0);
+    v1_ = dynamic_cast<Vertex*>(ve1);
+
+    // what's the cleanest way to report/notify that this edge has actually changed.
+    // what are the different categories of changes that matter to dependents ?
+    // for instance an edge wanna know if a vertex moves or has a new style (new join)
+
+    if (ve0opt.has_value() != ve1opt.has_value()) {
+        removeVacNode();
+        return ElementError::InvalidAttribute;
     }
-    if (!ve1) {
-        ve1 = ve0;
+
+    if (ve0opt.has_value() && !ve0) {
+        removeVacNode();
+        return ElementError::UnresolvedDependency;
+    }
+
+    if (ve1opt.has_value() && !ve1) {
+        removeVacNode();
+        return ElementError::UnresolvedDependency;
     }
 
     topology::KeyVertex* kv0 = nullptr;
@@ -55,12 +72,20 @@ ElementError KeyEdge::updateFromDom_(Workspace* workspace) {
         if (vn0) {
             kv0 = vn0->toCellUnchecked()->toKeyVertexUnchecked();
         }
+        if (ve0->hasError() || !kv0) {
+            removeVacNode();
+            return ElementError::ErrorInDependency;
+        }
     }
     if (ve1) {
         workspace->updateElementFromDom(ve1);
         topology::VacNode* vn1 = ve1->vacNode();
         if (vn1) {
             kv1 = vn1->toCellUnchecked()->toKeyVertexUnchecked();
+        }
+        if (ve1->hasError() || !kv0) {
+            removeVacNode();
+            return ElementError::ErrorInDependency;
         }
     }
     if (parentElement) {
@@ -72,22 +97,28 @@ ElementError KeyEdge::updateFromDom_(Workspace* workspace) {
         }
     }
 
+    if (!parentGroup) {
+        removeVacNode();
+        return ElementError::ErrorInParent;
+    }
+
     topology::KeyEdge* ke = nullptr;
 
     // check if it needs to be rebuilt
     if (vacNode_) {
         ke = vacNode_->toCellUnchecked()->toKeyEdgeUnchecked();
-
         topology::KeyVertex* oldKv0 = ke->startVertex();
         topology::KeyVertex* oldKv1 = ke->endVertex();
-        if (!parentGroup || kv0 != oldKv0 || kv1 != oldKv1) {
+        if (kv0 != oldKv0 || kv1 != oldKv1) {
+            // dirty geometry
+            edgeTesselationMode_ = -1;
+            // remove current node
             topology::ops::removeNode(vacNode_, false);
             vacNode_ = nullptr;
             ke = nullptr;
         }
     }
-
-    if (!vacNode_ && parentGroup) {
+    else {
         if (kv0 && kv1) {
             ke = topology::ops::createKeyEdge(
                 domElement->internalId(), parentGroup, kv0, kv1);
@@ -105,9 +136,12 @@ ElementError KeyEdge::updateFromDom_(Workspace* workspace) {
         const auto& points = domElement->getAttribute(ds::positions).getVec2dArray();
         const auto& widths = domElement->getAttribute(ds::widths).getDoubleArray();
 
-        // these do nothing if the data didn't change
-        topology::ops::setKeyEdgeCurvePoints(ke, points);
-        topology::ops::setKeyEdgeCurveWidths(ke, widths);
+        if (&ke->points() != &points.get() || &ke->widths() != &widths.get()) {
+            topology::ops::setKeyEdgeCurvePoints(ke, points);
+            topology::ops::setKeyEdgeCurveWidths(ke, widths);
+            // dirty geometry
+            edgeTesselationMode_ = -1;
+        }
 
         // XXX should we snap here ?
         //     group view matrices may not be ready..

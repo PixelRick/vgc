@@ -113,13 +113,7 @@ const Value& Element::getAttribute(core::StringId name) const {
     }
 }
 
-/*
-/// Emits a warning and returns `nullptr` the path cannot be resolved, or `tagNameFilter` is not
-/// empty and does not match the element tag name.
-/// Returns nullptr if the attribute is optional and not set.
-/// Throws if the attribute is not a path according to schema.
-*/
-Element* Element::getElementFromPathAttribute(
+std::optional<Element*> Element::getElementFromPathAttribute(
     core::StringId name,
     core::StringId tagNameFilter) const {
 
@@ -129,7 +123,7 @@ Element* Element::getElementFromPathAttribute(
     if (value.type() == dom::ValueType::NoneOrPath) {
         const dom::NoneOr<dom::Path>& noneOrPath = value.getNoneOrPath();
         if (!noneOrPath.has_value()) {
-            return nullptr;
+            return std::nullopt;
         }
         pathPtr = &noneOrPath.value();
     }

@@ -21,8 +21,55 @@
 
 namespace vgc::workspace {
 
+Element::~Element() {
+    clearDependencies();
+    for (Element* dependent : dependents_) {
+        dependent->onDependencyBeingDestroyed_(this);
+        dependents_.removeOne(dependent);
+    }
+}
+
 geometry::Rect2d Element::boundingBox(core::AnimTime /*t*/) const {
     return geometry::Rect2d::empty;
+}
+
+void Element::addDependency(Element* element) {
+    if (element && !dependencies_.contains(element)) {
+        dependencies_.emplaceLast(element);
+        element->dependents_.emplaceLast(this);
+    }
+}
+
+void Element::replaceDependency(Element* oldDependency, Element* newDependency) {
+    if (oldDependency != newDependency) {
+        removeDependency(oldDependency);
+        addDependency(newDependency);
+    }
+}
+
+void Element::removeDependency(Element* element) {
+    if (element && dependencies_.removeOne(element)) {
+        element->dependents_.removeOne(this);
+    }
+}
+
+void Element::clearDependencies() {
+    for (Element* dep : dependencies_) {
+        dep->dependents_.removeOne(this);
+    }
+    dependencies_.clear();
+}
+
+void Element::notifyChanges() {
+    for (Element* dependent : dependents_) {
+        dependent->onDependencyChanged_(this);
+    }
+}
+
+void Element::onDependencyChanged_(Element* dependency) {
+}
+
+void Element::onDependencyBeingDestroyed_(Element* dependency) {
 }
 
 ElementError Element::updateFromDom_(Workspace* /*workspace*/) {
@@ -49,6 +96,13 @@ VacElement* Element::findFirstSiblingVacElement_(Element* start) {
 }
 
 VacElement::~VacElement() {
+    if (vacNode_) {
+        topology::ops::removeNode(vacNode_, false);
+        vacNode_ = nullptr;
+    }
+}
+
+void VacElement::removeVacNode() {
     if (vacNode_) {
         topology::ops::removeNode(vacNode_, false);
         vacNode_ = nullptr;

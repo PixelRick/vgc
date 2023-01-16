@@ -92,7 +92,12 @@ enum class ElementError : UInt8 {
     InvalidAttribute,
     UnresolvedDependency,
     ErrorInDependency,
+    ErrorInParent,
 };
+
+constexpr bool operator!(const ElementError& error) noexcept {
+    return error == ElementError::None;
+}
 
 class Workspace;
 class VacElement;
@@ -110,7 +115,7 @@ protected:
     }
 
 public:
-    virtual ~Element() = default;
+    virtual ~Element();
 
 public:
     core::Id id() const {
@@ -134,6 +139,14 @@ public:
 
     ElementFlags flags() const {
         return flags_;
+    }
+
+    ElementError error() const {
+        return error_;
+    }
+
+    bool hasError() const {
+        return error_ != ElementError::None;
     }
 
     bool isInSyncWithDom() const {
@@ -193,6 +206,16 @@ protected:
 
     virtual ElementError updateFromDom_(Workspace* workspace);
 
+    void addDependency(Element* dependency);
+    void replaceDependency(Element* oldDependency, Element* newDependency);
+    void removeDependency(Element* dependency);
+    void clearDependencies();
+
+    void notifyChanges();
+
+    virtual void onDependencyChanged_(Element* dependency);
+    virtual void onDependencyBeingDestroyed_(Element* dependency);
+
     virtual void
     preparePaint_(core::AnimTime t = {}, PaintOptions flags = PaintOption::None);
 
@@ -215,6 +238,9 @@ private:
 
     bool isBeingUpdated_ = false;
     ElementError error_ = {};
+
+    core::Array<Element*> dependencies_;
+    core::Array<Element*> dependents_;
 
     static VacElement* findFirstSiblingVacElement_(Element* start);
 };
@@ -254,6 +280,8 @@ public:
 protected:
     // this pointer is not safe to use when tree is not synced with vac
     topology::VacNode* vacNode_ = nullptr;
+
+    void removeVacNode();
 };
 
 topology::VacNode* Element::vacNode() const {

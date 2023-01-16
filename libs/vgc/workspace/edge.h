@@ -127,6 +127,9 @@ protected:
         PaintOptions flags = PaintOption::None) const override;
 
 private:
+    Vertex* v0_ = nullptr;
+    Vertex* v1_ = nullptr;
+
     // need an invalidation mechanism
     mutable EdgeGraphics cachedGraphics_;
 
@@ -138,6 +141,7 @@ private:
     int edgeTesselationMode_ = -1;
     int edgeTesselationModeRequested_ = 2;
 
+    //void onUpdateError_();
     void updateGeometry_();
 };
 

@@ -269,13 +269,13 @@ public:
     const Value& getAttribute(core::StringId name) const;
 
     /// Gets the element referred to by the path attribute named `name`.
-    /// Emits a warning and returns `nullptr` the path cannot be resolved, or `tagNameFilter` is not
-    /// empty and does not match the element tag name.
-    /// Returns nullptr if the attribute is optional and not set.
-    /// Throws if the attribute is not a path according to schema.
+    /// Emits a warning and returns `nullptr` if `tagNameFilter` is not empty and does not match.
+    /// Emits a warning and returns `nullptr` if the path cannot be resolved.
+    /// Returns `std::nullopt` if the attribute is optional and not set.
     ///
-    Element*
-    getElementFromPathAttribute(core::StringId name, core::StringId tagNameFilter = {}) const;
+    std::optional<Element*> getElementFromPathAttribute(
+        core::StringId name,
+        core::StringId tagNameFilter = {}) const;
 
     /// Sets the value of the given attribute.
     ///
