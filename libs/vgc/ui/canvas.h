@@ -139,7 +139,7 @@ protected:
     VGC_SLOT(onWorkspaceChanged, onWorkspaceChanged_)
     VGC_SLOT(onDocumentChanged, onDocumentChanged_)
 
-private:
+protected:
     // Flags
     bool reload_ = true;
 

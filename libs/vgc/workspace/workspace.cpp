@@ -675,7 +675,16 @@ void Workspace::updateTreeAndVacFromDom_(const dom::Diff& diff) {
         if (!domElement) {
             continue;
         }
-        elements_.erase(domElement->internalId());
+        Element* element = find(domElement);
+        if (element) {
+            Element* parent = element->parent();
+            VGC_ASSERT(parent);
+            for (Element* child : *element) {
+                parent->appendChild(child);
+            }
+            element->unlink();
+            elements_.erase(domElement->internalId());
+        }
     }
 
     // create new elements

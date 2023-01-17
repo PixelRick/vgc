@@ -19,14 +19,14 @@
 
 namespace vgc::workspace {
 
-void Edge::updateGeometry(core::AnimTime t) {
+void Edge::updateGeometry(core::AnimTime /*t*/) {
 }
 
 void KeyEdge::updateGeometry() {
     updateGeometry_();
 }
 
-void KeyEdge::updateGeometry(core::AnimTime t) {
+void KeyEdge::updateGeometry(core::AnimTime /*t*/) {
     updateGeometry_();
 }
 
@@ -220,7 +220,7 @@ void KeyEdge::paint_(graphics::Engine* engine, core::AnimTime /*t*/, PaintOption
             BuiltinGeometryLayout::XYDxDy_iXYRotRGBA);
 
         core::FloatArray lineInstData;
-        lineInstData.extend({0.f, 0.f, 1.f, 0.02f, 0.64f, 1.0f, 1.f});
+        lineInstData.extend({0.f, 0.f, 1.f, 0.02f, 0.64f, 1.0f, 1.f, 0.f /*padding*/});
 
         engine->updateBufferData(
             cachedGraphics_.centerlineGeometry_->vertexBuffer(0),
@@ -237,7 +237,6 @@ void KeyEdge::paint_(graphics::Engine* engine, core::AnimTime /*t*/, PaintOption
             BuiltinGeometryLayout::XYDxDy_iXYRotRGBA);
 
         float pointHalfSize = 5.f;
-        float lineHalfSize = 2.f;
 
         core::Array<geometry::Vec4f> pointVertices;
         // clang-format off
@@ -266,8 +265,7 @@ void KeyEdge::paint_(graphics::Engine* engine, core::AnimTime /*t*/, PaintOption
     if (flags.has(PaintOption::Outline)) {
         engine->setProgram(graphics::BuiltinProgram::SreenSpaceDisplacement);
         engine->draw(cachedGraphics_.centerlineGeometry_, -1, 0);
-        engine->draw(
-            cachedGraphics_.pointsGeometry_, -1, geometry_.pointInstData_.length());
+        engine->draw(cachedGraphics_.pointsGeometry_, -1, geometry_.numPoints_);
     }
 }
 
@@ -291,7 +289,6 @@ void KeyEdge::updateGeometry_() {
     curve.setPositionData(&ke->points());
     curve.setWidthData(&ke->widths());
 
-    float pointHalfSize = 5.f;
     float lineHalfSize = 2.f;
 
     double maxAngle = 0.05;
@@ -332,7 +329,7 @@ void KeyEdge::updateGeometry_() {
     }
 
     const geometry::Vec2dArray& d = *curve.positionData();
-    Int numPoints = d.length();
+    const Int numPoints = d.length();
     const float dl = 1.f / numPoints;
     for (Int j = 0; j < numPoints; ++j) {
         geometry::Vec2d dp = d[j];
@@ -346,13 +343,14 @@ void KeyEdge::updateGeometry_() {
              (l < 0.5f ? 2 * l : 1.f),
              1.f});
     }
+    geometry_.numPoints_ = numPoints;
 
     // XXX shouldn't do it for draft -> add quality enum for current cached geometry
     if (v0_) {
-        v0_->updateJoins();
+        v0_->updateJoinsAndCaps();
     }
     if (v1_) {
-        v1_->updateJoins();
+        v1_->updateJoinsAndCaps();
     }
 
     cachedGraphics_.clear();

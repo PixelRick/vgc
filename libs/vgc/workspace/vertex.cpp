@@ -19,15 +19,15 @@
 
 namespace vgc::workspace {
 
-void Vertex::updateJoins(core::AnimTime t) {
+void Vertex::updateJoinsAndCaps(core::AnimTime /*t*/) {
 }
 
-void KeyVertex::updateJoins() {
-    updateJoins_();
+void KeyVertex::updateJoinsAndCaps() {
+    updateJoinsAndCaps_();
 }
 
-void KeyVertex::updateJoins(core::AnimTime t) {
-    updateJoins_();
+void KeyVertex::updateJoinsAndCaps(core::AnimTime /*t*/) {
+    updateJoinsAndCaps_();
 }
 
 geometry::Rect2d KeyVertex::boundingBox(core::AnimTime /*t*/) const {
@@ -63,7 +63,8 @@ void KeyVertex::paint_(
     PaintOptions /*flags*/) const {
 }
 
-void KeyVertex::updateJoins_() {
+void KeyVertex::updateJoinsAndCaps_() {
+    VGC_DEBUG_TMP("updateJoinsAndCaps_()");
 }
 
 geometry::Rect2d InbetweenVertex::boundingBox(core::AnimTime t) const {

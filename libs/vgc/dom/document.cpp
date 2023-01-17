@@ -835,6 +835,13 @@ core::History* Document::enableHistory(core::StringId entrypointName) {
     return history_.get();
 }
 
+void Document::disableHistory() {
+    if (history_) {
+        history_->disconnect(this);
+        history_ = nullptr;
+    }
+}
+
 bool Document::emitPendingDiff() {
     for (const auto& [node, oldRelatives] : previousRelativesMap_) {
         if (pendingDiff_.createdNodes_.contains(node)) {
@@ -896,8 +903,16 @@ void Document::onCreateNode_(Node* node) {
 }
 
 void Document::onRemoveNode_(Node* node) {
-    pendingDiff_.removedNodes_.emplaceLast(node);
-    pendingDiffKeepAllocPointers_.emplaceLast(node);
+    if (!pendingDiff_.createdNodes_.removeOne(node)) {
+        pendingDiff_.removedNodes_.emplaceLast(node);
+        pendingDiffKeepAllocPointers_.emplaceLast(node);
+    }
+    else {
+        previousRelativesMap_.erase(node);
+        pendingDiff_.modifiedElements_.erase(static_cast<Element*>(node));
+        pendingDiff_.reparentedNodes_.erase(node);
+        pendingDiff_.childrenReorderedNodes_.erase(node);
+    }
 }
 
 void Document::onMoveNode_(Node* node, const NodeRelatives& savedRelatives) {

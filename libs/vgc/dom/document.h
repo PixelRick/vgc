@@ -348,6 +348,7 @@ public:
     Element* elementByInternalId(core::Id id) const;
 
     core::History* enableHistory(core::StringId entrypointName);
+    void disableHistory();
 
     core::History* history() const {
         return history_.get();

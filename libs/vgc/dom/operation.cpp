@@ -39,8 +39,8 @@ void CreateElementOperation::do_() {
 
 void CreateElementOperation::undo_() {
     Document* document = element_->document();
-    element_->removeObjectFromParent_();
     document->onRemoveNode_(element_.get());
+    element_->removeObjectFromParent_();
     document->versionId_ = undoneDocumentVersionId();
     keepAlive_ = true;
 }

@@ -83,12 +83,14 @@ struct EdgeGeometryComputationCache {
     void clear() {
         strokeVertices_.clear();
         pointInstData_.clear();
+        numPoints_ = 0;
         lineVertices_.clear();
         edgeTesselationMode_ = -1;
     }
 
     geometry::Vec2fArray strokeVertices_;
     core::FloatArray pointInstData_;
+    Int numPoints_ = 0;
     core::Array<geometry::Vec4f> lineVertices_;
     int edgeTesselationMode_ = -1;
 };

@@ -25,8 +25,9 @@ Element::~Element() {
     clearDependencies();
     for (Element* dependent : dependents_) {
         dependent->onDependencyBeingDestroyed_(this);
-        dependents_.removeOne(dependent);
+        dependent->dependencies_.removeOne(this);
     }
+    dependents_.clear();
 }
 
 geometry::Rect2d Element::boundingBox(core::AnimTime /*t*/) const {
@@ -66,10 +67,10 @@ void Element::notifyChanges() {
     }
 }
 
-void Element::onDependencyChanged_(Element* dependency) {
+void Element::onDependencyChanged_(Element* /*dependency*/) {
 }
 
-void Element::onDependencyBeingDestroyed_(Element* dependency) {
+void Element::onDependencyBeingDestroyed_(Element* /*dependency*/) {
 }
 
 ElementError Element::updateFromDom_(Workspace* /*workspace*/) {

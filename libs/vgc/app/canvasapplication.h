@@ -106,6 +106,12 @@ public:
         return mainWidget()->panelArea();
     }
 
+    /// Returns the active document.
+    ///
+    dom::Document* activeDocument() const {
+        return document_;
+    }
+
 private:
     std::string applicationName_;
     MainWindowPtr window_;

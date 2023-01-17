@@ -14,9 +14,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <QTimer>
+
 #include <vgc/app/canvasapplication.h>
 #include <vgc/core/paths.h>
 #include <vgc/core/random.h>
+#include <vgc/dom/document.h>
 #include <vgc/ui/column.h>
 #include <vgc/ui/grid.h>
 #include <vgc/ui/imagebox.h>
@@ -265,7 +268,89 @@ private:
     }
 };
 
+void documentScenario1(vgc::dom::Document* document) {
+    static int i = 0;
+
+    namespace dom = vgc::dom;
+    namespace ds = dom::strings;
+    dom::Element* vgc = document->rootElement();
+    static dom::Element* v0 = nullptr;
+    static dom::Element* v1 = nullptr;
+    static dom::Element* v2 = nullptr;
+    static dom::Element* v3 = nullptr;
+    static dom::Element* e0 = nullptr;
+    static dom::Element* e1 = nullptr;
+    static dom::Element* e2 = nullptr;
+
+    using Vec2d = vgc::geometry::Vec2d;
+
+    constexpr Vec2d p0(0, 0);
+
+    // init
+    if (i == 0) {
+        document->disableHistory();
+
+        v0 = dom::Element::create(vgc, ds::vertex);
+        v1 = dom::Element::create(vgc, ds::vertex);
+        v2 = dom::Element::create(vgc, ds::vertex);
+        v3 = dom::Element::create(vgc, ds::vertex);
+        e0 = dom::Element::create(vgc, ds::edge);
+        e1 = dom::Element::create(vgc, ds::edge);
+        e2 = dom::Element::create(vgc, ds::edge);
+
+        /*
+          V1-----V0-----V2 (rotates around V0)
+                 /
+                /
+               V3
+        */
+
+        Vec2d p1(-200, 0);
+        Vec2d p2(200, 0);
+        Vec2d p3(-50, 200);
+
+        v0->setAttribute(ds::position, p0);
+        v1->setAttribute(ds::position, p1);
+        v2->setAttribute(ds::position, p2);
+        v3->setAttribute(ds::position, p3);
+
+        auto initEdge = [](dom::Element* e,
+                           dom::Element* v0,
+                           dom::Element* v1,
+                           const core::Color& c,
+                           double w) {
+            e->setAttribute(
+                ds::positions,
+                geometry::Vec2dArray(
+                    {v0->getAttribute(ds::position).getVec2d(),
+                     v1->getAttribute(ds::position).getVec2d()}));
+            e->setAttribute(ds::widths, core::DoubleArray({w, w}));
+            e->setAttribute(ds::color, c);
+            e->setAttribute(ds::startvertex, v0->getPathFromId());
+            e->setAttribute(ds::endvertex, v1->getPathFromId());
+        };
+
+        initEdge(e0, v1, v0, core::Color(0, 0, 0.9f), 60.f);
+        initEdge(e1, v0, v2, core::Color(0.9f, 0, 0), 20.f);
+        initEdge(e2, v0, v3, core::Color(0, 0.8f, 0), 30.f);
+    }
+
+    // step
+
+    float a = i / 100.f;
+    Vec2d p2(200 * std::cosf(a), 200 * std::sinf(a));
+    e1->setAttribute(ds::positions, geometry::Vec2dArray({p0, p2}));
+    v2->setAttribute(ds::position, p2);
+    document->emitPendingDiff();
+
+    ++i;
+}
+
 int main(int argc, char* argv[]) {
     auto application = UiTestApplication::create(argc, argv);
+    QTimer t;
+    t.callOnTimeout([&]() { documentScenario1(application->activeDocument()); });
+    t.setInterval(100);
+    t.start();
     return application->exec();
 }

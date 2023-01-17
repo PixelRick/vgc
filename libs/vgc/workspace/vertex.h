@@ -41,7 +41,7 @@ public:
         return n ? n->toCellUnchecked()->toVertexCellUnchecked() : nullptr;
     }
 
-    virtual void updateJoins(core::AnimTime t);
+    virtual void updateJoinsAndCaps(core::AnimTime t);
 };
 
 class VGC_WORKSPACE_API KeyVertex : public Vertex {
@@ -60,8 +60,8 @@ public:
         return n ? n->toCellUnchecked()->toKeyVertexUnchecked() : nullptr;
     }
 
-    void updateJoins();
-    void updateJoins(core::AnimTime t) override;
+    void updateJoinsAndCaps();
+    void updateJoinsAndCaps(core::AnimTime t) override;
 
     geometry::Rect2d boundingBox(core::AnimTime t) const override;
 
@@ -74,7 +74,7 @@ protected:
         PaintOptions flags = PaintOption::None) const override;
 
 private:
-    void updateJoins_();
+    void updateJoinsAndCaps_();
 };
 
 class VGC_WORKSPACE_API InbetweenVertex : public Vertex {

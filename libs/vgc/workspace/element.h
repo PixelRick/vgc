@@ -119,6 +119,8 @@ public:
     virtual ~Element();
 
 public:
+    using ChildrenIterator = Base::Iterator;
+
     core::Id id() const {
         return id_;
     }
@@ -192,6 +194,14 @@ public:
 
     Int numChildren() const {
         return Base::numChildren();
+    }
+
+    ChildrenIterator begin() const {
+        return Base::begin();
+    }
+
+    ChildrenIterator end() const {
+        return Base::end();
     }
 
     void paint(

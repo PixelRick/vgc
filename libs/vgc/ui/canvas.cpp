@@ -193,7 +193,7 @@ void Canvas::onWorkspaceChanged_() {
     requestRepaint();
 }
 
-void Canvas::onDocumentChanged_(const dom::Diff& diff) {
+void Canvas::onDocumentChanged_(const dom::Diff& /*diff*/) {
 }
 
 void Canvas::startCurve_(const geometry::Vec2d& p, double width) {
@@ -470,24 +470,7 @@ void Canvas::onPaintDraw(graphics::Engine* engine, PaintOptions /*options*/) {
     engine->setRasterizerState((polygonMode_ == 1) ? wireframeRS_ : fillRS_);
 
     geometry::Mat4f vm = engine->viewMatrix();
-    geometry::Mat4d cameraView = camera_.viewMatrix();
-    geometry::Mat4f cameraViewf(
-        static_cast<float>(cameraView(0, 0)),
-        static_cast<float>(cameraView(0, 1)),
-        static_cast<float>(cameraView(0, 2)),
-        static_cast<float>(cameraView(0, 3)),
-        static_cast<float>(cameraView(1, 0)),
-        static_cast<float>(cameraView(1, 1)),
-        static_cast<float>(cameraView(1, 2)),
-        static_cast<float>(cameraView(1, 3)),
-        static_cast<float>(cameraView(2, 0)),
-        static_cast<float>(cameraView(2, 1)),
-        static_cast<float>(cameraView(2, 2)),
-        static_cast<float>(cameraView(2, 3)),
-        static_cast<float>(cameraView(3, 0)),
-        static_cast<float>(cameraView(3, 1)),
-        static_cast<float>(cameraView(3, 2)),
-        static_cast<float>(cameraView(3, 3)));
+    geometry::Mat4f cameraViewf(camera_.viewMatrix());
     engine->pushViewMatrix(vm * cameraViewf);
 
     // render visit
