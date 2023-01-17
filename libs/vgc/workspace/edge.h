@@ -81,17 +81,19 @@ struct EdgeGraphics {
 struct EdgeGeometryComputationCache {
 
     void clear() {
-        strokeVertices_.clear();
-        pointInstData_.clear();
-        numPoints_ = 0;
-        lineVertices_.clear();
+        samples_.clear();
+        triangulation_.clear();
+        cps_.clear();
+        startSampleOverride_ = 0;
+        endSampleOverride_ = 0;
         edgeTesselationMode_ = -1;
     }
 
-    geometry::Vec2fArray strokeVertices_;
-    core::FloatArray pointInstData_;
-    Int numPoints_ = 0;
-    core::Array<geometry::Vec4f> lineVertices_;
+    geometry::CurveSampleArray samples_;
+    geometry::Vec2dArray triangulation_; // to remove
+    geometry::Vec2fArray cps_;
+    Int startSampleOverride_ = 0;
+    Int endSampleOverride_ = 0;
     int edgeTesselationMode_ = -1;
 };
 
@@ -116,6 +118,7 @@ public:
 class VGC_WORKSPACE_API KeyEdge : public Edge {
 private:
     friend class Workspace;
+    friend class KeyVertex; // for joins and caps
 
 public:
     ~KeyEdge() override = default;

@@ -156,6 +156,10 @@ public:
         return isInSyncWithDom_;
     }
 
+    const Workspace* workspace() const {
+        return workspace_;
+    }
+
     Element* parent() const {
         return Base::parent();
     }

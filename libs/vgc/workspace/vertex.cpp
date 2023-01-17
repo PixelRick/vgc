@@ -14,6 +14,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <vgc/workspace/edge.h>
 #include <vgc/workspace/vertex.h>
 #include <vgc/workspace/workspace.h>
 
@@ -64,7 +65,44 @@ void KeyVertex::paint_(
 }
 
 void KeyVertex::updateJoinsAndCaps_() {
-    VGC_DEBUG_TMP("updateJoinsAndCaps_()");
+    //VGC_DEBUG_TMP("updateJoinsAndCaps_()");
+
+    topology::KeyVertex* kv = vacNode()->toCellUnchecked()->toKeyVertexUnchecked();
+    if (!kv) {
+        return;
+    }
+
+    // get the KeyEdges that we have to join (later we'll have to do that by join group index)
+    struct IncidentEdge {
+        topology::KeyEdge* vacKe;
+        KeyEdge* ke;
+        double angle;
+        bool isReverse;
+        Int numSamples;
+    };
+    core::Array<IncidentEdge> edges;
+    for (topology::VacCell* cell : kv->star()) {
+        topology::KeyEdge* vacKe = cell->toKeyEdge();
+        // XXX replace dynamic_cast
+        KeyEdge* ke = dynamic_cast<KeyEdge*>(workspace()->find(vacKe->id()));
+        if (ke) {
+            ke->updateGeometry({});
+            bool isReverse = (vacKe->startVertex() != kv);
+            const geometry::CurveSampleArray& samples = ke->geometry_.samples_;
+            if (samples.length() < 2) {
+                continue;
+            }
+            geometry::CurveSample sample = samples[isReverse ? samples.size() - 2 : 1];
+
+            // XXX add xAxisAngle to Vec class
+            double angle =
+                geometry::Vec2d(1.f, 0).angle(sample.position() - kv->position({}));
+            edges.emplaceLast(
+                IncidentEdge{vacKe, ke, angle, isReverse, samples.length()});
+        }
+    }
+
+    // sort by incident angle
 }
 
 geometry::Rect2d InbetweenVertex::boundingBox(core::AnimTime t) const {

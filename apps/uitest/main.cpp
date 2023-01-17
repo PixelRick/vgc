@@ -337,7 +337,7 @@ void documentScenario1(vgc::dom::Document* document) {
 
     // step
 
-    float a = i / 100.f;
+    float a = i / 500.f;
     Vec2d p2(200 * std::cosf(a), 200 * std::sinf(a));
     e1->setAttribute(ds::positions, geometry::Vec2dArray({p0, p2}));
     v2->setAttribute(ds::position, p2);
@@ -350,7 +350,7 @@ int main(int argc, char* argv[]) {
     auto application = UiTestApplication::create(argc, argv);
     QTimer t;
     t.callOnTimeout([&]() { documentScenario1(application->activeDocument()); });
-    t.setInterval(100);
+    t.setInterval(20);
     t.start();
     return application->exec();
 }

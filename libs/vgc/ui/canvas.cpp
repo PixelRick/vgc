@@ -206,13 +206,14 @@ void Canvas::startCurve_(const geometry::Vec2d& p, double width) {
     // XXX CLEAN
     static core::StringId Draw_Curve("Draw Curve");
     core::History* history = workspace_->history();
-    drawCurveUndoGroup_ = history->createUndoGroup(Draw_Curve);
-
-    drawCurveUndoGroup_->undone().connect([this](core::UndoGroup*, bool /*isAbort*/) {
-        // isAbort should be true since we have no sub-group
-        isSketching_ = false;
-        drawCurveUndoGroup_ = nullptr;
-    });
+    if (history) {
+        drawCurveUndoGroup_ = history->createUndoGroup(Draw_Curve);
+        drawCurveUndoGroup_->undone().connect([this](core::UndoGroup*, bool /*isAbort*/) {
+            // isAbort should be true since we have no sub-group
+            isSketching_ = false;
+            drawCurveUndoGroup_ = nullptr;
+        });
+    }
 
     workspace::Element* wVgc = workspace_->vgcElement();
     dom::Element* dVgc = wVgc->domElement();

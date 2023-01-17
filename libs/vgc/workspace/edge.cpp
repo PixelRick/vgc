@@ -201,9 +201,24 @@ void KeyEdge::paint_(graphics::Engine* engine, core::AnimTime /*t*/, PaintOption
 
         core::Color color = domElement->getAttribute(ds::color).getColor();
 
+        geometry::Vec2fArray strokeVertices;
+        if (edgeTesselationModeRequested_ <= 2) {
+            for (const geometry::CurveSample& s : geometry_.samples_) {
+                geometry::Vec2d p0 = s.leftPoint();
+                strokeVertices.emplaceLast(geometry::Vec2f(p0));
+                geometry::Vec2d p1 = s.rightPoint();
+                strokeVertices.emplaceLast(geometry::Vec2f(p1));
+            }
+        }
+        else {
+            for (const geometry::Vec2d& p : geometry_.triangulation_) {
+                strokeVertices.emplaceLast(geometry::Vec2f(p));
+            }
+        }
         engine->updateBufferData(
             cachedGraphics_.strokeGeometry_->vertexBuffer(0), //
-            geometry_.strokeVertices_);
+            std::move(strokeVertices));
+
         engine->updateBufferData(
             cachedGraphics_.strokeGeometry_->vertexBuffer(1), //
             core::Array<float>({color.r(), color.g(), color.b(), color.a()}));
@@ -222,9 +237,21 @@ void KeyEdge::paint_(graphics::Engine* engine, core::AnimTime /*t*/, PaintOption
         core::FloatArray lineInstData;
         lineInstData.extend({0.f, 0.f, 1.f, 0.02f, 0.64f, 1.0f, 1.f, 0.f /*padding*/});
 
+        float lineHalfSize = 2.f;
+
+        geometry::Vec4fArray lineVertices;
+        for (const geometry::CurveSample& s : geometry_.samples_) {
+            geometry::Vec2f p = geometry::Vec2f(s.position());
+            geometry::Vec2f n = geometry::Vec2f(s.normal());
+            // clang-format off
+            lineVertices.emplaceLast(p.x(), p.y(), -lineHalfSize * n.x(), -lineHalfSize * n.y());
+            lineVertices.emplaceLast(p.x(), p.y(),  lineHalfSize * n.x(),  lineHalfSize * n.y());
+            // clang-format on
+        }
+
         engine->updateBufferData(
             cachedGraphics_.centerlineGeometry_->vertexBuffer(0),
-            geometry_.lineVertices_);
+            std::move(lineVertices));
         engine->updateBufferData(
             cachedGraphics_.centerlineGeometry_->vertexBuffer(1),
             std::move(lineInstData));
@@ -247,25 +274,41 @@ void KeyEdge::paint_(graphics::Engine* engine, core::AnimTime /*t*/, PaintOption
             {0, 0,  pointHalfSize,  pointHalfSize} });
         // clang-format on
 
+        core::FloatArray pointInstData;
+        const Int numPoints = geometry_.cps_.length();
+        const float dl = 1.f / numPoints;
+        for (Int j = 0; j < numPoints; ++j) {
+            geometry::Vec2f p = geometry_.cps_[j];
+            float l = j * dl;
+            pointInstData.extend(
+                {p.x(),
+                 p.y(),
+                 0.f,
+                 (l > 0.5f ? 2 * (1.f - l) : 1.f),
+                 0.f,
+                 (l < 0.5f ? 2 * l : 1.f),
+                 1.f});
+        }
+
         engine->updateBufferData(
             cachedGraphics_.pointsGeometry_->vertexBuffer(0), std::move(pointVertices));
         engine->updateBufferData(
-            cachedGraphics_.pointsGeometry_->vertexBuffer(1), geometry_.pointInstData_);
+            cachedGraphics_.pointsGeometry_->vertexBuffer(1), std::move(pointInstData));
     }
 
     if (flags.has(PaintOption::Selected)) {
         engine->setProgram(graphics::BuiltinProgram::Simple);
-        engine->draw(cachedGraphics_.selectionGeometry_, -1, 0);
+        engine->draw(cachedGraphics_.selectionGeometry_);
     }
     else if (!flags.has(PaintOption::Outline)) {
         engine->setProgram(graphics::BuiltinProgram::Simple);
-        engine->draw(cachedGraphics_.strokeGeometry_, -1, 0);
+        engine->draw(cachedGraphics_.strokeGeometry_);
     }
 
     if (flags.has(PaintOption::Outline)) {
         engine->setProgram(graphics::BuiltinProgram::SreenSpaceDisplacement);
-        engine->draw(cachedGraphics_.centerlineGeometry_, -1, 0);
-        engine->draw(cachedGraphics_.pointsGeometry_, -1, geometry_.numPoints_);
+        engine->draw(cachedGraphics_.centerlineGeometry_);
+        engine->drawInstanced(cachedGraphics_.pointsGeometry_);
     }
 }
 
@@ -289,8 +332,6 @@ void KeyEdge::updateGeometry_() {
     curve.setPositionData(&ke->points());
     curve.setWidthData(&ke->widths());
 
-    float lineHalfSize = 2.f;
-
     double maxAngle = 0.05;
     int minQuads = 1;
     int maxQuads = 64;
@@ -306,44 +347,17 @@ void KeyEdge::updateGeometry_() {
         samplingParams.setMaxAngle(maxAngle * 0.5); // matches triangulate()
         samplingParams.setMinIntraSegmentSamples(minQuads - 1);
         samplingParams.setMaxIntraSegmentSamples(maxQuads - 1);
-        core::Array<geometry::CurveSample> samples;
-        curve.sampleRange(samplingParams, samples);
-        for (const geometry::CurveSample& s : samples) {
-            geometry::Vec2d p0 = s.leftPoint();
-            geometry_.strokeVertices_.emplaceLast(geometry::Vec2f(p0));
-            geometry::Vec2d p1 = s.rightPoint();
-            geometry_.strokeVertices_.emplaceLast(geometry::Vec2f(p1));
-            geometry::Vec2f p = geometry::Vec2f(s.position());
-            geometry::Vec2f n = geometry::Vec2f(s.normal());
-            // clang-format off
-            geometry_.lineVertices_.emplaceLast(p.x(), p.y(), -lineHalfSize * n.x(), -lineHalfSize * n.y());
-            geometry_.lineVertices_.emplaceLast(p.x(), p.y(),  lineHalfSize * n.x(),  lineHalfSize * n.y());
-            // clang-format on
-        }
+        curve.sampleRange(samplingParams, geometry_.samples_);
+        geometry_.endSampleOverride_ = geometry_.samples_.length();
     }
     else {
-        geometry::Vec2dArray triangles = curve.triangulate(maxAngle, 1, 64);
-        for (const geometry::Vec2d& p : triangles) {
-            geometry_.strokeVertices_.emplaceLast(geometry::Vec2f(p));
-        }
+        geometry_.triangulation_ = curve.triangulate(maxAngle, 1, 64);
     }
 
     const geometry::Vec2dArray& d = *curve.positionData();
-    const Int numPoints = d.length();
-    const float dl = 1.f / numPoints;
-    for (Int j = 0; j < numPoints; ++j) {
-        geometry::Vec2d dp = d[j];
-        float l = j * dl;
-        geometry_.pointInstData_.extend(
-            {static_cast<float>(dp.x()),
-             static_cast<float>(dp.y()),
-             0.f,
-             (l > 0.5f ? 2 * (1.f - l) : 1.f),
-             0.f,
-             (l < 0.5f ? 2 * l : 1.f),
-             1.f});
+    for (const geometry::Vec2d& p : d) {
+        geometry_.cps_.emplaceLast(geometry::Vec2f(p));
     }
-    geometry_.numPoints_ = numPoints;
 
     // XXX shouldn't do it for draft -> add quality enum for current cached geometry
     if (v0_) {
