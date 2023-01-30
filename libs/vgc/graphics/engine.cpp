@@ -801,7 +801,7 @@ bool Engine::beginFrame(const SwapChainPtr& swapChain, FrameKind kind) {
 void Engine::endFrame(Int syncInterval, PresentFlags flags) {
 
     // check syncInterval >= 0
-    syncInterval = syncInterval > 0 ? syncInterval : 0;
+    syncInterval = 1;// syncInterval > 0 ? syncInterval : 0;
     UInt32 uSyncInterval = core::int_cast<UInt32>(syncInterval);
 
     ++swapChain_->numPendingPresents_;
@@ -820,6 +820,9 @@ void Engine::endFrame(Int syncInterval, PresentFlags flags) {
         flushWait();
         UInt64 timestamp =
             present_(swapChain_.get(), core::int_cast<UInt32>(syncInterval), flags);
+        VGC_DEBUG_TMP(
+            "shouldWait && swapChain_->numPendingPresents_:{}",
+            swapChain_->numPendingPresents_);
         --swapChain_->numPendingPresents_;
         if (presentCallback_) {
             presentCallback_(timestamp);
@@ -836,8 +839,10 @@ void Engine::endFrame(Int syncInterval, PresentFlags flags) {
             [](Engine* engine, const CommandParameters& p) {
                 UInt64 timestamp =
                     engine->present_(p.swapChain.get(), p.syncInterval, p.flags);
+                VGC_DEBUG_TMP(
+                    "swapChain_->numPendingPresents_:{}",
+                    p.swapChain->numPendingPresents_);
                 --p.swapChain->numPendingPresents_;
-
                 if (engine->presentCallback_) {
                     engine->presentCallback_(timestamp);
                 }
@@ -1267,6 +1272,11 @@ void Engine::waitCommandListTranslationFinished_(Int commandListId) {
     renderThreadEventConditionVariable_.wait(
         lock, [&] { return lastExecutedCommandListId_ == commandListId; });
     lock.unlock();
+}
+
+bool Engine::hasSubmittedCommandListPendingForTranslation_() {
+    std::unique_lock<std::mutex> lock(mutex_);
+    return lastExecutedCommandListId_ != lastSubmittedCommandListId_;
 }
 
 void Engine::sanitize_(SwapChainCreateInfo& /*createInfo*/) {

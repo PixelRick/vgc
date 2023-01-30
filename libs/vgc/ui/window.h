@@ -17,6 +17,8 @@
 #ifndef VGC_UI_WINDOW_H
 #define VGC_UI_WINDOW_H
 
+#include <atomic>
+
 #include <QWindow>
 
 #include <vgc/core/array.h>

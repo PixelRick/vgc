@@ -791,6 +791,8 @@ private:
     // returns false if translation was cancelled by a stop request.
     void waitCommandListTranslationFinished_(Int commandListId = 0);
 
+    bool hasSubmittedCommandListPendingForTranslation_();
+
     // -- helpers --
 
     void sanitize_(SwapChainCreateInfo& createInfo);

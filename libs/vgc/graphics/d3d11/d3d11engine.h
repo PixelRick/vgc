@@ -20,12 +20,10 @@
 #include <vgc/core/os.h>
 #ifdef VGC_CORE_OS_WINDOWS
 
-//#define USE_DXGI_VERSION_1_2
-
 // clang-format off
 
 #include <d3d11.h>
-#include <dxgi1_2.h>
+#include <dxgi1_3.h>
 
 #include <array>
 #include <chrono>
@@ -160,11 +158,9 @@ protected:
     present_(SwapChain* swapChain, UInt32 syncInterval, PresentFlags flags) override;
 
 private:
-#    ifdef USE_DXGI_VERSION_1_2
-    ComPtr<IDXGIFactory2> factory_;
-#    else
-    ComPtr<IDXGIFactory> factory_;
-#    endif
+    HANDLE frameLatencyWaitableObject_ = NULL;
+    ComPtr<IDXGIDevice1> dxgiDevice1_;
+    ComPtr<IDXGIFactory1> dxgiFactory1_;
     ComPtr<ID3D11Device> device_;
     ComPtr<ID3D11DeviceContext> deviceCtx_;
     ComPtr<ID3D11DepthStencilState> depthStencilState_;

@@ -38,6 +38,9 @@ namespace vgc::ui {
 
 namespace {
 
+inline constexpr QEvent::Type presentCalledEvent =
+    static_cast<QEvent::Type>(core::toUnderlying(QEvent::User) + 1000);
+
 std::string debugTime(const core::Stopwatch& stopwatch) {
     std::string res;
     Int64 us = stopwatch.elapsedMicroseconds();
@@ -686,6 +689,10 @@ void Window::paint(bool sync) {
     VGC_PROFILE_SCOPE("Window:paint");
     VGC_DEBUG_TMP("paint(({}, {}), sync={})", width_, height_, sync);
 
+    if (updateDeferred_) {
+        return;
+    }
+
     if (!isExposed()) {
         return;
     }
@@ -703,7 +710,6 @@ void Window::paint(bool sync) {
         updateDeferred_ = true;
         return;
     }
-    updateDeferred_ = false;
 
     engine_->beginFrame(swapChain_, graphics::FrameKind::Window);
 
@@ -791,6 +797,12 @@ bool Window::event(QEvent* event) {
         return true;
     case QEvent::ShortcutOverride:
         event->accept();
+        break;
+    case presentCalledEvent:
+        if (updateDeferred_) {
+            updateDeferred_ = false;
+            updateRequestEvent(event);
+        }
         break;
     default:
         break;
@@ -1056,9 +1068,7 @@ void Window::initEngine_() {
     }
 
     engine_->setPresentCallback([=](UInt64) {
-        if (updateDeferred_) {
-            QCoreApplication::postEvent(this, new QEvent(QEvent::UpdateRequest), 0);
-        }
+        QCoreApplication::postEvent(this, new QEvent(presentCalledEvent), 0);
     });
 }
 
