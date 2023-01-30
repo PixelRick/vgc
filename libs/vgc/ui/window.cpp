@@ -25,6 +25,7 @@
 
 #include <vgc/core/os.h>
 #include <vgc/core/paths.h>
+#include <vgc/core/profile.h>
 #include <vgc/geometry/camera2d.h>
 #include <vgc/graphics/d3d11/d3d11engine.h>
 #include <vgc/graphics/text.h>
@@ -675,13 +676,15 @@ void Window::updateRequestEvent(QEvent*) {
             updateViewportSize_();
         }
 #endif
-        paint(true);
+        paint(false);
     }
 }
 
 void Window::paint(bool sync) {
 
     VGC_WINDOW_DEBUG("paint(({}, {}), sync={})", width_, height_, sync);
+    VGC_PROFILE_SCOPE("Window:paint");
+    VGC_DEBUG_TMP("paint(({}, {}), sync={})", width_, height_, sync);
 
     if (!isExposed()) {
         return;
@@ -717,7 +720,39 @@ void Window::paint(bool sync) {
         widget_->updateGeometry();
     }
 
-    widget_->paint(engine_.get());
+    {
+        VGC_PROFILE_SCOPE("Window:MainWidgetPaint");
+        widget_->paint(engine_.get());
+    }
+
+    //#ifdef VGC_DEBUG_BUILD or 1
+    QPoint globalCursorPos = QCursor::pos();
+
+#ifdef VGC_CORE_OS_WINDOWS
+    POINT globalCursorPosWindows;
+    GetCursorPos(&globalCursorPosWindows);
+    VGC_DEBUG_TMP(
+        "QCursor:[{}, {}], Windows:[{}, {}]",
+        globalCursorPos.x(),
+        globalCursorPos.y(),
+        globalCursorPosWindows.x,
+        globalCursorPosWindows.y);
+#endif
+
+    QPoint relativeCursorPos = this->mapFromGlobal(globalCursorPos);
+    geometry::Vec2f pos = fromQtf(relativeCursorPos);
+
+    core::FloatArray a;
+    float csz = 20;
+    // clang-format off
+    a.extend({
+        pos.x(),              pos.y(),              1.f, 1.f, 1.f,
+        pos.x() + csz,        pos.y() + csz * 0.5f, 0.f, 0.f, 0.f,
+        pos.x() + csz * 0.5f, pos.y() + csz,        0.f, 0.f, 0.f,
+    });
+    engine_->updateVertexBufferData(cross_, std::move(a));
+    engine_->draw(cross_);
+    //#endif
 
 #if defined(VGC_QOPENGL_EXPERIMENT)
     static int frameIdx = 0;
@@ -730,8 +765,11 @@ void Window::paint(bool sync) {
     frameIdx++;
 #endif
 
-    // XXX make it endInlineFrame in QglEngine and copy its code into Engine::present()
-    engine_->endFrame(sync ? 1 : 0 + 0);
+    {
+        VGC_PROFILE_SCOPE("Window:EndFrame");
+        // XXX make it endInlineFrame in QglEngine and copy its code into Engine::present()
+        engine_->endFrame(sync ? 1 : 0 + 0);
+    }
 }
 
 bool Window::event(QEvent* event) {
@@ -993,6 +1031,7 @@ void Window::initEngine_() {
 
     {
         graphics::RasterizerStateCreateInfo createInfo = {};
+        //createInfo.setCullMode(graphics::CullMode::Back);
         rasterizerState_ = engine_->createRasterizerState(createInfo);
     }
 
@@ -1009,6 +1048,11 @@ void Window::initEngine_() {
             graphics::BlendFactor::OneMinusSourceAlpha);
         createInfo.setWriteMask(graphics::BlendWriteMaskBit::All);
         blendState_ = engine_->createBlendState(createInfo);
+    }
+
+    {
+        cross_ = engine_->createDynamicTriangleListView(
+            graphics::BuiltinGeometryLayout::XYRGB);
     }
 
     engine_->setPresentCallback([=](UInt64) {

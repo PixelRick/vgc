@@ -14,6 +14,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <vgc/core/profile.h>
 #include <vgc/graphics/engine.h>
 
 #include <tuple> // std::tuple_size
@@ -1178,25 +1179,41 @@ void Engine::renderThreadProc_() {
             return;
         }
 
-        // else commandQueue_ is not empty, so prepare some work
-        CommandList commandList = std::move(commandQueue_.first());
-        commandQueue_.removeFirst();
+        {
+            VGC_PROFILE_SCOPE("RenderThread:CommandListExecution");
 
-        lock.unlock();
+            // else commandQueue_ is not empty, so prepare some work
+            CommandList commandList = std::move(commandQueue_.first());
+            commandQueue_.removeFirst();
 
-        // execute commands
-        for (const CommandUPtr& command : commandList.commands) {
-            command->execute(this);
+            lock.unlock();
+
+            // execute commands
+            for (const CommandUPtr& command : commandList.commands) {
+                VGC_PROFILE_SCOPE(command->name().data());
+                command->execute(this);
+            }
+
+            {
+                VGC_PROFILE_SCOPE("RenderThread:NotifyEndOfCommandListExecution");
+
+                {
+                    VGC_PROFILE_SCOPE("RenderThread:Lock");
+                    lock.lock();
+                }
+                ++lastExecutedCommandListId_;
+                lock.unlock();
+
+                renderThreadEventConditionVariable_.notify_all();
+            }
+
+            {
+                VGC_PROFILE_SCOPE("RenderThread:GarbageCollection");
+
+                // release garbaged resources (locking)
+                resourceRegistry_->releaseAndDeleteGarbagedResources(this);
+            }
         }
-
-        lock.lock();
-        ++lastExecutedCommandListId_;
-        lock.unlock();
-
-        renderThreadEventConditionVariable_.notify_all();
-
-        // release garbaged resources (locking)
-        resourceRegistry_->releaseAndDeleteGarbagedResources(this);
     }
 }
 

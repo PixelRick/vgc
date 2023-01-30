@@ -1093,6 +1093,9 @@ SwapChainPtr D3d11Engine::constructSwapChain_(const SwapChainCreateInfo& createI
     sd.Windowed = true;
     sd.SwapEffect = DXGI_SWAP_EFFECT_SEQUENTIAL;
 
+    sd.SampleDesc.Count = 1;
+    //sd.SwapEffect = DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL;
+
     if (factory_->CreateSwapChain(
             device_.get(), &sd, dxgiSwapChain.releaseAndGetAddressOf())
         < 0) {
@@ -2025,10 +2028,12 @@ void D3d11Engine::clear_(const core::Color& color) {
     }
 }
 
-UInt64
-D3d11Engine::present_(SwapChain* swapChain, UInt32 syncInterval, PresentFlags /*flags*/) {
+UInt64 D3d11Engine::present_(
+    SwapChain* swapChain,
+    UInt32 /*syncInterval*/,
+    PresentFlags /*flags*/) {
     D3d11SwapChain* d3dSwapChain = static_cast<D3d11SwapChain*>(swapChain);
-    d3dSwapChain->dxgiSwapChain()->Present(syncInterval, 0);
+    d3dSwapChain->dxgiSwapChain()->Present(/*syncInterval*/ 1, 0);
     return std::chrono::nanoseconds(std::chrono::steady_clock::now() - engineStartTime())
         .count();
 }

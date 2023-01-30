@@ -157,11 +157,13 @@ private:
 
     // need an invalidation mechanism
     mutable EdgeGraphics cachedGraphics_;
-    int edgeTesselationModeRequested_ = 2;
 
     // local data to build graphics resource, kept as copy
     // should this be in vac ?
     EdgeGeometryComputationCache geometry_;
+    int edgeTesselationModeRequested_ = 2;
+    bool isUpdatingGeometry_ = false;
+
 
     //void onUpdateError_();
     void updateGeometry_();

@@ -26,6 +26,26 @@
 
 namespace vgc::workspace {
 
+class KeyEdge;
+
+namespace detail {
+
+struct JoinEdge {
+    topology::KeyEdge* vacKe;
+    KeyEdge* ke;
+    geometry::Vec2d outgoingTangent;
+    double angle;
+    bool isReverse;
+    Int numSamples;
+};
+
+struct JoinSlice {
+    std::array<JoinEdge*, 2> edges;
+    double angle;
+};
+
+} // namespace detail
+
 class VGC_WORKSPACE_API Vertex : public VacElement {
 private:
     friend class Workspace;
@@ -41,7 +61,7 @@ public:
         return n ? n->toCellUnchecked()->toVertexCellUnchecked() : nullptr;
     }
 
-    virtual void updateJoinsAndCaps(core::AnimTime t);
+    virtual void updateJoinsAndCaps(core::AnimTime t) = 0;
 };
 
 class VGC_WORKSPACE_API KeyVertex : public Vertex {
@@ -74,6 +94,15 @@ protected:
         PaintOptions flags = PaintOption::None) const override;
 
 private:
+    // debug geometry
+    mutable graphics::GeometryViewPtr debugLinesGeometry_;
+    mutable graphics::GeometryViewPtr debugQuadGeometry_;
+    core::Array<detail::JoinEdge> edges_;
+    core::Array<detail::JoinSlice> slices_;
+    geometry::Vec2d pos_;
+    bool isUpdatingJoinsAndCaps_ = false;
+
+    void debugPaint_(graphics::Engine* engine) const;
     void updateJoinsAndCaps_();
 };
 
@@ -93,6 +122,8 @@ public:
         return n ? n->toCellUnchecked()->toInbetweenVertexUnchecked() : nullptr;
     }
 
+    void updateJoinsAndCaps(core::AnimTime t) override;
+
     geometry::Rect2d boundingBox(core::AnimTime t) const override;
 
 protected:
@@ -103,8 +134,6 @@ protected:
         graphics::Engine* engine,
         core::AnimTime t,
         PaintOptions flags = PaintOption::None) const override;
-
-private:
 };
 
 } // namespace vgc::workspace

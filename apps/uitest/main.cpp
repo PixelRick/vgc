@@ -325,13 +325,13 @@ void documentScenario1(vgc::dom::Document* document) {
     if (i == 0) {
         document->disableHistory();
 
+        e0 = dom::Element::create(vgc, ds::edge);
+        e1 = dom::Element::create(vgc, ds::edge);
+        e2 = dom::Element::create(vgc, ds::edge);
         v0 = dom::Element::create(vgc, ds::vertex);
         v1 = dom::Element::create(vgc, ds::vertex);
         v2 = dom::Element::create(vgc, ds::vertex);
         v3 = dom::Element::create(vgc, ds::vertex);
-        e0 = dom::Element::create(vgc, ds::edge);
-        e1 = dom::Element::create(vgc, ds::edge);
-        e2 = dom::Element::create(vgc, ds::edge);
 
         /*
           V1-----V0-----V2 (rotates around V0)
@@ -356,7 +356,7 @@ void documentScenario1(vgc::dom::Document* document) {
 
     // step
 
-    float a = i / 500.f;
+    float a = i / 200.f;
     Vec2d p2(200 * std::cosf(a), 200 * std::sinf(a));
     e1->setAttribute(ds::positions, geometry::Vec2dArray({p0, p2}));
     v2->setAttribute(ds::position, p2);
@@ -368,7 +368,7 @@ void documentScenario1(vgc::dom::Document* document) {
 int main(int argc, char* argv[]) {
     auto application = UiTestApplication::create(argc, argv);
     QTimer t;
-    t.callOnTimeout([&]() { documentScenario1(application->activeDocument()); });
+    t.callOnTimeout([&]() { /*documentScenario1(application->activeDocument());*/ });
     t.setInterval(20);
     t.start();
     return application->exec();

@@ -22,6 +22,7 @@
 
 #include <vgc/core/array.h>
 #include <vgc/core/paths.h>
+#include <vgc/core/profile.h>
 #include <vgc/core/stopwatch.h>
 #include <vgc/core/stringid.h>
 #include <vgc/geometry/curve.h>
@@ -442,6 +443,7 @@ void Canvas::onPaintCreate(graphics::Engine* engine) {
 
 void Canvas::onPaintDraw(graphics::Engine* engine, PaintOptions /*options*/) {
 
+    VGC_PROFILE_SCOPE("Canvas:onPaintDraw");
     namespace gs = graphics::strings;
 
     drawTask_.start();
@@ -479,29 +481,34 @@ void Canvas::onPaintDraw(graphics::Engine* engine, PaintOptions /*options*/) {
     //  - use transforms
     //  - setup target for layers (painting a layer means using its result)
     bool paintOutline = showControlPoints_;
-    workspace_->visitDepthFirst(
-        [=](workspace::Element* /*e*/, Int /*depth*/) {
-            // we always visit children for now
-            return true;
-        },
-        [=](workspace::Element* e, Int /*depth*/) {
-            if (!e) {
-                return;
-            }
-            if (e->isVacElement()) {
-                // todo: should we use an enum to avoid dynamic_cast ?
-                // if an error happens with the Element creation we cannot rely on vac node type.
-                auto edge = dynamic_cast<workspace::KeyEdge*>(e);
-                if (edge) {
-                    edge->setTesselationMode(requestedTesselationMode_);
+    {
+        VGC_PROFILE_SCOPE("Canvas:WorkspaceVisit");
+        workspace_->visitDepthFirst(
+            [](workspace::Element* /*e*/, Int /*depth*/) {
+                // we always visit children for now
+                return true;
+            },
+            [=](workspace::Element* e, Int /*depth*/) {
+                if (!e) {
+                    return;
                 }
-            }
-            e->paint(engine);
-            if (paintOutline) {
-                e->paint(engine, {}, workspace::PaintOption::Outline);
-            }
-        });
-
+                const char* profileName = "Canvas:WorkspaceDrawElement";
+                if (e->isVacElement()) {
+                    // todo: should we use an enum to avoid dynamic_cast ?
+                    // if an error happens with the Element creation we cannot rely on vac node type.
+                    auto edge = dynamic_cast<workspace::KeyEdge*>(e);
+                    if (edge) {
+                        profileName = "Canvas:WorkspaceDrawEdgeElement";
+                        edge->setTesselationMode(requestedTesselationMode_);
+                    }
+                }
+                VGC_PROFILE_SCOPE(profileName);
+                e->paint(engine);
+                if (paintOutline) {
+                    e->paint(engine, {}, workspace::PaintOption::Outline);
+                }
+            });
+    }
     engine->popViewMatrix();
     engine->popPipelineParameters(modifiedParameters);
 

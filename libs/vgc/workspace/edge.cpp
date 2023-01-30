@@ -14,6 +14,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <vgc/core/span.h>
 #include <vgc/workspace/edge.h>
 
 #include <vgc/workspace/workspace.h>
@@ -203,7 +204,13 @@ void KeyEdge::paint_(graphics::Engine* engine, core::AnimTime /*t*/, PaintOption
 
         geometry::Vec2fArray strokeVertices;
         if (edgeTesselationModeRequested_ <= 2) {
-            for (const geometry::CurveSample& s : geometry_.samples_) {
+
+            auto samplesStart = geometry_.samples_.begin();
+            core::Span<const geometry::CurveSample> coreSamples(
+                samplesStart + geometry_.startSampleOverride_,
+                samplesStart + geometry_.endSampleOverride_);
+
+            for (const geometry::CurveSample& s : coreSamples) {
                 geometry::Vec2d p0 = s.leftPoint();
                 strokeVertices.emplaceLast(geometry::Vec2f(p0));
                 geometry::Vec2d p1 = s.rightPoint();
@@ -314,14 +321,21 @@ void KeyEdge::paint_(graphics::Engine* engine, core::AnimTime /*t*/, PaintOption
 
 void KeyEdge::updateGeometry_() {
 
+    if (isUpdatingGeometry_) {
+        return;
+    }
+    isUpdatingGeometry_ = true;
+
     topology::KeyEdge* ke = vacKeyEdge();
     if (!ke) {
         // error ?
+        isUpdatingGeometry_ = false;
         return;
     }
 
     // check if we need an update
     if (edgeTesselationModeRequested_ == geometry_.edgeTesselationMode_) {
+        isUpdatingGeometry_ = false;
         return;
     }
 
@@ -368,6 +382,7 @@ void KeyEdge::updateGeometry_() {
     }
 
     cachedGraphics_.clear();
+    isUpdatingGeometry_ = false;
 }
 
 } // namespace vgc::workspace
