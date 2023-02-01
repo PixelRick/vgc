@@ -738,11 +738,11 @@ void Window::paint(bool sync) {
     POINT globalCursorPosWindows;
     GetCursorPos(&globalCursorPosWindows);
     VGC_DEBUG_TMP(
-        "QCursor:[{}, {}], Windows:[{}, {}]",
-        globalCursorPos.x(),
-        globalCursorPos.y(),
+        "[User] Windows:[{}, {}], QCursor:[{}, {}]",
         globalCursorPosWindows.x,
-        globalCursorPosWindows.y);
+        globalCursorPosWindows.y,
+        globalCursorPos.x(),
+        globalCursorPos.y());
 #endif
 
     QPoint relativeCursorPos = this->mapFromGlobal(globalCursorPos);
@@ -759,6 +759,10 @@ void Window::paint(bool sync) {
     engine_->updateVertexBufferData(cross_, std::move(a));
     engine_->draw(cross_);
     //#endif
+
+    // execute all before getting mouse pos
+    // should query mouse pos directly from render thread to stay async
+    //engine_->flushWait();
 
 #if defined(VGC_QOPENGL_EXPERIMENT)
     static int frameIdx = 0;

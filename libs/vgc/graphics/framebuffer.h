@@ -27,7 +27,7 @@ namespace vgc::graphics {
 
 VGC_DECLARE_OBJECT(Engine);
 
-class VGC_GRAPHICS_API Viewport {
+class Viewport {
 public:
     Viewport(Int x, Int y, Int width, Int height)
         : x_(x)

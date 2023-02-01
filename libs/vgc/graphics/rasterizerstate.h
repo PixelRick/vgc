@@ -29,7 +29,7 @@ namespace vgc::graphics {
 /// \class vgc::graphics::RasterizerStateCreateInfo
 /// \brief Parameters for rasterizer state creation.
 ///
-class VGC_GRAPHICS_API RasterizerStateCreateInfo {
+class RasterizerStateCreateInfo {
 public:
     constexpr RasterizerStateCreateInfo() noexcept = default;
 

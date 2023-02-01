@@ -108,7 +108,7 @@ protected:
 
     void initImage_( //
         Image* image,
-        const Span<const char>* mipLevelDataSpans,
+        const core::Span<const char>* mipLevelDataSpans,
         Int count) override;
 
     void initImageView_(ImageView* view) override;
@@ -158,9 +158,8 @@ protected:
     present_(SwapChain* swapChain, UInt32 syncInterval, PresentFlags flags) override;
 
 private:
-    HANDLE frameLatencyWaitableObject_ = NULL;
-    ComPtr<IDXGIDevice1> dxgiDevice1_;
-    ComPtr<IDXGIFactory1> dxgiFactory1_;
+    ComPtr<IDXGIDevice2> dxgiDevice2_;
+    ComPtr<IDXGIFactory2> dxgiFactory2_;
     ComPtr<ID3D11Device> device_;
     ComPtr<ID3D11DeviceContext> deviceCtx_;
     ComPtr<ID3D11DepthStencilState> depthStencilState_;

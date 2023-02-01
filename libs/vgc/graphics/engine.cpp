@@ -14,6 +14,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <vgc/core/os.h>
+
+#ifdef VGC_CORE_OS_WINDOWS
+#    define WIN32_LEAN_AND_MEAN
+#    include <Windows.h>
+#endif
+
 #include <vgc/core/profile.h>
 #include <vgc/graphics/engine.h>
 
@@ -264,7 +271,7 @@ Engine::createImage(const ImageCreateInfo& createInfo, core::Array<char> initial
     queueLambdaCommandWithParameters_<CommandParameters>(
         "initImage",
         [](Engine* engine, const CommandParameters& p) {
-            Span<const char> m0 = {p.initialData.data(), p.initialData.length()};
+            core::Span<const char> m0 = {p.initialData.data(), p.initialData.length()};
             engine->initImage_(p.image.get(), &m0, 1);
         },
         image,
@@ -801,11 +808,18 @@ bool Engine::beginFrame(const SwapChainPtr& swapChain, FrameKind kind) {
 void Engine::endFrame(Int syncInterval, PresentFlags flags) {
 
     // check syncInterval >= 0
-    syncInterval = 1;// syncInterval > 0 ? syncInterval : 0;
+    syncInterval = syncInterval > 0 ? syncInterval : 0;
     UInt32 uSyncInterval = core::int_cast<UInt32>(syncInterval);
 
     ++swapChain_->numPendingPresents_;
     bool shouldWait = syncInterval > 0;
+
+#ifdef VGC_CORE_OS_WINDOWS
+    POINT globalCursorPosWindows;
+    GetCursorPos(&globalCursorPosWindows);
+    VGC_DEBUG_TMP(
+        "[User] Windows:[{}, {}]", globalCursorPosWindows.x, globalCursorPosWindows.y);
+#endif
 
     if (!isMultithreadingEnabled()) {
         UInt64 timestamp = present_(swapChain_.get(), uSyncInterval, flags);
@@ -960,6 +974,7 @@ void Engine::createBuiltinResources_() {
         createInfo.setCpuAccessFlags(CpuAccessFlag::Write);
         builtinConstantsBuffer_ =
             createBuffer(createInfo, sizeof(detail::BuiltinConstants));
+        cursor_ = createDynamicTriangleListView(graphics::BuiltinGeometryLayout::XYRGB);
     }
 
     createBuiltinShaders_();
@@ -1195,7 +1210,7 @@ void Engine::renderThreadProc_() {
 
             // execute commands
             for (const CommandUPtr& command : commandList.commands) {
-                VGC_PROFILE_SCOPE(command->name().data());
+                //VGC_PROFILE_SCOPE(command->name().data());
                 command->execute(this);
             }
 

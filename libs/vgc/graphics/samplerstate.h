@@ -30,7 +30,7 @@ namespace vgc::graphics {
 /// \class vgc::graphics::SamplerStateCreateInfo
 /// \brief Parameters for sampler state creation.
 ///
-class VGC_GRAPHICS_API SamplerStateCreateInfo {
+class SamplerStateCreateInfo {
 public:
     constexpr SamplerStateCreateInfo() noexcept = default;
 

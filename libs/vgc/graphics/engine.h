@@ -34,6 +34,7 @@
 #include <vgc/core/color.h>
 #include <vgc/core/flags.h>
 #include <vgc/core/innercore.h>
+#include <vgc/core/span.h>
 #include <vgc/core/templateutil.h>
 #include <vgc/geometry/mat4f.h>
 #include <vgc/geometry/rect2f.h>
@@ -73,30 +74,7 @@ struct BuiltinConstants {
 
 } // namespace detail
 
-// temporary impl
-template<typename T>
-struct Span {
-    T* data() const {
-        return data_;
-    }
-
-    Int length() const {
-        return length_;
-    }
-
-    T* begin() const {
-        return data_;
-    }
-
-    T* end() const {
-        return data_ + length_;
-    }
-
-    T* data_;
-    Int length_;
-};
-
-class VGC_GRAPHICS_API WindowSwapChainFormat {
+class WindowSwapChainFormat {
 public:
     using FlagsType = UInt64;
 
@@ -488,8 +466,10 @@ protected:
 
     virtual void initFramebuffer_(Framebuffer* framebuffer) = 0;
     virtual void initBuffer_(Buffer* buffer, const char* data, Int lengthInBytes) = 0;
-    virtual void
-    initImage_(Image* image, const Span<const char>* mipLevelDataSpans, Int count) = 0;
+    virtual void initImage_(
+        Image* image,
+        const core::Span<const char>* mipLevelDataSpans,
+        Int count) = 0;
     virtual void initImageView_(ImageView* view) = 0;
     virtual void initSamplerState_(SamplerState* state) = 0;
     virtual void initGeometryView_(GeometryView* view) = 0;
@@ -546,8 +526,7 @@ protected:
     ProgramPtr simpleTexturedProgram_;
     ProgramPtr sreenSpaceDisplacementProgram_;
 
-    BlendStatePtr defaultBlendState_;
-    RasterizerStatePtr defaultRasterizerState_;
+    GeometryViewPtr cursor_;
 
     // -- builtin batching early impl --
 

@@ -25,7 +25,7 @@ namespace vgc::graphics {
 /// \class vgc::graphics::ClipRect
 /// \brief Describes a clipping rectangle that can be rotated.
 ///
-class VGC_GRAPHICS_API ClipRect {};
+class ClipRect {};
 
 } // namespace vgc::graphics
 

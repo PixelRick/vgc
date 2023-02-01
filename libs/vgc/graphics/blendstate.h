@@ -30,7 +30,7 @@ namespace vgc::graphics {
 /// \class vgc::graphics::BlendEquation
 /// \brief Describes a blend equation.
 ///
-class VGC_GRAPHICS_API BlendEquation {
+class BlendEquation {
 public:
     constexpr BlendEquation() noexcept = default;
 
@@ -61,7 +61,7 @@ private:
 /// \class vgc::graphics::BlendStateCreateInfo
 /// \brief Parameters for blend state creation.
 ///
-class VGC_GRAPHICS_API BlendStateCreateInfo {
+class BlendStateCreateInfo {
 public:
     constexpr BlendStateCreateInfo() noexcept = default;
 

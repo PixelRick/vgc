@@ -146,7 +146,7 @@ protected:
     void initBuffer_(Buffer* buffer, const char* data, Int lengthInBytes) override;
     void initImage_(
         Image* image,
-        const Span<const char>* mipLevelDataSpans,
+        const core::Span<const char>* mipLevelDataSpans,
         Int numMipLevels) override;
     void initImageView_(ImageView* view) override;
     void initSamplerState_(SamplerState* state) override;

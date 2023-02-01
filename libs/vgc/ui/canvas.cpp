@@ -492,17 +492,17 @@ void Canvas::onPaintDraw(graphics::Engine* engine, PaintOptions /*options*/) {
                 if (!e) {
                     return;
                 }
-                const char* profileName = "Canvas:WorkspaceDrawElement";
+                //const char* profileName = "Canvas:WorkspaceDrawElement";
                 if (e->isVacElement()) {
                     // todo: should we use an enum to avoid dynamic_cast ?
                     // if an error happens with the Element creation we cannot rely on vac node type.
                     auto edge = dynamic_cast<workspace::KeyEdge*>(e);
                     if (edge) {
-                        profileName = "Canvas:WorkspaceDrawEdgeElement";
+                        //profileName = "Canvas:WorkspaceDrawEdgeElement";
                         edge->setTesselationMode(requestedTesselationMode_);
                     }
                 }
-                VGC_PROFILE_SCOPE(profileName);
+                //VGC_PROFILE_SCOPE(profileName);
                 e->paint(engine);
                 if (paintOutline) {
                     e->paint(engine, {}, workspace::PaintOption::Outline);

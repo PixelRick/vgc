@@ -38,7 +38,7 @@ using VertexBufferOffsetsArray = std::array<Int, maxAttachedVertexBuffers>;
 /// \class vgc::graphics::GeometryViewCreateInfo
 /// \brief Parameters for geometry view creation.
 ///
-class VGC_GRAPHICS_API GeometryViewCreateInfo {
+class GeometryViewCreateInfo {
 public:
     GeometryViewCreateInfo() noexcept = default;
 

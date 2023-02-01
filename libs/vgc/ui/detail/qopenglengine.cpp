@@ -1287,7 +1287,7 @@ void QglEngine::initBuffer_(Buffer* aBuffer, const char* data, Int lengthInBytes
 
 void QglEngine::initImage_(
     Image* aImage,
-    const Span<const char>* mipLevelDataSpans,
+    const core::Span<const char>* mipLevelDataSpans,
     Int count) {
 
     QglImage* image = static_cast<QglImage*>(aImage);

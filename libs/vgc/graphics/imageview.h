@@ -31,7 +31,7 @@ VGC_DECLARE_OBJECT(Engine);
 /// \class vgc::graphics::ImageViewCreateInfo
 /// \brief Parameters for image view creation.
 ///
-class VGC_GRAPHICS_API ImageViewCreateInfo {
+class ImageViewCreateInfo {
 public:
     constexpr ImageViewCreateInfo() noexcept = default;
 

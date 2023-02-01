@@ -40,7 +40,7 @@ enum class WindowNativeHandleType : uint8_t {
 // XXX do we let width/height configurable ?
 //     shouldn't it match the window size anyway ?
 
-class VGC_GRAPHICS_API SwapChainCreateInfo {
+class SwapChainCreateInfo {
 public:
     using FlagsType = UInt64;
 
