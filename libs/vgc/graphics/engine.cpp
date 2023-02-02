@@ -814,13 +814,6 @@ void Engine::endFrame(Int syncInterval, PresentFlags flags) {
     ++swapChain_->numPendingPresents_;
     bool shouldWait = syncInterval > 0;
 
-#ifdef VGC_CORE_OS_WINDOWS
-    POINT globalCursorPosWindows;
-    GetCursorPos(&globalCursorPosWindows);
-    VGC_DEBUG_TMP(
-        "[User] Windows:[{}, {}]", globalCursorPosWindows.x, globalCursorPosWindows.y);
-#endif
-
     if (!isMultithreadingEnabled()) {
         UInt64 timestamp = present_(swapChain_.get(), uSyncInterval, flags);
         --swapChain_->numPendingPresents_;
@@ -1200,7 +1193,7 @@ void Engine::renderThreadProc_() {
         }
 
         {
-            VGC_PROFILE_SCOPE("RenderThread:CommandListExecution");
+            //VGC_PROFILE_SCOPE("RenderThread:CommandListExecution");
 
             // else commandQueue_ is not empty, so prepare some work
             CommandList commandList = std::move(commandQueue_.first());
@@ -1215,10 +1208,10 @@ void Engine::renderThreadProc_() {
             }
 
             {
-                VGC_PROFILE_SCOPE("RenderThread:NotifyEndOfCommandListExecution");
+                //VGC_PROFILE_SCOPE("RenderThread:NotifyEndOfCommandListExecution");
 
                 {
-                    VGC_PROFILE_SCOPE("RenderThread:Lock");
+                    //VGC_PROFILE_SCOPE("RenderThread:Lock");
                     lock.lock();
                 }
                 ++lastExecutedCommandListId_;
@@ -1228,7 +1221,7 @@ void Engine::renderThreadProc_() {
             }
 
             {
-                VGC_PROFILE_SCOPE("RenderThread:GarbageCollection");
+                //VGC_PROFILE_SCOPE("RenderThread:GarbageCollection");
 
                 // release garbaged resources (locking)
                 resourceRegistry_->releaseAndDeleteGarbagedResources(this);

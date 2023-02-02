@@ -21,12 +21,11 @@
 
 namespace vgc::workspace {
 
-void KeyVertex::updateJoinsAndCaps() {
-    updateJoinsAndCaps_();
-}
-
-void KeyVertex::updateJoinsAndCaps(core::AnimTime /*t*/) {
-    updateJoinsAndCaps_();
+void KeyVertex::computeJoins(core::AnimTime t) {
+    topology::KeyVertex* kv = vacKeyVertex();
+    if (kv && t == kv->time()) {
+        computeJoins_();
+    }
 }
 
 geometry::Rect2d KeyVertex::boundingBox(core::AnimTime /*t*/) const {
@@ -149,20 +148,19 @@ void KeyVertex::debugPaint_(graphics::Engine* engine) const {
     }
 }
 
-void KeyVertex::updateJoinsAndCaps_() {
-    //VGC_DEBUG_TMP("updateJoinsAndCaps_()");
+void KeyVertex::computeJoins_() {
 
-    if (isUpdatingJoinsAndCaps_) {
+    if (!areJoinsDirty_ || isComputingJoins_) {
         return;
     }
-    isUpdatingJoinsAndCaps_ = true;
+    isComputingJoins_ = true;
 
     using detail::JoinEdge;
     using detail::JoinSlice;
 
     topology::KeyVertex* kv = vacNode()->toCellUnchecked()->toKeyVertexUnchecked();
     if (!kv) {
-        isUpdatingJoinsAndCaps_ = false;
+        isComputingJoins_ = false;
         return;
     }
     pos_ = kv->position({});
@@ -178,7 +176,7 @@ void KeyVertex::updateJoinsAndCaps_() {
         // XXX replace dynamic_cast
         KeyEdge* ke = dynamic_cast<KeyEdge*>(workspace()->find(vacKe->id()));
         if (ke) {
-            ke->updateGeometry({});
+            ke->computeRawGeometry(kv->time());
             bool isReverse = (vacKe->startVertex() != kv);
             const geometry::CurveSampleArray& samples = ke->geometry_.samples_;
             if (samples.length() < 2) {
@@ -227,10 +225,7 @@ void KeyVertex::updateJoinsAndCaps_() {
         }
     }
 
-    isUpdatingJoinsAndCaps_ = false;
-}
-
-void InbetweenVertex::updateJoinsAndCaps(core::AnimTime /*t*/) {
+    isComputingJoins_ = false;
 }
 
 geometry::Rect2d InbetweenVertex::boundingBox(core::AnimTime t) const {

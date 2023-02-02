@@ -368,7 +368,7 @@ void documentScenario1(vgc::dom::Document* document) {
 int main(int argc, char* argv[]) {
     auto application = UiTestApplication::create(argc, argv);
     QTimer t;
-    t.callOnTimeout([&]() { /*documentScenario1(application->activeDocument());*/ });
+    t.callOnTimeout([&]() { documentScenario1(application->activeDocument()); });
     t.setInterval(20);
     t.start();
     return application->exec();

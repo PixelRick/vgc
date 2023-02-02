@@ -118,20 +118,6 @@ enum class FocusReason : UInt8 {
 
 // clang-format on
 
-class WidgetPaintContext {
-public:
-    explicit constexpr WidgetPaintContext(
-        graphics::Engine* engine,
-        Window* window = nullptr)
-        : engine_(engine)
-        , window_(window) {
-    }
-
-private:
-    graphics::Engine* engine_ = nullptr;
-    Window* window_ = nullptr;
-};
-
 /// \class vgc::ui::Widget
 /// \brief Base class of all elements in the user interface.
 ///
@@ -470,6 +456,12 @@ public:
     float height() const {
         updateRootGeometry_();
         return size_[1];
+    }
+
+    /// Returns the window that contains the widget.
+    ///
+    Window* window() const {
+        return root()->window_;
     }
 
     /// Returns whether the content of this widget is automatically clipped
@@ -1333,8 +1325,11 @@ protected:
     virtual void onPaintDestroy(graphics::Engine* engine);
 
 private:
+    friend Window;
+
     WidgetList* children_ = nullptr;
     ActionList* actions_ = nullptr;
+    Window* window_ = nullptr;
 
     bool isReparentingWithinSameTree_ = false;
 

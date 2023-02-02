@@ -145,7 +145,6 @@ protected:
 
     // Cursor
     CursorChanger cursorChanger_;
-    graphics::GeometryViewPtr cursorGeometry_;
 
     // Camera (provides view matrix + projection matrix)
     geometry::Camera2d camera_;
@@ -174,7 +173,10 @@ protected:
     // to draw after that but our current architecture doesn't let us have deferred
     // widget draws.. widget does not even know it's window.
     std::array<geometry::Vec2d, 3> minimalLatencyStrokePoints_;
+    std::array<double, 3> minimalLatencyStrokeWidths_;
     graphics::GeometryViewPtr minimalLatencyStrokeGeometry_;
+    bool minimalLatencyStrokeReload_ = false;
+    geometry::Vec2f lastImmediateCursorPos_ = {};
 
     // Graphics resources
     // VgcGraph

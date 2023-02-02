@@ -21,6 +21,7 @@
 #include <vgc/core/array.h>
 #include <vgc/core/color.h>
 #include <vgc/core/object.h>
+#include <vgc/core/span.h>
 #include <vgc/geometry/api.h>
 #include <vgc/geometry/mat3d.h>
 #include <vgc/geometry/vec2d.h>
@@ -283,19 +284,19 @@ public:
     /// Returns the number of control points of the curve.
     ///
     Int numPoints() const {
-        return positionData_ ? positionData_->length() : 0;
+        return positions_.length();
     }
 
     /// Returns the position data of the curve.
     ///
-    const Vec2dArray* positionData() const {
-        return positionData_;
+    core::ConstSpan<Vec2d> positions() const {
+        return positions_;
     }
 
     /// Sets the position data of the curve.
     ///
-    void setPositionData(const Vec2dArray* positionData) {
-        positionData_ = positionData;
+    void setPositions(core::ConstSpan<Vec2d> positions) {
+        positions_ = positions;
     }
 
     /// Returns the AttributeVariability of the width attribute.
@@ -306,15 +307,15 @@ public:
 
     /// Returns the width data of the curve.
     ///
-    const core::DoubleArray* widthData() const {
-        return widthData_;
+    core::ConstSpan<double> widths() const {
+        return widths_;
     }
 
     /// Sets the width data of the curve.
     ///
-    void setWidthData(const core::DoubleArray* widthData) {
-        widthData_ = widthData;
-        onWidthDataChanged_();
+    void setWidths(core::ConstSpan<double> widths) {
+        widths_ = widths;
+        onWidthsChanged_();
     }
 
     /// Returns the width of the curve. If width is varying, then returns
@@ -436,11 +437,11 @@ public:
 private:
     // Representation of the centerline of the curve
     Type type_;
-    const Vec2dArray* positionData_ = nullptr;
+    core::Span<const Vec2d> positions_ = {};
 
     // Representation of the width of the curve
     AttributeVariability widthVariability_;
-    const core::DoubleArray* widthData_ = nullptr;
+    core::Span<const double> widths_ = {};
     double widthConstant_ = 0;
     double averageWidth_ = 0;
     //double maxWidth_ = 0;
@@ -448,7 +449,7 @@ private:
     // Color of the curve
     core::Color color_;
 
-    void onWidthDataChanged_();
+    void onWidthsChanged_();
 };
 
 } // namespace vgc::geometry

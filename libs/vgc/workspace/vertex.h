@@ -61,7 +61,8 @@ public:
         return n ? n->toCellUnchecked()->toVertexCellUnchecked() : nullptr;
     }
 
-    virtual void updateJoinsAndCaps(core::AnimTime t) = 0;
+    virtual void computeJoins(core::AnimTime t) {
+    }
 };
 
 class VGC_WORKSPACE_API KeyVertex : public Vertex {
@@ -80,8 +81,11 @@ public:
         return n ? n->toCellUnchecked()->toKeyVertexUnchecked() : nullptr;
     }
 
-    void updateJoinsAndCaps();
-    void updateJoinsAndCaps(core::AnimTime t) override;
+    bool isComputingJoins() const {
+        return isComputingJoins_;
+    }
+
+    void computeJoins(core::AnimTime t) override;
 
     geometry::Rect2d boundingBox(core::AnimTime t) const override;
 
@@ -100,10 +104,11 @@ private:
     core::Array<detail::JoinEdge> edges_;
     core::Array<detail::JoinSlice> slices_;
     geometry::Vec2d pos_;
-    bool isUpdatingJoinsAndCaps_ = false;
+    bool isComputingJoins_ = false;
+    bool areJoinsDirty_ = false;
 
     void debugPaint_(graphics::Engine* engine) const;
-    void updateJoinsAndCaps_();
+    void computeJoins_();
 };
 
 class VGC_WORKSPACE_API InbetweenVertex : public Vertex {
@@ -121,8 +126,6 @@ public:
         topology::VacNode* n = vacNode();
         return n ? n->toCellUnchecked()->toInbetweenVertexUnchecked() : nullptr;
     }
-
-    void updateJoinsAndCaps(core::AnimTime t) override;
 
     geometry::Rect2d boundingBox(core::AnimTime t) const override;
 

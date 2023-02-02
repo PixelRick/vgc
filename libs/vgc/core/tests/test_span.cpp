@@ -20,9 +20,11 @@
 #include <gtest/gtest.h>
 #include <vgc/core/array.h>
 #include <vgc/core/span.h>
+#include <vgc/geometry/vec2f.h>
 
 using vgc::Int;
 using vgc::core::Array;
+using vgc::core::ConstSpan;
 using vgc::core::dynamicExtent;
 using vgc::core::IndexError;
 using vgc::core::LogicError;

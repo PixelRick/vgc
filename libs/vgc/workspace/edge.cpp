@@ -21,15 +21,18 @@
 
 namespace vgc::workspace {
 
-void Edge::updateGeometry(core::AnimTime /*t*/) {
+EdgeGeometryDataCache* KeyEdge::computeRawGeometry(core::AnimTime t) {
+    topology::KeyEdge* ke = vacKeyEdge();
+    if (ke && t == ke->time()) {
+        computeRawGeometry_();
+    }
 }
 
-void KeyEdge::updateGeometry() {
-    updateGeometry_();
-}
-
-void KeyEdge::updateGeometry(core::AnimTime /*t*/) {
-    updateGeometry_();
+EdgeGeometryDataCache* KeyEdge::computeGeometry(core::AnimTime t) {
+    topology::KeyEdge* ke = vacKeyEdge();
+    if (ke && t == ke->time()) {
+        computeGeometry_();
+    }
 }
 
 geometry::Rect2d KeyEdge::boundingBox(core::AnimTime /*t*/) const {
@@ -124,6 +127,8 @@ ElementStatus KeyEdge::updateFromDom_(Workspace* workspace) {
         topology::KeyVertex* oldKv1 = ke->endVertex();
         if (kv0 != oldKv0 || kv1 != oldKv1) {
             // dirty geometry
+            isRawGeometryDirty_ = true;
+            isGeometryDirty_ = true;
             geometry_.clear();
             // remove current node
             topology::ops::removeNode(vacNode_, false);
@@ -152,6 +157,8 @@ ElementStatus KeyEdge::updateFromDom_(Workspace* workspace) {
             topology::ops::setKeyEdgeCurvePoints(ke, points);
             topology::ops::setKeyEdgeCurveWidths(ke, widths);
             // dirty geometry
+            isRawGeometryDirty_ = true;
+            isGeometryDirty_ = true;
             geometry_.clear();
         }
 
@@ -166,16 +173,19 @@ ElementStatus KeyEdge::updateFromDom_(Workspace* workspace) {
     return ElementStatus::InvalidAttribute;
 }
 
-void KeyEdge::preparePaint_(core::AnimTime /*t*/, PaintOptions /*flags*/) {
+void KeyEdge::preparePaint_(core::AnimTime t, PaintOptions /*flags*/) {
     // todo, use paint options to not compute everything or with lower quality
-    updateGeometry_();
+    topology::KeyEdge* ke = vacKeyEdge();
+    if (t == ke->time()) {
+        computeGeometry_();
+    }
 }
 
 void KeyEdge::paint_(graphics::Engine* engine, core::AnimTime /*t*/, PaintOptions flags)
     const {
 
     // if not already done (should we leave preparePaint_ optional?)
-    const_cast<KeyEdge*>(this)->updateGeometry_();
+    const_cast<KeyEdge*>(this)->updateGeometry();
 
     using namespace graphics;
     namespace ds = dom::strings;
@@ -319,23 +329,23 @@ void KeyEdge::paint_(graphics::Engine* engine, core::AnimTime /*t*/, PaintOption
     }
 }
 
-void KeyEdge::updateGeometry_() {
+void KeyEdge::computeRawGeometry_() {
 
-    if (isUpdatingGeometry_) {
+    if (!isRawGeometryDirty_ || isComputingGeometry_) {
         return;
     }
-    isUpdatingGeometry_ = true;
+    isComputingGeometry_ = true;
 
     topology::KeyEdge* ke = vacKeyEdge();
     if (!ke) {
         // error ?
-        isUpdatingGeometry_ = false;
+        isComputingGeometry_ = false;
         return;
     }
 
     // check if we need an update
     if (edgeTesselationModeRequested_ == geometry_.edgeTesselationMode_) {
-        isUpdatingGeometry_ = false;
+        isComputingGeometry_ = false;
         return;
     }
 
@@ -343,8 +353,8 @@ void KeyEdge::updateGeometry_() {
     geometry_.edgeTesselationMode_ = edgeTesselationModeRequested_;
 
     geometry::Curve curve;
-    curve.setPositionData(&ke->points());
-    curve.setWidthData(&ke->widths());
+    curve.setPositions(ke->points());
+    curve.setWidths(ke->widths());
 
     double maxAngle = 0.05;
     int minQuads = 1;
@@ -367,22 +377,35 @@ void KeyEdge::updateGeometry_() {
     else {
         geometry_.triangulation_ = curve.triangulate(maxAngle, 1, 64);
     }
+    geometry_.samplingVersion_++;
 
-    const geometry::Vec2dArray& d = *curve.positionData();
-    for (const geometry::Vec2d& p : d) {
+    for (const geometry::Vec2d& p : curve.positions()) {
         geometry_.cps_.emplaceLast(geometry::Vec2f(p));
     }
 
+    cachedGraphics_.clear();
+    isComputingGeometry_ = false;
+}
+
+void KeyEdge::computeGeometry_() {
+    computeRawGeometry_();
+    if (!isGeometryDirty_ || isComputingGeometry_) {
+        return;
+    }
+    isComputingGeometry_ = true;
+
+    topology::KeyEdge* ke = vacKeyEdge();
+
     // XXX shouldn't do it for draft -> add quality enum for current cached geometry
     if (v0_) {
-        v0_->updateJoinsAndCaps();
+        v0_->computeJoins(ke->time());
     }
     if (v1_) {
-        v1_->updateJoinsAndCaps();
+        v1_->computeJoins(ke->time());
     }
 
     cachedGraphics_.clear();
-    isUpdatingGeometry_ = false;
+    isComputingGeometry_ = false;
 }
 
 } // namespace vgc::workspace

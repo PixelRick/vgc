@@ -2964,7 +2964,7 @@ using SharedConstDoubleArray = SharedConstArray<double>;
 //
 
 template<typename T>
-struct fmt::formatter<vgc::core::Array<T>> : fmt::formatter<T> {
+struct fmt::formatter<vgc::core::Array<T>> : fmt::formatter<vgc::core::RemoveCVRef<T>> {
     template<typename FormatContext>
     auto format(const vgc::core::Array<T>& x, FormatContext& ctx) -> decltype(ctx.out()) {
 
@@ -2980,7 +2980,7 @@ struct fmt::formatter<vgc::core::Array<T>> : fmt::formatter<T> {
             while (it != last) {
                 out = vgc::core::copyStringTo(out, ", ");
                 ctx.advance_to(out);
-                out = fmt::formatter<T>::format(*++it, ctx);
+                out = fmt::formatter<vgc::core::RemoveCVRef<T>>::format(*++it, ctx);
             }
             *out++ = ']';
         }

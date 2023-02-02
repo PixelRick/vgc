@@ -1055,6 +1055,7 @@ SwapChainPtr D3d11Engine::constructSwapChain_(const SwapChainCreateInfo& createI
 
     ComPtr<IDXGISwapChain1> dxgiSwapChain1;
 
+#    if 0
     if (!dxgiSwapChain1) {
         // Windows 8.1+
         // FLIP_SEQUENTIAL + FRAME_LATENCY_WAITABLE_OBJECT
@@ -1076,8 +1077,8 @@ SwapChainPtr D3d11Engine::constructSwapChain_(const SwapChainCreateInfo& createI
         sd.Scaling = DXGI_SCALING_NONE;
         sd.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD; // DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL
         sd.AlphaMode = DXGI_ALPHA_MODE_UNSPECIFIED;
-        sd.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH
-                   | DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT;
+        sd.Flags = 0; // DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH
+        /* |*/ DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT;
         flags = sd.Flags;
 
         if (dxgiFactory2_->CreateSwapChainForHwnd(
@@ -1091,6 +1092,7 @@ SwapChainPtr D3d11Engine::constructSwapChain_(const SwapChainCreateInfo& createI
             // fallback below
         }
     }
+#    endif
 
     if (!dxgiSwapChain1) {
         DXGI_SWAP_CHAIN_DESC1 sd = {};
@@ -1098,14 +1100,17 @@ SwapChainPtr D3d11Engine::constructSwapChain_(const SwapChainCreateInfo& createI
         sd.Height = height;
         sd.Format = pixelFormatToDxgiFormat(wpFormat);
         sd.Stereo = FALSE;
-        sd.SampleDesc.Count = 1;
+        if (numSamples > 1) {
+            VGC_WARNING(LogVgcGraphics, "Multisampling:{}", numSamples);
+        }
+        sd.SampleDesc.Count = numSamples;
         sd.SampleDesc.Quality = 0;
         sd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
         sd.BufferCount = numBuffers;
         sd.Scaling = DXGI_SCALING_STRETCH;
         sd.SwapEffect = DXGI_SWAP_EFFECT_SEQUENTIAL;
         sd.AlphaMode = DXGI_ALPHA_MODE_UNSPECIFIED;
-        sd.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
+        sd.Flags = 0; // DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
         flags = sd.Flags;
 
         if (dxgiFactory2_->CreateSwapChainForHwnd(
@@ -1120,11 +1125,11 @@ SwapChainPtr D3d11Engine::constructSwapChain_(const SwapChainCreateInfo& createI
         }
     }
 
+    // prevents mode switch since alt+tab freezes the app when fullscreen...
+    dxgiFactory2_->MakeWindowAssociation(hWnd, DXGI_MWA_NO_ALT_ENTER);
+
     ComPtr<IDXGISwapChain2> dxgiSwapChain2;
-    if (dxgiSwapChain1) {
-        dxgiSwapChain1->QueryInterface(
-            IID_PPV_ARGS(dxgiSwapChain2.releaseAndGetAddressOf()));
-    }
+    dxgiSwapChain1->QueryInterface(IID_PPV_ARGS(dxgiSwapChain2.releaseAndGetAddressOf()));
 
     ComPtr<ID3D11Texture2D> backBuffer;
     dxgiSwapChain1->GetBuffer(0, IID_PPV_ARGS(backBuffer.releaseAndGetAddressOf()));
@@ -1140,14 +1145,15 @@ SwapChainPtr D3d11Engine::constructSwapChain_(const SwapChainCreateInfo& createI
 
     if (dxgiSwapChain2) {
         swapChain->dxgiSwapChain2_ = dxgiSwapChain2.get();
-        swapChain->frameLatencyWaitableObject_ =
-            dxgiSwapChain2->GetFrameLatencyWaitableObject();
-
-        UINT maxFrameLatency = 0;
-        if (dxgiSwapChain2->GetMaximumFrameLatency(&maxFrameLatency) == S_OK) {
-            VGC_DEBUG_TMP("maxFrameLatency:{}", maxFrameLatency);
+        if (flags & DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT) {
+            swapChain->frameLatencyWaitableObject_ =
+                dxgiSwapChain2->GetFrameLatencyWaitableObject();
+            UINT maxFrameLatency = 0;
+            if (dxgiSwapChain2->GetMaximumFrameLatency(&maxFrameLatency) == S_OK) {
+                VGC_DEBUG_TMP("maxFrameLatency:{}", maxFrameLatency);
+            }
+            dxgiSwapChain2->SetMaximumFrameLatency(1);
         }
-        dxgiSwapChain2->SetMaximumFrameLatency(1);
     }
 
     return SwapChainPtr(swapChain.release());
@@ -1290,7 +1296,7 @@ D3d11Engine::constructRasterizerState_(const RasterizerStateCreateInfo& createIn
 
 void D3d11Engine::onWindowResize_(SwapChain* swapChain, UInt32 width, UInt32 height) {
     D3d11SwapChain* d3dSwapChain = static_cast<D3d11SwapChain*>(swapChain);
-    IDXGISwapChain* dxgiSwapChain1 = d3dSwapChain->dxgiSwapChain1();
+    IDXGISwapChain1* dxgiSwapChain1 = d3dSwapChain->dxgiSwapChain1();
 
     d3dSwapChain->rtv_.reset();
     HRESULT hres = dxgiSwapChain1->ResizeBuffers(
@@ -1302,6 +1308,7 @@ void D3d11Engine::onWindowResize_(SwapChain* swapChain, UInt32 width, UInt32 hei
 
     ComPtr<ID3D11Texture2D> backBuffer;
     dxgiSwapChain1->GetBuffer(0, IID_PPV_ARGS(backBuffer.releaseAndGetAddressOf()));
+    VGC_DEBUG_TMP("new backBuffer: {}", (void*)backBuffer.get());
 
     ComPtr<ID3D11RenderTargetView> backBufferView;
     device_->CreateRenderTargetView(
@@ -2070,8 +2077,10 @@ UInt64
 D3d11Engine::present_(SwapChain* swapChain, UInt32 syncInterval, PresentFlags /*flags*/) {
 
     D3d11SwapChain* d3dSwapChain = static_cast<D3d11SwapChain*>(swapChain);
-    d3dSwapChain->dxgiSwapChain1()->Present(syncInterval, 0);
-    VGC_DEBUG_TMP("syncInterval:{}", syncInterval);
+    IDXGISwapChain1* dxgiSwapChain1 = d3dSwapChain->dxgiSwapChain1();
+    if (dxgiSwapChain1->Present(syncInterval, 0) != S_OK) {
+        VGC_ERROR(LogVgcGraphics, "Could not present frame.");
+    }
     return std::chrono::nanoseconds(std::chrono::steady_clock::now() - engineStartTime())
         .count();
 }

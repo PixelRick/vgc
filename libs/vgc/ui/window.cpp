@@ -29,6 +29,7 @@
 #include <vgc/geometry/camera2d.h>
 #include <vgc/graphics/d3d11/d3d11engine.h>
 #include <vgc/graphics/text.h>
+#include <vgc/ui/cursor.h>
 #include <vgc/ui/logcategories.h>
 #include <vgc/ui/qtutil.h>
 
@@ -138,6 +139,7 @@ Window::Window(const WidgetPtr& widget)
     //widget_->focusRequested().connect([this](){ this->onFocusRequested(); });
     widget_->widgetAddedToTree().connect(onWidgetAddedToTreeSlot_());
     widget_->widgetRemovedFromTree().connect(onWidgetRemovedFromTreeSlot_());
+    widget_->window_ = this;
 
     initEngine_();
     addShortcuts_(widget_.get());
@@ -163,6 +165,12 @@ void Window::onDestroyed() {
 
 WindowPtr Window::create(const WidgetPtr& widget) {
     return WindowPtr(new Window(widget));
+}
+
+geometry::Vec2f Window::mapFromGlobal(const geometry::Vec2f& globalPosition) const {
+    QPointF qGlobalPosition = toQt(globalPosition);
+    QPoint qRes = this->QWindow::mapFromGlobal(qGlobalPosition.toPoint());
+    return geometry::Vec2f(qRes.x(), qRes.y());
 }
 
 void Window::enterEvent(QEvent* event) {
@@ -686,8 +694,8 @@ void Window::updateRequestEvent(QEvent*) {
 void Window::paint(bool sync) {
 
     VGC_WINDOW_DEBUG("paint(({}, {}), sync={})", width_, height_, sync);
-    VGC_PROFILE_SCOPE("Window:paint");
-    VGC_DEBUG_TMP("paint(({}, {}), sync={})", width_, height_, sync);
+    //VGC_PROFILE_SCOPE("Window:paint");
+    //VGC_DEBUG_TMP("paint(({}, {}), sync={})", width_, height_, sync);
 
     if (updateDeferred_) {
         return;
@@ -727,26 +735,12 @@ void Window::paint(bool sync) {
     }
 
     {
-        VGC_PROFILE_SCOPE("Window:MainWidgetPaint");
+        //VGC_PROFILE_SCOPE("Window:MainWidgetPaint");
         widget_->paint(engine_.get());
     }
 
-    //#ifdef VGC_DEBUG_BUILD or 1
-    QPoint globalCursorPos = QCursor::pos();
-
-#ifdef VGC_CORE_OS_WINDOWS
-    POINT globalCursorPosWindows;
-    GetCursorPos(&globalCursorPosWindows);
-    VGC_DEBUG_TMP(
-        "[Window::paint] Windows:[{}, {}], QCursor:[{}, {}]",
-        globalCursorPosWindows.x,
-        globalCursorPosWindows.y,
-        globalCursorPos.x(),
-        globalCursorPos.y());
-#endif
-
-    QPoint relativeCursorPos = this->mapFromGlobal(globalCursorPos);
-    geometry::Vec2f pos = fromQtf(relativeCursorPos);
+#if 0
+    geometry::Vec2f pos = mapFromGlobal(globalCursorPosition());
 
     core::FloatArray a;
     float csz = 20;
@@ -758,7 +752,7 @@ void Window::paint(bool sync) {
     });
     engine_->updateVertexBufferData(cross_, std::move(a));
     engine_->draw(cross_);
-    //#endif
+#endif
 
     // execute all before getting mouse pos
     // should query mouse pos directly from render thread to stay async
@@ -776,13 +770,15 @@ void Window::paint(bool sync) {
 #endif
 
     {
-        VGC_PROFILE_SCOPE("Window:EndFrame");
+        //VGC_PROFILE_SCOPE("Window:EndFrame");
         // XXX make it endInlineFrame in QglEngine and copy its code into Engine::present()
         engine_->endFrame(sync ? 1 : 0 + 0);
     }
 }
 
 bool Window::event(QEvent* event) {
+    VGC_WARNING_PUSH
+    VGC_WARNING_MSVC_DISABLE(4063) // invalid switch value (custom event types)
     switch (event->type()) {
     case QEvent::InputMethodQuery:
         inputMethodQueryEvent(static_cast<QInputMethodQueryEvent*>(event));
@@ -802,6 +798,7 @@ bool Window::event(QEvent* event) {
     case QEvent::ShortcutOverride:
         event->accept();
         break;
+    // custom event types
     case presentCalledEvent:
         if (updateDeferred_) {
             updateDeferred_ = false;
@@ -812,6 +809,7 @@ bool Window::event(QEvent* event) {
         break;
     }
     return QWindow::event(event);
+    VGC_WARNING_POP
 }
 
 // These events may not exist on some Qt versions and OSs.
@@ -878,6 +876,10 @@ bool Window::nativeEvent(
             VGC_WINDOW_DEBUG_NOARGS("WM_GETMINMAXINFO");
             return false;
         }*/
+        case WM_ACTIVATEAPP: {
+            VGC_DEBUG_TMP("WM_ACTIVATEAPP");
+            return false;
+        }
         case WM_ENTERSIZEMOVE: {
             activeSizemove_ = true;
             return false;
@@ -965,7 +967,7 @@ void Window::initEngine_() {
 #if defined(VGC_CORE_OS_MACOS)
     engineCreateInfo.setMultithreadingEnabled(false);
 #else
-    engineCreateInfo.setMultithreadingEnabled(true);
+    engineCreateInfo.setMultithreadingEnabled(false);
 #endif
 
 #if defined(VGC_CORE_OS_WINDOWS) && TRUE

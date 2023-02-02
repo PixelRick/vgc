@@ -78,7 +78,7 @@ struct EdgeGraphics {
     graphics::GeometryViewPtr selectionGeometry_;
 };
 
-struct EdgeGeometryComputationCache {
+struct EdgeGeometryDataCache {
 
     void clear() {
         samples_.clear();
@@ -94,6 +94,7 @@ struct EdgeGeometryComputationCache {
     geometry::Vec2fArray cps_;
     Int startSampleOverride_ = 0;
     Int endSampleOverride_ = 0;
+    int samplingVersion_ = -1;
     int edgeTesselationMode_ = -1;
 };
 
@@ -112,7 +113,11 @@ public:
         return n ? n->toCellUnchecked()->toEdgeCellUnchecked() : nullptr;
     }
 
-    virtual void updateGeometry(core::AnimTime t);
+    virtual EdgeGeometryDataCache* computeRawGeometry(core::AnimTime t) {
+    }
+
+    virtual EdgeGeometryDataCache* computeGeometry(core::AnimTime t) {
+    }
 };
 
 class VGC_WORKSPACE_API KeyEdge : public Edge {
@@ -136,8 +141,8 @@ public:
         edgeTesselationModeRequested_ = core::clamp(mode, 0, 2);
     }
 
-    void updateGeometry();
-    void updateGeometry(core::AnimTime t) override;
+    EdgeGeometryDataCache* computeRawGeometry(core::AnimTime t) override;
+    EdgeGeometryDataCache* computeGeometry(core::AnimTime t) override;
 
     geometry::Rect2d boundingBox(core::AnimTime t) const override;
 
@@ -160,13 +165,14 @@ private:
 
     // local data to build graphics resource, kept as copy
     // should this be in vac ?
-    EdgeGeometryComputationCache geometry_;
+    EdgeGeometryDataCache geometry_;
     int edgeTesselationModeRequested_ = 2;
-    bool isUpdatingGeometry_ = false;
+    bool isComputingGeometry_ = false;
+    bool isRawGeometryDirty_ = false;
+    bool isGeometryDirty_ = false;
 
-
-    //void onUpdateError_();
-    void updateGeometry_();
+    void computeRawGeometry_();
+    void computeGeometry_();
 };
 
 } // namespace vgc::workspace
