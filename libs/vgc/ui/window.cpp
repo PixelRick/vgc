@@ -738,7 +738,7 @@ void Window::paint(bool sync) {
     POINT globalCursorPosWindows;
     GetCursorPos(&globalCursorPosWindows);
     VGC_DEBUG_TMP(
-        "[User] Windows:[{}, {}], QCursor:[{}, {}]",
+        "[Window::paint] Windows:[{}, {}], QCursor:[{}, {}]",
         globalCursorPosWindows.x,
         globalCursorPosWindows.y,
         globalCursorPos.x(),

@@ -438,6 +438,8 @@ void Canvas::onPaintCreate(graphics::Engine* engine) {
     wireframeRS_ = engine->createRasterizerState(createInfo);
     bgGeometry_ =
         engine->createDynamicTriangleStripView(graphics::BuiltinGeometryLayout::XYRGB);
+    cursorGeometry_ =
+        engine->createDynamicTriangleListView(graphics::BuiltinGeometryLayout::XYRGB);
     reload_ = true;
 }
 
@@ -509,6 +511,10 @@ void Canvas::onPaintDraw(graphics::Engine* engine, PaintOptions /*options*/) {
                 }
             });
     }
+
+    if (isSketching_) {
+    }
+
     engine->popViewMatrix();
     engine->popPipelineParameters(modifiedParameters);
 

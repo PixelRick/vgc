@@ -45,6 +45,7 @@ namespace vgc::ui {
 VGC_DECLARE_OBJECT(Action);
 VGC_DECLARE_OBJECT(OverlayArea);
 VGC_DECLARE_OBJECT(Widget);
+VGC_DECLARE_OBJECT(Window);
 
 // clang-format off
 
@@ -116,6 +117,20 @@ enum class FocusReason : UInt8 {
 };
 
 // clang-format on
+
+class WidgetPaintContext {
+public:
+    explicit constexpr WidgetPaintContext(
+        graphics::Engine* engine,
+        Window* window = nullptr)
+        : engine_(engine)
+        , window_(window) {
+    }
+
+private:
+    graphics::Engine* engine_ = nullptr;
+    Window* window_ = nullptr;
+};
 
 /// \class vgc::ui::Widget
 /// \brief Base class of all elements in the user interface.

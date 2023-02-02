@@ -1055,7 +1055,7 @@ SwapChainPtr D3d11Engine::constructSwapChain_(const SwapChainCreateInfo& createI
 
     ComPtr<IDXGISwapChain1> dxgiSwapChain1;
 
-    if (0 && !dxgiSwapChain1) {
+    if (!dxgiSwapChain1) {
         // Windows 8.1+
         // FLIP_SEQUENTIAL + FRAME_LATENCY_WAITABLE_OBJECT
 
