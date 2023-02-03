@@ -21,164 +21,35 @@
 
 namespace vgc::workspace {
 
-void KeyVertex::computeJoins(core::AnimTime t) {
-    topology::KeyVertex* kv = vacKeyVertex();
-    if (kv && t == kv->time()) {
-        computeJoins_();
-    }
+namespace detail {
+
+void VacVertexCellFrameData::computeJoins() {
+    computeJoins_();
 }
 
-geometry::Rect2d KeyVertex::boundingBox(core::AnimTime /*t*/) const {
-    geometry::Vec2d pos = vacKeyVertex()->position({});
-    return geometry::Rect2d(pos, pos);
-}
-
-ElementStatus KeyVertex::updateFromDom_(Workspace* /*workspace*/) {
-    namespace ds = dom::strings;
-    dom::Element* const domElement = this->domElement();
-
-    topology::KeyVertex* kv = nullptr;
-    if (!vacNode_) {
-        kv = topology::ops::createKeyVertex(
-            domElement->internalId(), parentVacElement()->vacNode()->toGroupUnchecked());
-        vacNode_ = kv;
-    }
-    else {
-        kv = vacNode_->toCellUnchecked()->toKeyVertexUnchecked();
-    }
-
-    const auto& position = domElement->getAttribute(ds::position).getVec2d();
-    topology::ops::setKeyVertexPosition(kv, position);
-
-    notifyChanges();
-
-    return ElementStatus::Ok;
-}
-
-void KeyVertex::paint_(graphics::Engine* engine, core::AnimTime /*t*/, PaintOptions flags)
-    const {
-
-    if (flags.has(PaintOption::Outline)) {
-        debugPaint_(engine);
-    }
-}
-
-void KeyVertex::debugPaint_(graphics::Engine* engine) const {
-
-    using namespace graphics;
-    using detail::JoinSlice;
-
-    if (!debugQuadGeometry_) {
-        debugQuadGeometry_ = engine->createDynamicTriangleStripView(
-            BuiltinGeometryLayout::XYRGB, IndexFormat::UInt16);
-        geometry::Vec2f p(pos_);
-        core::FloatArray vertices({
-            p.x() - 5, p.y() - 5, 0, 0, 0, //
-            p.x() - 5, p.y() + 5, 0, 0, 0, //
-            p.x() + 5, p.y() - 5, 0, 0, 0, //
-            p.x() + 5, p.y() + 5, 0, 0, 0, //
-        });
-        engine->updateVertexBufferData(debugQuadGeometry_, std::move(vertices));
-        core::Array<UInt16> lineIndices({0, 1, 2, 3});
-        engine->updateBufferData(
-            debugQuadGeometry_->indexBuffer(), std::move(lineIndices));
-    }
-
-    if (!debugLinesGeometry_ && slices_.length()) {
-        debugLinesGeometry_ = engine->createDynamicTriangleStripView(
-            BuiltinGeometryLayout::XYDxDy_iXYRotRGBA, IndexFormat::UInt16);
-
-        core::FloatArray lineInstData;
-        lineInstData.extend({0.f, 0.f, 1.f, 0.64f, 0.02f, 1.0f, 1.f, 0.f /*padding*/});
-
-        float lineHalfWidth = 1.5f;
-        float lineLength = 100.f;
-
-        geometry::Vec4fArray lineVertices;
-        core::Array<UInt16> lineIndices;
-
-        for (const JoinSlice& s : slices_) {
-            geometry::Vec2f p(pos_);
-            double angle0 = s.edges[0]->angle;
-            double angle1 = s.edges[1]->angle;
-            double midAngle = angle0 + angle1;
-            if (angle0 > angle1) {
-                midAngle += core::pi * 2;
-            }
-            midAngle *= 0.5;
-            if (midAngle > core::pi * 2) {
-                midAngle -= core::pi * 2;
-            }
-            geometry::Vec2f d(
-                static_cast<float>(std::cos(midAngle)),
-                static_cast<float>(std::sin(midAngle)));
-            geometry::Vec2f n = d.orthogonalized() * lineHalfWidth;
-            d *= lineLength;
-            // clang-format off
-            Int i = lineVertices.length();
-            lineVertices.emplaceLast(p.x(), p.y(), -n.x(), -n.y());
-            lineVertices.emplaceLast(p.x(), p.y(), n.x(), n.y());
-            lineVertices.emplaceLast(p.x(), p.y(), -n.x() + d.x(), -n.y() + d.y());
-            lineVertices.emplaceLast(p.x(), p.y(), n.x() + d.x(), n.y() + d.y());
-            lineIndices.extend(
-                {static_cast<UInt16>(i),
-                 static_cast<UInt16>(i + 1),
-                 static_cast<UInt16>(i + 2),
-                 static_cast<UInt16>(i + 3),
-                 static_cast<UInt16>(-1)});
-            // clang-format on
-        }
-
-        engine->updateBufferData(
-            debugLinesGeometry_->indexBuffer(), std::move(lineIndices));
-        engine->updateBufferData(
-            debugLinesGeometry_->vertexBuffer(0), std::move(lineVertices));
-        engine->updateBufferData(
-            debugLinesGeometry_->vertexBuffer(1), std::move(lineInstData));
-    }
-
-    if (debugLinesGeometry_) {
-        engine->setProgram(graphics::BuiltinProgram::SreenSpaceDisplacement);
-        engine->draw(debugLinesGeometry_);
-    }
-
-    if (debugQuadGeometry_ && slices_.length() < 2) {
-        engine->setProgram(graphics::BuiltinProgram::Simple);
-        engine->draw(debugQuadGeometry_);
-    }
-}
-
-void KeyVertex::computeJoins_() {
+void VacVertexCellFrameData::computeJoins_() {
 
     if (!areJoinsDirty_ || isComputingJoins_) {
         return;
     }
     isComputingJoins_ = true;
 
-    using detail::JoinEdge;
-    using detail::JoinSlice;
+    using detail::VacJoinEdgeFrameData;
 
-    topology::KeyVertex* kv = vacNode()->toCellUnchecked()->toKeyVertexUnchecked();
-    if (!kv) {
-        isComputingJoins_ = false;
-        return;
-    }
-    pos_ = kv->position({});
-
-    debugQuadGeometry_.reset();
-    debugLinesGeometry_.reset();
+    frameData.debugQuadGeometry_.reset();
+    frameData.debugLinesGeometry_.reset();
     edges_.clear();
     slices_.clear();
 
     // get the KeyEdges that we have to join (later we'll have to do that by join group index)
-    for (topology::VacCell* cell : kv->star()) {
+    for (topology::vacomplex::Cell* cell : kv->star()) {
         topology::KeyEdge* vacKe = cell->toKeyEdge();
         // XXX replace dynamic_cast
         KeyEdge* ke = dynamic_cast<KeyEdge*>(workspace()->find(vacKe->id()));
         if (ke) {
-            ke->computeRawGeometry(kv->time());
+            EdgeGeometryDataCache* geometry = ke->computeRawGeometry(kv->time());
             bool isReverse = (vacKe->startVertex() != kv);
-            const geometry::CurveSampleArray& samples = ke->geometry_.samples_;
+            const geometry::CurveSampleArray& samples = geometry->samples_;
             if (samples.length() < 2) {
                 continue;
             }
@@ -191,8 +62,14 @@ void KeyVertex::computeJoins_() {
                 angle += core::pi * 2;
             }
 
-            edges_.emplaceLast(
-                JoinEdge{vacKe, ke, outgoingTangent, angle, isReverse, samples.length()});
+            edges_.emplaceLast(JoinEdge{
+                ke,
+                vacKe,
+                geometry,
+                outgoingTangent,
+                angle,
+                isReverse,
+                samples.length()});
         }
     }
 
@@ -228,19 +105,176 @@ void KeyVertex::computeJoins_() {
     isComputingJoins_ = false;
 }
 
-geometry::Rect2d InbetweenVertex::boundingBox(core::AnimTime t) const {
-    geometry::Vec2d pos = vacInbetweenVertex()->position(t);
-    return geometry::Rect2d(pos, pos);
+} // namespace detail
+
+void VacVertexCell::debugPaint(
+    graphics::Engine* engine,
+    const detail::VacVertexCellFrameData& frameData) {
+
+    using namespace graphics;
+    using detail::VacJoinEdgeFrameData;
+
+    if (!frameData.debugQuadRenderGeometry_) {
+        frameData.debugQuadRenderGeometry_ = engine->createDynamicTriangleStripView(
+            BuiltinGeometryLayout::XYRGB, IndexFormat::UInt16);
+        geometry::Vec2f p(frameData.pos_);
+        core::FloatArray vertices({
+            p.x() - 5, p.y() - 5, 0, 0, 0, //
+            p.x() - 5, p.y() + 5, 0, 0, 0, //
+            p.x() + 5, p.y() - 5, 0, 0, 0, //
+            p.x() + 5, p.y() + 5, 0, 0, 0, //
+        });
+        engine->updateVertexBufferData(
+            frameData.debugQuadRenderGeometry_, std::move(vertices));
+        core::Array<UInt16> lineIndices({0, 1, 2, 3});
+        engine->updateBufferData(
+            frameData.debugQuadRenderGeometry_->indexBuffer(), std::move(lineIndices));
+    }
+
+    if (!frameData.debugLinesRenderGeometry_ && frameData.edges_.length()) {
+        frameData.debugLinesRenderGeometry_ = engine->createDynamicTriangleStripView(
+            BuiltinGeometryLayout::XYDxDy_iXYRotRGBA, IndexFormat::UInt16);
+
+        core::FloatArray lineInstData;
+        lineInstData.extend({0.f, 0.f, 1.f, 0.64f, 0.02f, 1.0f, 1.f, 0.f /*padding*/});
+
+        float lineHalfWidth = 1.5f;
+        float lineLength = 100.f;
+
+        geometry::Vec4fArray lineVertices;
+        core::Array<UInt16> lineIndices;
+
+        for (const VacJoinEdgeFrameData& s : frameData.edges_) {
+            geometry::Vec2f p(frameData.pos_);
+            double angle0 = s.angle_;
+            double angle1 = s.angle_ + s.angleToNext_;
+            double midAngle = angle0 + angle1;
+            if (angle0 > angle1) {
+                midAngle += core::pi * 2;
+            }
+            midAngle *= 0.5;
+            if (midAngle > core::pi * 2) {
+                midAngle -= core::pi * 2;
+            }
+            geometry::Vec2f d(
+                static_cast<float>(std::cos(midAngle)),
+                static_cast<float>(std::sin(midAngle)));
+            geometry::Vec2f n = d.orthogonalized() * lineHalfWidth;
+            d *= lineLength;
+            // clang-format off
+            Int i = lineVertices.length();
+            lineVertices.emplaceLast(p.x(), p.y(), -n.x(), -n.y());
+            lineVertices.emplaceLast(p.x(), p.y(), n.x(), n.y());
+            lineVertices.emplaceLast(p.x(), p.y(), -n.x() + d.x(), -n.y() + d.y());
+            lineVertices.emplaceLast(p.x(), p.y(), n.x() + d.x(), n.y() + d.y());
+            lineIndices.extend(
+                {static_cast<UInt16>(i),
+                static_cast<UInt16>(i + 1),
+                static_cast<UInt16>(i + 2),
+                static_cast<UInt16>(i + 3),
+                static_cast<UInt16>(-1)});
+            // clang-format on
+        }
+
+        engine->updateBufferData(
+            frameData.debugLinesRenderGeometry_->indexBuffer(), //
+            std::move(lineIndices));
+        engine->updateBufferData(
+            frameData.debugLinesRenderGeometry_->vertexBuffer(0),
+            std::move(lineVertices));
+        engine->updateBufferData(
+            frameData.debugLinesRenderGeometry_->vertexBuffer(1),
+            std::move(lineInstData));
+    }
+
+    if (frameData.debugLinesRenderGeometry_) {
+        engine->setProgram(graphics::BuiltinProgram::SreenSpaceDisplacement);
+        engine->draw(frameData.debugLinesRenderGeometry_);
+    }
+
+    if (frameData.debugQuadRenderGeometry_ && frameData.edges_.length() == 1) {
+        engine->setProgram(graphics::BuiltinProgram::Simple);
+        engine->draw(frameData.debugQuadRenderGeometry_);
+    }
 }
 
-ElementStatus InbetweenVertex::updateFromDom_(Workspace* /*workspace*/) {
+geometry::Rect2d VacKeyVertex::boundingBox(core::AnimTime /*t*/) const {
+    topology::KeyVertex* kv = vacKeyVertexNode();
+    if (kv) {
+        geometry::Vec2d pos = vacKeyVertexNode()->position({});
+        return geometry::Rect2d(pos, pos);
+    }
+}
+
+detail::VacVertexCellFrameData* VacKeyVertex::getOrCreateFrameData(core::AnimTime t) {
+    topology::KeyVertex* kv = vacKeyVertexNode();
+    if (kv && kv->time() == t) {
+        frameData_.pos_ = kv->position({});
+        return &frameData_;
+    }
+    return nullptr;
+}
+
+ElementStatus VacKeyVertex::updateFromDom_(Workspace* /*workspace*/) {
+    namespace ds = dom::strings;
+    dom::Element* const domElement = this->domElement();
+
+    topology::KeyVertex* kv = nullptr;
+    if (!vacNode_) {
+        kv = topology::ops::createKeyVertex(
+            domElement->internalId(), parentVacElement()->vacNode()->toGroupUnchecked());
+        vacNode_ = kv;
+    }
+    else {
+        kv = vacNode_->toCellUnchecked()->toKeyVertexUnchecked();
+    }
+
+    const auto& position = domElement->getAttribute(ds::position).getVec2d();
+    topology::ops::setKeyVertexPosition(kv, position);
+
+    // XXX also reset frame data !
+    notifyChanges();
+
     return ElementStatus::Ok;
 }
 
-void InbetweenVertex::preparePaint_(core::AnimTime /*t*/, PaintOptions /*flags*/) {
+void VacKeyVertex::paint_(
+    graphics::Engine* engine,
+    core::AnimTime /*t*/,
+    PaintOptions flags) const {
+
+    if (flags.has(PaintOption::Outline)) {
+        debugPaint_(engine);
+    }
 }
 
-void InbetweenVertex::paint_(
+void VacKeyVertex::debugPaint_(graphics::Engine* engine) const {
+    debugPaint(engine, frameData_);
+}
+
+geometry::Rect2d VacInbetweenVertex::boundingBox(core::AnimTime t) const {
+    topology::vacomplex::InbetweenVertex* iv = vacInbetweenVertexNode();
+    if (iv) {
+        geometry::Vec2d pos = iv->position(t);
+        return geometry::Rect2d(pos, pos);
+    }
+    return geometry::Rect2d();
+}
+
+detail::VacVertexCellFrameData*
+VacInbetweenVertex::getOrCreateFrameData(core::AnimTime t) {
+    // todo
+    return nullptr;
+}
+
+ElementStatus VacInbetweenVertex::updateFromDom_(Workspace* /*workspace*/) {
+    return ElementStatus::Ok;
+}
+
+void VacInbetweenVertex::preparePaint_(core::AnimTime /*t*/, PaintOptions /*flags*/) {
+}
+
+void VacInbetweenVertex::paint_(
     graphics::Engine* /*engine*/,
     core::AnimTime /*t*/,
     PaintOptions /*flags*/) const {

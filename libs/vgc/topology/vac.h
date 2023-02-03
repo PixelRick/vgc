@@ -162,6 +162,40 @@ private:
     bool diffEnabled_ = false;
 };
 
+namespace vacomplex {
+
+using Complex = Vac;
+
+using Cell = VacCell;
+using Group = VacGroup;
+using Node = VacNode;
+
+using CellType = topology::VacCellType;
+using topology::CellSpatialType;
+using topology::CellTemporalType;
+
+using NodeDiffFlag = VacNodeDiffFlag;
+using Diff = VacDiff;
+
+using topology::EdgeCell;
+using topology::FaceCell;
+using topology::VertexCell;
+
+using topology::KeyCell;
+using topology::KeyEdge;
+using topology::KeyFace;
+using topology::KeyVertex;
+
+using topology::InbetweenCell;
+using topology::InbetweenEdge;
+using topology::InbetweenFace;
+using topology::InbetweenVertex;
+
+using topology::EdgeGeometry;
+using topology::FaceGeometry;
+
+} // namespace vacomplex
+
 } // namespace vgc::topology
 
 #endif // VGC_TOPOLOGY_VAC_H

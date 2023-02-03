@@ -98,10 +98,7 @@ VacElement* Element::findFirstSiblingVacElement_(Element* start) {
 }
 
 VacElement::~VacElement() {
-    if (vacNode_) {
-        topology::ops::removeNode(vacNode_, false);
-        vacNode_ = nullptr;
-    }
+    removeVacNode();
 }
 
 void VacElement::removeVacNode() {

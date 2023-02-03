@@ -40,6 +40,7 @@ class Operations;
 
 } // namespace detail
 
+/*
 VGC_DECLARE_OBJECT(Vgc);
 
 class VgcCell;
@@ -47,6 +48,7 @@ class VgcCell;
 class Vertex;
 class Edge;
 class Face;
+*/
 
 VGC_DECLARE_OBJECT(Vac);
 

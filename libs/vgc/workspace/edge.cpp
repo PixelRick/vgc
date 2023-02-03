@@ -21,25 +21,25 @@
 
 namespace vgc::workspace {
 
-EdgeGeometryDataCache* KeyEdge::computeRawGeometry(core::AnimTime t) {
+EdgeGeometryDataCache* VacKeyEdge::computeRawGeometry(core::AnimTime t) {
     topology::KeyEdge* ke = vacKeyEdge();
     if (ke && t == ke->time()) {
         computeRawGeometry_();
     }
 }
 
-EdgeGeometryDataCache* KeyEdge::computeGeometry(core::AnimTime t) {
+EdgeGeometryDataCache* VacKeyEdge::computeGeometry(core::AnimTime t) {
     topology::KeyEdge* ke = vacKeyEdge();
     if (ke && t == ke->time()) {
         computeGeometry_();
     }
 }
 
-geometry::Rect2d KeyEdge::boundingBox(core::AnimTime /*t*/) const {
+geometry::Rect2d VacKeyEdge::boundingBox(core::AnimTime /*t*/) const {
     return geometry::Rect2d::empty;
 }
 
-ElementStatus KeyEdge::updateFromDom_(Workspace* workspace) {
+ElementStatus VacKeyEdge::updateFromDom_(Workspace* workspace) {
     namespace ds = dom::strings;
     dom::Element* const domElement = this->domElement();
 
@@ -79,12 +79,12 @@ ElementStatus KeyEdge::updateFromDom_(Workspace* workspace) {
 
     topology::KeyVertex* kv0 = nullptr;
     topology::KeyVertex* kv1 = nullptr;
-    topology::VacGroup* parentGroup = nullptr;
+    topology::vacomplex::Group* parentGroup = nullptr;
 
     // update dependencies (vertices)
     if (ve0) {
         workspace->updateElementFromDom(ve0);
-        topology::VacNode* vn0 = ve0->vacNode();
+        topology::vacomplex::Node* vn0 = ve0->vacNode();
         if (vn0) {
             kv0 = vn0->toCellUnchecked()->toKeyVertexUnchecked();
         }
@@ -95,7 +95,7 @@ ElementStatus KeyEdge::updateFromDom_(Workspace* workspace) {
     }
     if (ve1) {
         workspace->updateElementFromDom(ve1);
-        topology::VacNode* vn1 = ve1->vacNode();
+        topology::vacomplex::Node* vn1 = ve1->vacNode();
         if (vn1) {
             kv1 = vn1->toCellUnchecked()->toKeyVertexUnchecked();
         }
@@ -106,7 +106,7 @@ ElementStatus KeyEdge::updateFromDom_(Workspace* workspace) {
     }
     if (parentElement) {
         workspace->updateElementFromDom(parentElement);
-        topology::VacNode* parentNode = parentElement->vacNode();
+        topology::vacomplex::Node* parentNode = parentElement->vacNode();
         if (parentNode) {
             // checked cast to group, could be something invalid
             parentGroup = parentNode->toGroup();
@@ -173,7 +173,7 @@ ElementStatus KeyEdge::updateFromDom_(Workspace* workspace) {
     return ElementStatus::InvalidAttribute;
 }
 
-void KeyEdge::preparePaint_(core::AnimTime t, PaintOptions /*flags*/) {
+void VacKeyEdge::preparePaint_(core::AnimTime t, PaintOptions /*flags*/) {
     // todo, use paint options to not compute everything or with lower quality
     topology::KeyEdge* ke = vacKeyEdge();
     if (t == ke->time()) {
@@ -181,8 +181,10 @@ void KeyEdge::preparePaint_(core::AnimTime t, PaintOptions /*flags*/) {
     }
 }
 
-void KeyEdge::paint_(graphics::Engine* engine, core::AnimTime /*t*/, PaintOptions flags)
-    const {
+void VacKeyEdge::paint_(
+    graphics::Engine* engine,
+    core::AnimTime /*t*/,
+    PaintOptions flags) const {
 
     // if not already done (should we leave preparePaint_ optional?)
     const_cast<KeyEdge*>(this)->updateGeometry();
@@ -329,14 +331,14 @@ void KeyEdge::paint_(graphics::Engine* engine, core::AnimTime /*t*/, PaintOption
     }
 }
 
-void KeyEdge::computeRawGeometry_() {
+void VacKeyEdge::computeRawGeometry_() {
 
     if (!isRawGeometryDirty_ || isComputingGeometry_) {
         return;
     }
     isComputingGeometry_ = true;
 
-    topology::KeyEdge* ke = vacKeyEdge();
+    topology::KeyEdge* ke = vacKeyEdgeNode();
     if (!ke) {
         // error ?
         isComputingGeometry_ = false;
@@ -387,25 +389,40 @@ void KeyEdge::computeRawGeometry_() {
     isComputingGeometry_ = false;
 }
 
-void KeyEdge::computeGeometry_() {
+void VacKeyEdge::computeGeometry_() {
     computeRawGeometry_();
     if (!isGeometryDirty_ || isComputingGeometry_) {
         return;
     }
     isComputingGeometry_ = true;
 
-    topology::KeyEdge* ke = vacKeyEdge();
+    topology::KeyEdge* ke = vacKeyEdgeNode();
 
     // XXX shouldn't do it for draft -> add quality enum for current cached geometry
     if (v0_) {
-        v0_->computeJoins(ke->time());
+        //v0_->computeJoins();
     }
     if (v1_) {
-        v1_->computeJoins(ke->time());
+        //v1_->computeJoins();
     }
 
     cachedGraphics_.clear();
     isComputingGeometry_ = false;
+}
+
+void VacKeyEdge::computeJoin_(VacVertexCell* v, bool isStart) {
+
+    using namespace topology;
+
+    // XXX instead use the join struct as join builder...
+
+    vacomplex::VertexCell* vc = v->vacVertexCellNode();
+    if (vc->cellType() == vacomplex::CellType::KeyVertex) {
+        vacomplex::KeyVertex* kv = vc->toKeyVertexUnchecked();
+    }
+    else {
+        vacomplex::InbetweenVertex* iv = vc->toInbetweenVertexUnchecked();
+    }
 }
 
 } // namespace vgc::workspace

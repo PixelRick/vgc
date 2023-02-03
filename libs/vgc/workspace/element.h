@@ -130,11 +130,14 @@ public:
         return domElement_;
     }
 
+    bool isVgcElement() const {
+        return false;
+    }
+
     bool isVacElement() const {
         return isVacElement_;
     }
-
-    inline topology::VacNode* vacNode() const;
+    inline topology::vacomplex::Node* vacNode() const;
 
     core::StringId tagName() const {
         return domElement_->tagName();
@@ -289,24 +292,28 @@ public:
 
 public:
     // the returned pointer can be dangling if the workspace is not synced with its vac
-    topology::VacNode* vacNode() const {
+    topology::vacomplex::Node* vacNode() const {
         return vacNode_;
     }
 
 protected:
     // this pointer is not safe to use when tree is not synced with vac
-    topology::VacNode* vacNode_ = nullptr;
+    topology::vacomplex::Node* vacNode_ = nullptr;
+
+    topology::vacomplex::Cell* vacCellUnchecked() const {
+        return vacNode_->toCellUnchecked();
+    }
 
     void removeVacNode();
 };
 
-topology::VacNode* Element::vacNode() const {
+topology::vacomplex::Node* Element::vacNode() const {
     return isVacElement() ? static_cast<const VacElement*>(this)->vacNode() : nullptr;
 }
 
 VacElement* Element::parentVacElement() const {
     Element* e = parent();
-    return e->isVacElement() ? static_cast<VacElement*>(e) : nullptr;
+    return (e && e->isVacElement()) ? static_cast<VacElement*>(e) : nullptr;
 }
 
 } // namespace vgc::workspace

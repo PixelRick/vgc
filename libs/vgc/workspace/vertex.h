@@ -26,68 +26,97 @@
 
 namespace vgc::workspace {
 
-class KeyEdge;
+class VacEdgeCell;
+class EdgeGeometryCache;
 
 namespace detail {
 
-struct JoinEdge {
-    topology::KeyEdge* vacKe;
-    KeyEdge* ke;
-    geometry::Vec2d outgoingTangent;
-    double angle;
-    bool isReverse;
-    Int numSamples;
+struct VacJoinEdgeFrameData {
+    VacEdgeCell* element_;
+    // what to do if it dies ?
+    topology::vacomplex::EdgeCell* vacNode_;
+    EdgeGeometryCache* geometry_;
+    geometry::Vec2d outgoingTangent_;
+    double angle_;
+    double angleToNext_;
+    Int numSamples_;
+    bool isReverse_;
+    bool isSliceDirty_;
 };
 
-struct JoinSlice {
-    std::array<JoinEdge*, 2> edges;
-    double angle;
+class VGC_WORKSPACE_API VacVertexCellFrameData {
+public:
+    // join computation requires collaboration
+    friend class VacVertexCell;
+    friend class VacKeyVertex;
+    friend class VacInbetweenVertex;
+    friend class VacEdgeCell;
+    friend class VacKeyEdge;
+    friend class VacInbetweenEdge;
+
+    void reset(geometry::Vec2d pos) {
+        debugLinesRenderGeometry_.reset();
+        debugQuadRenderGeometry_.reset();
+        edges_.clear();
+        pos_ = pos;
+        isComputingJoins_ = false;
+        areJoinsDirty_ = true;
+    }
+
+private:
+    void computeJoins_();
+
+    mutable graphics::GeometryViewPtr debugLinesRenderGeometry_;
+    mutable graphics::GeometryViewPtr debugQuadRenderGeometry_;
+    core::Array<detail::VacJoinEdgeFrameData> edges_;
+    geometry::Vec2d pos_;
+    bool isComputingJoins_ = false;
+    bool areJoinsDirty_ = false;
 };
 
 } // namespace detail
 
-class VGC_WORKSPACE_API Vertex : public VacElement {
+class VGC_WORKSPACE_API VacVertexCell : public VacElement {
 private:
     friend class Workspace;
+    friend class VacKeyVertex;
+    friend class VacInbetweenVertex;
 
 protected:
-    Vertex(Workspace* workspace, dom::Element* domElement)
+    VacVertexCell(Workspace* workspace, dom::Element* domElement)
         : VacElement(workspace, domElement) {
     }
 
 public:
-    topology::VertexCell* vacVertex() const {
-        topology::VacNode* n = vacNode();
-        return n ? n->toCellUnchecked()->toVertexCellUnchecked() : nullptr;
+    topology::vacomplex::VertexCell* vacVertexCellNode() const {
+        return vacCellUnchecked()->toVertexCellUnchecked();
     }
 
-    virtual void computeJoins(core::AnimTime t) {
-    }
+protected:
+    virtual detail::VacVertexCellFrameData* getOrCreateFrameData(core::AnimTime t) = 0;
+
+    static void
+    debugPaint(graphics::Engine* engine, const detail::VacVertexCellFrameData& data);
 };
 
-class VGC_WORKSPACE_API KeyVertex : public Vertex {
+class VGC_WORKSPACE_API VacKeyVertex : public VacVertexCell {
 private:
     friend class Workspace;
 
 public:
-    ~KeyVertex() override = default;
+    ~VacKeyVertex() override = default;
 
-    KeyVertex(Workspace* workspace, dom::Element* domElement)
-        : Vertex(workspace, domElement) {
+    VacKeyVertex(Workspace* workspace, dom::Element* domElement)
+        : VacVertexCell(workspace, domElement) {
     }
 
-    topology::KeyVertex* vacKeyVertex() const {
-        topology::VacNode* n = vacNode();
-        return n ? n->toCellUnchecked()->toKeyVertexUnchecked() : nullptr;
+    topology::KeyVertex* vacKeyVertexNode() const {
+        return vacCellUnchecked()->toKeyVertexUnchecked();
     }
-
-    bool isComputingJoins() const {
-        return isComputingJoins_;
-    }
-
-    void computeJoins(core::AnimTime t) override;
 
     geometry::Rect2d boundingBox(core::AnimTime t) const override;
+
+    detail::VacVertexCellFrameData* getOrCreateFrameData(core::AnimTime t) override;
 
 protected:
     ElementStatus updateFromDom_(Workspace* workspace) override;
@@ -98,36 +127,29 @@ protected:
         PaintOptions flags = PaintOption::None) const override;
 
 private:
-    // debug geometry
-    mutable graphics::GeometryViewPtr debugLinesGeometry_;
-    mutable graphics::GeometryViewPtr debugQuadGeometry_;
-    core::Array<detail::JoinEdge> edges_;
-    core::Array<detail::JoinSlice> slices_;
-    geometry::Vec2d pos_;
-    bool isComputingJoins_ = false;
-    bool areJoinsDirty_ = false;
+    detail::VacVertexCellFrameData frameData_;
 
     void debugPaint_(graphics::Engine* engine) const;
-    void computeJoins_();
 };
 
-class VGC_WORKSPACE_API InbetweenVertex : public Vertex {
+class VGC_WORKSPACE_API VacInbetweenVertex : public VacVertexCell {
 private:
     friend class Workspace;
 
 public:
-    ~InbetweenVertex() override = default;
+    ~VacInbetweenVertex() override = default;
 
-    InbetweenVertex(Workspace* workspace, dom::Element* domElement)
-        : Vertex(workspace, domElement) {
+    VacInbetweenVertex(Workspace* workspace, dom::Element* domElement)
+        : VacVertexCell(workspace, domElement) {
     }
 
-    topology::InbetweenVertex* vacInbetweenVertex() const {
-        topology::VacNode* n = vacNode();
-        return n ? n->toCellUnchecked()->toInbetweenVertexUnchecked() : nullptr;
+    topology::vacomplex::InbetweenVertex* vacInbetweenVertexNode() const {
+        return vacCellUnchecked()->toInbetweenVertexUnchecked();
     }
 
     geometry::Rect2d boundingBox(core::AnimTime t) const override;
+
+    detail::VacVertexCellFrameData* getOrCreateFrameData(core::AnimTime t) override;
 
 protected:
     ElementStatus updateFromDom_(Workspace* workspace) override;
@@ -137,6 +159,9 @@ protected:
         graphics::Engine* engine,
         core::AnimTime t,
         PaintOptions flags = PaintOption::None) const override;
+
+private:
+    core::Array<std::pair<core::AnimTimeRange, detail::VacVertexCellFrameData>> cache_;
 };
 
 } // namespace vgc::workspace

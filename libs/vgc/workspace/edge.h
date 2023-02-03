@@ -98,19 +98,18 @@ struct EdgeGeometryDataCache {
     int edgeTesselationMode_ = -1;
 };
 
-class VGC_WORKSPACE_API Edge : public VacElement {
+class VGC_WORKSPACE_API VacEdgeCell : public VacElement {
 private:
     friend class Workspace;
 
 protected:
-    Edge(Workspace* workspace, dom::Element* domElement)
+    VacEdgeCell(Workspace* workspace, dom::Element* domElement)
         : VacElement(workspace, domElement) {
     }
 
 public:
-    topology::EdgeCell* vacEdge() const {
-        topology::VacNode* n = vacNode();
-        return n ? n->toCellUnchecked()->toEdgeCellUnchecked() : nullptr;
+    topology::EdgeCell* vacEdgeCellNode() const {
+        return vacCellUnchecked()->toEdgeCellUnchecked();
     }
 
     virtual EdgeGeometryDataCache* computeRawGeometry(core::AnimTime t) {
@@ -120,21 +119,20 @@ public:
     }
 };
 
-class VGC_WORKSPACE_API KeyEdge : public Edge {
+class VGC_WORKSPACE_API VacKeyEdge : public VacEdgeCell {
 private:
     friend class Workspace;
     friend class KeyVertex; // for joins and caps
 
 public:
-    ~KeyEdge() override = default;
+    ~VacKeyEdge() override = default;
 
-    KeyEdge(Workspace* workspace, dom::Element* domElement)
-        : Edge(workspace, domElement) {
+    VacKeyEdge(Workspace* workspace, dom::Element* domElement)
+        : VacEdgeCell(workspace, domElement) {
     }
 
-    topology::KeyEdge* vacKeyEdge() const {
-        topology::VacNode* n = vacNode();
-        return n ? n->toCellUnchecked()->toKeyEdgeUnchecked() : nullptr;
+    topology::KeyEdge* vacKeyEdgeNode() const {
+        return vacCellUnchecked()->toKeyEdgeUnchecked();
     }
 
     void setTesselationMode(int mode) {
@@ -173,6 +171,7 @@ private:
 
     void computeRawGeometry_();
     void computeGeometry_();
+    void computeJoin_(VacVertexCell* v, bool isStart);
 };
 
 } // namespace vgc::workspace
