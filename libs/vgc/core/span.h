@@ -830,6 +830,8 @@ template<typename T, size_t n>
 Span(std::array<T, n>& arr) -> Span<T, n>;
 template<typename T, size_t n>
 Span(const std::array<T, n>& arr) -> Span<const T, n>;
+template<typename T, typename IntType, VGC_REQUIRES(std::is_arithmetic_v<IntType>)>
+Span(T* first, IntType length) -> Span<T, dynamicExtent>;
 
 template<typename T, Int extent_ = dynamicExtent>
 using ConstSpan = Span<const T, extent_>;

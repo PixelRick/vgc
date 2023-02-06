@@ -254,9 +254,9 @@ WorkspacePtr Workspace::create(dom::DocumentPtr document) {
     std::call_once(initOnceFlag, []() {
         registerElementClass(ds::vgc, &makeUniqueElement<Layer>);
         registerElementClass(ds::layer, &makeUniqueElement<Layer>);
-        registerElementClass(ds::vertex, &makeUniqueElement<KeyVertex>);
+        registerElementClass(ds::vertex, &makeUniqueElement<VacKeyVertex>);
         //registerElementClass(ds::edge, &makeUniqueElement<KeyEdge>);
-        registerElementClass(ds::edge, &makeUniqueElement<KeyEdge>);
+        registerElementClass(ds::edge, &makeUniqueElement<VacKeyEdge>);
     });
 
     return WorkspacePtr(new Workspace(document));
@@ -690,6 +690,7 @@ void Workspace::updateTreeAndVacFromDom_(const dom::Diff& diff) {
         if (element) {
             Element* parent = element->parent();
             VGC_ASSERT(parent);
+            // reparent children to element's parent
             for (Element* child : *element) {
                 parent->appendChild(child);
             }

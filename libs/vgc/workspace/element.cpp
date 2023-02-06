@@ -39,25 +39,30 @@ void Element::addDependency(Element* element) {
     if (element && !dependencies_.contains(element)) {
         dependencies_.emplaceLast(element);
         element->dependents_.emplaceLast(this);
+        element->onDependentElementAdded_(this);
     }
 }
 
-void Element::replaceDependency(Element* oldDependency, Element* newDependency) {
+bool Element::replaceDependency(Element* oldDependency, Element* newDependency) {
     if (oldDependency != newDependency) {
         removeDependency(oldDependency);
         addDependency(newDependency);
+        return true;
     }
+    return false;
 }
 
 void Element::removeDependency(Element* element) {
     if (element && dependencies_.removeOne(element)) {
         element->dependents_.removeOne(this);
+        element->onDependentElementRemoved_(this);
     }
 }
 
 void Element::clearDependencies() {
     for (Element* dep : dependencies_) {
         dep->dependents_.removeOne(this);
+        dep->onDependentElementRemoved_(this);
     }
     dependencies_.clear();
 }
@@ -72,6 +77,12 @@ void Element::onDependencyChanged_(Element* /*dependency*/) {
 }
 
 void Element::onDependencyBeingDestroyed_(Element* /*dependency*/) {
+}
+
+void Element::onDependentElementRemoved_(Element* /*dependent*/) {
+}
+
+void Element::onDependentElementAdded_(Element* /*dependent*/) {
 }
 
 ElementStatus Element::updateFromDom_(Workspace* /*workspace*/) {
@@ -98,14 +109,20 @@ VacElement* Element::findFirstSiblingVacElement_(Element* start) {
 }
 
 VacElement::~VacElement() {
-    removeVacNode();
+    resetVacNode();
 }
 
-void VacElement::removeVacNode() {
-    if (vacNode_) {
-        topology::ops::removeNode(vacNode_, false);
-        vacNode_ = nullptr;
+void VacElement::resetVacNode(vacomplex::Node* newNode) {
+    if (vacNode_ != newNode) {
+        if (vacNode_) {
+            topology::ops::removeNode(vacNode_, false);
+            onVacNodeRemoved_();
+        }
+        vacNode_ = newNode;
     }
+}
+
+void VacElement::onVacNodeRemoved_() {
 }
 
 } // namespace vgc::workspace

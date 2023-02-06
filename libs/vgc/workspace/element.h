@@ -137,7 +137,7 @@ public:
     bool isVacElement() const {
         return isVacElement_;
     }
-    inline topology::vacomplex::Node* vacNode() const;
+    inline vacomplex::Node* vacNode() const;
 
     core::StringId tagName() const {
         return domElement_->tagName();
@@ -225,7 +225,8 @@ protected:
     virtual ElementStatus updateFromDom_(Workspace* workspace);
 
     void addDependency(Element* dependency);
-    void replaceDependency(Element* oldDependency, Element* newDependency);
+    /// Both `oldDependency` and `newDependency` can be null. Returns true if `oldDependency != newDependency`, false otherwise.
+    bool replaceDependency(Element* oldDependency, Element* newDependency);
     void removeDependency(Element* dependency);
     void clearDependencies();
 
@@ -233,6 +234,10 @@ protected:
 
     virtual void onDependencyChanged_(Element* dependency);
     virtual void onDependencyBeingDestroyed_(Element* dependency);
+
+    /// dependent may be being destroyed, only use its pointer as key.
+    virtual void onDependentElementRemoved_(Element* dependent);
+    virtual void onDependentElementAdded_(Element* dependent);
 
     virtual void
     preparePaint_(core::AnimTime t = {}, PaintOptions flags = PaintOption::None);
@@ -292,22 +297,25 @@ public:
 
 public:
     // the returned pointer can be dangling if the workspace is not synced with its vac
-    topology::vacomplex::Node* vacNode() const {
+    vacomplex::Node* vacNode() const {
         return vacNode_;
     }
 
 protected:
-    // this pointer is not safe to use when tree is not synced with vac
-    topology::vacomplex::Node* vacNode_ = nullptr;
-
-    topology::vacomplex::Cell* vacCellUnchecked() const {
+    vacomplex::Cell* vacCellUnchecked() const {
         return vacNode_->toCellUnchecked();
     }
 
-    void removeVacNode();
+    void resetVacNode(vacomplex::Node* newNode = nullptr);
+
+    virtual void onVacNodeRemoved_();
+
+private:
+    // this pointer is not safe to use when tree is not synced with vac
+    vacomplex::Node* vacNode_ = nullptr;
 };
 
-topology::vacomplex::Node* Element::vacNode() const {
+vacomplex::Node* Element::vacNode() const {
     return isVacElement() ? static_cast<const VacElement*>(this)->vacNode() : nullptr;
 }
 

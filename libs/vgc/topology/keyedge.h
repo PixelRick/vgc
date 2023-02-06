@@ -23,6 +23,7 @@
 #include <vgc/topology/api.h>
 #include <vgc/topology/cell.h>
 #include <vgc/topology/edgegeometry.h>
+#include <vgc/topology/keyvertex.h>
 
 namespace vgc::topology {
 
@@ -74,6 +75,14 @@ public:
     // XXX temporary, we should use geometry_.
     Int64 dataVersion() const {
         return dataVersion_;
+    }
+
+    bool isStartVertex(VertexCell* v) const override {
+        return v == startVertex_->toVertexCellUnchecked();
+    }
+
+    bool isEndVertex(VertexCell* v) const override {
+        return v == endVertex_->toVertexCellUnchecked();
     }
 
 private:

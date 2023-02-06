@@ -514,7 +514,7 @@ void Canvas::onPaintDraw(graphics::Engine* engine, PaintOptions /*options*/) {
                 if (e->isVacElement()) {
                     // todo: should we use an enum to avoid dynamic_cast ?
                     // if an error happens with the Element creation we cannot rely on vac node type.
-                    auto edge = dynamic_cast<workspace::KeyEdge*>(e);
+                    auto edge = dynamic_cast<workspace::VacKeyEdge*>(e);
                     if (edge) {
                         //profileName = "Canvas:WorkspaceDrawEdgeElement";
                         edge->setTesselationMode(requestedTesselationMode_);

@@ -34,6 +34,14 @@ private:
 
 public:
     VGC_TOPOLOGY_DEFINE_SPATIOTEMPORAL_CELL_CAST_METHODS(Inbetween, Edge)
+
+    bool isStartVertex(VertexCell* /*v*/) const override {
+        return false;
+    }
+
+    bool isEndVertex(VertexCell* /*v*/) const override {
+        return false;
+    }
 };
 
 } // namespace vgc::topology

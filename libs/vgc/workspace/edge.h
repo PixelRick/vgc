@@ -78,8 +78,14 @@ struct EdgeGraphics {
     graphics::GeometryViewPtr selectionGeometry_;
 };
 
-struct EdgeGeometryDataCache {
+class VGC_WORKSPACE_API VacEdgeCellFrameCache {
+private:
+    friend class VacEdgeCell;
+    friend class VacKeyEdge;
+    friend class VacInbetweenEdge;
+    friend class VacVertexCell;
 
+public:
     void clear() {
         samples_.clear();
         triangulation_.clear();
@@ -87,15 +93,23 @@ struct EdgeGeometryDataCache {
         startSampleOverride_ = 0;
         endSampleOverride_ = 0;
         edgeTesselationMode_ = -1;
+        graphics_.clear();
     }
 
+    const core::AnimTimeRange& timeRange() const {
+        return timeRange_;
+    }
+
+private:
+    core::AnimTimeRange timeRange_;
     geometry::CurveSampleArray samples_;
     geometry::Vec2dArray triangulation_; // to remove
     geometry::Vec2fArray cps_;
     Int startSampleOverride_ = 0;
     Int endSampleOverride_ = 0;
-    int samplingVersion_ = -1;
+    Int samplingVersion_ = -1;
     int edgeTesselationMode_ = -1;
+    EdgeGraphics graphics_;
 };
 
 class VGC_WORKSPACE_API VacEdgeCell : public VacElement {
@@ -112,17 +126,17 @@ public:
         return vacCellUnchecked()->toEdgeCellUnchecked();
     }
 
-    virtual EdgeGeometryDataCache* computeRawGeometry(core::AnimTime t) {
-    }
+    virtual VacEdgeCellFrameCache* computeStandaloneGeometry(core::AnimTime /*t*/) = 0;
 
-    virtual EdgeGeometryDataCache* computeGeometry(core::AnimTime t) {
-    }
+    virtual VacEdgeCellFrameCache* computeGeometry(core::AnimTime /*t*/) = 0;
+
+private:
 };
 
 class VGC_WORKSPACE_API VacKeyEdge : public VacEdgeCell {
 private:
     friend class Workspace;
-    friend class KeyVertex; // for joins and caps
+    friend class VacKeyVertex; // for joins and caps
 
 public:
     ~VacKeyEdge() override = default;
@@ -139,8 +153,10 @@ public:
         edgeTesselationModeRequested_ = core::clamp(mode, 0, 2);
     }
 
-    EdgeGeometryDataCache* computeRawGeometry(core::AnimTime t) override;
-    EdgeGeometryDataCache* computeGeometry(core::AnimTime t) override;
+    void clearJoinsCaches() const;
+
+    VacEdgeCellFrameCache* computeStandaloneGeometry(core::AnimTime t) override;
+    VacEdgeCellFrameCache* computeGeometry(core::AnimTime t) override;
 
     geometry::Rect2d boundingBox(core::AnimTime t) const override;
 
@@ -154,22 +170,30 @@ protected:
         core::AnimTime t,
         PaintOptions flags = PaintOption::None) const override;
 
+    void onVacNodeRemoved_() override;
+
 private:
-    KeyVertex* v0_ = nullptr;
-    KeyVertex* v1_ = nullptr;
+    struct VertexInfo {
+        VacKeyVertex* element;
+        Int joinGroup = 0;
+    };
+
+    std::array<VertexInfo, 2> vertices_ = {};
 
     // need an invalidation mechanism
-    mutable EdgeGraphics cachedGraphics_;
+    mutable EdgeGraphics cachedGraphics_ = {};
 
     // local data to build graphics resource, kept as copy
     // should this be in vac ?
-    EdgeGeometryDataCache geometry_;
+    VacEdgeCellFrameCache geometry_ = {};
     int edgeTesselationModeRequested_ = 2;
     bool isComputingGeometry_ = false;
-    bool isRawGeometryDirty_ = false;
+    bool isStandaloneGeometryDirty_ = false;
     bool isGeometryDirty_ = false;
 
-    void computeRawGeometry_();
+    void onUpdateError_();
+
+    void computeStandaloneGeometry_();
     void computeGeometry_();
     void computeJoin_(VacVertexCell* v, bool isStart);
 };
