@@ -1984,14 +1984,12 @@ void D3d11Engine::draw_(
     UInt numIndices,
     UInt numInstances,
     UInt startIndex,
-    Int baseVertex,
-    UInt startInstance) {
+    Int baseVertex) {
 
     UINT nIdx = core::int_cast<UINT>(numIndices);
     UINT nInst = core::int_cast<UINT>(numInstances);
     UINT startIdx = core::int_cast<UINT>(startIndex);
     INT baseVtx = core::int_cast<INT>(baseVertex);
-    UINT startInst = core::int_cast<UINT>(startInstance);
 
     if (nIdx == 0) {
         return;
@@ -2052,7 +2050,7 @@ void D3d11Engine::draw_(
         }
         else {
             deviceCtx_->IASetIndexBuffer(indexBuffer->object(), indexFormat, 0);
-            deviceCtx_->DrawIndexedInstanced(nIdx, nInst, startIdx, baseVtx, startInst);
+            deviceCtx_->DrawIndexedInstanced(nIdx, nInst, startIdx, baseVtx, 0);
         }
     }
     else {
@@ -2060,7 +2058,7 @@ void D3d11Engine::draw_(
             deviceCtx_->Draw(nIdx, startIdx + baseVtx);
         }
         else {
-            deviceCtx_->DrawInstanced(nIdx, nInst, startIdx + baseVtx, startInst);
+            deviceCtx_->DrawInstanced(nIdx, nInst, startIdx + baseVtx, 0);
         }
     }
 }

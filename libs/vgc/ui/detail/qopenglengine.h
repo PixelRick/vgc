@@ -187,8 +187,7 @@ protected:
         UInt numIndices,
         UInt numInstances,
         UInt startIndex,
-        Int baseVertex,
-        UInt startInstance) override;
+        Int baseVertex) override;
     void clear_(const core::Color& color) override;
 
     UInt64

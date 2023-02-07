@@ -44,7 +44,7 @@ void VacVertexCellFrameData::debugPaint(graphics::Engine* engine) {
             debugQuadRenderGeometry_->indexBuffer(), std::move(lineIndices));
     }
 
-    if (!debugLinesRenderGeometry_ && halfedges_.length()) {
+    if (!debugLinesRenderGeometry_ && halfedgesData_.length()) {
         debugLinesRenderGeometry_ = engine->createDynamicTriangleStripView(
             BuiltinGeometryLayout::XYDxDy_iXYRotRGBA, IndexFormat::UInt16);
 
@@ -57,7 +57,7 @@ void VacVertexCellFrameData::debugPaint(graphics::Engine* engine) {
         geometry::Vec4fArray lineVertices;
         core::Array<UInt16> lineIndices;
 
-        for (const VacJoinHalfedgeFrameData& s : halfedges_) {
+        for (const VacJoinHalfedgeFrameData& s : halfedgesData_) {
             geometry::Vec2f p(pos_);
             double angle0 = s.angle();
             double angle1 = s.angle() + s.angleToNext();
@@ -103,7 +103,7 @@ void VacVertexCellFrameData::debugPaint(graphics::Engine* engine) {
         engine->draw(debugLinesRenderGeometry_);
     }
 
-    if (debugQuadRenderGeometry_ && halfedges_.length() == 1) {
+    if (debugQuadRenderGeometry_ && halfedgesData_.length() == 1) {
         engine->setProgram(graphics::BuiltinProgram::Simple);
         engine->draw(debugQuadRenderGeometry_);
     }
@@ -124,10 +124,15 @@ void VacVertexCell::clearFramesData() {
     frameDataEntries_.clear();
 }
 
-void VacVertexCell::clearJoinsData() {
+void VacVertexCell::clearFramesJoinData() {
     for (auto& entry : frameDataEntries_) {
         entry.clearJoinData();
     }
+}
+
+void VacVertexCell::clearJoinTopologyData() {
+    joinHalfedges_.clear();
+    isJoinHalfedgesDirty_ = true;
 }
 
 void VacVertexCell::computeJoin(core::AnimTime t) {
@@ -173,6 +178,8 @@ void VacVertexCell::paint_(graphics::Engine* engine, core::AnimTime t, PaintOpti
     if (flags.has(PaintOption::Outline)) {
         detail::VacVertexCellFrameData* fd = frameData(t);
         if (fd) {
+            //const_cast<VacVertexCell*>(this)->computePos_(*fd);
+            const_cast<VacVertexCell*>(this)->computeJoin_(*fd);
             fd->debugPaint(engine);
         }
     }
@@ -219,19 +226,22 @@ void VacVertexCell::computeJoin_(detail::VacVertexCellFrameData& data) {
         return;
     }
 
+    computePos_(data);
+
     data.isComputing_ = true;
     VGC_DEBUG_TMP("VacVertexCell({})->computeJoin_", (void*)this);
 
     updateJoinHalfedges_();
     for (const detail::VacJoinHalfedge& he : joinHalfedges_) {
-        data.halfedges_.emplaceLast(he);
+        data.halfedgesData_.emplaceLast(he);
     }
 
-    for (detail::VacJoinHalfedgeFrameData& heData : data.halfedges_) {
+    for (detail::VacJoinHalfedgeFrameData& heData : data.halfedgesData_) {
 
         VacEdgeCell* cell = heData.halfedge().edgeCell();
         VacEdgeCellFrameData* edgeData = cell->frameData(data.time());
         if (!edgeData) {
+            // huh ?
             continue;
         }
         cell->computeStandaloneGeometry_(*edgeData);
@@ -255,26 +265,35 @@ void VacVertexCell::computeJoin_(detail::VacVertexCellFrameData& data) {
         heData.angle_ = angle;
     }
 
-    const Int numHalfedges = data.halfedges_.length();
+    const Int numHalfedges = data.halfedgesData_.length();
     if (numHalfedges == 0) {
         // nothing to do
     }
     else if (numHalfedges == 1) {
         // cap, todo
+        const detail::VacJoinHalfedgeFrameData& halfedgeData = data.halfedgesData_[0];
+        Int basePatchIndex = halfedgeData.halfedge().isReverse() ? 2 : 0;
+        VGC_DEBUG_TMP("basePatchIndex:{}", basePatchIndex)
+        VacEdgeCellFrameData* edgeData = halfedgeData.edgeData_;
+        if (edgeData) {
+            Int numSamples = edgeData->samples_.length();
+            edgeData->patches_[basePatchIndex].sampleOverride_ = numSamples / 3;
+            edgeData->patches_[basePatchIndex + 1].sampleOverride_ = 0;
+        }
     }
     else {
         // sort by incident angle
         std::sort(
-            data.halfedges_.begin(),
-            data.halfedges_.end(),
+            data.halfedgesData_.begin(),
+            data.halfedgesData_.end(),
             [](const detail::VacJoinHalfedgeFrameData& a,
                const detail::VacJoinHalfedgeFrameData& b) {
                 return a.angle() < b.angle();
             });
 
-        detail::VacJoinHalfedgeFrameData* previousHalfedge = &data.halfedges_.last();
+        detail::VacJoinHalfedgeFrameData* previousHalfedge = &data.halfedgesData_.last();
         double previousAngle = previousHalfedge->angle() - core::pi;
-        for (detail::VacJoinHalfedgeFrameData& halfedge : data.halfedges_) {
+        for (detail::VacJoinHalfedgeFrameData& halfedge : data.halfedgesData_) {
             halfedge.angleToNext_ = halfedge.angle() - previousAngle;
             previousAngle = halfedge.angle();
         }
@@ -298,7 +317,7 @@ ElementStatus VacKeyVertex::updateFromDom_(Workspace* /*workspace*/) {
     const auto& position = domElement->getAttribute(ds::position).getVec2d();
     topology::ops::setKeyVertexPosition(kv, position);
 
-    // XXX also reset frame data !
+    clearFramesData();
     notifyChanges();
 
     return ElementStatus::Ok;

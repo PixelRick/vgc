@@ -1779,14 +1779,11 @@ void QglEngine::draw_(
     UInt numIndices,
     UInt numInstances,
     UInt startIndex,
-    Int baseVertex,
-    UInt startInstance) {
+    Int baseVertex) {
 
     GLsizei nIdx = core::int_cast<GLsizei>(numIndices);
     GLsizei nInst = core::int_cast<GLsizei>(numInstances);
-    GLsizei startIdx = core::int_cast<GLsizei>(startIndex);
     GLint baseVtx = core::int_cast<GLint>(baseVertex);
-    GLsizei startInst = core::int_cast<GLsizei>(startInstance);
 
     if (nIdx == 0) {
         return;

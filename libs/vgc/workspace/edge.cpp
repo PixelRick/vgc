@@ -45,22 +45,28 @@ geometry::Rect2d VacKeyEdge::boundingBox(core::AnimTime /*t*/) const {
 
 void VacKeyEdge::clearFramesData() {
     frameData_.clear();
-    // we have to invalidate the join data stored in vertices !
-    for (Int i = 0; i < 2; ++i) {
-        VacKeyVertex* v = vertices_[i].element;
+}
+
+void VacKeyEdge::clearFramesJoinData() {
+    frameData_.clearJoinData();
+}
+
+void VacKeyEdge::clearVerticesFramesJoinData() {
+    for (const auto& vertex : vertices_) {
+        VacKeyVertex* v = vertex.element;
         if (v) {
-            v->clearJoinsData();
+            v->clearFramesJoinData();
         }
     }
 }
 
-void VacKeyEdge::clearJoinsData() {
+void VacKeyEdge::clearVerticesJoinTopologyData() {
     frameData_.clearJoinData();
     // we have to invalidate the join data stored in vertices !
-    for (Int i = 0; i < 2; ++i) {
-        VacKeyVertex* v = vertices_[i].element;
+    for (const auto& vertex : vertices_) {
+        VacKeyVertex* v = vertex.element;
         if (v) {
-            v->clearJoinsData();
+            v->clearJoinTopologyData();
         }
     }
 }
@@ -219,6 +225,8 @@ void VacKeyEdge::paint_(graphics::Engine* engine, core::AnimTime t, PaintOptions
         || (!flags.has(PaintOption::Outline) && !graphics.strokeGeometry_)) {
         graphics.strokeGeometry_ =
             engine->createDynamicTriangleStripView(BuiltinGeometryLayout::XY_iRGBA);
+        graphics.joinGeometry_ = engine->createDynamicTriangleStripView(
+            BuiltinGeometryLayout::XY_iRGBA, IndexFormat::UInt16);
 
         GeometryViewCreateInfo createInfo = {};
         createInfo.setBuiltinGeometryLayout(BuiltinGeometryLayout::XY_iRGBA);
@@ -231,33 +239,79 @@ void VacKeyEdge::paint_(graphics::Engine* engine, core::AnimTime t, PaintOptions
         core::Color color = domElement->getAttribute(ds::color).getColor();
 
         geometry::Vec2fArray strokeVertices;
+        geometry::Vec2fArray joinVertices;
+        core::Array<UInt16> joinIndices;
+
         if (edgeTesselationModeRequested_ <= 2) {
 
-            Int commonSamplesStartIndex = std::max(
-                frameData_.patches_[0].sampleOverride_,
-                frameData_.patches_[1].sampleOverride_);
-            Int commonSamplesEndIndex = frameData_.samples_.length()
-                                        - std::max(
-                                            frameData_.patches_[2].sampleOverride_,
-                                            frameData_.patches_[3].sampleOverride_);
-            auto samples = frameData_.samples_.begin();
+            std::array<Int, 2> maxSampleOverrides = {
+                std::max(
+                    frameData_.patches_[0].sampleOverride_,
+                    frameData_.patches_[1].sampleOverride_),
+                std::max(
+                    frameData_.patches_[2].sampleOverride_,
+                    frameData_.patches_[3].sampleOverride_)};
+            Int totalOverride = maxSampleOverrides[0] + maxSampleOverrides[1];
 
-            // new strips or inline ?
-            for (const auto& s : frameData_.patches_[0].samples) {
-                geometry::Vec2d p0 = s.centerPoint;
-                strokeVertices.emplaceLast(geometry::Vec2f(p0));
-                geometry::Vec2d p1 = s.sidePoint;
-                strokeVertices.emplaceLast(geometry::Vec2f(p1));
-            }
-
-            core::Span<const geometry::CurveSample> coreSamples(
-                samples + commonSamplesStartIndex, samples + commonSamplesEndIndex);
+            auto samples = core::Span(frameData_.samples_);
+            auto coreSamples =
+                samples.subspan(maxSampleOverrides[0], samples.length() - totalOverride);
 
             for (const geometry::CurveSample& s : coreSamples) {
                 geometry::Vec2d p0 = s.leftPoint();
-                strokeVertices.emplaceLast(geometry::Vec2f(p0));
                 geometry::Vec2d p1 = s.rightPoint();
+                strokeVertices.emplaceLast(geometry::Vec2f(p0));
                 strokeVertices.emplaceLast(geometry::Vec2f(p1));
+            }
+
+            auto getSampleSidePoint = [](const geometry::CurveSample& s, bool isLeft) {
+                return isLeft ? s.leftPoint() : s.rightPoint();
+            };
+
+            for (Int i = 0; i < 4; ++i) {
+                const auto& patch = frameData_.patches_[i];
+                const bool isStart = i < 2;
+                const bool isLeft = i % 2 == 0;
+                if (isStart) {
+                    if (patch.sampleOverride_ < maxSampleOverrides[0]) {
+                        auto fillSamples = samples.subspan(
+                            patch.sampleOverride_,
+                            maxSampleOverrides[0] - patch.sampleOverride_);
+                        UInt16 index = core::int_cast<UInt16>(joinVertices.length());
+                        if (joinIndices.length()) {
+                            joinIndices.emplaceLast(-1);
+                        }
+                        for (const geometry::CurveSample& s : fillSamples) {
+                            geometry::Vec2d cp = s.position();
+                            geometry::Vec2d sp = getSampleSidePoint(s, isLeft);
+                            joinVertices.emplaceLast(geometry::Vec2f(sp));
+                            joinVertices.emplaceLast(geometry::Vec2f(cp));
+                            joinIndices.emplaceLast(index);
+                            joinIndices.emplaceLast(index + 1);
+                            index += 2;
+                        }
+                    }
+                }
+                else {
+                    if (patch.sampleOverride_ < maxSampleOverrides[1]) {
+                        auto fillSamples = samples.subspan(
+                            samples.length() - maxSampleOverrides[1],
+                            maxSampleOverrides[1] - patch.sampleOverride_);
+                        UInt16 index = core::int_cast<UInt16>(joinVertices.length());
+                        if (joinIndices.length()) {
+                            joinIndices.emplaceLast(-1);
+                        }
+                        for (const geometry::CurveSample& s : fillSamples) {
+                            geometry::Vec2d cp = s.position();
+                            geometry::Vec2d sp = getSampleSidePoint(s, isLeft);
+                            joinVertices.emplaceLast(geometry::Vec2f(sp));
+                            joinVertices.emplaceLast(geometry::Vec2f(cp));
+                            joinIndices.emplaceLast(index);
+                            joinIndices.emplaceLast(index + 1);
+                            index += 2;
+                        }
+                    }
+                }
             }
         }
         else {
@@ -268,10 +322,20 @@ void VacKeyEdge::paint_(graphics::Engine* engine, core::AnimTime t, PaintOptions
         engine->updateBufferData(
             graphics.strokeGeometry_->vertexBuffer(0), //
             std::move(strokeVertices));
-
         engine->updateBufferData(
             graphics.strokeGeometry_->vertexBuffer(1), //
             core::Array<float>({color.r(), color.g(), color.b(), color.a()}));
+
+        engine->updateBufferData(
+            graphics.joinGeometry_->vertexBuffer(0), //
+            std::move(joinVertices));
+        engine->updateBufferData(
+            graphics.joinGeometry_->vertexBuffer(1), //
+            core::Array<float>({color.g(), color.b(), color.r(), color.a()}));
+        engine->updateBufferData(
+            graphics.joinGeometry_->indexBuffer(), //
+            std::move(joinIndices));
+
         engine->updateBufferData(
             selectionInstanceBuffer, //
             core::Array<float>(
@@ -323,10 +387,10 @@ void VacKeyEdge::paint_(graphics::Engine* engine, core::AnimTime t, PaintOptions
         // clang-format on
 
         core::FloatArray pointInstData;
-        const Int numPoints = frameData_.cps_.length();
+        const Int numPoints = frameData_.controlPoints_.length();
         const float dl = 1.f / numPoints;
         for (Int j = 0; j < numPoints; ++j) {
-            geometry::Vec2f p = frameData_.cps_[j];
+            geometry::Vec2f p = frameData_.controlPoints_[j];
             float l = j * dl;
             pointInstData.extend(
                 {p.x(),
@@ -351,6 +415,7 @@ void VacKeyEdge::paint_(graphics::Engine* engine, core::AnimTime t, PaintOptions
     else if (!flags.has(PaintOption::Outline)) {
         engine->setProgram(graphics::BuiltinProgram::Simple);
         engine->draw(graphics.strokeGeometry_);
+        engine->draw(graphics.joinGeometry_);
     }
 
     if (flags.has(PaintOption::Outline)) {
@@ -428,7 +493,7 @@ void VacKeyEdge::computeStandaloneGeometry_(VacEdgeCellFrameData& data) {
     data.samplingVersion_++;
 
     for (const geometry::Vec2d& p : curve.positions()) {
-        data.cps_.emplaceLast(geometry::Vec2f(p));
+        data.controlPoints_.emplaceLast(geometry::Vec2f(p));
     }
 
     data.isStandaloneGeometryComputed_ = true;
@@ -457,7 +522,7 @@ void VacKeyEdge::computeGeometry_(VacEdgeCellFrameData& data) {
     if (v0) {
         v0->computeJoin(ke->time());
     }
-    VacKeyVertex* v1 = vertices_[0].element;
+    VacKeyVertex* v1 = vertices_[1].element;
     if (v1 && v1 != v0) {
         v1->computeJoin(ke->time());
     }

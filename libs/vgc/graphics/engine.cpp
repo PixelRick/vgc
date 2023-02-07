@@ -911,7 +911,7 @@ void Engine::draw(
     queueLambdaCommandWithParameters_<GeometryViewPtr>(
         "draw",
         [=](Engine* engine, const GeometryViewPtr& gv) {
-            engine->draw_(gv.get(), un, 0, startIndex, baseVertex, 0);
+            engine->draw_(gv.get(), un, 0, startIndex, baseVertex);
         },
         geometryView);
 }
@@ -921,8 +921,7 @@ void Engine::drawInstanced(
     Int numIndices,
     Int numInstances,
     Int startIndex,
-    Int baseVertex,
-    Int startInstance) {
+    Int baseVertex) {
 
     if (!checkResourceIsValid_(geometryView)) {
         return;
@@ -954,7 +953,7 @@ void Engine::drawInstanced(
     queueLambdaCommandWithParameters_<GeometryViewPtr>(
         "drawInstanced",
         [=](Engine* engine, const GeometryViewPtr& gv) {
-            engine->draw_(gv.get(), un, uk, startIndex, baseVertex, startInstance);
+            engine->draw_(gv.get(), un, uk, startIndex, baseVertex);
         },
         geometryView);
 }

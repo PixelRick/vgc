@@ -827,11 +827,17 @@ private:
 
 // deduction guides
 template<typename T, size_t n>
-Span(std::array<T, n>& arr) -> Span<T, n>;
+Span(std::array<T, n>&) -> Span<T, n>;
 template<typename T, size_t n>
-Span(const std::array<T, n>& arr) -> Span<const T, n>;
+Span(const std::array<T, n>&) -> Span<const T, n>;
+template<typename T>
+Span(core::Array<T>&) -> Span<T, dynamicExtent>;
+template<typename T, size_t n>
+Span(const core::Array<T>&) -> Span<const T, dynamicExtent>;
 template<typename T, typename IntType, VGC_REQUIRES(std::is_arithmetic_v<IntType>)>
-Span(T* first, IntType length) -> Span<T, dynamicExtent>;
+Span(T*, IntType) -> Span<T, dynamicExtent>;
+template<typename T>
+Span(T*, T*) -> Span<T, dynamicExtent>;
 
 template<typename T, Int extent_ = dynamicExtent>
 using ConstSpan = Span<const T, extent_>;

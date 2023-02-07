@@ -402,8 +402,7 @@ public:
         Int numIndices = -1,
         Int numInstances = -1,
         Int startIndex = 0,
-        Int baseVertex = 0,
-        Int startInstance = 0);
+        Int baseVertex = 0);
 
     //void createTextAtlasResource();
 
@@ -521,8 +520,8 @@ protected:
         UInt numIndices,
         UInt numInstances,
         UInt startIndex,
-        Int baseVertex,
-        UInt startInstance) = 0;
+        Int baseVertex) = 0;
+
     virtual void clear_(const core::Color& color) = 0;
 
     virtual UInt64

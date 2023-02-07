@@ -75,15 +75,17 @@ struct EdgeGraphics {
     // Stroke
     StrokeGraphics strokeGraphics_;
     graphics::GeometryViewPtr strokeGeometry_;
+    graphics::GeometryViewPtr joinGeometry_;
     graphics::GeometryViewPtr selectionGeometry_;
 };
 
 namespace detail {
 
 struct EdgeJoinPatchSample {
+    Int centerPointSampleIndex = -1;
     geometry::Vec2d centerPoint;
     geometry::Vec2d sidePoint;
-    double s;
+    geometry::Vec2d st;
 };
 
 struct EdgeJoinPatch {
@@ -111,7 +113,7 @@ public:
     void clear() {
         samples_.clear();
         triangulation_.clear();
-        cps_.clear();
+        controlPoints_.clear();
         for (auto& patch : patches_) {
             patch.clear();
         }
@@ -137,7 +139,7 @@ private:
     core::AnimTime time_;
     geometry::CurveSampleArray samples_;
     geometry::Vec2dArray triangulation_; // to remove
-    geometry::Vec2fArray cps_;
+    geometry::Vec2fArray controlPoints_;
     Int samplingVersion_ = -1;
     int edgeTesselationMode_ = -1;
     // 0: start left patch
@@ -145,6 +147,8 @@ private:
     // 2: end left patch
     // 3: end right patch
     std::array<detail::EdgeJoinPatch, 4> patches_;
+    // isExtension is true if cap is active
+    std::array<detail::EdgeJoinPatch, 2> caps_;
     EdgeGraphics graphics_;
     bool isStandaloneGeometryComputed_ = false;
     bool isGeometryComputed_ = false;
@@ -166,8 +170,13 @@ public:
         return vacCellUnchecked()->toEdgeCellUnchecked();
     }
 
+    // to be called when standalone geometry changes
     virtual void clearFramesData() = 0;
-    virtual void clearJoinsData() = 0;
+    virtual void clearFramesJoinData() = 0;
+    // to be called when standalone geometry changes or this edge gets removed
+    virtual void clearVerticesFramesJoinData() = 0;
+    // to be called when vertices are changed or this edge gets removed
+    virtual void clearVerticesJoinTopologyData() = 0;
 
     const VacEdgeCellFrameData* computeStandaloneGeometry(core::AnimTime t);
     const VacEdgeCellFrameData* computeGeometry(core::AnimTime t);
@@ -199,7 +208,9 @@ public:
     }
 
     void clearFramesData() override;
-    void clearJoinsData() override;
+    void clearFramesJoinData() override;
+    void clearVerticesFramesJoinData() override;
+    void clearVerticesJoinTopologyData() override;
 
     geometry::Rect2d boundingBox(core::AnimTime t) const override;
 

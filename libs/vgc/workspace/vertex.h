@@ -113,7 +113,7 @@ public:
     void clearJoinData() {
         debugLinesRenderGeometry_.reset();
         debugQuadRenderGeometry_.reset();
-        halfedges_.clear();
+        halfedgesData_.clear();
         isComputing_ = false;
         isJoinComputed_ = false;
     }
@@ -126,7 +126,7 @@ private:
     mutable graphics::GeometryViewPtr debugLinesRenderGeometry_;
     mutable graphics::GeometryViewPtr debugQuadRenderGeometry_;
     // join data
-    core::Array<detail::VacJoinHalfedgeFrameData> halfedges_;
+    core::Array<detail::VacJoinHalfedgeFrameData> halfedgesData_;
     bool isComputing_ = false;
     bool isJoinComputed_ = false;
     bool isPosComputed_ = false;
@@ -150,8 +150,12 @@ public:
         return vacCellUnchecked()->toVertexCellUnchecked();
     }
 
+    // to be called when standalone position changes
     void clearFramesData();
-    void clearJoinsData();
+    // to be called when incident edges geometry changes
+    void clearFramesJoinData();
+    // to be called when incident edges are added or removed
+    void clearJoinTopologyData();
 
     void computeJoin(core::AnimTime t);
 
