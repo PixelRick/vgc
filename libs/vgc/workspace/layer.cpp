@@ -32,7 +32,7 @@ ElementStatus Layer::updateFromDom_(Workspace* /*workspace*/) {
     if (!g) {
         g = topology::ops::createVacGroup(
             domElement->internalId(), parentVacElement()->vacNode()->toGroupUnchecked());
-        resetVacNode(g);
+        setVacNode(g);
     }
 
     // todo: set attributes

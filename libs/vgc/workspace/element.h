@@ -137,6 +137,10 @@ public:
     bool isVacElement() const {
         return isVacElement_;
     }
+
+    inline VacElement* toVacElement();
+    inline const VacElement* toVacElement() const;
+
     inline vacomplex::Node* vacNode() const;
 
     core::StringId tagName() const {
@@ -306,7 +310,8 @@ protected:
         return vacNode_->toCellUnchecked();
     }
 
-    void resetVacNode(vacomplex::Node* newNode = nullptr);
+    void removeVacNode();
+    void setVacNode(vacomplex::Node* vacNode);
 
     virtual void onVacNodeRemoved_();
 
@@ -322,6 +327,14 @@ vacomplex::Node* Element::vacNode() const {
 VacElement* Element::parentVacElement() const {
     Element* e = parent();
     return (e && e->isVacElement()) ? static_cast<VacElement*>(e) : nullptr;
+}
+
+VacElement* Element::toVacElement() {
+    return isVacElement_ ? static_cast<VacElement*>(this) : nullptr;
+}
+
+const VacElement* Element::toVacElement() const {
+    return isVacElement_ ? static_cast<const VacElement*>(this) : nullptr;
 }
 
 } // namespace vgc::workspace

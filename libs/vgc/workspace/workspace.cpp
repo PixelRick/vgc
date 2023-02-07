@@ -224,8 +224,9 @@ void Workspace::onDestroyed() {
     vac_->onNodeAboutToBeRemoved().disconnect(this);
     for (const auto& p : elements_) {
         Element* e = p.second.get();
-        if (e->isVacElement()) {
-            static_cast<VacElement*>(e)->vacNode_ = nullptr;
+        VacElement* ve = e->toVacElement();
+        if (ve) {
+            ve->vacNode_ = nullptr;
         }
     }
     vac_ = nullptr;
@@ -446,9 +447,13 @@ void Workspace::onVacNodeAboutToBeRemoved_(topology::VacNode* node) {
     auto it = elements_.find(node->id());
     if (it != elements_.end()) {
         Element* element = it->second.get();
-        if (element->isVacElement()) {
-            static_cast<VacElement*>(element)->vacNode_ = nullptr;
-            elementsToUpdateFromDom_.emplaceLast(element);
+        VacElement* vacElement = element->toVacElement();
+        if (vacElement && vacElement->vacNode_) {
+            vacElement->vacNode_ = nullptr;
+            vacElement->onVacNodeRemoved_();
+            if (!element->isBeingUpdated_) {
+                elementsToUpdateFromDom_.emplaceLast(element);
+            }
         }
     }
 }

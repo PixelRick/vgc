@@ -78,7 +78,29 @@ struct EdgeGraphics {
     graphics::GeometryViewPtr selectionGeometry_;
 };
 
-class VGC_WORKSPACE_API VacEdgeCellFrameCache {
+namespace detail {
+
+struct EdgeJoinPatchSample {
+    geometry::Vec2d centerPoint;
+    geometry::Vec2d sidePoint;
+    double s;
+};
+
+struct EdgeJoinPatch {
+
+    void clear() {
+        samples.clear();
+        sampleOverride_ = 0;
+    }
+
+    core::Array<EdgeJoinPatchSample> samples;
+    bool isExtension = false;
+    Int sampleOverride_ = 0;
+};
+
+} // namespace detail
+
+class VGC_WORKSPACE_API VacEdgeCellFrameData {
 private:
     friend class VacEdgeCell;
     friend class VacKeyEdge;
@@ -90,31 +112,49 @@ public:
         samples_.clear();
         triangulation_.clear();
         cps_.clear();
-        startSampleOverride_ = 0;
-        endSampleOverride_ = 0;
+        for (auto& patch : patches_) {
+            patch.clear();
+        }
         edgeTesselationMode_ = -1;
         graphics_.clear();
+        isStandaloneGeometryComputed_ = false;
+        isGeometryComputed_ = false;
     }
 
-    const core::AnimTimeRange& timeRange() const {
-        return timeRange_;
+    void clearJoinData() {
+        for (auto& patch : patches_) {
+            patch.clear();
+        }
+        graphics_.clear();
+        isGeometryComputed_ = false;
+    }
+
+    const core::AnimTime& time() const {
+        return time_;
     }
 
 private:
-    core::AnimTimeRange timeRange_;
+    core::AnimTime time_;
     geometry::CurveSampleArray samples_;
     geometry::Vec2dArray triangulation_; // to remove
     geometry::Vec2fArray cps_;
-    Int startSampleOverride_ = 0;
-    Int endSampleOverride_ = 0;
     Int samplingVersion_ = -1;
     int edgeTesselationMode_ = -1;
+    // 0: start left patch
+    // 1: start right patch
+    // 2: end left patch
+    // 3: end right patch
+    std::array<detail::EdgeJoinPatch, 4> patches_;
     EdgeGraphics graphics_;
+    bool isStandaloneGeometryComputed_ = false;
+    bool isGeometryComputed_ = false;
+    bool isComputing_ = false;
 };
 
 class VGC_WORKSPACE_API VacEdgeCell : public VacElement {
 private:
     friend class Workspace;
+    friend class VacVertexCell;
 
 protected:
     VacEdgeCell(Workspace* workspace, dom::Element* domElement)
@@ -126,11 +166,16 @@ public:
         return vacCellUnchecked()->toEdgeCellUnchecked();
     }
 
-    virtual VacEdgeCellFrameCache* computeStandaloneGeometry(core::AnimTime /*t*/) = 0;
+    virtual void clearFramesData() = 0;
+    virtual void clearJoinsData() = 0;
 
-    virtual VacEdgeCellFrameCache* computeGeometry(core::AnimTime /*t*/) = 0;
+    const VacEdgeCellFrameData* computeStandaloneGeometry(core::AnimTime t);
+    const VacEdgeCellFrameData* computeGeometry(core::AnimTime t);
 
-private:
+protected:
+    virtual VacEdgeCellFrameData* frameData(core::AnimTime t) const = 0;
+    virtual void computeStandaloneGeometry_(VacEdgeCellFrameData& data) = 0;
+    virtual void computeGeometry_(VacEdgeCellFrameData& data) = 0;
 };
 
 class VGC_WORKSPACE_API VacKeyEdge : public VacEdgeCell {
@@ -153,10 +198,8 @@ public:
         edgeTesselationModeRequested_ = core::clamp(mode, 0, 2);
     }
 
-    void clearJoinsCaches() const;
-
-    VacEdgeCellFrameCache* computeStandaloneGeometry(core::AnimTime t) override;
-    VacEdgeCellFrameCache* computeGeometry(core::AnimTime t) override;
+    void clearFramesData() override;
+    void clearJoinsData() override;
 
     geometry::Rect2d boundingBox(core::AnimTime t) const override;
 
@@ -172,6 +215,10 @@ protected:
 
     void onVacNodeRemoved_() override;
 
+    VacEdgeCellFrameData* frameData(core::AnimTime t) const override;
+    void computeStandaloneGeometry_(VacEdgeCellFrameData& data) override;
+    void computeGeometry_(VacEdgeCellFrameData& data) override;
+
 private:
     struct VertexInfo {
         VacKeyVertex* element;
@@ -180,21 +227,10 @@ private:
 
     std::array<VertexInfo, 2> vertices_ = {};
 
-    // need an invalidation mechanism
-    mutable EdgeGraphics cachedGraphics_ = {};
-
-    // local data to build graphics resource, kept as copy
-    // should this be in vac ?
-    VacEdgeCellFrameCache geometry_ = {};
+    mutable VacEdgeCellFrameData frameData_ = {};
     int edgeTesselationModeRequested_ = 2;
-    bool isComputingGeometry_ = false;
-    bool isStandaloneGeometryDirty_ = false;
-    bool isGeometryDirty_ = false;
 
     void onUpdateError_();
-
-    void computeStandaloneGeometry_();
-    void computeGeometry_();
     void computeJoin_(VacVertexCell* v, bool isStart);
 };
 

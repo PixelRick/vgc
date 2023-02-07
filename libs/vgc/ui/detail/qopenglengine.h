@@ -182,7 +182,13 @@ protected:
 
     void generateMips_(const ImageViewPtr& imageView) override;
 
-    void draw_(GeometryView* view, UInt numIndices, UInt numInstances) override;
+    void draw_(
+        GeometryView* view,
+        UInt numIndices,
+        UInt numInstances,
+        UInt startIndex,
+        Int baseVertex,
+        UInt startInstance) override;
     void clear_(const core::Color& color) override;
 
     UInt64

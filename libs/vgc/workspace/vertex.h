@@ -29,7 +29,7 @@ namespace vgc::workspace {
 
 class VacVertexCell;
 class VacEdgeCell;
-class VacEdgeCellFrameCache;
+class VacEdgeCellFrameData;
 
 namespace detail {
 
@@ -58,11 +58,11 @@ private:
     bool isReverse_;
 };
 
-class VGC_WORKSPACE_API VacJoinHalfedgeFrameCache {
+class VGC_WORKSPACE_API VacJoinHalfedgeFrameData {
 public:
     friend VacVertexCell;
 
-    VacJoinHalfedgeFrameCache(const VacJoinHalfedge& halfedge)
+    VacJoinHalfedgeFrameData(const VacJoinHalfedge& halfedge)
         : halfedge_(halfedge) {
     }
 
@@ -80,34 +80,42 @@ public:
 
 private:
     VacJoinHalfedge halfedge_;
-    VacEdgeCellFrameCache* edgeCache_ = nullptr;
+    VacEdgeCellFrameData* edgeData_ = nullptr;
     geometry::Vec2d outgoingTangent_ = {};
     double angle_ = 0.0;
     double angleToNext_ = 0.0;
 };
 
-class VGC_WORKSPACE_API VacVertexCellFrameCache {
+class VGC_WORKSPACE_API VacVertexCellFrameData {
 public:
     friend VacVertexCell;
 
-    VacVertexCellFrameCache(const core::AnimTime& t)
+    VacVertexCellFrameData(const core::AnimTime& t)
         : time_(t) {
-    }
-
-    void clearJoinData() {
-        debugLinesRenderGeometry_.reset();
-        debugQuadRenderGeometry_.reset();
-        halfedges_.clear();
-        isComputingJoin_ = false;
-        isJoinComputed_ = false;
     }
 
     const core::AnimTime& time() const {
         return time_;
     }
 
+    bool hasPosData() const {
+        return isJoinComputed_;
+    }
+
     const geometry::Vec2d& pos() const {
         return pos_;
+    }
+
+    bool hasJoinData() const {
+        return isJoinComputed_;
+    }
+
+    void clearJoinData() {
+        debugLinesRenderGeometry_.reset();
+        debugQuadRenderGeometry_.reset();
+        halfedges_.clear();
+        isComputing_ = false;
+        isJoinComputed_ = false;
     }
 
     void debugPaint(graphics::Engine* engine);
@@ -118,9 +126,10 @@ private:
     mutable graphics::GeometryViewPtr debugLinesRenderGeometry_;
     mutable graphics::GeometryViewPtr debugQuadRenderGeometry_;
     // join data
-    core::Array<detail::VacJoinHalfedgeFrameCache> halfedges_;
-    bool isComputingJoin_ = false;
+    core::Array<detail::VacJoinHalfedgeFrameData> halfedges_;
+    bool isComputing_ = false;
     bool isJoinComputed_ = false;
+    bool isPosComputed_ = false;
 };
 
 } // namespace detail
@@ -141,12 +150,10 @@ public:
         return vacCellUnchecked()->toVertexCellUnchecked();
     }
 
-    const core::Array<detail::VacJoinHalfedge>& joinHalfedges() const;
+    void clearFramesData();
+    void clearJoinsData();
 
-    void clearFrameCaches() const;
-    void clearJoinCaches() const;
-
-    detail::VacVertexCellFrameCache* computeJoin(core::AnimTime t) const;
+    void computeJoin(core::AnimTime t);
 
 protected:
     void paint_(
@@ -154,17 +161,16 @@ protected:
         core::AnimTime t,
         PaintOptions flags = PaintOption::None) const override;
 
-    detail::VacVertexCellFrameCache* frameCache(core::AnimTime t) const;
-    void initFrameCache_(detail::VacVertexCellFrameCache& cache) const;
-    void computeJoinHalfedgesData_(detail::VacVertexCellFrameCache& cache) const;
-    void computeJoin_(detail::VacVertexCellFrameCache& cache) const;
+    detail::VacVertexCellFrameData* frameData(core::AnimTime t) const;
+    void computePos_(detail::VacVertexCellFrameData& data);
+    void computeJoin_(detail::VacVertexCellFrameData& data);
 
 private:
     mutable core::Array<detail::VacJoinHalfedge> joinHalfedges_;
-    mutable core::Array<detail::VacVertexCellFrameCache> frameCacheEntries_;
+    mutable core::Array<detail::VacVertexCellFrameData> frameDataEntries_;
     mutable bool isJoinHalfedgesDirty_ = true;
 
-    void computeJoinHalfedges_() const;
+    void updateJoinHalfedges_() const;
 };
 
 class VGC_WORKSPACE_API VacKeyVertex : public VacVertexCell {

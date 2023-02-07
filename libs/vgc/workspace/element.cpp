@@ -109,17 +109,24 @@ VacElement* Element::findFirstSiblingVacElement_(Element* start) {
 }
 
 VacElement::~VacElement() {
-    resetVacNode();
+    removeVacNode();
 }
 
-void VacElement::resetVacNode(vacomplex::Node* newNode) {
-    if (vacNode_ != newNode) {
-        if (vacNode_) {
-            topology::ops::removeNode(vacNode_, false);
-            onVacNodeRemoved_();
-        }
-        vacNode_ = newNode;
+void VacElement::removeVacNode() {
+    if (vacNode_) {
+        // We set vacNode_ to null before calling removeNode because
+        // the workspace would consider it as an external event otherwise
+        // and would both call onVacNodeRemoved_ and schedule this element for update.
+        vacomplex::Node* tmp = vacNode_;
+        vacNode_ = nullptr;
+        topology::ops::removeNode(tmp, false);
+        onVacNodeRemoved_();
     }
+}
+
+void VacElement::setVacNode(vacomplex::Node* vacNode) {
+    removeVacNode();
+    vacNode_ = vacNode;
 }
 
 void VacElement::onVacNodeRemoved_() {

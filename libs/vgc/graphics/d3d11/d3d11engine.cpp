@@ -1403,7 +1403,7 @@ void D3d11Engine::initImage_(
     core::Array<D3D11_SUBRESOURCE_DATA> initData(numMipLevels * numLayers);
     if (count > 0) {
         VGC_CORE_ASSERT(numMipLevels > 0);
-        initData.resize(numMipLevels * numLayers);
+        initData.resize(static_cast<Int>(numMipLevels) * numLayers);
         UINT levelWidth = width;
         UINT levelHeight = height;
         UINT bpp = image->bytesPerPixel();
@@ -1979,10 +1979,19 @@ void D3d11Engine::generateMips_(const ImageViewPtr& aImageView) {
     }
 }
 
-void D3d11Engine::draw_(GeometryView* view, UInt numIndices, UInt numInstances) {
+void D3d11Engine::draw_(
+    GeometryView* view,
+    UInt numIndices,
+    UInt numInstances,
+    UInt startIndex,
+    Int baseVertex,
+    UInt startInstance) {
 
     UINT nIdx = core::int_cast<UINT>(numIndices);
     UINT nInst = core::int_cast<UINT>(numInstances);
+    UINT startIdx = core::int_cast<UINT>(startIndex);
+    INT baseVtx = core::int_cast<INT>(baseVertex);
+    UINT startInst = core::int_cast<UINT>(startInstance);
 
     if (nIdx == 0) {
         return;
@@ -2036,22 +2045,22 @@ void D3d11Engine::draw_(GeometryView* view, UInt numIndices, UInt numInstances) 
                                   ? DXGI_FORMAT_R16_UINT
                                   : DXGI_FORMAT_R32_UINT;
 
-    if (numInstances == 0) {
-        if (indexBuffer) {
-            deviceCtx_->IASetIndexBuffer(indexBuffer->object(), indexFormat, 0);
-            deviceCtx_->DrawIndexed(nIdx, 0, 0);
+    if (indexBuffer) {
+        deviceCtx_->IASetIndexBuffer(indexBuffer->object(), indexFormat, 0);
+        if (numInstances == 0) {
+            deviceCtx_->DrawIndexed(nIdx, startIdx, baseVtx);
         }
         else {
-            deviceCtx_->Draw(nIdx, 0);
+            deviceCtx_->IASetIndexBuffer(indexBuffer->object(), indexFormat, 0);
+            deviceCtx_->DrawIndexedInstanced(nIdx, nInst, startIdx, baseVtx, startInst);
         }
     }
     else {
-        if (indexBuffer) {
-            deviceCtx_->IASetIndexBuffer(indexBuffer->object(), indexFormat, 0);
-            deviceCtx_->DrawIndexedInstanced(nIdx, nInst, 0, 0, 0);
+        if (numInstances == 0) {
+            deviceCtx_->Draw(nIdx, startIdx + baseVtx);
         }
         else {
-            deviceCtx_->DrawInstanced(nIdx, nInst, 0, 0);
+            deviceCtx_->DrawInstanced(nIdx, nInst, startIdx + baseVtx, startInst);
         }
     }
 }

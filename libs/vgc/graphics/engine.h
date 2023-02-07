@@ -391,11 +391,19 @@ public:
     template<typename T>
     void updateVertexBufferData(const GeometryViewPtr& geometry, core::Array<T> data);
 
-    void draw(const GeometryViewPtr& geometry, Int numIndices = -1);
+    void draw(
+        const GeometryViewPtr& geometry,
+        Int numIndices = -1,
+        Int startIndex = 0,
+        Int baseVertex = 0);
+
     void drawInstanced(
         const GeometryViewPtr& geometry,
         Int numIndices = -1,
-        Int numInstances = -1);
+        Int numInstances = -1,
+        Int startIndex = 0,
+        Int baseVertex = 0,
+        Int startInstance = 0);
 
     //void createTextAtlasResource();
 
@@ -508,7 +516,13 @@ protected:
 
     virtual void generateMips_(const ImageViewPtr& imageView) = 0;
 
-    virtual void draw_(GeometryView* view, UInt numPrimitives, UInt numInstances) = 0;
+    virtual void draw_(
+        GeometryView* view,
+        UInt numIndices,
+        UInt numInstances,
+        UInt startIndex,
+        Int baseVertex,
+        UInt startInstance) = 0;
     virtual void clear_(const core::Color& color) = 0;
 
     virtual UInt64

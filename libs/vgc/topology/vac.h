@@ -25,6 +25,7 @@
 #include <vgc/core/object.h>
 #include <vgc/topology/api.h>
 #include <vgc/topology/cell.h>
+#include <vgc/topology/exceptions.h>
 #include <vgc/topology/inbetweenedge.h>
 #include <vgc/topology/inbetweenface.h>
 #include <vgc/topology/inbetweenvertex.h>
@@ -147,7 +148,11 @@ protected:
         ++version_;
     }
 
-    // insert/rem ops ?
+    void insertNode(core::Id id, std::unique_ptr<VacNode>&& node) {
+        if (!nodes_.try_emplace(id, std::move(node)).second) {
+            throw IdCollisionError("Id collision error.");
+        }
+    }
 
     // graphics...
 

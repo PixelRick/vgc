@@ -22,26 +22,47 @@
 
 namespace vgc::workspace {
 
-VacEdgeCellFrameCache* VacKeyEdge::computeStandaloneGeometry(core::AnimTime t) {
-    topology::KeyEdge* ke = vacKeyEdgeNode();
-    if (ke && t == ke->time()) {
-        computeStandaloneGeometry_();
+const VacEdgeCellFrameData* VacEdgeCell::computeStandaloneGeometry(core::AnimTime t) {
+    VacEdgeCellFrameData* data = frameData(t);
+    if (data) {
+        computeStandaloneGeometry_(*data);
     }
-    // XXX to fix...
-    return nullptr;
+    return data;
 }
 
-VacEdgeCellFrameCache* VacKeyEdge::computeGeometry(core::AnimTime t) {
-    topology::KeyEdge* ke = vacKeyEdgeNode();
-    if (ke && t == ke->time()) {
-        computeGeometry_();
+const VacEdgeCellFrameData* VacEdgeCell::computeGeometry(core::AnimTime t) {
+    VacEdgeCellFrameData* data = frameData(t);
+    if (data) {
+        computeStandaloneGeometry_(*data);
+        computeGeometry_(*data);
     }
-    // XXX to fix...
-    return nullptr;
+    return data;
 }
 
 geometry::Rect2d VacKeyEdge::boundingBox(core::AnimTime /*t*/) const {
     return geometry::Rect2d::empty;
+}
+
+void VacKeyEdge::clearFramesData() {
+    frameData_.clear();
+    // we have to invalidate the join data stored in vertices !
+    for (Int i = 0; i < 2; ++i) {
+        VacKeyVertex* v = vertices_[i].element;
+        if (v) {
+            v->clearJoinsData();
+        }
+    }
+}
+
+void VacKeyEdge::clearJoinsData() {
+    frameData_.clearJoinData();
+    // we have to invalidate the join data stored in vertices !
+    for (Int i = 0; i < 2; ++i) {
+        VacKeyVertex* v = vertices_[i].element;
+        if (v) {
+            v->clearJoinsData();
+        }
+    }
 }
 
 ElementStatus VacKeyEdge::updateFromDom_(Workspace* workspace) {
@@ -123,15 +144,13 @@ ElementStatus VacKeyEdge::updateFromDom_(Workspace* workspace) {
         vacomplex::KeyVertex* oldKv0 = ke->startVertex();
         vacomplex::KeyVertex* oldKv1 = ke->endVertex();
         if (vacKvs[0] != oldKv0 || vacKvs[0] != oldKv1) {
-            // dirty geometry
-            isStandaloneGeometryDirty_ = true;
-            isGeometryDirty_ = true;
-            geometry_.clear();
             ke = nullptr;
         }
     }
 
     if (!ke) {
+        // remove first to free id usage
+        removeVacNode();
         const core::Id id = domElement->internalId();
         if (vacKvs[0] && vacKvs[1]) {
             ke = topology::ops::createKeyOpenEdge(id, parentGroup, vacKvs[0], vacKvs[1]);
@@ -140,7 +159,7 @@ ElementStatus VacKeyEdge::updateFromDom_(Workspace* workspace) {
             // XXX warning if kv0 || kv1 ?
             ke = topology::ops::createKeyClosedEdge(id, parentGroup);
         }
-        resetVacNode(ke);
+        setVacNode(ke);
     }
 
     // XXX warning on null parent group ?
@@ -153,11 +172,7 @@ ElementStatus VacKeyEdge::updateFromDom_(Workspace* workspace) {
             topology::ops::setKeyEdgeCurvePoints(ke, points);
             topology::ops::setKeyEdgeCurveWidths(ke, widths);
             // dirty geometry
-            cachedGraphics_.clear();
-            isStandaloneGeometryDirty_ = true;
-            isGeometryDirty_ = true;
-            geometry_.clear();
-            clearJoinsCaches();
+            clearFramesData();
         }
 
         // XXX should we snap here ?
@@ -174,10 +189,7 @@ ElementStatus VacKeyEdge::updateFromDom_(Workspace* workspace) {
 
 void VacKeyEdge::preparePaint_(core::AnimTime t, PaintOptions /*flags*/) {
     // todo, use paint options to not compute everything or with lower quality
-    topology::KeyEdge* ke = vacKeyEdgeNode();
-    if (t == ke->time()) {
-        computeGeometry_();
-    }
+    computeGeometry(t);
 }
 
 void VacKeyEdge::paint_(graphics::Engine* engine, core::AnimTime t, PaintOptions flags)
@@ -189,7 +201,7 @@ void VacKeyEdge::paint_(graphics::Engine* engine, core::AnimTime t, PaintOptions
     }
 
     // if not already done (should we leave preparePaint_ optional?)
-    const_cast<VacKeyEdge*>(this)->computeGeometry_();
+    const_cast<VacKeyEdge*>(this)->computeGeometry_(frameData_);
 
     using namespace graphics;
     namespace ds = dom::strings;
@@ -201,28 +213,45 @@ void VacKeyEdge::paint_(graphics::Engine* engine, core::AnimTime t, PaintOptions
 
     // XXX todo: reuse geometry objects, create buffers separately (attributes waiting in EdgeGraphics).
 
+    EdgeGraphics& graphics = frameData_.graphics_;
+
     if (flags.hasAny(strokeOptions)
-        || (!flags.has(PaintOption::Outline) && !cachedGraphics_.strokeGeometry_)) {
-        cachedGraphics_.strokeGeometry_ =
+        || (!flags.has(PaintOption::Outline) && !graphics.strokeGeometry_)) {
+        graphics.strokeGeometry_ =
             engine->createDynamicTriangleStripView(BuiltinGeometryLayout::XY_iRGBA);
 
         GeometryViewCreateInfo createInfo = {};
         createInfo.setBuiltinGeometryLayout(BuiltinGeometryLayout::XY_iRGBA);
         createInfo.setPrimitiveType(PrimitiveType::TriangleStrip);
-        createInfo.setVertexBuffer(0, cachedGraphics_.strokeGeometry_->vertexBuffer(0));
-        BufferPtr selectionInstanceBuffer = engine->createVertexBuffer(4 * 4);
+        createInfo.setVertexBuffer(0, graphics.strokeGeometry_->vertexBuffer(0));
+        BufferPtr selectionInstanceBuffer = engine->createVertexBuffer(Int(4) * 4);
         createInfo.setVertexBuffer(1, selectionInstanceBuffer);
-        cachedGraphics_.selectionGeometry_ = engine->createGeometryView(createInfo);
+        graphics.selectionGeometry_ = engine->createGeometryView(createInfo);
 
         core::Color color = domElement->getAttribute(ds::color).getColor();
 
         geometry::Vec2fArray strokeVertices;
         if (edgeTesselationModeRequested_ <= 2) {
 
-            auto samplesStart = geometry_.samples_.begin();
+            Int commonSamplesStartIndex = std::max(
+                frameData_.patches_[0].sampleOverride_,
+                frameData_.patches_[1].sampleOverride_);
+            Int commonSamplesEndIndex = frameData_.samples_.length()
+                                        - std::max(
+                                            frameData_.patches_[2].sampleOverride_,
+                                            frameData_.patches_[3].sampleOverride_);
+            auto samples = frameData_.samples_.begin();
+
+            // new strips or inline ?
+            for (const auto& s : frameData_.patches_[0].samples) {
+                geometry::Vec2d p0 = s.centerPoint;
+                strokeVertices.emplaceLast(geometry::Vec2f(p0));
+                geometry::Vec2d p1 = s.sidePoint;
+                strokeVertices.emplaceLast(geometry::Vec2f(p1));
+            }
+
             core::Span<const geometry::CurveSample> coreSamples(
-                samplesStart + geometry_.startSampleOverride_,
-                samplesStart + geometry_.endSampleOverride_);
+                samples + commonSamplesStartIndex, samples + commonSamplesEndIndex);
 
             for (const geometry::CurveSample& s : coreSamples) {
                 geometry::Vec2d p0 = s.leftPoint();
@@ -232,16 +261,16 @@ void VacKeyEdge::paint_(graphics::Engine* engine, core::AnimTime t, PaintOptions
             }
         }
         else {
-            for (const geometry::Vec2d& p : geometry_.triangulation_) {
+            for (const geometry::Vec2d& p : frameData_.triangulation_) {
                 strokeVertices.emplaceLast(geometry::Vec2f(p));
             }
         }
         engine->updateBufferData(
-            cachedGraphics_.strokeGeometry_->vertexBuffer(0), //
+            graphics.strokeGeometry_->vertexBuffer(0), //
             std::move(strokeVertices));
 
         engine->updateBufferData(
-            cachedGraphics_.strokeGeometry_->vertexBuffer(1), //
+            graphics.strokeGeometry_->vertexBuffer(1), //
             core::Array<float>({color.r(), color.g(), color.b(), color.a()}));
         engine->updateBufferData(
             selectionInstanceBuffer, //
@@ -251,8 +280,8 @@ void VacKeyEdge::paint_(graphics::Engine* engine, core::AnimTime t, PaintOptions
 
     constexpr PaintOptions centerlineOptions = {PaintOption::Outline};
 
-    if (flags.hasAny(centerlineOptions) && !cachedGraphics_.centerlineGeometry_) {
-        cachedGraphics_.centerlineGeometry_ = engine->createDynamicTriangleStripView(
+    if (flags.hasAny(centerlineOptions) && !graphics.centerlineGeometry_) {
+        graphics.centerlineGeometry_ = engine->createDynamicTriangleStripView(
             BuiltinGeometryLayout::XYDxDy_iXYRotRGBA);
 
         core::FloatArray lineInstData;
@@ -261,7 +290,7 @@ void VacKeyEdge::paint_(graphics::Engine* engine, core::AnimTime t, PaintOptions
         float lineHalfSize = 2.f;
 
         geometry::Vec4fArray lineVertices;
-        for (const geometry::CurveSample& s : geometry_.samples_) {
+        for (const geometry::CurveSample& s : frameData_.samples_) {
             geometry::Vec2f p = geometry::Vec2f(s.position());
             geometry::Vec2f n = geometry::Vec2f(s.normal());
             // clang-format off
@@ -271,17 +300,15 @@ void VacKeyEdge::paint_(graphics::Engine* engine, core::AnimTime t, PaintOptions
         }
 
         engine->updateBufferData(
-            cachedGraphics_.centerlineGeometry_->vertexBuffer(0),
-            std::move(lineVertices));
+            graphics.centerlineGeometry_->vertexBuffer(0), std::move(lineVertices));
         engine->updateBufferData(
-            cachedGraphics_.centerlineGeometry_->vertexBuffer(1),
-            std::move(lineInstData));
+            graphics.centerlineGeometry_->vertexBuffer(1), std::move(lineInstData));
     }
 
     constexpr PaintOptions pointsOptions = {PaintOption::Outline};
 
-    if (flags.hasAny(pointsOptions) && !cachedGraphics_.pointsGeometry_) {
-        cachedGraphics_.pointsGeometry_ = engine->createDynamicTriangleStripView(
+    if (flags.hasAny(pointsOptions) && !graphics.pointsGeometry_) {
+        graphics.pointsGeometry_ = engine->createDynamicTriangleStripView(
             BuiltinGeometryLayout::XYDxDy_iXYRotRGBA);
 
         float pointHalfSize = 5.f;
@@ -296,10 +323,10 @@ void VacKeyEdge::paint_(graphics::Engine* engine, core::AnimTime t, PaintOptions
         // clang-format on
 
         core::FloatArray pointInstData;
-        const Int numPoints = geometry_.cps_.length();
+        const Int numPoints = frameData_.cps_.length();
         const float dl = 1.f / numPoints;
         for (Int j = 0; j < numPoints; ++j) {
-            geometry::Vec2f p = geometry_.cps_[j];
+            geometry::Vec2f p = frameData_.cps_[j];
             float l = j * dl;
             pointInstData.extend(
                 {p.x(),
@@ -312,74 +339,75 @@ void VacKeyEdge::paint_(graphics::Engine* engine, core::AnimTime t, PaintOptions
         }
 
         engine->updateBufferData(
-            cachedGraphics_.pointsGeometry_->vertexBuffer(0), std::move(pointVertices));
+            graphics.pointsGeometry_->vertexBuffer(0), std::move(pointVertices));
         engine->updateBufferData(
-            cachedGraphics_.pointsGeometry_->vertexBuffer(1), std::move(pointInstData));
+            graphics.pointsGeometry_->vertexBuffer(1), std::move(pointInstData));
     }
 
     if (flags.has(PaintOption::Selected)) {
         engine->setProgram(graphics::BuiltinProgram::Simple);
-        engine->draw(cachedGraphics_.selectionGeometry_);
+        engine->draw(graphics.selectionGeometry_);
     }
     else if (!flags.has(PaintOption::Outline)) {
         engine->setProgram(graphics::BuiltinProgram::Simple);
-        engine->draw(cachedGraphics_.strokeGeometry_);
+        engine->draw(graphics.strokeGeometry_);
     }
 
     if (flags.has(PaintOption::Outline)) {
         engine->setProgram(graphics::BuiltinProgram::SreenSpaceDisplacement);
-        engine->draw(cachedGraphics_.centerlineGeometry_);
-        engine->drawInstanced(cachedGraphics_.pointsGeometry_);
+        engine->draw(graphics.centerlineGeometry_);
+        engine->drawInstanced(graphics.pointsGeometry_);
     }
 }
 
 void VacKeyEdge::onVacNodeRemoved_() {
-    clearJoinsCaches();
+    clearFramesData();
 }
 
 void VacKeyEdge::onUpdateError_() {
-    resetVacNode();
+    removeVacNode();
 }
 
-void VacKeyEdge::clearJoinsCaches() const {
-    for (Int i = 0; i < 2; ++i) {
-        VacKeyVertex* v = vertices_[i].element;
-        if (v) {
-            v->clearJoinCaches();
-        }
+VacEdgeCellFrameData* VacKeyEdge::frameData(core::AnimTime t) const {
+    vacomplex::EdgeCell* cell = vacEdgeCellNode();
+    if (!cell) {
+        return nullptr;
     }
+    if (frameData_.time() == t) {
+        return &frameData_;
+    }
+    return nullptr;
 }
 
-void VacKeyEdge::computeStandaloneGeometry_() {
+void VacKeyEdge::computeStandaloneGeometry_(VacEdgeCellFrameData& data) {
 
-    if (!isStandaloneGeometryDirty_ || isComputingGeometry_) {
+    if (edgeTesselationModeRequested_ == data.edgeTesselationMode_) {
         return;
     }
-    isComputingGeometry_ = true;
-
+    if (data.isStandaloneGeometryComputed_ || data.isComputing_) {
+        return;
+    }
     topology::KeyEdge* ke = vacKeyEdgeNode();
     if (!ke) {
-        // error ?
-        isComputingGeometry_ = false;
         return;
     }
+
+    data.isComputing_ = true;
+    VGC_DEBUG_TMP("VacKeyEdge({})->computeStandaloneGeometry_", (void*)this);
+
+    // TODO: compute vertices pos and snap
 
     // check if we need an update
-    if (edgeTesselationModeRequested_ == geometry_.edgeTesselationMode_) {
-        isComputingGeometry_ = false;
-        return;
-    }
 
-    geometry_.clear();
-    geometry_.edgeTesselationMode_ = edgeTesselationModeRequested_;
+    data.edgeTesselationMode_ = edgeTesselationModeRequested_;
 
     geometry::Curve curve;
     curve.setPositions(ke->points());
     curve.setWidths(ke->widths());
 
     double maxAngle = 0.05;
-    int minQuads = 1;
-    int maxQuads = 64;
+    Int minQuads = 1;
+    Int maxQuads = 64;
     if (edgeTesselationModeRequested_ <= 2) {
         if (edgeTesselationModeRequested_ == 0) {
             maxQuads = 1;
@@ -392,31 +420,37 @@ void VacKeyEdge::computeStandaloneGeometry_() {
         samplingParams.setMaxAngle(maxAngle * 0.5); // matches triangulate()
         samplingParams.setMinIntraSegmentSamples(minQuads - 1);
         samplingParams.setMaxIntraSegmentSamples(maxQuads - 1);
-        curve.sampleRange(samplingParams, geometry_.samples_);
-        geometry_.endSampleOverride_ = geometry_.samples_.length();
+        curve.sampleRange(samplingParams, data.samples_);
     }
     else {
-        geometry_.triangulation_ = curve.triangulate(maxAngle, 1, 64);
+        data.triangulation_ = curve.triangulate(maxAngle, 1, 64);
     }
-    geometry_.samplingVersion_++;
+    data.samplingVersion_++;
 
     for (const geometry::Vec2d& p : curve.positions()) {
-        geometry_.cps_.emplaceLast(geometry::Vec2f(p));
+        data.cps_.emplaceLast(geometry::Vec2f(p));
     }
 
-    cachedGraphics_.clear();
-    isComputingGeometry_ = false;
+    data.isStandaloneGeometryComputed_ = true;
+    data.isComputing_ = false;
+
+    data.graphics_.clear();
 }
 
-void VacKeyEdge::computeGeometry_() {
+void VacKeyEdge::computeGeometry_(VacEdgeCellFrameData& data) {
 
-    computeStandaloneGeometry_();
-    if (!isGeometryDirty_ || isComputingGeometry_) {
+    if (data.isGeometryComputed_ || data.isComputing_) {
         return;
     }
-    isComputingGeometry_ = true;
-
     topology::KeyEdge* ke = vacKeyEdgeNode();
+    if (!ke) {
+        return;
+    }
+
+    computeStandaloneGeometry_(data);
+
+    data.isComputing_ = true;
+    VGC_DEBUG_TMP("VacKeyEdge({})->computeGeometry_", (void*)this);
 
     // XXX shouldn't do it for draft -> add quality enum for current cached geometry
     VacKeyVertex* v0 = vertices_[0].element;
@@ -428,8 +462,11 @@ void VacKeyEdge::computeGeometry_() {
         v1->computeJoin(ke->time());
     }
 
-    cachedGraphics_.clear();
-    isComputingGeometry_ = false;
+    data.isGeometryComputed_ = true;
+    data.isComputing_ = false;
+
+    // XXX clear less ?
+    data.graphics_.clear();
 }
 
 void VacKeyEdge::computeJoin_(VacVertexCell* /*v*/, bool /*isStart*/) {
