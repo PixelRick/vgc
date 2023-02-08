@@ -401,6 +401,10 @@ bool Canvas::onMouseRelease(MouseEvent* event) {
         return false;
     }
 
+    if (isSketching_) {
+        requestRepaint();
+    }
+
     isSketching_ = false;
     isRotating_ = false;
     isPanning_ = false;
@@ -531,7 +535,7 @@ void Canvas::onPaintDraw(graphics::Engine* engine, PaintOptions /*options*/) {
     if (isSketching_) {
 
         Window* w = window();
-        bool lastPointChanged = false;
+        bool cursorMoved = false;
         if (w) {
             geometry::Vec2f pos(w->mapFromGlobal(globalCursorPosition()));
             geometry::Vec2d posd(root()->mapTo(this, pos));
@@ -539,13 +543,13 @@ void Canvas::onPaintDraw(graphics::Engine* engine, PaintOptions /*options*/) {
                 camera_.viewMatrix().inverted().transformPointAffine(posd));
             if (lastImmediateCursorPos_ != pos) {
                 lastImmediateCursorPos_ = pos;
-                lastPointChanged = true;
+                cursorMoved = true;
                 minimalLatencyStrokePoints_[2] = geometry::Vec2d(pos);
                 minimalLatencyStrokeWidths_[2] = minimalLatencyStrokeWidths_[1];
             }
         }
 
-        if (lastPointChanged && minimalLatencyStrokeReload_) {
+        if (cursorMoved || minimalLatencyStrokeReload_) {
 
             core::Color color(1.f, 0.f, 0.f, 1.f);
             geometry::Vec2fArray strokeVertices;

@@ -123,10 +123,16 @@ public:
         isGeometryComputed_ = false;
     }
 
-    void clearJoinData() {
-        for (auto& patch : patches_) {
-            patch.clear();
-        }
+    void clearStartJoinData() {
+        patches_[0].clear();
+        patches_[1].clear();
+        graphics_.clear();
+        isGeometryComputed_ = false;
+    }
+
+    void clearEndJoinData() {
+        patches_[2].clear();
+        patches_[3].clear();
         graphics_.clear();
         isGeometryComputed_ = false;
     }
@@ -170,27 +176,27 @@ public:
         return vacCellUnchecked()->toEdgeCellUnchecked();
     }
 
-    // to be called when standalone geometry changes
-    virtual void clearFramesData() = 0;
-    virtual void clearFramesJoinData() = 0;
-    // to be called when standalone geometry changes or this edge gets removed
-    virtual void clearVerticesFramesJoinData() = 0;
-    // to be called when vertices are changed or this edge gets removed
-    virtual void clearVerticesJoinTopologyData() = 0;
-
-    const VacEdgeCellFrameData* computeStandaloneGeometry(core::AnimTime t);
-    const VacEdgeCellFrameData* computeGeometry(core::AnimTime t);
+    const VacEdgeCellFrameData* computeStandaloneGeometryAt(core::AnimTime t);
+    const VacEdgeCellFrameData* computeGeometryAt(core::AnimTime t);
 
 protected:
     virtual VacEdgeCellFrameData* frameData(core::AnimTime t) const = 0;
-    virtual void computeStandaloneGeometry_(VacEdgeCellFrameData& data) = 0;
-    virtual void computeGeometry_(VacEdgeCellFrameData& data) = 0;
+    virtual void computeStandaloneGeometry(VacEdgeCellFrameData& data) = 0;
+    virtual void computeGeometry(VacEdgeCellFrameData& data) = 0;
+
+    virtual void onInputGeometryChanged() = 0;
+
+    virtual void clearStartJoinData() = 0;
+    virtual void clearEndJoinData() = 0;
+    virtual void clearJoinData() = 0;
 };
 
 class VGC_WORKSPACE_API VacKeyEdge : public VacEdgeCell {
 private:
     friend class Workspace;
-    friend class VacKeyVertex; // for joins and caps
+    // for joins and caps
+    friend class VacVertexCell;
+    friend class VacKeyVertex;
 
 public:
     ~VacKeyEdge() override = default;
@@ -204,18 +210,19 @@ public:
     }
 
     void setTesselationMode(int mode) {
-        edgeTesselationModeRequested_ = core::clamp(mode, 0, 2);
+        int newMode = core::clamp(mode, 0, 2);
+        if (edgeTesselationModeRequested_ != newMode) {
+            edgeTesselationModeRequested_ = newMode;
+            onInputGeometryChanged();
+        }
     }
-
-    void clearFramesData() override;
-    void clearFramesJoinData() override;
-    void clearVerticesFramesJoinData() override;
-    void clearVerticesJoinTopologyData() override;
 
     geometry::Rect2d boundingBox(core::AnimTime t) const override;
 
 protected:
     ElementStatus updateFromDom_(Workspace* workspace) override;
+
+    void onDependencyBeingDestroyed_(Element* dependency) override;
 
     void preparePaint_(core::AnimTime t, PaintOptions flags) override;
 
@@ -227,8 +234,14 @@ protected:
     void onVacNodeRemoved_() override;
 
     VacEdgeCellFrameData* frameData(core::AnimTime t) const override;
-    void computeStandaloneGeometry_(VacEdgeCellFrameData& data) override;
-    void computeGeometry_(VacEdgeCellFrameData& data) override;
+    void computeStandaloneGeometry(VacEdgeCellFrameData& data) override;
+    void computeGeometry(VacEdgeCellFrameData& data) override;
+
+    void onInputGeometryChanged();
+
+    void clearStartJoinData() override;
+    void clearEndJoinData() override;
+    void clearJoinData() override;
 
 private:
     struct VertexInfo {
@@ -236,13 +249,12 @@ private:
         Int joinGroup = 0;
     };
 
-    std::array<VertexInfo, 2> vertices_ = {};
+    std::array<VertexInfo, 2> verticesInfo_ = {};
 
     mutable VacEdgeCellFrameData frameData_ = {};
     int edgeTesselationModeRequested_ = 2;
 
     void onUpdateError_();
-    void computeJoin_(VacVertexCell* v, bool isStart);
 };
 
 } // namespace vgc::workspace

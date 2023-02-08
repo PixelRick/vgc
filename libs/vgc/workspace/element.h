@@ -234,9 +234,6 @@ protected:
     void removeDependency(Element* dependency);
     void clearDependencies();
 
-    void notifyChanges();
-
-    virtual void onDependencyChanged_(Element* dependency);
     virtual void onDependencyBeingDestroyed_(Element* dependency);
 
     /// dependent may be being destroyed, only use its pointer as key.

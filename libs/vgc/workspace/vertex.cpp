@@ -120,55 +120,11 @@ geometry::Rect2d VacKeyVertex::boundingBox(core::AnimTime /*t*/) const {
     return geometry::Rect2d::empty;
 }
 
-void VacVertexCell::clearFramesData() {
-    frameDataEntries_.clear();
-}
-
-void VacVertexCell::clearFramesJoinData() {
-    for (auto& entry : frameDataEntries_) {
-        entry.clearJoinData();
-    }
-}
-
-void VacVertexCell::clearJoinTopologyData() {
-    joinHalfedges_.clear();
-    isJoinHalfedgesDirty_ = true;
-}
-
 void VacVertexCell::computeJoin(core::AnimTime t) {
     detail::VacVertexCellFrameData* c = frameData(t);
     if (c) {
-        computePos_(*c);
-        computeJoin_(*c);
-    }
-}
-
-void VacVertexCell::updateJoinHalfedges_() const {
-
-    vacomplex::VertexCell* v = vacVertexCellNode();
-    if (!v) {
-        joinHalfedges_.clear();
-        return;
-    }
-
-    if (!isJoinHalfedgesDirty_) {
-        return;
-    }
-
-    joinHalfedges_.clear();
-    for (vacomplex::Cell* vacCell : v->star()) {
-        vacomplex::EdgeCell* vacEdge = vacCell->toEdgeCell();
-        VacElement* edge = static_cast<VacElement*>(workspace()->find(vacEdge->id()));
-        // XXX replace dynamic_cast
-        VacEdgeCell* edgeCell = dynamic_cast<VacKeyEdge*>(edge);
-        if (edgeCell) {
-            if (vacEdge->isStartVertex(v)) {
-                joinHalfedges_.emplaceLast(edgeCell, 0, false);
-            }
-            if (vacEdge->isEndVertex(v)) {
-                joinHalfedges_.emplaceLast(edgeCell, 0, true);
-            }
-        }
+        computePos(*c);
+        computeJoin(*c);
     }
 }
 
@@ -179,7 +135,7 @@ void VacVertexCell::paint_(graphics::Engine* engine, core::AnimTime t, PaintOpti
         detail::VacVertexCellFrameData* fd = frameData(t);
         if (fd) {
             //const_cast<VacVertexCell*>(this)->computePos_(*fd);
-            const_cast<VacVertexCell*>(this)->computeJoin_(*fd);
+            const_cast<VacVertexCell*>(this)->computeJoin(*fd);
             fd->debugPaint(engine);
         }
     }
@@ -203,7 +159,7 @@ detail::VacVertexCellFrameData* VacVertexCell::frameData(core::AnimTime t) const
     return nullptr;
 }
 
-void VacVertexCell::computePos_(detail::VacVertexCellFrameData& data) {
+void VacVertexCell::computePos(detail::VacVertexCellFrameData& data) {
     if (data.isPosComputed_ || data.isComputing_) {
         return;
     }
@@ -221,17 +177,16 @@ void VacVertexCell::computePos_(detail::VacVertexCellFrameData& data) {
     data.isComputing_ = false;
 }
 
-void VacVertexCell::computeJoin_(detail::VacVertexCellFrameData& data) {
+void VacVertexCell::computeJoin(detail::VacVertexCellFrameData& data) {
     if (data.isJoinComputed_ || data.isComputing_) {
         return;
     }
 
-    computePos_(data);
+    computePos(data);
 
     data.isComputing_ = true;
     VGC_DEBUG_TMP("VacVertexCell({})->computeJoin_", (void*)this);
 
-    updateJoinHalfedges_();
     for (const detail::VacJoinHalfedge& he : joinHalfedges_) {
         data.halfedgesData_.emplaceLast(he);
     }
@@ -244,7 +199,7 @@ void VacVertexCell::computeJoin_(detail::VacVertexCellFrameData& data) {
             // huh ?
             continue;
         }
-        cell->computeStandaloneGeometry_(*edgeData);
+        cell->computeStandaloneGeometry(*edgeData);
 
         const geometry::CurveSampleArray& samples = edgeData->samples_;
         if (samples.length() < 2) {
@@ -266,6 +221,7 @@ void VacVertexCell::computeJoin_(detail::VacVertexCellFrameData& data) {
     }
 
     const Int numHalfedges = data.halfedgesData_.length();
+    VGC_DEBUG_TMP("numHalfedges:{}", numHalfedges);
     if (numHalfedges == 0) {
         // nothing to do
     }
@@ -273,7 +229,7 @@ void VacVertexCell::computeJoin_(detail::VacVertexCellFrameData& data) {
         // cap, todo
         const detail::VacJoinHalfedgeFrameData& halfedgeData = data.halfedgesData_[0];
         Int basePatchIndex = halfedgeData.halfedge().isReverse() ? 2 : 0;
-        VGC_DEBUG_TMP("basePatchIndex:{}", basePatchIndex)
+        VGC_DEBUG_TMP("basePatchIndex:{}", basePatchIndex);
         VacEdgeCellFrameData* edgeData = halfedgeData.edgeData_;
         if (edgeData) {
             Int numSamples = edgeData->samples_.length();
@@ -315,12 +271,76 @@ ElementStatus VacKeyVertex::updateFromDom_(Workspace* /*workspace*/) {
     }
 
     const auto& position = domElement->getAttribute(ds::position).getVec2d();
-    topology::ops::setKeyVertexPosition(kv, position);
-
-    clearFramesData();
-    notifyChanges();
+    if (kv->position() != position) {
+        topology::ops::setKeyVertexPosition(kv, position);
+        onInputGeometryChanged();
+    }
 
     return ElementStatus::Ok;
+}
+
+void VacVertexCell::rebuildJoinHalfedgesArray() const {
+
+    vacomplex::VertexCell* v = vacVertexCellNode();
+    if (!v) {
+        joinHalfedges_.clear();
+        return;
+    }
+
+    joinHalfedges_.clear();
+    for (vacomplex::Cell* vacCell : v->star()) {
+        vacomplex::EdgeCell* vacEdge = vacCell->toEdgeCell();
+        VacElement* edge = static_cast<VacElement*>(workspace()->find(vacEdge->id()));
+        // XXX replace dynamic_cast
+        VacEdgeCell* edgeCell = dynamic_cast<VacKeyEdge*>(edge);
+        if (edgeCell) {
+            if (vacEdge->isStartVertex(v)) {
+                joinHalfedges_.emplaceLast(edgeCell, 0, false);
+            }
+            if (vacEdge->isEndVertex(v)) {
+                joinHalfedges_.emplaceLast(edgeCell, 0, true);
+            }
+        }
+    }
+}
+
+void VacVertexCell::clearJoinHalfedgesJoinData() const {
+    for (const detail::VacJoinHalfedge& joinHalfedge : joinHalfedges_) {
+        if (joinHalfedge.isReverse()) {
+            joinHalfedge.edgeCell()->clearEndJoinData();
+        }
+        else {
+            joinHalfedge.edgeCell()->clearStartJoinData();
+        }
+    }
+}
+
+void VacVertexCell::addJoinHalfedge_(const detail::VacJoinHalfedge& joinHalfedge) {
+    joinHalfedges_.emplaceLast(joinHalfedge);
+    for (auto& entry : frameDataEntries_) {
+        entry.clearJoinData();
+    }
+}
+
+void VacVertexCell::removeJoinHalfedge_(const detail::VacJoinHalfedge& joinHalfedge) {
+    auto equal = detail::VacJoinHalfedge::GrouplessEqualTo();
+    joinHalfedges_.removeOneIf(
+        [&](const detail::VacJoinHalfedge& x) { return equal(joinHalfedge, x); });
+    for (auto& entry : frameDataEntries_) {
+        entry.clearJoinData();
+    }
+}
+
+void VacVertexCell::onInputGeometryChanged() {
+    frameDataEntries_.clear();
+    clearJoinHalfedgesJoinData();
+}
+
+void VacVertexCell::onJoinEdgeGeometryChanged_(VacEdgeCell* edge) {
+    for (auto& entry : frameDataEntries_) {
+        entry.clearJoinData();
+    }
+    clearJoinHalfedgesJoinData();
 }
 
 geometry::Rect2d VacInbetweenVertex::boundingBox(core::AnimTime t) const {

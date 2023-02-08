@@ -22,53 +22,25 @@
 
 namespace vgc::workspace {
 
-const VacEdgeCellFrameData* VacEdgeCell::computeStandaloneGeometry(core::AnimTime t) {
+const VacEdgeCellFrameData* VacEdgeCell::computeStandaloneGeometryAt(core::AnimTime t) {
     VacEdgeCellFrameData* data = frameData(t);
     if (data) {
-        computeStandaloneGeometry_(*data);
+        computeStandaloneGeometry(*data);
     }
     return data;
 }
 
-const VacEdgeCellFrameData* VacEdgeCell::computeGeometry(core::AnimTime t) {
+const VacEdgeCellFrameData* VacEdgeCell::computeGeometryAt(core::AnimTime t) {
     VacEdgeCellFrameData* data = frameData(t);
     if (data) {
-        computeStandaloneGeometry_(*data);
-        computeGeometry_(*data);
+        computeStandaloneGeometry(*data);
+        computeGeometry(*data);
     }
     return data;
 }
 
 geometry::Rect2d VacKeyEdge::boundingBox(core::AnimTime /*t*/) const {
     return geometry::Rect2d::empty;
-}
-
-void VacKeyEdge::clearFramesData() {
-    frameData_.clear();
-}
-
-void VacKeyEdge::clearFramesJoinData() {
-    frameData_.clearJoinData();
-}
-
-void VacKeyEdge::clearVerticesFramesJoinData() {
-    for (const auto& vertex : vertices_) {
-        VacKeyVertex* v = vertex.element;
-        if (v) {
-            v->clearFramesJoinData();
-        }
-    }
-}
-
-void VacKeyEdge::clearVerticesJoinTopologyData() {
-    frameData_.clearJoinData();
-    // we have to invalidate the join data stored in vertices !
-    for (const auto& vertex : vertices_) {
-        VacKeyVertex* v = vertex.element;
-        if (v) {
-            v->clearJoinTopologyData();
-        }
-    }
 }
 
 ElementStatus VacKeyEdge::updateFromDom_(Workspace* workspace) {
@@ -80,18 +52,26 @@ ElementStatus VacKeyEdge::updateFromDom_(Workspace* workspace) {
         workspace->getElementFromPathAttribute(domElement, ds::endvertex, ds::vertex)};
 
     Element* parentElement = this->parent();
-    // XXX impl custom safe cast
 
-    std::array<VacKeyVertex*, 2> oldVertices = {
-        vertices_[0].element, vertices_[1].element};
+    std::array<VacKeyVertex*, 2> oldVertices = {};
     std::array<VacKeyVertex*, 2> newVertices = {};
-    std::array<bool, 2> verticesNeedJoinUpdate = {};
-
     for (Int i = 0; i < 2; ++i) {
-        VacKeyVertex* v = dynamic_cast<VacKeyVertex*>(verticesOpt[i].value_or(nullptr));
-        newVertices[i] = v;
-        verticesNeedJoinUpdate[i] |= replaceDependency(vertices_[i].element, v);
-        vertices_[i].element = v;
+        VacKeyVertex* const oldVertex = verticesInfo_[i].element;
+        Element* const newVertexElement = verticesOpt[i].value_or(nullptr);
+        // XXX impl custom safe cast
+        VacKeyVertex* const newVertex = dynamic_cast<VacKeyVertex*>(newVertexElement);
+        oldVertices[i] = oldVertex;
+        newVertices[i] = newVertex;
+        if (replaceDependency(oldVertex, newVertex)) {
+            detail::VacJoinHalfedge he(this, i == 1, 0);
+            if (oldVertex) {
+                oldVertex->removeJoinHalfedge_(he);
+            }
+            if (newVertex) {
+                newVertex->addJoinHalfedge_(he);
+            }
+            verticesInfo_[i].element = newVertex;
+        }
     }
 
     // What's the cleanest way to report/notify that this edge has actually changed ?
@@ -110,25 +90,22 @@ ElementStatus VacKeyEdge::updateFromDom_(Workspace* workspace) {
         }
     }
 
+    // update vac to get vertex nodes
     std::array<vacomplex::KeyVertex*, 2> vacKvs = {};
-    vacomplex::Group* parentGroup = nullptr;
-
-    // update dependencies (vertices)
     for (Int i = 0; i < 2; ++i) {
         VacKeyVertex* v = newVertices[i];
         if (v) {
             workspace->updateElementFromDom(v);
-            vacomplex::Node* node = v->vacNode();
-            if (node) {
-                vacKvs[i] = node->toCellUnchecked()->toKeyVertexUnchecked();
-            }
+            vacKvs[i] = v->vacKeyVertexNode();
             if (v->hasError() || !vacKvs[i]) {
                 onUpdateError_();
                 return ElementStatus::ErrorInDependency;
             }
         }
     }
+
     // update group
+    vacomplex::Group* parentGroup = nullptr;
     if (parentElement) {
         workspace->updateElementFromDom(parentElement);
         vacomplex::Node* parentNode = parentElement->vacNode();
@@ -142,21 +119,19 @@ ElementStatus VacKeyEdge::updateFromDom_(Workspace* workspace) {
         return ElementStatus::ErrorInParent;
     }
 
-    vacomplex::KeyEdge* ke = nullptr;
+    vacomplex::KeyEdge* ke = vacKeyEdgeNode();
 
     // check if it needs to be rebuilt
-    ke = vacNode()->toCellUnchecked()->toKeyEdgeUnchecked();
     if (ke) {
         vacomplex::KeyVertex* oldKv0 = ke->startVertex();
         vacomplex::KeyVertex* oldKv1 = ke->endVertex();
         if (vacKvs[0] != oldKv0 || vacKvs[0] != oldKv1) {
+            removeVacNode();
             ke = nullptr;
         }
     }
 
     if (!ke) {
-        // remove first to free id usage
-        removeVacNode();
         const core::Id id = domElement->internalId();
         if (vacKvs[0] && vacKvs[1]) {
             ke = topology::ops::createKeyOpenEdge(id, parentGroup, vacKvs[0], vacKvs[1]);
@@ -177,8 +152,7 @@ ElementStatus VacKeyEdge::updateFromDom_(Workspace* workspace) {
         if (&ke->points() != &points.get() || &ke->widths() != &widths.get()) {
             topology::ops::setKeyEdgeCurvePoints(ke, points);
             topology::ops::setKeyEdgeCurveWidths(ke, widths);
-            // dirty geometry
-            clearFramesData();
+            onInputGeometryChanged();
         }
 
         // XXX should we snap here ?
@@ -193,9 +167,17 @@ ElementStatus VacKeyEdge::updateFromDom_(Workspace* workspace) {
     return ElementStatus::InvalidAttribute;
 }
 
+void VacKeyEdge::onDependencyBeingDestroyed_(Element* dependency) {
+    for (VertexInfo& vi : verticesInfo_) {
+        if (vi.element == dependency) {
+            vi.element = nullptr;
+        }
+    }
+}
+
 void VacKeyEdge::preparePaint_(core::AnimTime t, PaintOptions /*flags*/) {
     // todo, use paint options to not compute everything or with lower quality
-    computeGeometry(t);
+    computeGeometryAt(t);
 }
 
 void VacKeyEdge::paint_(graphics::Engine* engine, core::AnimTime t, PaintOptions flags)
@@ -207,7 +189,7 @@ void VacKeyEdge::paint_(graphics::Engine* engine, core::AnimTime t, PaintOptions
     }
 
     // if not already done (should we leave preparePaint_ optional?)
-    const_cast<VacKeyEdge*>(this)->computeGeometry_(frameData_);
+    const_cast<VacKeyEdge*>(this)->computeGeometry(frameData_);
 
     using namespace graphics;
     namespace ds = dom::strings;
@@ -276,7 +258,7 @@ void VacKeyEdge::paint_(graphics::Engine* engine, core::AnimTime t, PaintOptions
                     if (patch.sampleOverride_ < maxSampleOverrides[0]) {
                         auto fillSamples = samples.subspan(
                             patch.sampleOverride_,
-                            maxSampleOverrides[0] - patch.sampleOverride_);
+                            maxSampleOverrides[0] - patch.sampleOverride_ + 1);
                         UInt16 index = core::int_cast<UInt16>(joinVertices.length());
                         if (joinIndices.length()) {
                             joinIndices.emplaceLast(-1);
@@ -295,8 +277,8 @@ void VacKeyEdge::paint_(graphics::Engine* engine, core::AnimTime t, PaintOptions
                 else {
                     if (patch.sampleOverride_ < maxSampleOverrides[1]) {
                         auto fillSamples = samples.subspan(
-                            samples.length() - maxSampleOverrides[1],
-                            maxSampleOverrides[1] - patch.sampleOverride_);
+                            samples.length() - 1 - maxSampleOverrides[1],
+                            maxSampleOverrides[1] - patch.sampleOverride_ + 1);
                         UInt16 index = core::int_cast<UInt16>(joinVertices.length());
                         if (joinIndices.length()) {
                             joinIndices.emplaceLast(-1);
@@ -426,11 +408,7 @@ void VacKeyEdge::paint_(graphics::Engine* engine, core::AnimTime t, PaintOptions
 }
 
 void VacKeyEdge::onVacNodeRemoved_() {
-    clearFramesData();
-}
-
-void VacKeyEdge::onUpdateError_() {
-    removeVacNode();
+    onInputGeometryChanged();
 }
 
 VacEdgeCellFrameData* VacKeyEdge::frameData(core::AnimTime t) const {
@@ -444,7 +422,7 @@ VacEdgeCellFrameData* VacKeyEdge::frameData(core::AnimTime t) const {
     return nullptr;
 }
 
-void VacKeyEdge::computeStandaloneGeometry_(VacEdgeCellFrameData& data) {
+void VacKeyEdge::computeStandaloneGeometry(VacEdgeCellFrameData& data) {
 
     if (edgeTesselationModeRequested_ == data.edgeTesselationMode_) {
         return;
@@ -502,7 +480,7 @@ void VacKeyEdge::computeStandaloneGeometry_(VacEdgeCellFrameData& data) {
     data.graphics_.clear();
 }
 
-void VacKeyEdge::computeGeometry_(VacEdgeCellFrameData& data) {
+void VacKeyEdge::computeGeometry(VacEdgeCellFrameData& data) {
 
     if (data.isGeometryComputed_ || data.isComputing_) {
         return;
@@ -512,17 +490,17 @@ void VacKeyEdge::computeGeometry_(VacEdgeCellFrameData& data) {
         return;
     }
 
-    computeStandaloneGeometry_(data);
+    computeStandaloneGeometry(data);
 
     data.isComputing_ = true;
     VGC_DEBUG_TMP("VacKeyEdge({})->computeGeometry_", (void*)this);
 
     // XXX shouldn't do it for draft -> add quality enum for current cached geometry
-    VacKeyVertex* v0 = vertices_[0].element;
+    VacKeyVertex* v0 = verticesInfo_[0].element;
     if (v0) {
         v0->computeJoin(ke->time());
     }
-    VacKeyVertex* v1 = vertices_[1].element;
+    VacKeyVertex* v1 = verticesInfo_[1].element;
     if (v1 && v1 != v0) {
         v1->computeJoin(ke->time());
     }
@@ -534,11 +512,30 @@ void VacKeyEdge::computeGeometry_(VacEdgeCellFrameData& data) {
     data.graphics_.clear();
 }
 
-void VacKeyEdge::computeJoin_(VacVertexCell* /*v*/, bool /*isStart*/) {
+void VacKeyEdge::onInputGeometryChanged() {
+    frameData_.clear();
+    for (VertexInfo& vi : verticesInfo_) {
+        if (vi.element) {
+            vi.element->onJoinEdgeGeometryChanged_(this);
+        }
+    }
+}
 
-    using namespace topology;
+void VacKeyEdge::clearStartJoinData() {
+    frameData_.clearStartJoinData();
+}
 
-    // XXX instead use the join struct as join builder...
+void VacKeyEdge::clearEndJoinData() {
+    frameData_.clearEndJoinData();
+}
+
+void VacKeyEdge::clearJoinData() {
+    frameData_.clearStartJoinData();
+    frameData_.clearEndJoinData();
+}
+
+void VacKeyEdge::onUpdateError_() {
+    removeVacNode();
 }
 
 } // namespace vgc::workspace

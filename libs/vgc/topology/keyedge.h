@@ -27,7 +27,7 @@
 
 namespace vgc::topology {
 
-class VGC_TOPOLOGY_API KeyEdge : public SpatioTemporalCell<EdgeCell, KeyCell> {
+class VGC_TOPOLOGY_API KeyEdge final : public SpatioTemporalCell<EdgeCell, KeyCell> {
 private:
     friend detail::Operations;
 

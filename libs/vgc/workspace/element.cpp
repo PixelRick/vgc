@@ -67,15 +67,6 @@ void Element::clearDependencies() {
     dependencies_.clear();
 }
 
-void Element::notifyChanges() {
-    for (Element* dependent : dependents_) {
-        dependent->onDependencyChanged_(this);
-    }
-}
-
-void Element::onDependencyChanged_(Element* /*dependency*/) {
-}
-
 void Element::onDependencyBeingDestroyed_(Element* /*dependency*/) {
 }
 

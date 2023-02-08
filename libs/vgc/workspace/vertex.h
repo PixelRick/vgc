@@ -52,6 +52,13 @@ public:
         return isReverse_;
     }
 
+    struct GrouplessEqualTo {
+        constexpr bool
+        operator()(const VacJoinHalfedge& lhs, const VacJoinHalfedge& rhs) const {
+            return lhs.edgeCell_ == rhs.edgeCell_ && lhs.isReverse_ == rhs.isReverse_;
+        }
+    };
+
 private:
     VacEdgeCell* edgeCell_;
     Int32 group_;
@@ -137,8 +144,9 @@ private:
 class VGC_WORKSPACE_API VacVertexCell : public VacElement {
 private:
     friend class Workspace;
-    friend class VacKeyVertex;
-    friend class VacInbetweenVertex;
+    friend class VacEdgeCell;
+    friend class VacKeyEdge;
+    friend class VacInbetweenVEdge;
 
 protected:
     VacVertexCell(Workspace* workspace, dom::Element* domElement)
@@ -150,13 +158,6 @@ public:
         return vacCellUnchecked()->toVertexCellUnchecked();
     }
 
-    // to be called when standalone position changes
-    void clearFramesData();
-    // to be called when incident edges geometry changes
-    void clearFramesJoinData();
-    // to be called when incident edges are added or removed
-    void clearJoinTopologyData();
-
     void computeJoin(core::AnimTime t);
 
 protected:
@@ -166,20 +167,29 @@ protected:
         PaintOptions flags = PaintOption::None) const override;
 
     detail::VacVertexCellFrameData* frameData(core::AnimTime t) const;
-    void computePos_(detail::VacVertexCellFrameData& data);
-    void computeJoin_(detail::VacVertexCellFrameData& data);
+    void computePos(detail::VacVertexCellFrameData& data);
+    void computeJoin(detail::VacVertexCellFrameData& data);
+
+    void rebuildJoinHalfedgesArray() const;
+    void clearJoinHalfedgesJoinData() const;
+
+    void addJoinHalfedge_(const detail::VacJoinHalfedge& joinHalfedge);
+    void removeJoinHalfedge_(const detail::VacJoinHalfedge& joinHalfedge);
+
+    void onInputGeometryChanged();
+    void onJoinEdgeGeometryChanged_(VacEdgeCell* edge);
 
 private:
     mutable core::Array<detail::VacJoinHalfedge> joinHalfedges_;
     mutable core::Array<detail::VacVertexCellFrameData> frameDataEntries_;
-    mutable bool isJoinHalfedgesDirty_ = true;
-
-    void updateJoinHalfedges_() const;
 };
 
 class VGC_WORKSPACE_API VacKeyVertex : public VacVertexCell {
 private:
     friend class Workspace;
+    friend class VacEdgeCell;
+    friend class VacKeyEdge;
+    friend class VacInbetweenVEdge;
 
 public:
     ~VacKeyVertex() override = default;

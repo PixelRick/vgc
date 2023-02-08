@@ -1646,6 +1646,26 @@ public:
         return false;
     }
 
+    /// Removes the first element that satisfies the predicate `pred` from the container.
+    /// Returns whether a removal happens.
+    ///
+    /// ```cpp
+    /// vgc::core::Array<double> a = {5, 12, 11, 12, 14};
+    /// a.removeIf([](double v) { return v > 11; });
+    /// // => [5, 11, 12, 14]
+    /// ```
+    ///
+    template<typename Pred>
+    Int removeOneIf(Pred pred) {
+        const auto end_ = end();
+        auto it = std::find_if(begin(), end_, pred);
+        if (it != end_) {
+            erase_(it);
+            return true;
+        }
+        return false;
+    }
+
     /// Removes all elements that compares equal to `value`, shifting all
     /// subsequent elements to the left.
     ///
