@@ -174,7 +174,8 @@ bool Canvas::onKeyPress(KeyEvent* event) {
         requestRepaint();
         break;
     case Key::I:
-        requestedTesselationMode_ = (requestedTesselationMode_ + 1) % 4;
+        requestedTesselationMode_ = (requestedTesselationMode_ + 1) % 3;
+        reTesselate = true;
         requestRepaint();
         break;
     case Key::P:
@@ -253,16 +254,28 @@ void Canvas::continueCurve_(const geometry::Vec2d& p, double width) {
 
     namespace ds = dom::strings;
 
-    if (edge_) {
-        points_.append(p);
-        widths_.append(width);
+    if (!edge_) {
+        return;
+    }
 
-        endVertex_->setAttribute(ds::position, p);
+    if (!points_.isEmpty() && points_.last() == p) {
+        return;
+    }
 
-        edge_->setAttribute(ds::positions, points_);
-        edge_->setAttribute(ds::widths, widths_);
+    points_.append(p);
+    widths_.append(width);
 
-        workspace_->sync();
+    endVertex_->setAttribute(ds::position, p);
+
+    edge_->setAttribute(ds::positions, points_);
+    edge_->setAttribute(ds::widths, widths_);
+
+    workspace_->sync();
+
+    workspace::Element* edgeElement = workspace_->find(edge_);
+    auto edgeCell = dynamic_cast<workspace::VacKeyEdge*>(edgeElement);
+    if (edgeCell) {
+        edgeCell->setTesselationMode(0);
     }
 }
 
@@ -291,7 +304,7 @@ bool Canvas::onMouseMove(MouseEvent* event) {
         minimalLatencyStrokePoints_[0] = minimalLatencyStrokePoints_[1];
         minimalLatencyStrokeWidths_[0] = minimalLatencyStrokeWidths_[1];
         minimalLatencyStrokePoints_[1] = worldCoords;
-        minimalLatencyStrokeWidths_[1] = width * 0.5;
+        minimalLatencyStrokeWidths_[1] = width;
         minimalLatencyStrokeReload_ = true;
         return true;
     }
@@ -402,6 +415,11 @@ bool Canvas::onMouseRelease(MouseEvent* event) {
     }
 
     if (isSketching_) {
+        workspace::Element* edgeElement = workspace_->find(edge_);
+        auto edgeCell = dynamic_cast<workspace::VacKeyEdge*>(edgeElement);
+        if (edgeCell) {
+            edgeCell->setTesselationMode(requestedTesselationMode_);
+        }
         requestRepaint();
     }
 
@@ -519,7 +537,7 @@ void Canvas::onPaintDraw(graphics::Engine* engine, PaintOptions /*options*/) {
                     // todo: should we use an enum to avoid dynamic_cast ?
                     // if an error happens with the Element creation we cannot rely on vac node type.
                     auto edge = dynamic_cast<workspace::VacKeyEdge*>(e);
-                    if (edge) {
+                    if (edge && reTesselate) {
                         //profileName = "Canvas:WorkspaceDrawEdgeElement";
                         edge->setTesselationMode(requestedTesselationMode_);
                     }
@@ -530,6 +548,7 @@ void Canvas::onPaintDraw(graphics::Engine* engine, PaintOptions /*options*/) {
                     e->paint(engine, {}, workspace::PaintOption::Outline);
                 }
             });
+        reTesselate = false;
     }
 
     if (isSketching_) {
@@ -545,13 +564,14 @@ void Canvas::onPaintDraw(graphics::Engine* engine, PaintOptions /*options*/) {
                 lastImmediateCursorPos_ = pos;
                 cursorMoved = true;
                 minimalLatencyStrokePoints_[2] = geometry::Vec2d(pos);
-                minimalLatencyStrokeWidths_[2] = minimalLatencyStrokeWidths_[1];
+                minimalLatencyStrokeWidths_[2] = minimalLatencyStrokeWidths_[1] * 0.5;
             }
         }
 
         if (cursorMoved || minimalLatencyStrokeReload_) {
 
-            core::Color color(1.f, 0.f, 0.f, 1.f);
+            //core::Color color(1.f, 0.f, 0.f, 1.f);
+            core::Color color = currentColor_;
             geometry::Vec2fArray strokeVertices;
 
             geometry::Curve curve;

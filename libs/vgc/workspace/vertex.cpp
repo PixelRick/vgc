@@ -227,15 +227,15 @@ void VacVertexCell::computeJoin(detail::VacVertexCellFrameData& data) {
     }
     else if (numHalfedges == 1) {
         // cap, todo
-        const detail::VacJoinHalfedgeFrameData& halfedgeData = data.halfedgesData_[0];
-        Int basePatchIndex = halfedgeData.halfedge().isReverse() ? 2 : 0;
-        VGC_DEBUG_TMP("basePatchIndex:{}", basePatchIndex);
-        VacEdgeCellFrameData* edgeData = halfedgeData.edgeData_;
-        if (edgeData) {
-            Int numSamples = edgeData->samples_.length();
-            edgeData->patches_[basePatchIndex].sampleOverride_ = numSamples / 3;
-            edgeData->patches_[basePatchIndex + 1].sampleOverride_ = 0;
-        }
+        //const detail::VacJoinHalfedgeFrameData& halfedgeData = data.halfedgesData_[0];
+        //Int basePatchIndex = halfedgeData.halfedge().isReverse() ? 2 : 0;
+        //VGC_DEBUG_TMP("basePatchIndex:{}", basePatchIndex);
+        //VacEdgeCellFrameData* edgeData = halfedgeData.edgeData_;
+        //if (edgeData) {
+        //    Int numSamples = edgeData->samples_.length();
+        //    edgeData->patches_[basePatchIndex].sampleOverride_ = numSamples / 3;
+        //    edgeData->patches_[basePatchIndex + 1].sampleOverride_ = 0;
+        //}
     }
     else {
         // sort by incident angle

@@ -370,6 +370,6 @@ int main(int argc, char* argv[]) {
     QTimer t;
     t.callOnTimeout([&]() { documentScenario1(application->activeDocument()); });
     t.setInterval(20);
-    //t.start();
+    t.start();
     return application->exec();
 }

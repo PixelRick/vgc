@@ -208,7 +208,7 @@ void VacKeyEdge::paint_(graphics::Engine* engine, core::AnimTime t, PaintOptions
         graphics.strokeGeometry_ =
             engine->createDynamicTriangleStripView(BuiltinGeometryLayout::XY_iRGBA);
         graphics.joinGeometry_ = engine->createDynamicTriangleStripView(
-            BuiltinGeometryLayout::XY_iRGBA, IndexFormat::UInt16);
+            BuiltinGeometryLayout::XY_iRGBA, IndexFormat::UInt32);
 
         GeometryViewCreateInfo createInfo = {};
         createInfo.setBuiltinGeometryLayout(BuiltinGeometryLayout::XY_iRGBA);
@@ -222,7 +222,7 @@ void VacKeyEdge::paint_(graphics::Engine* engine, core::AnimTime t, PaintOptions
 
         geometry::Vec2fArray strokeVertices;
         geometry::Vec2fArray joinVertices;
-        core::Array<UInt16> joinIndices;
+        core::Array<UInt32> joinIndices;
 
         if (edgeTesselationModeRequested_ <= 2) {
 
@@ -259,7 +259,7 @@ void VacKeyEdge::paint_(graphics::Engine* engine, core::AnimTime t, PaintOptions
                         auto fillSamples = samples.subspan(
                             patch.sampleOverride_,
                             maxSampleOverrides[0] - patch.sampleOverride_ + 1);
-                        UInt16 index = core::int_cast<UInt16>(joinVertices.length());
+                        UInt32 index = core::int_cast<UInt32>(joinVertices.length());
                         if (joinIndices.length()) {
                             joinIndices.emplaceLast(-1);
                         }
@@ -279,7 +279,7 @@ void VacKeyEdge::paint_(graphics::Engine* engine, core::AnimTime t, PaintOptions
                         auto fillSamples = samples.subspan(
                             samples.length() - 1 - maxSampleOverrides[1],
                             maxSampleOverrides[1] - patch.sampleOverride_ + 1);
-                        UInt16 index = core::int_cast<UInt16>(joinVertices.length());
+                        UInt32 index = core::int_cast<UInt32>(joinVertices.length());
                         if (joinIndices.length()) {
                             joinIndices.emplaceLast(-1);
                         }
@@ -456,8 +456,8 @@ void VacKeyEdge::computeStandaloneGeometry(VacEdgeCellFrameData& data) {
             maxQuads = 1;
         }
         else if (edgeTesselationModeRequested_ == 1) {
-            minQuads = 10;
-            maxQuads = 10;
+            minQuads = 1;
+            maxQuads = 8;
         }
         geometry::CurveSamplingParameters samplingParams = {};
         samplingParams.setMaxAngle(maxAngle * 0.5); // matches triangulate()
