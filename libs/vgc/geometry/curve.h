@@ -404,6 +404,25 @@ public:
         Int start = 0,
         Int end = -1) const;
 
+    /// \overload
+    // samples are returned non-transformed
+    void sampleRangeForView(
+        const CurveSamplingParameters& parameters,
+        core::Array<CurveSample>& outAppend,
+        const geometry::Mat3d& viewMatrix,
+        Int controlPointStart = 0,
+        Int controlPointEnd = -1) const;
+
+    /// \overload
+    // samples are returned non-transformed
+    void sampleRangeForView(
+        const CurveSamplingParameters& parameters,
+        core::Array<CurveSample>& outAppend,
+        const geometry::Mat3d& modelGroupMatrix,
+        const geometry::Mat3d& viewMatrix,
+        Int start = 0,
+        Int end = -1) const;
+
     /// Sets the color of the curve.
     ///
     // XXX Think aboutvariability for colors too. Does it make sense
@@ -423,6 +442,9 @@ public:
     core::Color color() const {
         return color_;
     }
+
+protected:
+    bool makeRangeIndicesPositive(Int& start, Int& end) const;
 
 private:
     // Representation of the centerline of the curve

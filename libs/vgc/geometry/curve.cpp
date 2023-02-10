@@ -420,11 +420,10 @@ struct IterativeSamplingCache {
     core::Array<IterativeSamplingSample> sampleStack;
 };
 
-bool testLine_(
+bool testCenterLine_(
     const IterativeSamplingSample& s0,
     const IterativeSamplingSample& s1,
-    double cosMaxAngle,
-    bool isWidthUniform) {
+    double cosMaxAngle) {
     // Test angle between curve normals and center segment normal.
     geometry::Vec2d l = s1.pos - s0.pos;
     geometry::Vec2d n = l.normalized().orthogonalized();
@@ -434,9 +433,13 @@ bool testLine_(
     if (n.dot(s1.normal) < cosMaxAngle) {
         return false;
     }
-    if (isWidthUniform) {
-        return true;
-    }
+    return true;
+}
+
+bool testOutline_(
+    const IterativeSamplingSample& s0,
+    const IterativeSamplingSample& s1,
+    double cosMaxAngle) {
     // Test angle between curve normals and outline segments normal.
     geometry::Vec2d ll = s1.leftPoint - s0.leftPoint;
     geometry::Vec2d lln = -ll.normalized().orthogonalized();
@@ -455,6 +458,23 @@ bool testLine_(
         return false;
     }
     return true;
+}
+
+bool shouldSubdivide_(
+    const IterativeSamplingSample& s0,
+    const IterativeSamplingSample& s1,
+    double cosMaxAngle,
+    bool outlineTestingEnabled) {
+
+    if (!testCenterLine_(s0, s1, cosMaxAngle)) {
+        return true;
+    }
+
+    if (outlineTestingEnabled && !testOutline_(s0, s1, cosMaxAngle)) {
+        return true;
+    }
+
+    return false;
 }
 
 bool sampleIter_(
@@ -549,8 +569,8 @@ bool sampleIter_(
             // Adaptive sampling
             Int subdivLevel = (std::max)(s0.subdivLevel, s->subdivLevel);
             if (subdivLevel < maxSubdivLevels
-                && !testLine_(s0, *s, cosMaxAngle, isWidthUniform)) {
-
+                && shouldSubdivide_(s0, *s, cosMaxAngle, !isWidthUniform)) {
+                // subdivide
                 double u = (s0.u + s->u) * 0.5;
                 s = &sampleStack.emplaceLast();
                 s->computeFrom(cps, radii, u, isWidthUniform);
@@ -576,20 +596,13 @@ void Curve::sampleRange(
     Int start,
     Int end) const {
 
-    Int numSegs = (std::max)(Int(0), numPoints() - 1);
-    if (start < 0) {
-        start = (std::max)(Int(0), numSegs - start);
-    }
-    else if (start > numSegs - 1) {
+    if (!makeRangeIndicesPositive(start, end) || (start >= end)) {
         return;
-    }
-    if (end < 0 || end > numSegs) {
-        end = numSegs;
     }
 
     const Int minSegmentSamples =
-        (std::max)(Int(0), parameters.minIntraSegmentSamples()) + 1;
-    outAppend.reserve(outAppend.length() + 1 + (end - start) * minSegmentSamples);
+        2 + (std::max)(Int(0), parameters.minIntraSegmentSamples());
+    outAppend.reserve(outAppend.length() + 1 + (end - start) * (minSegmentSamples - 1));
 
     IterativeSamplingCache data = {};
     data.cosMaxAngle = std::cos(parameters.maxAngle());
@@ -599,7 +612,410 @@ void Curve::sampleRange(
     }
 }
 
-void Curve::onWidthsChanged_() {
+//
+//
+// We want to support vector pattern brushes through generic transform matrices.
+// A pattern brush is a collection of vector graphics repeated along a given curve.
+// It deforms as if defined in the space of a ribbon that follows the curve.
+// Coordinates in the ribbon can be defined by arclength `s` and `offset`.
+//
+// To this end, we have to sample the pattern embedded in the ribbon space in a way that it
+// is visually correct after transformation.
+//
+// The main problem is that parametric curves don't allow easy mapping between L and their
+// parameter `t`.
+// We cannot afford doing a gradient descent in the mapping function to find the `t` for
+// a given `s`.
+//
+// Considered solutions are:
+//  - Approximate the curve as a polyline.
+//  - Approximate the curve as a sequence of quadratic Bézier curve flat enough to consider `t == k*s`.
+//  - Approximate `f(s) = t` as long as ds/du is exact at junctions of Bézier curves.
+//
+// Our first implementation will be to approximate the curve as a polyline.
+// The question is, if `t == k*s` is a good approximation for the center line segments, does it stands
+// true for the outline segments ?
+//
+
+// ---------------------------------------------------------------------------------------
+// View Adaptive Iterative Subdivision Sampling
+
+namespace vaiss {
+
+//struct BezierCurveSample {
+//    VGC_WARNING_PUSH
+//    VGC_WARNING_MSVC_DISABLE(26495) // member variable uninitialized
+//    BezierCurveSample(core::NoInit) noexcept
+//        : pos(core::noInit)
+//        , normal(core::noInit) {
+//    }
+//    VGC_WARNING_POP
+//
+//    Vec2d pos;
+//    Vec2d normal;
+//};
+
+struct BezierCurveSample {
+    VGC_WARNING_PUSH
+    VGC_WARNING_MSVC_DISABLE(26495) // member variable uninitialized
+    BezierCurveSample()
+        : pos(core::noInit)
+        , normal(core::noInit)
+        , morphPos(core::noInit)
+        , morphLeft(core::noInit)
+        , morphRight(core::noInit)
+        , viewPos(core::noInit)
+        , viewLeft(core::noInit)
+        , viewRight(core::noInit) {
+    }
+    VGC_WARNING_POP
+
+    // In model space
+    // correct interpolation of parameters in triangles requires homogeneous component.
+    // it is easier to let the GPU re-transform and compute it itself than sending a Vec3.
+    Vec2d pos;
+    Vec2d normal;
+
+    // for inbetweening
+    Vec2d morphPos;
+    Vec2d morphLeft;
+    Vec2d morphRight;
+    // for display
+    Vec2d viewPos;
+    Vec2d viewLeft;
+    Vec2d viewRight;
+};
+
+template<size_t degree>
+struct BezierCurveSubdivisionSample {
+    VGC_WARNING_PUSH
+    VGC_WARNING_MSVC_DISABLE(26495) // member variable uninitialized
+    BezierCurveSubdivisionSample(core::NoInit) noexcept
+        : sample(core::noInit) {
+    }
+    VGC_WARNING_POP
+
+    BezierCurveSample sample;
+    std::array<Vec2d, degree + 1> cps;
+    double u;
+    Int subdivLevel = 0;
+};
+
+// XXX move the compute snippets to the Sampler class.
+
+//void computeFrom(
+//    const std::array<Vec2d, 4>& controlPoints,
+//    double /*halfwidth*/,
+//    double u_) {
+//    this->u = u_;
+//    cubicBezierPosAndDerCasteljau<Vec2d>(controlPoints, u_, pos, tangent);
+//    this->unitTangent = tangent.normalized();
+//    //this->halfwidth = halfwidth;
+//    //this->halfwidthDer = 0;
+//    computeExtra_();
+//}
+//
+//void computeFrom(
+//    const std::array<Vec2d, 4>& controlPoints,
+//    const std::array<double, 4>& /*halfwidths*/,
+//    double u_) {
+//
+//    this->u = u_;
+//    cubicBezierPosAndDerCasteljauVec2d > (controlPoints, u_, pos, tangent);
+//    //cubicBezierPosAndDerCasteljau(halfwidths, u, halfwidth, halfwidthDer);
+//    //normal = tangent.normalized().orthogonalized();
+//    computeExtra_();
+//}
+//
+//void computeFrom(
+//    const Vec2d& pos_,
+//    const Vec2d& tangent_,
+//    double /*halfwidth*/,
+//    double /*halfwidthDer*/,
+//    double u_) {
+//
+//    this->u = u_;
+//    this->pos = pos_;
+//    this->tangent = tangent_;
+//    //this->halfwidth = halfwidth;
+//    //this->halfwidthDer = halfwidthDer;
+//    //normal = tangent.normalized().orthogonalized();
+//    computeExtra_();
+//}
+//
+//void computeExtra_() {
+//    //if (halfwidthDer != 0) {
+//    //    Vec2d dr = halfwidthDer * normal;
+//    //    rightPointNormal = (tangent + dr).normalized().orthogonalized();
+//    //    leftPointNormal = -(tangent - dr).normalized().orthogonalized();
+//    //}
+//    //else {
+//    //    rightPointNormal = normal;
+//    //    leftPointNormal = -normal;
+//    //}
+//    //Vec2d orthoHalfwidth = halfwidth * normal;
+//    //rightPoint = pos + orthoHalfwidth;
+//    //leftPoint = pos - orthoHalfwidth;
+//}
+
+struct IdentityTransform {};
+
+// 2 passes algorithm:
+// First we want the max width outline to be clean in all views of interest by subdividing in U.
+// Then we add new samples in S on the "polyquads" from the previous step using base width interpolation (in S) and stroke profile (defined over S).
+
+template<
+    size_t degree,
+    typename TModelTransform,
+    typename TMorphTransform,
+    typename TViewTransform>
+class Sampler {
+public:
+    Sampler(
+        const Curve* curve,
+        const CurveSamplingParameters& parameters,
+        const TModelTransform& modelTransform,
+        const TMorphTransform& morphTransform,
+        const TViewTransform& viewTransform)
+
+        : curve_(curve_)
+        , modelTransform_(modelTransform)
+        , morphTransform_(morphTransform)
+        , viewTransform_(viewTransform) {
+
+        cosMaxAngle_ = std::cos(parameters.maxAngle());
+        cosHalfMaxAngle_ = std::cos(0.5 * parameters.maxAngle());
+    }
+
+private:
+    Curve* curve_;
+    TModelTransform modelTransform_;
+    TMorphTransform morphTransform_;
+    TViewTransform viewTransform_;
+    double maxWidth = 1.0;
+    // cache
+    std::optional<BezierCurveSample> previousSampleN_;
+    Int segmentIndex_ = 0;
+    double cosMaxAngle_;
+    double cosHalfMaxAngle_;
+    core::Array<BezierCurveSubdivisionSample> sampleStack_;
+
+    bool sampleIter_(core::Array<CurveSample>& outAppend) {
+
+        const Int idx = segmentIndex;
+
+        // Get indices of interpolated points for current segment.
+        const Int numPts = curve_->numPoints();
+        Int i0 = (std::max)(idx - 1, Int(0));
+        Int i1 = idx;
+        Int i2 = idx + 1;
+        Int i3 = (std::min)(idx + 2, numPts - 1);
+
+        // Return now if idx is not a valid segment index.
+        if (i1 < 0 || i2 >= numPts) {
+            return false;
+        }
+
+        // Get positions of interpolated points and compute Bézier control points.
+        const Vec2dArray& pts = curve_->positionData();
+        std::array<Vec2d, 4> cps = {pts[i0], pts[i1], pts[i2], pts[i3]};
+
+        // Convert points to 
+        uniformCatmullRomToBezierCappedInPlace(cps.data());
+
+        IterativeSamplingSample s0 = {};
+        IterativeSamplingSample sN = {};
+
+        // Compute first sample of segment.
+        if (!previousSampleN_.has_value()) {
+            double radiusDer = isWidthUniform ? 0 : radii[1] - radii[0];
+            s0.computeFrom(cps[0], 3 * (cps[1] - cps[0]), radii[0], radiusDer, 0);
+            outAppend.emplaceLast(s0.pos, s0.normal, s0.radius);
+        }
+        else {
+            // Re-use last sample of previous segment.
+            s0 = *previousSampleN_;
+            s0.u = 0;
+        }
+
+        // Compute last sample of segment.
+        {
+            double radiusDer = isWidthUniform ? 0 : radii[3] - radii[2];
+            sN.computeFrom(cps[3], 3 * (cps[3] - cps[2]), radii[3], radiusDer, 1);
+        }
+
+        const double cosMaxAngle = data.cosMaxAngle;
+        const Int minISS = params.minIntraSegmentSamples();
+        const Int maxISS = params.maxIntraSegmentSamples();
+        const Int minSamples = (std::max)(Int(0), minISS) + 2;
+        const Int maxSamples = (std::max)(minISS, maxISS) + 2;
+        const Int extraSamples = maxSamples - minSamples;
+        const Int level0Lines = minSamples - 1;
+
+        const Int extraSamplesPerLevel0Line =
+            static_cast<Int>(std::floor(static_cast<float>(extraSamples) / level0Lines));
+        const Int maxSubdivLevels =
+            1 + static_cast<Int>(std::floor(std::log2(extraSamplesPerLevel0Line + 1)));
+
+        sampleStack_.resize(0);
+        sampleStack_.reserve(extraSamplesPerLevel0Line + 1);
+
+        double duLevel0 = 1.0 / static_cast<double>(minSamples - 1);
+        for (Int i = 1; i < minSamples; ++i) {
+            // Uniform sample
+            IterativeSamplingSample* s = &sampleStack_.emplaceLast();
+            if (i == minSamples - 1) {
+                *s = sN;
+            }
+            else {
+                double u = i * duLevel0;
+                s->computeFrom(cps, radii, u, isWidthUniform);
+            }
+            while (s != nullptr) {
+                // Adaptive sampling
+                Int subdivLevel = (std::max)(s0.subdivLevel, s->subdivLevel);
+                if (subdivLevel < maxSubdivLevels
+                    && shouldSubdivide_(s0, *s, cosMaxAngle, !isWidthUniform)) {
+                    // subdivide
+                    double u = (s0.u + s->u) * 0.5;
+                    s = &sampleStack_.emplaceLast();
+                    s->computeFrom(cps, radii, u, isWidthUniform);
+                    s->subdivLevel = subdivLevel + 1;
+                }
+                else {
+                    s0 = *s;
+                    outAppend.emplaceLast(s0.pos, s0.normal, s0.radius);
+                    sampleStack_.pop();
+                    s = sampleStack_.isEmpty() ? nullptr : &sampleStack.last();
+                }
+            }
+        }
+
+        data.segmentIndex += 1;
+        data.previousSampleN = sN;
+        return true;
+    }
+
+    bool testCenterLine_(const BezierCurveSample& s0, const BezierCurveSample& s1) {
+        // Test angle at each sample between their curve normal and the segment normal.
+        geometry::Vec2d l = s1.pos - s0.pos;
+        geometry::Vec2d n = l.normalized().orthogonalized();
+        if (n.dot(s0.normal) < cosHalfMaxAngle_) {
+            return false;
+        }
+        if (n.dot(s1.normal) < cosHalfMaxAngle_) {
+            return false;
+        }
+        return true;
+    }
+
+    bool testOutline_(const BezierCurveSample& s0, const BezierCurveSample& s1) {
+        // Test angle between curve normals and outline segments normal.
+        geometry::Vec2d ll = s1.leftPoint - s0.leftPoint;
+        geometry::Vec2d lln = -ll.normalized().orthogonalized();
+        if (lln.dot(s0.leftPointNormal) < cosMaxAngle) {
+            return false;
+        }
+        if (lln.dot(s1.leftPointNormal) < cosMaxAngle) {
+            return false;
+        }
+        geometry::Vec2d rl = s1.rightPoint - s0.rightPoint;
+        geometry::Vec2d rln = rl.normalized().orthogonalized();
+        if (rln.dot(s0.rightPointNormal) < cosMaxAngle) {
+            return false;
+        }
+        if (rln.dot(s1.rightPointNormal) < cosMaxAngle) {
+            return false;
+        }
+        return true;
+    }
+};
+
+bool shouldSubdivide_(
+    const Sample& s0,
+    const Sample& s1,
+    double cosMaxAngle,
+    bool outlineTestingEnabled) {
+
+    if (!testCenterLine_(s0, s1, cosMaxAngle)) {
+        return true;
+    }
+
+    if (outlineTestingEnabled && !testOutline_(s0, s1, cosMaxAngle)) {
+        return true;
+    }
+
+    return false;
+}
+
+} // namespace vaiss
+
+void Curve::sampleRangeForView(
+    const CurveSamplingParameters& parameters,
+    core::Array<CurveSample>& outAppend,
+    const geometry::Mat3d& viewMatrix,
+    Int start,
+    Int end) const {
+
+    if (!makeRangeIndicesPositive(start, end) || (start >= end)) {
+        return;
+    }
+
+    const Int minSegmentSamples =
+        2 + (std::max)(Int(0), parameters.minIntraSegmentSamples());
+    outAppend.reserve(outAppend.length() + 1 + (end - start) * (minSegmentSamples - 1));
+
+    IterativeSamplingCache data = {};
+    data.cosMaxAngle = std::cos(parameters.maxAngle());
+    data.segmentIndex = start;
+    for (Int i = start; i < end; ++i) {
+        sampleIter_(this, parameters, data, outAppend);
+    }
+}
+
+void Curve::sampleRangeForView(
+    const CurveSamplingParameters& parameters,
+    core::Array<CurveSample>& outAppend,
+    const geometry::Mat3d& modelGroupMatrix,
+    const geometry::Mat3d& viewMatrix,
+    Int start,
+    Int end) const {
+
+    if (!makeRangeIndicesPositive(start, end) || (start >= end)) {
+        return;
+    }
+
+    const Int minSegmentSamples =
+        2 + (std::max)(Int(0), parameters.minIntraSegmentSamples());
+    outAppend.reserve(outAppend.length() + 1 + (end - start) * (minSegmentSamples - 1));
+
+    IterativeSamplingCache data = {};
+    data.cosMaxAngle = std::cos(parameters.maxAngle());
+    data.segmentIndex = start;
+    for (Int i = start; i < end; ++i) {
+        sampleIter_(this, parameters, data, outAppend);
+    }
+}
+
+bool Curve::makeRangeIndicesPositive(Int& start, Int& end) const {
+    const Int numPts = numPoints();
+    const Int numSegs = numPts ? numPts - 1 : 0;
+    if (start < 0) {
+        start = numSegs + start;
+    }
+    if (start > numSegs) {
+        return false;
+    }
+    if (end < 0) {
+        end = numSegs + end;
+    }
+    if (end > numSegs) {
+        return false;
+    }
+    return true;
+}
+
+void Curve::onWidthDataChanged_() {
     // todo, compute max and average
 }
 
