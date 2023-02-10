@@ -603,7 +603,7 @@ void Canvas::onPaintDraw(graphics::Engine* engine, PaintOptions /*options*/) {
 
             engine->updateBufferData(
                 minimalLatencyStrokeGeometry_->vertexBuffer(1), //
-                core::Array<float>({color.r(), color.g(), color.b(), color.a()}));
+                core::Array<float>({color.g(), color.r(), color.b(), color.a()}));
 
             minimalLatencyStrokeReload_ = false;
         }

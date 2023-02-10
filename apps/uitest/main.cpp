@@ -14,9 +14,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <QTimer>
+
 #include <vgc/app/canvasapplication.h>
 #include <vgc/core/paths.h>
 #include <vgc/core/random.h>
+#include <vgc/dom/document.h>
 #include <vgc/ui/column.h>
 #include <vgc/ui/grid.h>
 #include <vgc/ui/imagebox.h>
@@ -29,6 +32,7 @@ namespace app = vgc::app;
 namespace core = vgc::core;
 namespace geometry = vgc::geometry;
 namespace ui = vgc::ui;
+namespace workspace = vgc::workspace;
 
 using vgc::Int;
 using vgc::UInt32;
@@ -264,7 +268,117 @@ private:
     }
 };
 
+void initEdge(
+    vgc::dom::Element* e,
+    vgc::dom::Element* v0,
+    vgc::dom::Element* v1,
+    const vgc::core::Color& c,
+    double w) {
+
+    namespace ds = vgc::dom::strings;
+
+    geometry::Vec2d p0 = v0->getAttribute(ds::position).getVec2d();
+    geometry::Vec2d p1 = v1->getAttribute(ds::position).getVec2d();
+
+    geometry::Vec2dArray points;
+    core::DoubleArray widths;
+    points.emplaceLast(p0);
+    widths.emplaceLast(w);
+    geometry::Vec2d p0p1 = p1 - p0;
+    std::random_device r;
+    std::default_random_engine re(r());
+    std::uniform_real_distribution<double> width_distrib(w * 0.5, w * 2.0);
+    const int steps = 10;
+    for (Int i = 0; i < steps; ++i) {
+        points.emplaceLast(p0 + p0p1 * static_cast<double>(i + 1) / (steps + 1));
+        widths.emplaceLast(width_distrib(re));
+    }
+    points.emplaceLast(p1);
+    widths.emplaceLast(w);
+
+    e->setAttribute(ds::positions, std::move(points));
+    e->setAttribute(ds::widths, std::move(widths));
+    e->setAttribute(ds::color, c);
+    e->setAttribute(ds::startvertex, v0->getPathFromId());
+    e->setAttribute(ds::endvertex, v1->getPathFromId());
+};
+
+void documentScenario1(vgc::dom::Document* document) {
+    static int i = 0;
+
+    namespace dom = vgc::dom;
+    namespace ds = dom::strings;
+    dom::Element* vgc = document->rootElement();
+    static dom::Element* v0 = nullptr;
+    static dom::Element* v1 = nullptr;
+    static dom::Element* v2 = nullptr;
+    static dom::Element* v3 = nullptr;
+    static dom::Element* e0 = nullptr;
+    static dom::Element* e1 = nullptr;
+    static dom::Element* e2 = nullptr;
+
+    using Vec2d = vgc::geometry::Vec2d;
+
+    constexpr Vec2d p0(0, 0);
+
+    // init
+    if (i == 0) {
+        document->disableHistory();
+
+        //e0 = dom::Element::create(vgc, ds::edge);
+        e1 = dom::Element::create(vgc, ds::edge);
+        //e2 = dom::Element::create(vgc, ds::edge);
+        v0 = dom::Element::create(vgc, ds::vertex);
+        v1 = dom::Element::create(vgc, ds::vertex);
+        v2 = dom::Element::create(vgc, ds::vertex);
+        v3 = dom::Element::create(vgc, ds::vertex);
+
+        /*
+          V1-----V0-----V2 (rotates around V0)
+                 /
+                /
+               V3
+        */
+
+        Vec2d p1(-200, 0);
+        Vec2d p2(200, 0);
+        Vec2d p3(-50, 200);
+
+        v0->setAttribute(ds::position, p0);
+        v1->setAttribute(ds::position, p1);
+        v2->setAttribute(ds::position, p2);
+        v3->setAttribute(ds::position, p3);
+
+        //initEdge(e0, v1, v0, core::Color(0, 0, 0.9f), 60.f);
+        initEdge(e1, v0, v2, core::Color(0.9f, 0, 0), 20.f);
+        //initEdge(e2, v0, v3, core::Color(0, 0.8f, 0), 30.f);
+    }
+
+    // step
+
+    //float a = i / 200.f;
+    //Vec2d p2(200 * std::cosf(a), 200 * std::sinf(a));
+
+    Vec2d p0 = {};
+    Vec2d p2(200, 0);
+    Vec2d p0p2 = p2 - p0;
+    Vec2d p0p2n = p0p2.orthogonalized();
+    e1->setAttribute(
+        ds::positions,
+        geometry::Vec2dArray(
+            {p0, p0 + p0p2 * 0.3 + p0p2n * 0.1, p0 + p0p2 * 0.6 - p0p2n * 0.1, p2}));
+    e1->setAttribute(ds::widths, core::DoubleArray({30.f, 20.f, 40.f, 50.f}));
+    v2->setAttribute(ds::position, p2);
+
+    document->emitPendingDiff();
+    ++i;
+}
+
 int main(int argc, char* argv[]) {
     auto application = UiTestApplication::create(argc, argv);
+    QTimer t;
+    t.callOnTimeout([&]() { documentScenario1(application->activeDocument()); });
+    t.setInterval(20);
+    t.start();
     return application->exec();
 }

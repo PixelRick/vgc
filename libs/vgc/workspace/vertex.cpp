@@ -176,6 +176,56 @@ void VacVertexCell::computePosition(detail::VacVertexCellFrameData& data) {
     data.isComputing_ = false;
 }
 
+template<bool fromStart, bool onEdgeLeft>
+Int findOverrideLimit(VacEdgeCellFrameData* edgeData, double halfwidthArcRatio) {
+    Int index = 0;
+    const geometry::CurveSampleArray& samples = edgeData->samples();
+    if constexpr (fromStart) {
+        for (auto it = samples.begin(); it != samples.end(); ++it, ++index) {
+            const double hw = onEdgeLeft ? it->leftHalfwidth() : it->rightHalfwidth();
+            const double s = it->s();
+            if (s * halfwidthArcRatio > hw) {
+                break;
+            }
+        }
+    }
+    else {
+        const double endS = samples.last().s();
+        for (auto it = samples.rbegin(); it != samples.rend(); ++it, ++index) {
+            const double hw = onEdgeLeft ? it->leftHalfwidth() : it->rightHalfwidth();
+            const double s = endS - it->s();
+            if (s * halfwidthArcRatio > hw) {
+                break;
+            }
+        }
+    }
+    return std::min(index, samples.length() / 3);
+}
+
+Int findOverrideLimit(
+    VacEdgeCellFrameData* edgeData,
+    double halfwidthArcRatio,
+    bool fromStart,
+    bool onEdgeLeft) {
+
+    if (fromStart) {
+        if (onEdgeLeft) {
+            return findOverrideLimit<true, true>(edgeData, halfwidthArcRatio);
+        }
+        else {
+            return findOverrideLimit<true, false>(edgeData, halfwidthArcRatio);
+        }
+    }
+    else {
+        if (onEdgeLeft) {
+            return findOverrideLimit<false, true>(edgeData, halfwidthArcRatio);
+        }
+        else {
+            return findOverrideLimit<false, false>(edgeData, halfwidthArcRatio);
+        }
+    }
+}
+
 void VacVertexCell::computeJoin(detail::VacVertexCellFrameData& data) {
     if (data.isJoinComputed_ || data.isComputing_) {
         return;
@@ -244,11 +294,30 @@ void VacVertexCell::computeJoin(detail::VacVertexCellFrameData& data) {
                 return a.angle() < b.angle();
             });
 
-        detail::VacJoinHalfedgeFrameData* previousHalfedge = &data.halfedgesData_.last();
-        double previousAngle = previousHalfedge->angle() - core::pi;
-        for (detail::VacJoinHalfedgeFrameData& halfedge : data.halfedgesData_) {
-            halfedge.angleToNext_ = halfedge.angle() - previousAngle;
-            previousAngle = halfedge.angle();
+        detail::VacJoinHalfedgeFrameData* halfedgeFirst = &data.halfedgesData_.first();
+        detail::VacJoinHalfedgeFrameData* halfedgeA = &data.halfedgesData_.last();
+        detail::VacJoinHalfedgeFrameData* halfedgeB = halfedgeFirst;
+        double angleA = halfedgeA->angle() - core::pi * 2;
+        for (Int i = 0; i < data.halfedgesData_.length(); ++i) {
+            double angleB = halfedgeB->angle();
+            halfedgeA->angleToNext_ = angleB - angleA;
+
+            const bool isReverseA = halfedgeA->halfedge().isReverse();
+            Int maxOverrideA =
+                findOverrideLimit(halfedgeA->edgeData_, 0.5, !isReverseA, isReverseA);
+            const bool isReverseB = halfedgeB->halfedge().isReverse();
+            Int maxOverrideB =
+                findOverrideLimit(halfedgeB->edgeData_, 0.5, !isReverseB, !isReverseB);
+
+            halfedgeA->edgeData_->patches_[isReverseA ? 2 : 1].sampleOverride_ =
+                maxOverrideA;
+
+            //halfedgeB->edgeData_->patches_[isReverseB ? 3 : 0].sampleOverride_ =
+            //    maxOverrideB;
+
+            halfedgeA = halfedgeB;
+            angleA = angleB;
+            ++halfedgeB;
         }
     }
 
@@ -320,6 +389,7 @@ void VacVertexCell::clearJoinHalfedgesJoinData() const {
     }
 }
 
+// this vertex is the halfedge start vertex
 void VacVertexCell::addJoinHalfedge_(const detail::VacJoinHalfedge& joinHalfedge) {
     joinHalfedges_.emplaceLast(joinHalfedge);
     for (auto& entry : frameDataEntries_) {
@@ -327,6 +397,7 @@ void VacVertexCell::addJoinHalfedge_(const detail::VacJoinHalfedge& joinHalfedge
     }
 }
 
+// this vertex is the halfedge start vertex
 void VacVertexCell::removeJoinHalfedge_(const detail::VacJoinHalfedge& joinHalfedge) {
     auto equal = detail::VacJoinHalfedge::GrouplessEqualTo();
     joinHalfedges_.removeOneIf(
