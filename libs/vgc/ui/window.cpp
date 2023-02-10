@@ -737,6 +737,25 @@ void Window::paint(bool sync) {
         widget_->paint(engine_.get());
     }
 
+#if 0
+    geometry::Vec2f pos = mapFromGlobal(globalCursorPosition());
+
+    core::FloatArray a;
+    float csz = 20;
+    // clang-format off
+    a.extend({
+        pos.x(),              pos.y(),              1.f, 1.f, 1.f,
+        pos.x() + csz,        pos.y() + csz * 0.5f, 0.f, 0.f, 0.f,
+        pos.x() + csz * 0.5f, pos.y() + csz,        0.f, 0.f, 0.f,
+    });
+    engine_->updateVertexBufferData(cross_, std::move(a));
+    engine_->draw(cross_);
+#endif
+
+    // execute all before getting mouse pos
+    // should query mouse pos directly from render thread to stay async
+    //engine_->flushWait();
+
 #if defined(VGC_QOPENGL_EXPERIMENT)
     static int frameIdx = 0;
     auto fmt = format();
@@ -856,6 +875,10 @@ bool Window::nativeEvent(
             VGC_WINDOW_DEBUG_NOARGS("WM_GETMINMAXINFO");
             return false;
         }*/
+        case WM_ACTIVATEAPP: {
+            VGC_DEBUG_TMP("WM_ACTIVATEAPP");
+            return false;
+        }
         case WM_ENTERSIZEMOVE: {
             activeSizemove_ = true;
             return false;
@@ -1025,6 +1048,7 @@ void Window::initEngine_() {
 
     {
         graphics::RasterizerStateCreateInfo createInfo = {};
+        //createInfo.setCullMode(graphics::CullMode::Back);
         rasterizerState_ = engine_->createRasterizerState(createInfo);
     }
 
@@ -1041,6 +1065,11 @@ void Window::initEngine_() {
             graphics::BlendFactor::OneMinusSourceAlpha);
         createInfo.setWriteMask(graphics::BlendWriteMaskBit::All);
         blendState_ = engine_->createBlendState(createInfo);
+    }
+
+    {
+        cross_ = engine_->createDynamicTriangleListView(
+            graphics::BuiltinGeometryLayout::XYRGB);
     }
 
     engine_->setPresentCallback([=](UInt64) {

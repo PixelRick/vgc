@@ -220,6 +220,7 @@ private:
     graphics::BlendStatePtr blendState_;
     geometry::Mat4f proj_;
     core::Color clearColor_;
+    graphics::GeometryViewPtr cross_;
 
     MouseButtons pressedMouseButtons_;
     MouseButtons pressedTabletButtons_;

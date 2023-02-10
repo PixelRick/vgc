@@ -1307,6 +1307,7 @@ void D3d11Engine::onWindowResize_(SwapChain* swapChain, UInt32 width, UInt32 hei
 
     ComPtr<ID3D11Texture2D> backBuffer;
     dxgiSwapChain1->GetBuffer(0, IID_PPV_ARGS(backBuffer.releaseAndGetAddressOf()));
+    VGC_DEBUG_TMP("new backBuffer: {}", (void*)backBuffer.get());
 
     ComPtr<ID3D11RenderTargetView> backBufferView;
     device_->CreateRenderTargetView(

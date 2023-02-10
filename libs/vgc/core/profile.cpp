@@ -159,7 +159,7 @@ ScopeProfiler::ScopeProfiler(const char* name)
 }
 
 ScopeProfiler::~ScopeProfiler() {
-    constexpr bool timestampMode = false;
+    constexpr bool timestampMode = true;
 
     Array<ProfilerEntry>& entries = g.entries;
 
