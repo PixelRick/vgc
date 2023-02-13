@@ -175,13 +175,17 @@ void VacVertexCell::computePosition(detail::VacVertexCellFrameData& data) {
     data.isComputing_ = false;
 }
 
-template<bool fromStart, bool onEdgeLeft>
-Int findOverrideLimit(VacEdgeCellFrameData* edgeData, double halfwidthArcRatio) {
+template<bool fromEnd>
+Int findOverrideLimit(
+    VacEdgeCellFrameData* edgeData,
+    double halfwidthArcRatio,
+    geometry::EdgeSide side) {
+
     Int index = 0;
     const geometry::CurveSampleArray& samples = edgeData->samples();
-    if constexpr (fromStart) {
+    if constexpr (!fromEnd) {
         for (auto it = samples.begin(); it != samples.end(); ++it, ++index) {
-            const double hw = onEdgeLeft ? it->leftHalfwidth() : it->rightHalfwidth();
+            const double hw = it->halfwidth(side);
             const double s = it->s();
             if (s * halfwidthArcRatio > hw) {
                 break;
@@ -191,7 +195,7 @@ Int findOverrideLimit(VacEdgeCellFrameData* edgeData, double halfwidthArcRatio) 
     else {
         const double endS = samples.last().s();
         for (auto it = samples.rbegin(); it != samples.rend(); ++it, ++index) {
-            const double hw = onEdgeLeft ? it->leftHalfwidth() : it->rightHalfwidth();
+            const double hw = it->halfwidth(side);
             const double s = endS - it->s();
             if (s * halfwidthArcRatio > hw) {
                 break;
@@ -204,24 +208,14 @@ Int findOverrideLimit(VacEdgeCellFrameData* edgeData, double halfwidthArcRatio) 
 Int findOverrideLimit(
     VacEdgeCellFrameData* edgeData,
     double halfwidthArcRatio,
-    bool fromStart,
-    bool onEdgeLeft) {
+    geometry::EdgeSide side,
+    bool fromEnd = false) {
 
-    if (fromStart) {
-        if (onEdgeLeft) {
-            return findOverrideLimit<true, true>(edgeData, halfwidthArcRatio);
-        }
-        else {
-            return findOverrideLimit<true, false>(edgeData, halfwidthArcRatio);
-        }
+    if (fromEnd) {
+        return findOverrideLimit<true>(edgeData, halfwidthArcRatio, side);
     }
     else {
-        if (onEdgeLeft) {
-            return findOverrideLimit<false, true>(edgeData, halfwidthArcRatio);
-        }
-        else {
-            return findOverrideLimit<false, false>(edgeData, halfwidthArcRatio);
-        }
+        return findOverrideLimit<false>(edgeData, halfwidthArcRatio, side);
     }
 }
 
@@ -248,12 +242,12 @@ void VacVertexCell::computeJoin(detail::VacVertexCellFrameData& data) {
         }
         cell->computeStandaloneGeometry(*edgeData);
 
+        const bool isReverse = heData.halfedge().isReverse();
         const geometry::CurveSampleArray& samples = edgeData->samples_;
         if (samples.length() < 2) {
             continue;
         }
-        geometry::CurveSample sample =
-            samples[heData.halfedge().isReverse() ? samples.size() - 2 : 1];
+        geometry::CurveSample sample = samples[isReverse ? samples.size() - 2 : 1];
 
         // XXX add xAxisAngle to Vec class
         geometry::Vec2d outgoingTangent =
@@ -302,17 +296,151 @@ void VacVertexCell::computeJoin(detail::VacVertexCellFrameData& data) {
             halfedgeA->angleToNext_ = angleB - angleA;
 
             const bool isReverseA = halfedgeA->halfedge().isReverse();
-            Int maxOverrideA =
-                findOverrideLimit(halfedgeA->edgeData_, 0.5, !isReverseA, isReverseA);
+            const geometry::CurveSampleArray& samplesA = halfedgeA->edgeData_->samples();
+            Int maxOverrideA = findOverrideLimit(
+                halfedgeA->edgeData_,
+                0.5,
+                isReverseA ? geometry::EdgeSide::Left : geometry::EdgeSide::Right,
+                isReverseA);
+            core::Array<detail::EdgeJoinPatchSample> patchASamples;
+            if (!isReverseA) {
+                double hwJoin = samplesA.first().rightHalfwidth();
+                Int index = 0;
+                for (auto it = samplesA.begin(); it != samplesA.end(); ++it, ++index) {
+                    const double hw = it->rightHalfwidth();
+                    const double s = it->s();
+                    if (s > hwJoin * 2) {
+                        // we should interp a new sample
+                        break;
+                    }
+                    auto& p = patchASamples.emplaceLast();
+                    p.centerPointSampleIndex = index;
+                    p.centerPoint = it->position();
+                    p.sidePoint = it->rightPoint();
+                    p.st = geometry::Vec2d(s, hw);
+                }
+            }
+            else {
+                double hwJoin = samplesA.last().leftHalfwidth();
+                const double endS = samplesA.last().s();
+                Int index = samplesA.size() - 1;
+                for (auto it = samplesA.rbegin(); it != samplesA.rend(); ++it, --index) {
+                    const double hw = it->leftHalfwidth();
+                    const double s = endS - it->s();
+                    if (s > hwJoin * 2) {
+                        // we should interp a new sample
+                        break;
+                    }
+                    auto& p = patchASamples.emplaceLast();
+                    p.centerPointSampleIndex = index;
+                    p.centerPoint = it->position();
+                    p.sidePoint = it->leftPoint();
+                    p.st = geometry::Vec2d(s, hw);
+                }
+            }
+            maxOverrideA = patchASamples.size() - 1;
+
             const bool isReverseB = halfedgeB->halfedge().isReverse();
-            Int maxOverrideB =
-                findOverrideLimit(halfedgeB->edgeData_, 0.5, !isReverseB, !isReverseB);
+            const geometry::CurveSampleArray& samplesB = halfedgeB->edgeData_->samples();
+            Int maxOverrideB = findOverrideLimit(
+                halfedgeB->edgeData_,
+                0.5,
+                isReverseB ? geometry::EdgeSide::Right : geometry::EdgeSide::Left,
+                isReverseB);
+            core::Array<detail::EdgeJoinPatchSample> patchBSamples;
+            if (!isReverseB) {
+                double hwJoin = samplesB.first().leftHalfwidth();
+                Int index = 0;
+                for (auto it = samplesB.begin(); it != samplesB.end(); ++it, ++index) {
+                    const double hw = it->leftHalfwidth();
+                    const double s = it->s();
+                    if (s > hwJoin * 2) {
+                        // we should interp a new sample
+                        break;
+                    }
+                    auto& p = patchBSamples.emplaceLast();
+                    p.centerPointSampleIndex = index;
+                    p.centerPoint = it->position();
+                    p.sidePoint = it->leftPoint();
+                    p.st = geometry::Vec2d(s, hw);
+                }
+            }
+            else {
+                double hwJoin = samplesB.last().rightHalfwidth();
+                const double endS = samplesB.last().s();
+                Int index = samplesB.size() - 1;
+                for (auto it = samplesB.rbegin(); it != samplesB.rend(); ++it, --index) {
+                    const double hw = it->rightHalfwidth();
+                    const double s = endS - it->s();
+                    if (s > hwJoin * 2) {
+                        // we should interp a new sample
+                        break;
+                    }
+                    auto& p = patchBSamples.emplaceLast();
+                    p.centerPointSampleIndex = index;
+                    p.centerPoint = it->position();
+                    p.sidePoint = it->rightPoint();
+                    p.st = geometry::Vec2d(s, hw);
+                }
+            }
+            maxOverrideB = patchBSamples.size() - 1;
 
-            halfedgeA->edgeData_->patches_[isReverseA ? 2 : 1].sampleOverride_ =
-                maxOverrideA;
+            // compute intersection of straight outlines
 
-            //halfedgeB->edgeData_->patches_[isReverseB ? 3 : 0].sampleOverride_ =
-            //    maxOverrideB;
+            struct Ray {
+                geometry::Vec2d pos;
+                geometry::Vec2d dir;
+
+                std::optional<geometry::Vec2d> intersectWith(const Ray& other) {
+
+                    const geometry::Vec2d d1 = dir;
+                    const geometry::Vec2d d2 = other.dir;
+
+                    double ddet = d1.det(d2);
+                    if (std::abs(ddet) > core::epsilon) {
+                        geometry::Vec2d w = other.pos - pos;
+                        double iddet = 1 / ddet;
+                        double t0 = w.det(d2) * iddet;
+                        double t1 = w.det(d1) * iddet;
+                        return geometry::Vec2d(t0, t1);
+                    }
+
+                    return std::nullopt;
+                }
+            };
+
+            Ray borderRayA = {
+                patchASamples.first().sidePoint,
+                halfedgeA->outgoingTangent_.normalized()};
+
+            Ray borderRayB = {
+                patchBSamples.first().sidePoint,
+                halfedgeB->outgoingTangent_.normalized()};
+
+            std::optional<geometry::Vec2d> isect = borderRayA.intersectWith(borderRayB);
+            if (isect.has_value()) {
+                const geometry::Vec2d& t = isect.value();
+                geometry::Vec2d vA = borderRayA.pos + borderRayA.dir * t[0];
+                geometry::Vec2d vB = borderRayB.pos + borderRayB.dir * t[1];
+                auto& pA = patchASamples.emplaceFirst();
+                pA.centerPoint = data.position();
+                pA.sidePoint = vA;
+                auto& pB = patchBSamples.emplaceFirst();
+                pB.centerPoint = data.position();
+                pB.sidePoint = vB;
+            }
+
+            // fill data
+
+            detail::EdgeJoinPatch& patchA =
+                halfedgeA->edgeData_->patches_[isReverseA ? 2 : 1];
+            patchA.sampleOverride_ = maxOverrideA;
+            patchA.samples = patchASamples;
+
+            detail::EdgeJoinPatch& patchB =
+                halfedgeB->edgeData_->patches_[isReverseB ? 3 : 0];
+            patchB.sampleOverride_ = maxOverrideB;
+            patchB.samples = patchBSamples;
 
             halfedgeA = halfedgeB;
             angleA = angleB;
@@ -322,7 +450,7 @@ void VacVertexCell::computeJoin(detail::VacVertexCellFrameData& data) {
 
     data.isJoinComputed_ = true;
     data.isComputing_ = false;
-}
+} // namespace vgc::workspace
 
 ElementStatus VacKeyVertex::updateFromDom_(Workspace* /*workspace*/) {
     namespace ds = dom::strings;

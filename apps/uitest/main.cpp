@@ -348,9 +348,9 @@ void documentScenario1(vgc::dom::Document* document) {
     if (i == 0) {
         document->disableHistory();
 
-        //e0 = dom::Element::create(vgc, ds::edge);
+        e0 = dom::Element::create(vgc, ds::edge);
         e1 = dom::Element::create(vgc, ds::edge);
-        //e2 = dom::Element::create(vgc, ds::edge);
+        e2 = dom::Element::create(vgc, ds::edge);
         v0 = dom::Element::create(vgc, ds::vertex);
         v1 = dom::Element::create(vgc, ds::vertex);
         v2 = dom::Element::create(vgc, ds::vertex);
@@ -372,18 +372,16 @@ void documentScenario1(vgc::dom::Document* document) {
         v2->setAttribute(ds::position, p2);
         v3->setAttribute(ds::position, p3);
 
-        //initEdge(e0, v1, v0, core::Color(0, 0, 0.9f), 60.f);
+        initEdge(e0, v1, v0, core::Color(0, 0, 0.9f), 60.f);
         initEdge(e1, v0, v2, core::Color(0.9f, 0, 0), 20.f);
-        //initEdge(e2, v0, v3, core::Color(0, 0.8f, 0), 30.f);
+        initEdge(e2, v0, v3, core::Color(0, 0.8f, 0), 30.f);
     }
 
     // step
 
-    //float a = i / 200.f;
-    //Vec2d p2(200 * std::cosf(a), 200 * std::sinf(a));
-
-    Vec2d p0 = {};
-    Vec2d p2(200, 0);
+    float a = i / 200.f;
+    Vec2d p2(200 * std::cosf(a), 200 * std::sinf(a));
+    //Vec2d p2(200, 0);
     Vec2d p0p2 = p2 - p0;
     Vec2d p0p2n = p0p2.orthogonalized();
     e1->setAttribute(
@@ -391,6 +389,7 @@ void documentScenario1(vgc::dom::Document* document) {
         geometry::Vec2dArray(
             {p0, p0 + p0p2 * 0.3 + p0p2n * 0.1, p0 + p0p2 * 0.6 - p0p2n * 0.1, p2}));
     e1->setAttribute(ds::widths, core::DoubleArray({30.f, 20.f, 40.f, 50.f}));
+
     v2->setAttribute(ds::position, p2);
 
     document->emitPendingDiff();

@@ -30,6 +30,15 @@ namespace vgc::geometry {
 
 class Curve;
 
+enum class EdgeSide : Int {
+    Right = 0,
+    Left = 1
+};
+
+inline constexpr EdgeSide opposite(EdgeSide side) {
+    return side == EdgeSide::Left ? EdgeSide::Right : EdgeSide::Left;
+}
+
 class CurveSample {
 public:
     constexpr CurveSample() noexcept
@@ -83,6 +92,14 @@ public:
         return width_[1];
     }
 
+    const Vec2d& halfwidths() const {
+        return width_;
+    }
+
+    double halfwidth(EdgeSide side) const {
+        return width_[core::toUnderlying(side)];
+    }
+
     void setWidth(double rightHalfwidth, double leftHalfwidth) {
         width_[0] = rightHalfwidth;
         width_[1] = leftHalfwidth;
@@ -113,6 +130,10 @@ public:
     //
     Vec2d sidePoint(Int side) const {
         return side ? leftPoint() : rightPoint();
+    }
+
+    Vec2d sidePoint(EdgeSide side) const {
+        return side == EdgeSide::Right ? rightPoint() : leftPoint();
     }
 
     double s() const {

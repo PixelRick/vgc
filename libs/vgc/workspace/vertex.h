@@ -69,6 +69,7 @@ private:
     bool isReverse_;
 };
 
+// outgoing halfedge
 class VGC_WORKSPACE_API VacJoinHalfedgeFrameData {
 public:
     friend VacVertexCell;

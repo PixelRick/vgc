@@ -353,6 +353,8 @@ void VacKeyEdge::paint_(graphics::Engine* engine, core::AnimTime t, PaintOptions
                 return isLeft ? s.leftPoint() : s.rightPoint();
             };
 
+            UInt32 joinIndex = core::int_cast<UInt32>(joinVertices.length());
+
             for (Int i = 0; i < 4; ++i) {
                 const auto& patch = frameData_.patches_[i];
                 const bool isStart = i < 2;
@@ -362,8 +364,8 @@ void VacKeyEdge::paint_(graphics::Engine* engine, core::AnimTime t, PaintOptions
                         auto fillSamples = samples.subspan(
                             patch.sampleOverride_,
                             maxSampleOverrides[0] - patch.sampleOverride_ + 1);
-                        UInt32 index = core::int_cast<UInt32>(joinVertices.length());
-                        if (joinIndices.length()) {
+
+                        if (joinIndex > 0) {
                             joinIndices.emplaceLast(-1);
                         }
                         for (const geometry::CurveSample& s : fillSamples) {
@@ -371,9 +373,9 @@ void VacKeyEdge::paint_(graphics::Engine* engine, core::AnimTime t, PaintOptions
                             geometry::Vec2d sp = getSampleSidePoint(s, isLeft);
                             joinVertices.emplaceLast(geometry::Vec2f(sp));
                             joinVertices.emplaceLast(geometry::Vec2f(cp));
-                            joinIndices.emplaceLast(index);
-                            joinIndices.emplaceLast(index + 1);
-                            index += 2;
+                            joinIndices.emplaceLast(joinIndex);
+                            joinIndices.emplaceLast(joinIndex + 1);
+                            joinIndex += 2;
                         }
                     }
                 }
@@ -382,8 +384,7 @@ void VacKeyEdge::paint_(graphics::Engine* engine, core::AnimTime t, PaintOptions
                         auto fillSamples = samples.subspan(
                             samples.length() - 1 - maxSampleOverrides[1],
                             maxSampleOverrides[1] - patch.sampleOverride_ + 1);
-                        UInt32 index = core::int_cast<UInt32>(joinVertices.length());
-                        if (joinIndices.length()) {
+                        if (joinIndex > 0) {
                             joinIndices.emplaceLast(-1);
                         }
                         for (const geometry::CurveSample& s : fillSamples) {
@@ -391,11 +392,25 @@ void VacKeyEdge::paint_(graphics::Engine* engine, core::AnimTime t, PaintOptions
                             geometry::Vec2d sp = getSampleSidePoint(s, isLeft);
                             joinVertices.emplaceLast(geometry::Vec2f(sp));
                             joinVertices.emplaceLast(geometry::Vec2f(cp));
-                            joinIndices.emplaceLast(index);
-                            joinIndices.emplaceLast(index + 1);
-                            index += 2;
+                            joinIndices.emplaceLast(joinIndex);
+                            joinIndices.emplaceLast(joinIndex + 1);
+                            joinIndex += 2;
                         }
                     }
+                }
+
+                if (joinIndex > 0) {
+                    joinIndices.emplaceLast(-1);
+                }
+                for (const auto& sample : patch.samples) {
+                    geometry::Vec2d cp = sample.centerPoint;
+                    geometry::Vec2d sp = sample.sidePoint;
+                    joinVertices.emplaceLast(geometry::Vec2f(sp));
+                    joinVertices.emplaceLast(geometry::Vec2f(cp));
+                    // XXX use isLeft to make the strip CCW.
+                    joinIndices.emplaceLast(joinIndex);
+                    joinIndices.emplaceLast(joinIndex + 1);
+                    joinIndex += 2;
                 }
             }
         }
