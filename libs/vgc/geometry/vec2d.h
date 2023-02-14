@@ -282,8 +282,16 @@ public:
     ///
     Vec2d normalized(bool* isNormalizable = nullptr, double epsilon = 0.0) const;
 
-    /// Rotates this Vec2d by 90° counter-clockwise, assuming a left-handed
-    /// coordinate system.
+    /// Rotates this Vec2d by 90°, transforming the X-axis unit vector into the Y-axis unit vector.
+    ///
+    /// In a top-left origin system (X right, Y down) it is clockwise.
+    ///
+    /// In a bottom-left origin system (X right, Y up) it is counter-clockwise.
+    /// 
+    /// ```cpp
+    /// Vec2d v(10, 20);
+    /// v.orthogonalize(); // => (-20, 10)
+    /// ```
     ///
     constexpr Vec2d& orthogonalize() {
         double tmp = data_[0];
@@ -292,8 +300,16 @@ public:
         return *this;
     }
 
-    /// Returns a copy of this Vec2d rotated 90° counter-clockwise, assuming a
-    /// left-handed coordinate system.
+    /// Returns a copy of this Vec2d rotated 90°, transforming the X-axis unit vector into the Y-axis unit vector.
+    ///
+    /// In a top-left origin system (X right, Y down) it is clockwise.
+    ///
+    /// In a bottom-left origin system (X right, Y up) it is counter-clockwise.
+    ///
+    /// ```cpp
+    /// Vec2d v1(10, 20);
+    /// Vec2d v2 = v1.orthogonalized(); // => v2:(-20, 10)
+    /// ```
     ///
     constexpr Vec2d orthogonalized() const {
         return Vec2d(*this).orthogonalize();
