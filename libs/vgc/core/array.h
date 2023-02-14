@@ -1709,7 +1709,7 @@ public:
     /// ```cpp
     /// vgc::core::Array<double> a = {8, 10, 42, 12, 15};
     /// a.removeRange(1, 3);   // => [8, 12, 15]
-    /// a.removeRange(2, 3);   // => [42, 12]
+    /// a.removeRange(2, 3);   // => [8, 12]
     /// a.removeRange(1, 0);   // => vgc::core::IndexError!
     /// a.removeRange(-1, 0);  // => vgc::core::IndexError!
     /// a.removeRange(2, 3);   // => vgc::core::IndexError!

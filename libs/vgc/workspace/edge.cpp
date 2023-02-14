@@ -328,7 +328,8 @@ void VacKeyEdge::paint_(graphics::Engine* engine, core::AnimTime t, PaintOptions
             std::move(joinVertices));
         engine->updateBufferData(
             graphics.joinGeometry_->vertexBuffer(1), //
-            core::Array<float>({color.g(), color.b(), color.r(), color.a()}));
+            core::Array<float>(
+                {color.r() * 0.8f, color.g() * 0.8f, color.b() * 0.8f, color.a()}));
         engine->updateBufferData(
             graphics.joinGeometry_->indexBuffer(), //
             std::move(joinIndices));

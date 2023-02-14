@@ -349,14 +349,15 @@ void documentScenario1(vgc::dom::Document* document) {
         v2->setAttribute(ds::position, p2);
         v3->setAttribute(ds::position, p3);
 
-        initEdge(e0, v1, v0, core::Color(0, 0, 0.9f), 60.f);
-        initEdge(e1, v0, v2, core::Color(0.9f, 0, 0), 20.f);
-        initEdge(e2, v0, v3, core::Color(0, 0.8f, 0), 30.f);
+        initEdge(e0, v1, v0, core::Color(0, 0, 0.9f, 0.5f), 60.f);
+        initEdge(e1, v0, v2, core::Color(0.9f, 0, 0, 0.5f), 20.f);
+        initEdge(e2, v0, v3, core::Color(0, 0.8f, 0, 0.5f), 30.f);
     }
 
     // step
 
-    float a = i / 200.f;
+    float a0 = i / 300.f;
+    float a = std::fmod(a0, 1.0) * core::pi * 0.13 + core::pi * -0.20;
     Vec2d p2(200 * std::cosf(a), 200 * std::sinf(a));
     //Vec2d p2(200, 0);
     Vec2d p0p2 = p2 - p0;
