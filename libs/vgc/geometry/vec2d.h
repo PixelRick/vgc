@@ -404,6 +404,56 @@ public:
         return std::atan2(a.det(b), a.dot(b));
     }
 
+    /// Returns the angle, in radians and in the interval (−π, π], between the X
+    /// axis and this Vec2d `a`.
+    ///
+    /// ```cpp
+    /// Vec2d a(1, 1);
+    /// double d = a.xAxisAngle(); // returns 0.7853981633974483 (approx. π/4 rad = 45 deg)
+    /// ```
+    ///
+    /// This value is computed using the following formula:
+    ///
+    /// ```cpp
+    /// double angle = atan2(a[1], a[0]);
+    /// ```
+    ///
+    /// It returns an undefined value if `a` is zero-length.
+    ///
+    /// If you are using the following coordinate system (X pointing right and Y
+    /// pointing up, like is usual in the fields of mathematics):
+    ///
+    /// ```
+    /// ^ Y
+    /// |
+    /// |
+    /// o-----> X
+    /// ```
+    ///
+    /// then `a.xAxisAngle()` is positive if going from the X axis to `a` is a
+    /// counterclockwise motion, and negative if it is a clockwise motion.
+    ///
+    /// If instead you are using the following coordinate system (X pointing
+    /// right and Y pointing down, like is usual in user interface systems):
+    ///
+    /// ```
+    /// o-----> X
+    /// |
+    /// |
+    /// v Y
+    /// ```
+    ///
+    /// then `a.xAxisAngle()` is positive if going from the X axis to `a` is a
+    /// clockwise motion, and negative if it is a counterclockwise motion.
+    ///
+    /// \sa det(), dot()
+    ///
+    double xAxisAngle() const {
+        const Vec2d& a = *this;
+        return std::atan2(a[1], a[0]);
+    }
+
+
     /// Returns whether this Vec2d `a` and the given Vec2d `b` are almost equal
     /// within some relative tolerance. If all values are finite, this function
     /// is equivalent to:

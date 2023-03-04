@@ -30,15 +30,6 @@ namespace vgc::geometry {
 
 class Curve;
 
-enum class EdgeSide : Int {
-    Right = 0,
-    Left = 1
-};
-
-inline constexpr EdgeSide opposite(EdgeSide side) {
-    return side == EdgeSide::Left ? EdgeSide::Right : EdgeSide::Left;
-}
-
 class CurveSample {
 public:
     constexpr CurveSample() noexcept
@@ -56,8 +47,19 @@ public:
     constexpr CurveSample(Vec2d position, Vec2d normal, double halfwidth = 0.5) noexcept
         : position_(position)
         , normal_(normal)
-        , width_(halfwidth, halfwidth)
+        , halfwidths_(halfwidth, halfwidth)
         , s_(0) {
+    }
+
+    constexpr CurveSample(
+        Vec2d position,
+        Vec2d normal,
+        Vec2d halfwidths,
+        double s) noexcept
+        : position_(position)
+        , normal_(normal)
+        , halfwidths_(halfwidths)
+        , s_(s) {
     }
 
     const Vec2d& position() const {
@@ -84,43 +86,72 @@ public:
         normal_ = normal;
     }
 
+    // ┌─── x
+    // │ ─segment─→
+    // │  ↓ right
+    // y
+    //
     double rightHalfwidth() const {
-        return width_[0];
+        return halfwidths_[0];
     }
 
+    // ┌─── x
+    // │  ↑ left
+    // │ ─segment─→
+    // y
+    //
     double leftHalfwidth() const {
-        return width_[1];
+        return halfwidths_[1];
     }
 
+    // ┌─── x
+    // │  ↑ halfwidths[1]
+    // │ ─segment─→
+    // y  ↓ halfwidths[0]
+    //
     const Vec2d& halfwidths() const {
-        return width_;
+        return halfwidths_;
     }
 
-    double halfwidth(EdgeSide side) const {
-        return width_[core::toUnderlying(side)];
+    // ┌─── x
+    // │  ↑ halfwidth(1)
+    // │ ─segment─→
+    // y  ↓ halfwidth(0)
+    //
+    double halfwidth(Int side) const {
+        return halfwidths_[side];
+    }
+
+    // ┌─── x
+    // │  ↑ halfwidths[1]
+    // │ ─segment─→
+    // y  ↓ halfwidths[0]
+    //
+    void setHalfwidths(const Vec2d& halfwidths) {
+        halfwidths_ = halfwidths;
     }
 
     void setWidth(double rightHalfwidth, double leftHalfwidth) {
-        width_[0] = rightHalfwidth;
-        width_[1] = leftHalfwidth;
+        halfwidths_[0] = rightHalfwidth;
+        halfwidths_[1] = leftHalfwidth;
     }
 
     // ┌─── x
-    // │  ↑ left
     // │ ─segment─→
-    // y  ↓ right
+    // │  ↓ right
+    // y
     //
     Vec2d rightPoint() const {
-        return position_ + normal_ * width_[0];
+        return position_ + normal_ * halfwidths_[0];
     }
 
     // ┌─── x
     // │  ↑ left
     // │ ─segment─→
-    // y  ↓ right
+    // y
     //
     Vec2d leftPoint() const {
-        return position_ - normal_ * width_[1];
+        return position_ - normal_ * halfwidths_[1];
     }
 
     // ┌─── x
@@ -130,10 +161,6 @@ public:
     //
     Vec2d sidePoint(Int side) const {
         return side ? leftPoint() : rightPoint();
-    }
-
-    Vec2d sidePoint(EdgeSide side) const {
-        return side == EdgeSide::Right ? rightPoint() : leftPoint();
     }
 
     double s() const {
@@ -147,9 +174,19 @@ public:
 private:
     Vec2d position_;
     Vec2d normal_;
-    Vec2d width_;
+    Vec2d halfwidths_;
     double s_; // total arclength from start point
 };
+
+inline geometry::CurveSample
+lerp(const geometry::CurveSample& a, const geometry::CurveSample& b, float t) {
+    const double ot = (1 - t);
+    return geometry::CurveSample(
+        a.position() * t + b.position() * ot,
+        (a.normal() * t + b.normal() * ot).normalized(),
+        a.halfwidths() * t + b.halfwidths() * ot,
+        a.s() * t + b.s() * ot);
+}
 
 /// Alias for `vgc::core::Array<vgc::geometry::CurveSample>`.
 ///

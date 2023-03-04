@@ -380,7 +380,7 @@ void documentScenario1(vgc::dom::Document* document) {
     // step
 
     float a0 = i / 300.f;
-    float a = std::fmod(a0, 1.0) * core::pi * 0.13 + core::pi * -0.20;
+    float a = std::fmod(a0, 1.0) * core::pi * 2.13 + core::pi * -1.20;
     Vec2d p2(200 * std::cosf(a), 200 * std::sinf(a));
     //Vec2d p2(200, 0);
     Vec2d p0p2 = p2 - p0;

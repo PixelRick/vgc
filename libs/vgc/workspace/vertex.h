@@ -33,6 +33,32 @@ class VacEdgeCellFrameData;
 
 namespace detail {
 
+struct Ray {
+    geometry::Vec2d pos;
+    geometry::Vec2d dir;
+
+    std::optional<geometry::Vec2d> intersectWith(const Ray& other) const {
+
+        const geometry::Vec2d d1 = dir;
+        const geometry::Vec2d d2 = other.dir;
+
+        double ddet = d1.det(d2);
+        if (std::abs(ddet) > core::epsilon) {
+            geometry::Vec2d w = other.pos - pos;
+            double iddet = 1 / ddet;
+            double t0 = w.det(d2) * iddet;
+            double t1 = w.det(d1) * iddet;
+            return geometry::Vec2d(t0, t1);
+        }
+
+        return std::nullopt;
+    }
+
+    geometry::Vec2d pointAt(double t) const {
+        return pos + t * dir;
+    }
+};
+
 // references an incident halfedge in a join
 class VGC_WORKSPACE_API VacJoinHalfedge {
 public:
@@ -73,6 +99,7 @@ private:
 class VGC_WORKSPACE_API VacJoinHalfedgeFrameData {
 public:
     friend VacVertexCell;
+    friend class VacVertexCellFrameData;
 
     VacJoinHalfedgeFrameData(const VacJoinHalfedge& halfedge)
         : halfedge_(halfedge) {
@@ -80,6 +107,18 @@ public:
 
     const VacJoinHalfedge& halfedge() const {
         return halfedge_;
+    }
+
+    VacEdgeCell* edgeCell() const {
+        return halfedge_.edgeCell();
+    }
+
+    bool isReverse() const {
+        return halfedge_.isReverse();
+    }
+
+    Int group() const {
+        return halfedge_.group();
     }
 
     double angle() const {
@@ -94,8 +133,35 @@ private:
     VacJoinHalfedge halfedge_;
     VacEdgeCellFrameData* edgeData_ = nullptr;
     geometry::Vec2d outgoingTangent_ = {};
+    geometry::Vec2d halfwidths_ = {};
+    geometry::Vec2d patchCutLimits_ = {};
+    double patchLength_ = 0;
+    struct SidePatchData {
+        // straight join model data
+        double extDist = 0;
+        double cutDist = 0;
+        double cutHalfwidth = 0;
+        Ray borderRay = {};
+    };
+    std::array<SidePatchData, 2> sidePatchData_ = {};
+    core::Array<geometry::CurveSample> workingSamples;
+    geometry::CurveSample mergeSample;
+    Int mergeSampleIndex_ = 0;
     double angle_ = 0.0;
     double angleToNext_ = 0.0;
+};
+
+class VGC_WORKSPACE_API VacJoinFrameData {
+public:
+    friend class VacVertexCellFrameData;
+    friend VacVertexCell;
+
+    void clear() {
+        halfedgesData_.clear();
+    }
+
+private:
+    core::Array<detail::VacJoinHalfedgeFrameData> halfedgesData_;
 };
 
 class VGC_WORKSPACE_API VacVertexCellFrameData {
@@ -125,7 +191,7 @@ public:
     void clearJoinData() {
         debugLinesRenderGeometry_.reset();
         debugQuadRenderGeometry_.reset();
-        halfedgesData_.clear();
+        joinData_.clear();
         isComputing_ = false;
         isJoinComputed_ = false;
     }
@@ -137,8 +203,7 @@ private:
     geometry::Vec2d position_ = core::noInit;
     mutable graphics::GeometryViewPtr debugLinesRenderGeometry_;
     mutable graphics::GeometryViewPtr debugQuadRenderGeometry_;
-    // join data
-    core::Array<detail::VacJoinHalfedgeFrameData> halfedgesData_;
+    VacJoinFrameData joinData_;
     bool isComputing_ = false;
     bool isJoinComputed_ = false;
     bool isPositionComputed_ = false;
