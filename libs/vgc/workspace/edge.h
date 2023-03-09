@@ -141,6 +141,10 @@ public:
         return time_;
     }
 
+    const geometry::CurveSampleArray& samples() const {
+        return samples_;
+    }
+
 private:
     core::AnimTime time_;
     geometry::CurveSampleArray samples_;

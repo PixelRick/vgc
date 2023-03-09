@@ -22,6 +22,7 @@
 #include <vgc/core/algorithm.h>
 #include <vgc/core/array.h>
 #include <vgc/core/colors.h>
+#include <vgc/core/stopwatch.h>
 #include <vgc/geometry/bezier.h>
 #include <vgc/geometry/catmullrom.h>
 
@@ -499,10 +500,11 @@ bool sampleIter_(
     IterativeSamplingSample s0 = {};
     IterativeSamplingSample sN = {};
 
+    static core::Stopwatch sw = {};
+
     // Compute first sample of segment.
     if (!data.previousSampleN.has_value()) {
-        double radiusDer = isWidthUniform ? 0 : radii[1] - radii[0];
-        s0.computeFrom(cps[0], 3 * (cps[1] - cps[0]), radii[0], radiusDer, 0);
+        s0.computeFrom(cps, radii, 0, isWidthUniform);
         outAppend.emplaceLast(s0.pos, s0.normal, s0.radius);
     }
     else {
@@ -512,10 +514,7 @@ bool sampleIter_(
     }
 
     // Compute last sample of segment.
-    {
-        double radiusDer = isWidthUniform ? 0 : radii[3] - radii[2];
-        sN.computeFrom(cps[3], 3 * (cps[3] - cps[2]), radii[3], radiusDer, 1);
-    }
+    { sN.computeFrom(cps, radii, 1, isWidthUniform); }
 
     const double cosMaxAngle = data.cosMaxAngle;
     const Int minISS = params.minIntraSegmentSamples();

@@ -578,7 +578,7 @@ void VacKeyEdge::computeStandaloneGeometry(VacEdgeCellFrameData& data) {
             maxQuads = 1;
         }
         else if (edgeTesselationModeRequested_ == 1) {
-            minQuads = 1;
+            minQuads = 2;
             maxQuads = 8;
         }
         geometry::CurveSamplingParameters samplingParams = {};
@@ -586,6 +586,17 @@ void VacKeyEdge::computeStandaloneGeometry(VacEdgeCellFrameData& data) {
         samplingParams.setMinIntraSegmentSamples(minQuads - 1);
         samplingParams.setMaxIntraSegmentSamples(maxQuads - 1);
         curve.sampleRange(samplingParams, data.samples_);
+        if (data.samples_.length()) {
+            auto it = data.samples_.begin();
+            geometry::Vec2d lastPoint = it->position();
+            double s = 0;
+            for (++it; it != data.samples_.end(); ++it) {
+                geometry::Vec2d point = it->position();
+                s += (point - lastPoint).length();
+                it->setS(s);
+                lastPoint = point;
+            }
+        }
 
         bbox_ = geometry::Rect2d::empty;
         for (auto sample : data.samples_) {

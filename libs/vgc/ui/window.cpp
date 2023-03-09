@@ -712,6 +712,7 @@ void Window::updateRequestEvent(QEvent*) {
         }
 #endif
         paint(true);
+        //requestUpdate();
     }
 }
 
