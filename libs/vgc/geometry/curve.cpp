@@ -529,25 +529,26 @@ bool sampleIter_(
         std::array<double, 4> radiiB = {
             widths[i1] * 0.5, widths[i2] * 0.5, widths[i3] * 0.5, widths[iB] * 0.5};
         uniformCatmullRomToBezierInPlace(radiiB.data());
-        double wA = widths[i0];
-        double wB = widths[i3];
-        double dwA = 3 * (radiiA[3] - radiiA[2]);
-        double dw0 = 3 * (radii[1] - radii[0]);
-        double dw1 = 3 * (radii[3] - radii[2]);
-        double dwB = 3 * (radiiB[1] - radiiB[0]);
 
-        // finally, compute outline tangents
+        //double wA = widths[i0];
+        //double wB = widths[i3];
+        //double dwA = 3 * (radiiA[3] - radiiA[2]);
+        //double dw0 = 3 * (radii[1] - radii[0]);
+        //double dw1 = 3 * (radii[3] - radii[2]);
+        //double dwB = 3 * (radiiB[1] - radiiB[0]);
 
-        auto computeTerm1 = [](Vec2d dp, Vec2d ddp, double w, double dw) {
-            return dw / dp.length();
-        };
-        auto computeTerm2 = [](Vec2d dp, Vec2d ddp, double w, double dw) {
-            Vec2d dpSwitched = Vec2d(dp.y(), dp.x());
-            Vec2d ddpSwitched = Vec2d(ddp.y(), ddp.x());
-            return (dp); // todo (see notion, the equation is there)
-        };
+        //// finally, compute outline tangents
 
-        Vec2d doA = {};
+        //auto computeTerm1 = [](Vec2d dp, Vec2d ddp, double /*w*/, double dw) {
+        //    return dw / dp.length();
+        //};
+        //auto computeTerm2 = [](Vec2d dp, Vec2d ddp, double /*w*/, double /*dw*/) {
+        //    Vec2d dpSwitched = Vec2d(dp.y(), dp.x());
+        //    Vec2d ddpSwitched = Vec2d(ddp.y(), ddp.x());
+        //    return (dp); // todo (see notion, the equation is there)
+        //};
+
+        //Vec2d doA = {};
 
         //-------------------------
         //-------------------------

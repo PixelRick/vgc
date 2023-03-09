@@ -179,7 +179,7 @@ private:
 };
 
 inline geometry::CurveSample
-lerp(const geometry::CurveSample& a, const geometry::CurveSample& b, float t) {
+lerp(const geometry::CurveSample& a, const geometry::CurveSample& b, double t) {
     const double ot = (1 - t);
     return geometry::CurveSample(
         a.position() * t + b.position() * ot,

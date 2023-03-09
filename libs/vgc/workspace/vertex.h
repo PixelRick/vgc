@@ -142,6 +142,12 @@ private:
         double cutDist = 0;
         double cutHalfwidth = 0;
         Ray borderRay = {};
+
+        void clear() {
+            extDist = 0;
+            cutDist = 0;
+            cutHalfwidth = 0;
+        }
     };
     std::array<SidePatchData, 2> sidePatchData_ = {};
     core::Array<geometry::CurveSample> workingSamples;

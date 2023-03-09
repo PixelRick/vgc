@@ -614,10 +614,10 @@ void VacKeyEdge::computeStandaloneGeometry(VacEdgeCellFrameData& data) {
             }
         }
 
-        bbox_ = geometry::Rect2d::empty;
-        for (auto sample : data.samples_) {
-            bbox_.uniteWith(sample.position());
-        }
+        //bbox_ = geometry::Rect2d::empty;
+        //for (auto sample : data.samples_) {
+        //    bbox_.uniteWith(sample.position());
+        //}
     }
     else {
         data.triangulation_ = curve.triangulate(maxAngle, 1, 64);
