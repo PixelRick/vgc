@@ -317,9 +317,17 @@ void VacKeyEdge::paint_(graphics::Engine* engine, core::AnimTime t, PaintOptions
     if (flags.hasAny(strokeOptions)
         || (!flags.has(PaintOption::Outline) && !graphics.strokeGeometry_)) {
         graphics.strokeGeometry_ =
-            engine->createDynamicTriangleStripView(BuiltinGeometryLayout::XY_iRGBA);
+            engine->createDynamicTriangleStripView(BuiltinGeometryLayout::XYUV_iRGBA);
         graphics.joinGeometry_ = engine->createDynamicTriangleStripView(
-            BuiltinGeometryLayout::XY_iRGBA, IndexFormat::UInt32);
+            BuiltinGeometryLayout::XYUV_iRGBA, IndexFormat::UInt32);
+
+        GeometryViewCreateInfo createInfo = {};
+        createInfo.setBuiltinGeometryLayout(BuiltinGeometryLayout::XYUV_iRGBA);
+        createInfo.setPrimitiveType(PrimitiveType::TriangleStrip);
+        createInfo.setVertexBuffer(0, graphics.strokeGeometry_->vertexBuffer(0));
+        BufferPtr selectionInstanceBuffer = engine->createVertexBuffer(Int(4) * 4);
+        createInfo.setVertexBuffer(1, selectionInstanceBuffer);
+        graphics.selectionGeometry_ = engine->createGeometryView(createInfo);
 
         core::Color color = domElement->getAttribute(ds::color).getColor();
 
@@ -329,13 +337,15 @@ void VacKeyEdge::paint_(graphics::Engine* engine, core::AnimTime t, PaintOptions
 
         if (edgeTesselationModeRequested_ <= 2) {
 
-            std::array<Int, 2> maxSampleOverrides = {
+            std::array<Int, 2> mergeIndices = {
+                // clang-format off
                 std::max(
-                    frameData_.patches_[0].sampleOverride_,
-                    frameData_.patches_[1].sampleOverride_),
+                    frameData_.patches_[0].mergeIndex,
+                    frameData_.patches_[1].mergeIndex),
                 std::max(
-                    frameData_.patches_[2].sampleOverride_,
-                    frameData_.patches_[3].sampleOverride_)};
+                    frameData_.patches_[2].mergeIndex,
+                    frameData_.patches_[3].mergeIndex)};
+            // clang-format on
             Int totalOverride = maxSampleOverrides[0] + maxSampleOverrides[1];
 
             auto samples = core::Span(frameData_.samples_);
@@ -346,7 +356,9 @@ void VacKeyEdge::paint_(graphics::Engine* engine, core::AnimTime t, PaintOptions
                 geometry::Vec2d p0 = s.leftPoint();
                 geometry::Vec2d p1 = s.rightPoint();
                 strokeVertices.emplaceLast(geometry::Vec2f(p0));
+                strokeVertices.emplaceLast(geometry::Vec2f(s.s(), -s.leftHalfwidth()));
                 strokeVertices.emplaceLast(geometry::Vec2f(p1));
+                strokeVertices.emplaceLast(geometry::Vec2f(s.s(), s.rightHalfwidth()));
             }
 
             auto getSampleSidePoint = [](const geometry::CurveSample& s, bool isLeft) {
@@ -372,7 +384,9 @@ void VacKeyEdge::paint_(graphics::Engine* engine, core::AnimTime t, PaintOptions
                             geometry::Vec2d cp = s.position();
                             geometry::Vec2d sp = getSampleSidePoint(s, isLeft);
                             joinVertices.emplaceLast(geometry::Vec2f(sp));
+                            joinVertices.emplaceLast(s.s(), s.halfwidth(isLeft ? 1 : 0));
                             joinVertices.emplaceLast(geometry::Vec2f(cp));
+                            joinVertices.emplaceLast(s.s(), 0);
                             joinIndices.emplaceLast(joinIndex);
                             joinIndices.emplaceLast(joinIndex + 1);
                             joinIndex += 2;
@@ -391,7 +405,9 @@ void VacKeyEdge::paint_(graphics::Engine* engine, core::AnimTime t, PaintOptions
                             geometry::Vec2d cp = s.position();
                             geometry::Vec2d sp = getSampleSidePoint(s, isLeft);
                             joinVertices.emplaceLast(geometry::Vec2f(sp));
+                            joinVertices.emplaceLast(s.s(), s.halfwidth(isLeft ? 1 : 0));
                             joinVertices.emplaceLast(geometry::Vec2f(cp));
+                            joinVertices.emplaceLast(s.s(), 0);
                             joinIndices.emplaceLast(joinIndex);
                             joinIndices.emplaceLast(joinIndex + 1);
                             joinIndex += 2;
@@ -402,11 +418,13 @@ void VacKeyEdge::paint_(graphics::Engine* engine, core::AnimTime t, PaintOptions
                 if (joinIndex > 0) {
                     joinIndices.emplaceLast(-1);
                 }
-                for (const auto& sample : patch.samples) {
-                    geometry::Vec2d cp = sample.centerPoint;
-                    geometry::Vec2d sp = sample.sidePoint;
+                for (const auto& s : patch.samples) {
+                    geometry::Vec2d cp = s.centerPoint;
+                    geometry::Vec2d sp = s.sidePoint;
                     joinVertices.emplaceLast(geometry::Vec2f(sp));
+                    joinVertices.emplaceLast(geometry::Vec2f(s.st));
                     joinVertices.emplaceLast(geometry::Vec2f(cp));
+                    joinVertices.emplaceLast(s.st[0], 0);
                     // XXX use isLeft to make the strip CCW.
                     joinIndices.emplaceLast(joinIndex);
                     joinIndices.emplaceLast(joinIndex + 1);
@@ -534,7 +552,7 @@ void VacKeyEdge::paint_(graphics::Engine* engine, core::AnimTime t, PaintOptions
         engine->draw(graphics.selectionGeometry_);
     }
     else if (!flags.has(PaintOption::Outline)) {
-        engine->setProgram(graphics::BuiltinProgram::Simple);
+        engine->setProgram(graphics::BuiltinProgram::SimpleTexturedDebug);
         engine->draw(graphics.strokeGeometry_);
         engine->draw(graphics.joinGeometry_);
     }

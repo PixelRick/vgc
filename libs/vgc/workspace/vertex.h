@@ -34,7 +34,7 @@ class VacEdgeCellFrameData;
 namespace detail {
 
 struct Ray {
-    geometry::Vec2d pos;
+    geometry::Vec2d origin;
     geometry::Vec2d dir;
 
     std::optional<geometry::Vec2d> intersectWith(const Ray& other) const {
@@ -44,7 +44,7 @@ struct Ray {
 
         double ddet = d1.det(d2);
         if (std::abs(ddet) > core::epsilon) {
-            geometry::Vec2d w = other.pos - pos;
+            geometry::Vec2d w = other.origin - origin;
             double iddet = 1 / ddet;
             double t0 = w.det(d2) * iddet;
             double t1 = w.det(d1) * iddet;
@@ -55,7 +55,7 @@ struct Ray {
     }
 
     geometry::Vec2d pointAt(double t) const {
-        return pos + t * dir;
+        return origin + t * dir;
     }
 };
 
@@ -138,15 +138,17 @@ private:
     double patchLength_ = 0;
     struct SidePatchData {
         // straight join model data
-        double extDist = 0;
-        double cutDist = 0;
-        double cutHalfwidth = 0;
+        double filletLength = 0;
+        double joinHalfwidth = 0;
+        bool isCutFillet = false;
+        double extLength = 0;
         Ray borderRay = {};
 
         void clear() {
-            extDist = 0;
-            cutDist = 0;
-            cutHalfwidth = 0;
+            filletLength = 0;
+            joinHalfwidth = 0;
+            isCutFillet = false;
+            extLength = 0;
         }
     };
     std::array<SidePatchData, 2> sidePatchData_ = {};

@@ -291,6 +291,8 @@ private:
     }
 };
 
+std::default_random_engine re;
+
 void initEdge(
     vgc::dom::Element* e,
     vgc::dom::Element* v0,
@@ -308,13 +310,12 @@ void initEdge(
     points.emplaceLast(p0);
     widths.emplaceLast(w);
     geometry::Vec2d p0p1 = p1 - p0;
-    std::random_device r;
-    std::default_random_engine re(r());
+
     std::uniform_real_distribution<double> width_distrib(w * 0.5, w * 2.0);
-    const int steps = 10;
+    const int steps = 1;
     for (Int i = 0; i < steps; ++i) {
         points.emplaceLast(p0 + p0p1 * static_cast<double>(i + 1) / (steps + 1));
-        widths.emplaceLast(width_distrib(re));
+        widths.emplaceLast(w); // width_distrib(re));
     }
     points.emplaceLast(p1);
     widths.emplaceLast(w);
@@ -379,8 +380,8 @@ void documentScenario1(vgc::dom::Document* document) {
 
     // step
 
-    float a0 = i / 300.f;
-    float a = std::fmod(a0, 1.0) * core::pi * 2.13 + core::pi * -1.20;
+    float a0 = i / 600.0f;
+    float a = std::fmod(a0, 1.0) * core::pi * 2 + core::pi * -1.20;
     Vec2d p2(200 * std::cosf(a), 200 * std::sinf(a));
     //Vec2d p2(200, 0);
     Vec2d p0p2 = p2 - p0;
@@ -398,6 +399,11 @@ void documentScenario1(vgc::dom::Document* document) {
 }
 
 int main(int argc, char* argv[]) {
+    auto seed = std::random_device()();
+    VGC_DEBUG_TMP_EXPR(seed);
+    re.seed(seed);
+    re.seed(2739290663);
+
     auto application = UiTestApplication::create(argc, argv);
     QTimer t;
     t.callOnTimeout([&]() { documentScenario1(application->activeDocument()); });

@@ -82,22 +82,26 @@ struct EdgeGraphics {
 namespace detail {
 
 struct EdgeJoinPatchSample {
-    Int centerPointSampleIndex = -1;
     geometry::Vec2d centerPoint;
     geometry::Vec2d sidePoint;
-    geometry::Vec2d st;
+    geometry::Vec3d sideTUV;
+    double centerU;
+    Int centerPointSampleIndex = -1;
 };
 
 struct EdgeJoinPatch {
 
     void clear() {
         samples.clear();
-        sampleOverride_ = 0;
+        mergeIndex = 0;
+        mergeT = 1;
+        isCap = false;
     }
 
     core::Array<EdgeJoinPatchSample> samples;
-    bool isExtension = false;
-    Int sampleOverride_ = 0;
+    Int mergeIndex = 0;
+    double mergeT = 1;
+    bool isCap = false;
 };
 
 } // namespace detail
