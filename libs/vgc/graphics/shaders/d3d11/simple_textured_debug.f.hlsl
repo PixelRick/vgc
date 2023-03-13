@@ -15,15 +15,15 @@ float4 main(PS_INPUT input)
 
     const float square_size = 4;
     const float m = square_size * 2;
-    float2 uvm = (m + (input.uv % m)) % m;
+    float2 uvm = (m + ((input.uv + 2.0) % m)) % m;
 
     if ((uvm.x < square_size) == (uvm.y < square_size)) {
         return float4(0, 0, 0, input.col.a * 2);
     }
-    if (input.uv.y < 0) {
-        return float4(
-            input.col.rgb + ((round(avg(input.col.rgb)) * 2 - 1) * 0.5), input.col.a);
+    float3 c = input.col.rgb;// lerp(input.col.rgb, input.col.gbr, input.uv.x / 160.0 % 0.5);
+    if (input.uv.y < -0.1) {
+        c += (round(avg(c)) * 2 - 1) * 0.5;
     }
 
-    return input.col;
+    return float4(c, input.col.a);
 }

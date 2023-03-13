@@ -182,10 +182,10 @@ inline geometry::CurveSample
 lerp(const geometry::CurveSample& a, const geometry::CurveSample& b, double t) {
     const double ot = (1 - t);
     return geometry::CurveSample(
-        a.position() * t + b.position() * ot,
-        (a.normal() * t + b.normal() * ot).normalized(),
-        a.halfwidths() * t + b.halfwidths() * ot,
-        a.s() * t + b.s() * ot);
+        a.position() * ot + b.position() * t,
+        (a.normal() * ot + b.normal() * t).normalized(),
+        a.halfwidths() * ot + b.halfwidths() * t,
+        a.s() * ot + b.s() * t);
 }
 
 /// Alias for `vgc::core::Array<vgc::geometry::CurveSample>`.

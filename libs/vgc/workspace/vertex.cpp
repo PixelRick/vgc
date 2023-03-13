@@ -279,270 +279,6 @@ void VacVertexCell::computeJoin(detail::VacVertexCellFrameData& data) {
     // we define the interpolation length based on the cut limit
     constexpr double interpolationLimitCoefficient = 1.5;
 
-    // compute the straight line model tangents and fix limits
-    for (detail::VacJoinHalfedgeFrameData& heData : joinData.halfedgesData_) {
-        // We approximate the tangent using the position of the first sample
-        // that is either at a distance equal to the cut limit or is at half arclength.
-        //
-        const geometry::CurveSampleArray& samples = heData.edgeData_->samples_;
-        const bool isReverse = heData.isReverse();
-        const double endS = samples.last().s();
-        // the patch cannot use more than half of the edge
-        const double maxS = endS * 0.5;
-        // we'll interpolate the center-line too and it is common to both sides
-        const double patchLengthLimit =
-            interpolationLimitCoefficient
-            * std::max(heData.patchCutLimits_[0], heData.patchCutLimits_[1]);
-        const double sqPatchLengthLimit = patchLengthLimit * patchLengthLimit;
-        double patchLength = patchLengthLimit;
-        //
-        core::Array<geometry::CurveSample>& workingSamples = heData.workingSamples;
-        workingSamples.clear();
-        if (!isReverse) {
-            auto it = samples.begin();
-            Int i = 0;
-            auto previousIt = it;
-            double previousSqDist = 0;
-            for (; it != samples.end(); previousIt = it++, ++i) {
-                const geometry::CurveSample& sample = *it;
-                const geometry::Vec2d position = it->position();
-                const double sqDist = (vertexPosition - position).squaredLength();
-                const double s = it->s();
-                double tStop = -1;
-                if (s > maxS) {
-                    const double previousS = previousIt->s();
-                    tStop = (maxS - previousS) / (s - previousS);
-                }
-                if (sqDist > sqPatchLengthLimit) {
-                    const double distance = std::sqrt(sqDist);
-                    const double previousDistance = std::sqrt(previousSqDist);
-                    tStop = (patchLengthLimit - previousDistance)
-                            / (distance - previousDistance);
-                }
-                if (tStop >= 0) {
-                    const double distance = std::sqrt(sqDist);
-                    workingSamples.emplaceLast(geometry::lerp(*previousIt, *it, tStop));
-                    patchLength = (std::min)(patchLengthLimit, distance);
-                    heData.mergeSampleIndex_ = i;
-                    break;
-                }
-                workingSamples.emplaceLast(sample);
-                previousSqDist = sqDist;
-            }
-            heData.mergeSample = (it != samples.end()) ? *it : samples.last();
-        }
-        else {
-            std::array<bool, 2> sideDone = {};
-            auto it = samples.rbegin();
-            Int i = 0;
-            auto previousIt = it;
-            double previousSqDist = 0;
-            for (; it != samples.rend(); previousIt = it++, ++i) {
-                const geometry::CurveSample& sample = *it;
-                const geometry::Vec2d position = it->position();
-                const double sqDist = (vertexPosition - position).squaredLength();
-                const double s = endS - it->s();
-                double tStop = -1;
-                if (s > maxS) {
-                    // lerp a new sample
-                    const double previousS = endS - previousIt->s();
-                    tStop = (maxS - previousS) / (s - previousS);
-                }
-                if (sqDist > sqPatchLengthLimit) {
-                    const double distance = std::sqrt(sqDist);
-                    const double previousDistance = std::sqrt(previousSqDist);
-                    tStop = (patchLengthLimit - previousDistance)
-                            / (distance - previousDistance);
-                }
-                if (tStop >= 0) {
-                    const double distance = std::sqrt(sqDist);
-                    geometry::CurveSample newSample =
-                        geometry::lerp(*previousIt, *it, tStop);
-                    workingSamples.emplaceLast(
-                        newSample.position(),
-                        -newSample.normal(),
-                        geometry::Vec2d(newSample.halfwidth(1), newSample.halfwidth(0)),
-                        endS - newSample.s());
-                    patchLength = (std::min)(patchLengthLimit, distance);
-                    heData.mergeSampleIndex_ = i;
-                    break;
-                }
-                workingSamples.emplaceLast(
-                    sample.position(),
-                    -sample.normal(),
-                    geometry::Vec2d(sample.halfwidth(1), sample.halfwidth(0)),
-                    s);
-                previousSqDist = sqDist;
-            }
-            heData.mergeSample = (it != samples.rend()) ? *it : samples.first();
-            heData.mergeSample.setNormal(-heData.mergeSample.normal());
-            heData.mergeSample.setHalfwidths(geometry::Vec2d(
-                heData.mergeSample.halfwidth(1), heData.mergeSample.halfwidth(0)));
-            heData.mergeSample.setS(endS - heData.mergeSample.s());
-        }
-        heData.patchLength_ = patchLength;
-        const double patchCutLimit = patchLength / interpolationLimitCoefficient;
-        heData.patchCutLimits_[0] = (std::min)(heData.patchCutLimits_[0], patchCutLimit);
-        heData.patchCutLimits_[1] = (std::min)(heData.patchCutLimits_[1], patchCutLimit);
-
-        geometry::Vec2d outgoingTangent =
-            (workingSamples.last().position() - vertexPosition).normalized();
-        heData.outgoingTangent_ = outgoingTangent;
-
-        double angle = outgoingTangent.xAxisAngle();
-        if (angle < 0) {
-            angle += core::pi * 2;
-        }
-        heData.angle_ = angle;
-    }
-
-    //for (detail::VacJoinHalfedgeFrameData& heData : joinData.halfedgesData_) {
-    //    // We approximate the tangent using the position of the first sample
-    //    // that is either at a distance equal to the cut limit or is at half arclength.
-    //    //
-    //    const geometry::CurveSampleArray& samples = heData.edgeData_->samples_;
-    //    const bool isReverse = heData.isReverse();
-    //    const double endS = samples.last().s();
-    //    // the patch cannot use more than half of the edge
-    //    const double maxS = endS * 0.5;
-    //    geometry::Vec2d patchLengthLimits =
-    //        interpolationLimitCoefficient * heData.patchCutLimits_;
-    //    const geometry::Vec2d sqPatchLengthLimits = {
-    //        patchLengthLimits[0] * patchLengthLimits[0],
-    //        patchLengthLimits[1] * patchLengthLimits[1]};
-    //
-    //    const std::array<double, 2> interpolationLimits = {};
-    //    if (!isReverse) {
-    //        std::array<bool, 2> sideDone = {};
-    //        auto it = samples.begin();
-    //        Int i = 0;
-    //        auto previousIt = it;
-    //        double previousSqDist = 0;
-    //        for (; it != samples.end(); previousIt = it++, ++i) {
-    //            const geometry::CurveSample& sample = *it;
-    //            const geometry::Vec2d position = it->position();
-    //            const double sqDist = (vertexPosition - position).squaredLength();
-    //            const double s = it->s();
-    //            if (s > maxS) {
-    //                // lerp a new sample
-    //                const double previousS = previousIt->s();
-    //                const double t = (maxS - previousS) / (s - previousS);
-    //                const geometry::CurveSample newSample =
-    //                    geometry::lerp(*previousIt, *it, t);
-    //                if (!sideDone[0]) {
-    //                    auto& p = heData.sidePatchData_[0].samples.emplaceLast();
-    //                    p.centerPoint = newSample.position();
-    //                    p.sidePoint = newSample.sidePoint(0);
-    //                    p.st = geometry::Vec2d(maxS, newSample.halfwidth(0));
-    //                    sideDone[0] = true;
-    //                }
-    //                if (!sideDone[1]) {
-    //                    auto& p = heData.sidePatchData_[1].samples.emplaceLast();
-    //                    p.centerPoint = newSample.position();
-    //                    p.sidePoint = newSample.sidePoint(1);
-    //                    p.st = geometry::Vec2d(maxS, newSample.halfwidth(1));
-    //                    sideDone[1] = true;
-    //                }
-    //                const double distance = std::sqrt(sqDist);
-    //                patchLengthLimits[0] = std::min(patchLengthLimits[0], distance);
-    //                patchLengthLimits[1] = std::min(patchLengthLimits[1], distance);
-    //                break;
-    //            }
-    //            if (!sideDone[0]) {
-    //                if (sqDist > sqPatchLengthLimits[0]) {
-    //                    // approx line-circle intersection
-    //                    const double distance = std::sqrt(sqDist);
-    //                    const double previousDistance = std::sqrt(previousSqDist);
-    //                    const double t = (patchLengthLimits[0] - previousDistance)
-    //                                     / (distance - previousDistance);
-    //                    const geometry::CurveSample newSample =
-    //                        geometry::lerp(*previousIt, *it, t);
-    //                    auto& p = heData.sidePatchData_[0].samples.emplaceLast();
-    //                    p.centerPoint = newSample.position();
-    //                    p.sidePoint = newSample.sidePoint(0);
-    //                    p.st = geometry::Vec2d(newSample.s(), newSample.halfwidth(0));
-    //                    sideDone[0] = true;
-    //                }
-    //                else {
-    //                    auto& p = heData.sidePatchData_[0].samples.emplaceLast();
-    //                    p.centerPoint = position;
-    //                    p.sidePoint = sample.sidePoint(0);
-    //                    p.st = geometry::Vec2d(s, sample.halfwidth(0));
-    //                }
-    //            }
-    //            if (!sideDone[1]) {
-    //                if (sqDist > sqPatchLengthLimits[1]) {
-    //                    // approx line-circle intersection
-    //                    const double distance = std::sqrt(sqDist);
-    //                    const double previousDistance = std::sqrt(previousSqDist);
-    //                    const double t = (patchLengthLimits[1] - previousDistance)
-    //                                     / (distance - previousDistance);
-    //                    const geometry::CurveSample newSample =
-    //                        geometry::lerp(*previousIt, *it, t);
-    //                    auto& p = heData.sidePatchData_[1].samples.emplaceLast();
-    //                    p.centerPoint = newSample.position();
-    //                    p.sidePoint = newSample.sidePoint(1);
-    //                    p.st = geometry::Vec2d(newSample.s(), newSample.halfwidth(1));
-    //                    sideDone[1] = true;
-    //                }
-    //                else {
-    //                    auto& p = heData.sidePatchData_[1].samples.emplaceLast();
-    //                    p.centerPointSampleIndex = i;
-    //                    p.centerPoint = position;
-    //                    p.sidePoint = sample.sidePoint(1);
-    //                    p.st = geometry::Vec2d(s, sample.halfwidth(1));
-    //                }
-    //            }
-    //            else if (sideDone[0]) {
-    //                break;
-    //            }
-    //            previousSqDist = sqDist;
-    //            //const double hw = it->leftHalfwidth();
-    //            //auto& p = patchSamplesB.emplaceLast();
-    //            //p.centerPointSampleIndex = index;
-    //            //p.centerPoint = it->position();
-    //            //p.sidePoint = it->leftPoint();
-    //            //p.st = geometry::Vec2d(s, hw);
-    //        }
-    //    }
-    //    else {
-    //        std::array<bool, 2> sideDone = {};
-    //        auto it = samples.rbegin();
-    //        Int i = 0;
-    //        auto previousIt = it;
-    //        double previousSqDist = 0;
-    //        for (; it != samples.rend(); previousIt = it++, ++i) {
-    //            const geometry::Vec2d position = it->position();
-    //            const double sqDist = (vertexPosition - position).squaredLength();
-    //            const double s = endS - it->s();
-    //            if (s > maxS) {
-    //                // lerp a new sample
-    //                const double previousS = endS - previousIt->s();
-    //                const double t = (maxS - previousS) / (s - previousS);
-    //                const geometry::CurveSample newSample =
-    //                    geometry::lerp(*previousIt, *it, t);
-    //                if (!sideDone[0]) {
-    //                    auto& p = heData.sidePatchData_[0].samples.emplaceLast();
-    //                    p.centerPoint = newSample.position();
-    //                    p.sidePoint = newSample.sidePoint(1);
-    //                    p.st = geometry::Vec2d(maxS, newSample.halfwidth(1));
-    //                }
-    //                if (!sideDone[1]) {
-    //                    auto& p = heData.sidePatchData_[1].samples.emplaceLast();
-    //                    p.centerPoint = newSample.position();
-    //                    p.sidePoint = newSample.sidePoint(0);
-    //                    p.st = geometry::Vec2d(maxS, newSample.halfwidth(0));
-    //                }
-    //                const double distance = std::sqrt(sqDist);
-    //                patchLengthLimits[0] = std::min(patchLengthLimits[0], distance);
-    //                patchLengthLimits[1] = std::min(patchLengthLimits[1], distance);
-    //                break;
-    //            }
-    //            previousSqDist = sqDist;
-    //        }
-    //    }
-    //}
-
     const Int numHalfedges = joinData.halfedgesData_.length();
     if (numHalfedges == 0) {
         // nothing to do
@@ -572,6 +308,136 @@ void VacVertexCell::computeJoin(detail::VacVertexCellFrameData& data) {
         // - The two joins of a collapsing edge produce overlaps.
         //   In the context of animation we have to prevent popping when the two vertices
         //   become one.
+
+        // compute the straight line model tangents and fix limits
+        for (detail::VacJoinHalfedgeFrameData& heData : joinData.halfedgesData_) {
+            // We approximate the tangent using the position of the first sample
+            // that is either at a distance equal to the cut limit or is at half arclength.
+            //
+            const geometry::CurveSampleArray& samples = heData.edgeData_->samples_;
+            const bool isReverse = heData.isReverse();
+            const double endS = samples.last().s();
+            // the patch cannot use more than half of the edge
+            const double maxS = endS * 0.5;
+            // we'll interpolate the center-line too and it is common to both sides
+            const double patchLengthLimit =
+                interpolationLimitCoefficient
+                * std::max(heData.patchCutLimits_[0], heData.patchCutLimits_[1]);
+            const double sqPatchLengthLimit = patchLengthLimit * patchLengthLimit;
+            double patchLength = patchLengthLimit;
+            //
+            core::Array<geometry::CurveSample>& workingSamples = heData.workingSamples_;
+            workingSamples.clear();
+            if (!isReverse) {
+                auto it = samples.begin();
+                Int i = 0;
+                auto previousIt = it;
+                double previousSqDist = 0;
+                for (; it != samples.end(); previousIt = it++, ++i) {
+                    const geometry::CurveSample& sample = *it;
+                    const geometry::Vec2d position = it->position();
+                    const double sqDist = (vertexPosition - position).squaredLength();
+                    const double s = it->s();
+                    double tStop = 2;
+                    if (s > maxS) {
+                        const double previousS = previousIt->s();
+                        tStop = (maxS - previousS) / (s - previousS);
+                    }
+                    if (sqDist > sqPatchLengthLimit) {
+                        const double distance = std::sqrt(sqDist);
+                        const double previousDistance = std::sqrt(previousSqDist);
+                        tStop = (std::min)(
+                            tStop,
+                            (patchLengthLimit - previousDistance)
+                                / (distance - previousDistance));
+                    }
+                    if (tStop <= 1) {
+                        geometry::CurveSample mergeSample =
+                            geometry::lerp(*previousIt, *it, tStop);
+                        const double distance =
+                            (vertexPosition - mergeSample.position()).length();
+                        workingSamples.emplaceLast(mergeSample);
+                        patchLength = (std::min)(patchLengthLimit, distance);
+                        detail::EdgeJoinPatchMergeLocation& mergeLocation =
+                            heData.edgeData_->patches_[0].mergeLocation;
+                        mergeLocation.halfedgeNextSampleIndex = i;
+                        mergeLocation.t = tStop;
+                        mergeLocation.sample = mergeSample;
+                        break;
+                    }
+                    workingSamples.emplaceLast(sample);
+                    previousSqDist = sqDist;
+                }
+            }
+            else {
+                std::array<bool, 2> sideDone = {};
+                auto it = samples.rbegin();
+                Int i = 0;
+                auto previousIt = it;
+                double previousSqDist = 0;
+                for (; it != samples.rend(); previousIt = it++, ++i) {
+                    const geometry::CurveSample& sample = *it;
+                    const geometry::Vec2d position = it->position();
+                    const double sqDist = (vertexPosition - position).squaredLength();
+                    const double s = endS - it->s();
+                    double tStop = 2;
+                    if (s > maxS) {
+                        // lerp a new sample
+                        const double previousS = endS - previousIt->s();
+                        tStop = (maxS - previousS) / (s - previousS);
+                    }
+                    if (sqDist > sqPatchLengthLimit) {
+                        const double distance = std::sqrt(sqDist);
+                        const double previousDistance = std::sqrt(previousSqDist);
+                        tStop = (std::min)(
+                            tStop,
+                            (patchLengthLimit - previousDistance)
+                                / (distance - previousDistance));
+                    }
+                    if (tStop <= 1) {
+                        geometry::CurveSample mergeSample =
+                            geometry::lerp(*previousIt, *it, tStop);
+                        const double distance =
+                            (vertexPosition - mergeSample.position()).length();
+                        workingSamples.emplaceLast(
+                            mergeSample.position(),
+                            -mergeSample.normal(),
+                            geometry::Vec2d(
+                                mergeSample.halfwidth(1), mergeSample.halfwidth(0)),
+                            endS - mergeSample.s());
+                        patchLength = (std::min)(patchLengthLimit, distance);
+                        detail::EdgeJoinPatchMergeLocation& mergeLocation =
+                            heData.edgeData_->patches_[1].mergeLocation;
+                        mergeLocation.halfedgeNextSampleIndex = i;
+                        mergeLocation.t = tStop;
+                        mergeLocation.sample = mergeSample;
+                        break;
+                    }
+                    workingSamples.emplaceLast(
+                        sample.position(),
+                        -sample.normal(),
+                        geometry::Vec2d(sample.halfwidth(1), sample.halfwidth(0)),
+                        s);
+                    previousSqDist = sqDist;
+                }
+            }
+            heData.patchLength_ = patchLength;
+            const double patchCutLimit = patchLength / interpolationLimitCoefficient;
+            heData.patchCutLimits_[0] =
+                (std::min)(heData.patchCutLimits_[0], patchCutLimit);
+            heData.patchCutLimits_[1] =
+                (std::min)(heData.patchCutLimits_[1], patchCutLimit);
+
+            geometry::Vec2d outgoingTangent =
+                (workingSamples.last().position() - vertexPosition).normalized();
+            heData.outgoingTangent_ = outgoingTangent;
+
+            double angle = outgoingTangent.xAxisAngle();
+            if (angle < 0) {
+                angle += core::pi * 2;
+            }
+            heData.angle_ = angle;
+        }
 
         // sort by incident angle
         std::sort(
@@ -694,7 +560,7 @@ void VacVertexCell::computeJoin(detail::VacVertexCellFrameData& data) {
 
         // now create the actual patches
         for (auto& halfedgeData : data.joinData_.halfedgesData_) {
-            geometry::CurveSampleArray& workingSamples = halfedgeData.workingSamples;
+            geometry::CurveSampleArray& workingSamples = halfedgeData.workingSamples_;
 
             const double maxFilletLength = (std::max)(
                 halfedgeData.sidePatchData_[0].filletLength,
@@ -717,18 +583,19 @@ void VacVertexCell::computeJoin(detail::VacVertexCellFrameData& data) {
                     const double d = (sFilletMax / sMax) * halfedgeData.patchLength_;
                     const double t = (sFilletMax - previousS) / (s - previousS);
                     const double ot = 1 - t;
-                    it = workingSamples.emplace(it, *it);
-                    it->setPosition(centerRay.pointAt(d));
-                    it->setNormal(centerRayNormal);
-                    it->setHalfwidths(
-                        previousIt->halfwidths() * ot + it->halfwidths() * t);
-                    it->setS(sFilletMax);
+                    geometry::CurveSample newSample(
+                        centerRay.pointAt(d),
+                        centerRayNormal,
+                        previousIt->halfwidths() * ot + it->halfwidths() * t,
+                        sFilletMax);
+                    it = workingSamples.emplace(it, newSample);
                     previousIt = it++;
                     break;
                 }
                 const double d = (s / sMax) * halfedgeData.patchLength_;
                 it->setPosition(centerRay.pointAt(d));
                 it->setNormal(centerRayNormal);
+                geometry::Vec2f hwf(it->halfwidths());
                 if (s == sFilletMax) {
                     previousIt = it++;
                     break;
@@ -759,7 +626,9 @@ void VacVertexCell::computeJoin(detail::VacVertexCellFrameData& data) {
                     p.centerPoint = vertexPosition;
                     p.sidePoint =
                         sidePatchData.borderRay.pointAt(-sidePatchData.extLength);
-                    p.st = geometry::Vec2d(0, halfwidth);
+                    p.sideSTUV =
+                        geometry::Vec4f(0, static_cast<float>(halfwidth), 0, 1.f);
+                    p.centerSU = geometry::Vec2f(0, 0);
                 }
 
                 const double tFillet =
@@ -773,10 +642,22 @@ void VacVertexCell::computeJoin(detail::VacVertexCellFrameData& data) {
                 const int normalMultiplier = i ? -1 : 1;
 
                 it = workingSamples.begin();
-                previousIt = it;
-                if (sidePatchData.isCutFillet) {
+                if (0) { // debug
+                    for (; it != workingSamples.end(); ++it) {
+                        const double s = it->s();
+                        auto& p = patchSamples.emplaceLast();
+                        p.centerPoint = it->position();
+                        double hw = it->halfwidth(i);
+                        p.sidePoint =
+                            p.centerPoint + normalMultiplier * hw * it->normal();
+                        p.sideSTUV = geometry::Vec4f(s, hw, s, 1.0);
+                        p.centerSU = geometry::Vec2f(s, s);
+                    }
+                }
+                else if (sidePatchData.isCutFillet) {
                     if (sFillet > 0) {
                         // lerp halfwidths from join halfwidth to cut halfwidth
+                        previousIt = it;
                         for (; it != workingSamples.end(); previousIt = it++) {
                             const double s = it->s();
                             if (s > sFillet) {
@@ -785,22 +666,21 @@ void VacVertexCell::computeJoin(detail::VacVertexCellFrameData& data) {
                                 auto& p = patchSamples.emplaceLast();
                                 p.centerPoint = centerRay.pointAt(d);
                                 p.sidePoint = sidePatchData.borderRay.pointAt(d);
-                                p.st = geometry::Vec2d(sFillet, halfwidth);
+                                p.sideSTUV =
+                                    geometry::Vec4f(sFillet, halfwidth, sFillet, 1.f);
+                                p.centerSU = geometry::Vec2f(sFillet, sFillet);
                                 break;
                             }
-                            const double d = (s / sMax) * halfedgeData.patchLength_;
                             const double t = s / sFillet;
                             const double ot = 1 - t;
                             auto& p = patchSamples.emplaceLast();
-                            p.centerPoint = centerRay.pointAt(d);
+                            p.centerPoint = it->position();
                             const double hw =
                                 sidePatchData.joinHalfwidth * ot + halfwidth * t;
                             p.sidePoint =
                                 p.centerPoint + normalMultiplier * hw * centerRayNormal;
-                            if (std::isnan(p.sidePoint.x())) {
-                                VGC_DEBUG_TMP("sldkhfs");
-                            }
-                            p.st = geometry::Vec2d(s, hw);
+                            p.sideSTUV = geometry::Vec4f(s, hw, s, 1.0);
+                            p.centerSU = geometry::Vec2f(s, s);
                             if (s == sFillet) {
                                 previousIt = it++;
                                 break;
@@ -808,39 +688,45 @@ void VacVertexCell::computeJoin(detail::VacVertexCellFrameData& data) {
                         }
                     }
                     // lerp halfwidths from cut halfwidth to original halfwidth
+                    Int fixIndex = 0;
                     const double sInterp2 = sMax - sFillet;
-                    for (; it != workingSamples.end(); previousIt = it++) {
+                    for (; it != workingSamples.end(); ++it) {
                         const double s = it->s();
                         const double d = (s / sMax) * halfedgeData.patchLength_;
                         const double t = (s - sFillet) / sInterp2;
                         const double ot = 1 - t;
                         // temporary fix
-                        if (s == sFillet2 && sFillet2 > 0) {
-                            auto& p = patchSamples.emplaceLast(patchSamples.last());
-                            p.centerPoint = it->position();
-                            continue;
-                        }
+                        //if (s == sFillet2 && sFillet2 > 0 && sFillet2 != sFillet) {
+                        //    fixIndex = patchSamples.size();
+                        //    auto& p = patchSamples.emplaceLast(patchSamples.last());
+                        //    p.centerPoint = it->position();
+                        //    p.centerSU = geometry::Vec2f(s, s);
+                        //    continue;
+                        //}
                         auto& p = patchSamples.emplaceLast();
                         p.centerPoint = it->position();
                         const double hw = halfwidth * ot + it->halfwidth(i) * t;
                         p.sidePoint =
                             p.centerPoint + normalMultiplier * hw * it->normal();
-                        p.st = geometry::Vec2d(s, hw);
+                        p.sideSTUV = geometry::Vec4f(s, hw, s, 1.0);
+                        p.centerSU = geometry::Vec2f(s, s);
                     }
                 }
                 else {
                     // lerp halfwidths from box halfwidth to original halfwidth
                     // additional lerp from join halfwidth to computed halfwidth between 0 and sFillet
+                    Int fixIndex = 0;
                     for (; it != workingSamples.end(); ++it) {
                         const double s = it->s();
                         const double t = s / sMax;
                         const double ot = 1 - t;
                         // temporary fix
-                        if (s == sFillet2 && sFillet2 > 0) {
-                            auto& p = patchSamples.emplaceLast(patchSamples.last());
-                            p.centerPoint = it->position();
-                            continue;
-                        }
+                        //if (s == sFillet2 && sFillet2 > 0 && sFillet2 != sFillet) {
+                        //    fixIndex = patchSamples.size();
+                        //    auto& p = patchSamples.emplaceLast(patchSamples.last());
+                        //    p.centerPoint = it->position();
+                        //    p.centerSU = geometry::Vec2f(s, s);
+                        //}
                         auto& p = patchSamples.emplaceLast();
                         p.centerPoint = it->position();
                         double hw = halfwidth * ot + it->halfwidth(i) * t;
@@ -856,22 +742,16 @@ void VacVertexCell::computeJoin(detail::VacVertexCellFrameData& data) {
                         }
                         p.sidePoint =
                             p.centerPoint + normalMultiplier * hw * it->normal();
-                        p.st = geometry::Vec2d(s, hw);
+                        p.sideSTUV = geometry::Vec4f(s, hw, s, 1.0);
+                        p.centerSU = geometry::Vec2f(s, s);
                     }
                 }
-
-                auto& p = patchSamples.emplaceLast();
-                p.centerPoint = halfedgeData.mergeSample.position();
-                p.sidePoint = halfedgeData.mergeSample.sidePoint(i);
-                p.st = geometry::Vec2d(
-                    halfedgeData.mergeSample.s(), halfedgeData.mergeSample.halfwidth(i));
 
                 // fill data
                 const bool isReverse = halfedgeData.isReverse();
                 detail::EdgeJoinPatch& patch0 =
-                    halfedgeData.edgeData_->patches_[isReverse ? 2 + i : 0 + (1 - i)];
-                patch0.sampleOverride_ = halfedgeData.mergeSampleIndex_;
-                patch0.samples = std::move(patchSamples);
+                    halfedgeData.edgeData_->patches_[isReverse ? 1 : 0];
+                patch0.sideSamples[i] = std::move(patchSamples);
             }
         }
     }

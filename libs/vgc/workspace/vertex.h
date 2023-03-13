@@ -152,9 +152,7 @@ private:
         }
     };
     std::array<SidePatchData, 2> sidePatchData_ = {};
-    core::Array<geometry::CurveSample> workingSamples;
-    geometry::CurveSample mergeSample;
-    Int mergeSampleIndex_ = 0;
+    core::Array<geometry::CurveSample> workingSamples_;
     double angle_ = 0.0;
     double angleToNext_ = 0.0;
 };

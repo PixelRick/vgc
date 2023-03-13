@@ -315,7 +315,7 @@ void initEdge(
     const int steps = 1;
     for (Int i = 0; i < steps; ++i) {
         points.emplaceLast(p0 + p0p1 * static_cast<double>(i + 1) / (steps + 1));
-        widths.emplaceLast(w); // width_distrib(re));
+        widths.emplaceLast(width_distrib(re));
     }
     points.emplaceLast(p1);
     widths.emplaceLast(w);
