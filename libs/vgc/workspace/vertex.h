@@ -39,15 +39,16 @@ struct Ray {
 
     std::optional<geometry::Vec2d> intersectWith(const Ray& other) const {
 
-        const geometry::Vec2d d1 = dir;
-        const geometry::Vec2d d2 = other.dir;
+        const geometry::Vec2d d0 = dir;
+        const geometry::Vec2d d1 = other.dir;
 
-        double ddet = d1.det(d2);
-        if (std::abs(ddet) > core::epsilon) {
-            geometry::Vec2d w = other.origin - origin;
-            double iddet = 1 / ddet;
-            double t0 = w.det(d2) * iddet;
-            double t1 = w.det(d1) * iddet;
+        // Solve 2x2 system using Cramer's rule.
+        double delta = d0.det(d1);
+        if (std::abs(delta) > core::epsilon) {
+            geometry::Vec2d p0p1 = other.origin - origin;
+            double inv_delta = 1 / delta;
+            double t0 = p0p1.det(d1) * inv_delta;
+            double t1 = p0p1.det(d0) * inv_delta;
             return geometry::Vec2d(t0, t1);
         }
 
