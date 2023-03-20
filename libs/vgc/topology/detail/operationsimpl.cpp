@@ -132,6 +132,59 @@ KeyEdge* Operations::createKeyClosedEdge(
     return p;
 }
 
+// Assumes `cycles` are valid.
+// Assumes `nextSibling` is either `nullptr` or a child of `parentGroup`.
+KeyFace* Operations::createKeyFace(
+    core::Id id,
+    VacGroup* parentGroup,
+    core::Array<KeyCycle> cycles,
+    VacNode* nextSibling = nullptr,
+    core::AnimTime t = {}) {
+
+    Vac* vac = parentGroup->vac();
+    KeyFace* p = new KeyFace(id, t);
+    vac->insertNode(id, std::unique_ptr<KeyFace>(p));
+    parentGroup->insertChildUnchecked(nextSibling, p);
+
+    // init cell
+    p->cycles_ = std::move(cycles);
+    core::Array<VacCell> boundary = {};
+    for (const KeyCycle& cycle : p->cycles_) {
+        KeyVertex* v = cycle.steinerVertex_;
+        if (v) {
+            if (!boundary.find(v)) {
+                v->star_.emplaceLast(p);
+                // diff star
+                if (vac->isDiffEnabled_) {
+                    vac->diff_.onNodeDiff(v, VacNodeDiffFlag::StarChanged);
+                }
+                boundary.emplaceLast(v);
+            }
+        }
+        for (const KeyHalfedge& halfedge : cycle.halfedges_) {
+            KeyEdge* e = halfedge.edge();
+            if (!boundary.find(e)) {
+                e->star_.emplaceLast(p);
+                // diff star
+                if (vac->isDiffEnabled_) {
+                    vac->diff_.onNodeDiff(e, VacNodeDiffFlag::StarChanged);
+                }
+                boundary.emplaceLast(e);
+            }
+        }
+    }
+    p->boundary_.assign(std::move(boundary));
+
+    // diff
+    vac->incrementVersion();
+    if (vac->isDiffEnabled_) {
+        vac->diff_.onNodeDiff(p, VacNodeDiffFlag::Created);
+        vac->diff_.onNodeDiff(parentGroup, VacNodeDiffFlag::ChildrenChanged);
+    }
+
+    return p;
+}
+
 void Operations::removeNode(VacNode* node, bool removeFreeVertices) {
 
     Vac* vac = node->vac();

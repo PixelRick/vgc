@@ -62,4 +62,24 @@ KeyEdge* createKeyOpenEdge(
         id, parentGroup, startVertex, endVertex, nextSibling, t);
 }
 
+KeyFace* createKeyFace(
+    core::Id id,
+    VacGroup* parentGroup,
+    core::Array<KeyCycle> cycles,
+    VacNode* nextSibling,
+    core::AnimTime t) {
+
+    if (!parentGroup) {
+        throw LogicError("createKeyFace: parentGroup is nullptr.");
+    }
+    for (const KeyCycle& cycle : cycles) {
+        if (!cycle.isValid()) {
+            throw LogicError(
+                "createKeyFace: at least one of the input cycles is not valid.");
+        }
+    }
+
+    return detail::Operations::createKeyFace(id, parentGroup, cycles, nextSibling, t);
+}
+
 } // namespace vgc::topology::ops

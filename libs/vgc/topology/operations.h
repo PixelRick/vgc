@@ -30,6 +30,7 @@ namespace vgc::topology::ops {
 
 /// Throws `NotAChildError` if `nextSibling` is not a child of `parentGroup` or `nullptr`.
 /// Throws `IdCollisionError` if `id` is already used by a node of the `Vac` of `parentGroup`.
+/// Throws `LogicError` if `parentGroup` is nullptr.
 ///
 inline VacGroup*
 createVacGroup(core::Id id, VacGroup* parentGroup, VacNode* nextSibling = nullptr) {
@@ -40,12 +41,15 @@ createVacGroup(core::Id id, VacGroup* parentGroup, VacNode* nextSibling = nullpt
 }
 
 /// Throws `NotAChildError` if `nextSibling` is not a child of `parentGroup` or `nullptr`.
+/// Throws `LogicError` if `parentGroup` is nullptr.
+///
 inline VacGroup* createVacGroup(VacGroup* parentGroup, VacNode* nextSibling = nullptr) {
     return createVacGroup(core::genId(), parentGroup, nextSibling);
 }
 
 /// Throws `NotAChildError` if `nextSibling` is not a child of `parentGroup` or `nullptr`.
 /// Throws `IdCollisionError` if `id` is already used by a node of the `Vac` of `parentGroup`.
+/// Throws `LogicError` if `parentGroup` is nullptr.
 ///
 inline KeyVertex* createKeyVertex(
     core::Id id,
@@ -60,6 +64,8 @@ inline KeyVertex* createKeyVertex(
 }
 
 /// Throws `NotAChildError` if `nextSibling` is not a child of `parentGroup` or `nullptr`.
+/// Throws `LogicError` if `parentGroup` is nullptr.
+///
 inline KeyVertex* createKeyVertex(
     VacGroup* parentGroup,
     VacNode* nextSibling = nullptr,
@@ -70,6 +76,7 @@ inline KeyVertex* createKeyVertex(
 
 /// Throws `NotAChildError` if `nextSibling` is not a child of `parentGroup` or `nullptr`.
 /// Throws `IdCollisionError` if `id` is already used by a node of the `Vac` of `parentGroup`.
+/// Throws `LogicError` if `parentGroup`, `startVertex`, or `endVertex` is nullptr.
 ///
 VGC_TOPOLOGY_API
 KeyEdge* createKeyOpenEdge(
@@ -81,6 +88,8 @@ KeyEdge* createKeyOpenEdge(
     core::AnimTime t = {});
 
 /// Throws `NotAChildError` if `nextSibling` is not a child of `parentGroup` or `nullptr`.
+/// Throws `LogicError` if `parentGroup`, `startVertex`, or `endVertex` is nullptr.
+///
 inline KeyEdge* createKeyOpenEdge(
     VacGroup* parentGroup,
     KeyVertex* startVertex,
@@ -94,6 +103,7 @@ inline KeyEdge* createKeyOpenEdge(
 
 /// Throws `NotAChildError` if `nextSibling` is not a child of `parentGroup` or `nullptr`.
 /// Throws `IdCollisionError` if `id` is already used by a node of the `Vac` of `parentGroup`.
+/// Throws `LogicError` if `parentGroup` is nullptr.
 ///
 inline KeyEdge* createKeyClosedEdge(
     core::Id id,
@@ -114,6 +124,29 @@ inline KeyEdge* createKeyClosedEdge(
     core::AnimTime t = {}) {
 
     return createKeyClosedEdge(core::genId(), parentGroup, nextSibling, t);
+}
+
+/// Throws `NotAChildError` if `nextSibling` is not a child of `parentGroup` or `nullptr`.
+/// Throws `IdCollisionError` if `id` is already used by a node of the `Vac` of `parentGroup`.
+/// Throws `LogicError` if `parentGroup` is nullptr or one of the given `cycles` is not valid.
+///
+KeyFace* createKeyFace(
+    core::Id id,
+    VacGroup* parentGroup,
+    core::Array<KeyCycle> cycles,
+    VacNode* nextSibling = nullptr,
+    core::AnimTime t = {});
+
+/// Throws `NotAChildError` if `nextSibling` is not a child of `parentGroup` or `nullptr`.
+/// Throws `LogicError` if `parentGroup` is nullptr or one of the given `cycles` is not valid.
+///
+inline KeyFace* createKeyFace(
+    VacGroup* parentGroup,
+    core::Array<KeyCycle> cycles,
+    VacNode* nextSibling = nullptr,
+    core::AnimTime t = {}) {
+
+    return createKeyFace(core::genId(), parentGroup, std::move(cycles), nextSibling, t);
 }
 
 inline void removeNode(VacNode* node, bool removeFreeVertices) {

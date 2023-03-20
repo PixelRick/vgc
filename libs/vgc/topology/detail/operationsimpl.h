@@ -60,6 +60,16 @@ public:
         VacNode* nextSibling = nullptr,
         core::AnimTime t = {});
 
+    /// Assumes `cycles` are valid.
+    /// Assumes `nextSibling` is either `nullptr` or a child of `parentGroup`.
+    ///
+    static KeyFace* createKeyFace(
+        core::Id id,
+        VacGroup* parentGroup,
+        core::Array<KeyCycle> cycles,
+        VacNode* nextSibling = nullptr,
+        core::AnimTime t = {});
+
     static void removeNode(VacNode* node, bool removeFreeVertices);
     static void removeNodeSmart(VacNode* node, bool removeFreeVertices);
 
