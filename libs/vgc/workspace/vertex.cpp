@@ -44,7 +44,7 @@ void VacVertexCellFrameData::debugPaint(graphics::Engine* engine) {
             debugQuadRenderGeometry_->indexBuffer(), std::move(lineIndices));
     }
 
-    if (!debugLinesRenderGeometry_ && halfedgesData_.length()) {
+    if (!debugLinesRenderGeometry_ && joinData_.halfedgesData_.length()) {
         debugLinesRenderGeometry_ = engine->createDynamicTriangleStripView(
             BuiltinGeometryLayout::XYDxDy_iXYRotWRGBA, IndexFormat::UInt16);
 
@@ -56,7 +56,7 @@ void VacVertexCellFrameData::debugPaint(graphics::Engine* engine) {
         geometry::Vec4fArray lineVertices;
         core::Array<UInt16> lineIndices;
 
-        for (const VacJoinHalfedgeFrameData& s : halfedgesData_) {
+        for (const VacJoinHalfedgeFrameData& s : joinData_.halfedgesData_) {
             geometry::Vec2f p(position_);
             double angle0 = s.angle();
             double angle1 = s.angle() + s.angleToNext();
@@ -102,7 +102,7 @@ void VacVertexCellFrameData::debugPaint(graphics::Engine* engine) {
         engine->draw(debugLinesRenderGeometry_);
     }
 
-    if (debugQuadRenderGeometry_ && halfedgesData_.length() == 1) {
+    if (debugQuadRenderGeometry_ && joinData_.halfedgesData_.length() == 1) {
         engine->setProgram(graphics::BuiltinProgram::Simple);
         engine->draw(debugQuadRenderGeometry_);
     }
@@ -205,41 +205,56 @@ void VacVertexCell::computeJoin(detail::VacVertexCellFrameData& data) {
 
     data.isComputing_ = true;
 
+    detail::VacJoinFrameData& joinData = data.joinData_;
+    geometry::Vec2d vertexPosition = data.position();
+
+    // collect standalone edge data and halfwidths at join
     for (const detail::VacJoinHalfedge& he : joinHalfedges_) {
-        data.halfedgesData_.emplaceLast(he);
-    }
-
-    for (detail::VacJoinHalfedgeFrameData& heData : data.halfedgesData_) {
-
-        VacEdgeCell* cell = heData.halfedge().edgeCell();
+        VacEdgeCell* cell = he.edgeCell();
         VacEdgeCellFrameData* edgeData = cell->frameData(data.time());
         if (!edgeData) {
             // huh ?
             continue;
         }
         cell->computeStandaloneGeometry(*edgeData);
-
         const geometry::CurveSampleArray& samples = edgeData->samples_;
         if (samples.length() < 2) {
             continue;
         }
-        geometry::CurveSample sample =
-            samples[heData.halfedge().isReverse() ? samples.size() - 2 : 1];
 
-        // XXX add xAxisAngle to Vec class
-        geometry::Vec2d outgoingTangent =
-            (sample.position() - data.position()).normalized();
-        double angle = geometry::Vec2d(1.f, 0).angle(outgoingTangent);
-        if (angle < 0) {
-            angle += core::pi * 2;
-        }
-
+        detail::VacJoinHalfedgeFrameData& heData =
+            joinData.halfedgesData_.emplaceLast(he);
         heData.edgeData_ = edgeData;
-        heData.outgoingTangent_ = outgoingTangent;
-        heData.angle_ = angle;
+
+        const bool isReverse = he.isReverse();
+        if (!isReverse) {
+            geometry::CurveSample sample = samples.first();
+            heData.halfwidths_ = sample.halfwidths();
+        }
+        else {
+            geometry::CurveSample sample = samples.last();
+            heData.halfwidths_[0] = sample.halfwidth(1);
+            heData.halfwidths_[1] = sample.halfwidth(0);
+        }
     }
 
-    const Int numHalfedges = data.halfedgesData_.length();
+    // compute patch limits (future: hook for plugins)
+    for (detail::VacJoinHalfedgeFrameData& heData : joinData.halfedgesData_) {
+        // We tested experimentally a per-slice equation, but it prevents us from
+        // defining the angular order based on the result.
+        // To keep more freedom we limit the input to halfwidths per edge.
+        //
+        // Let's keep it simple for now and use a single coefficient and multiply
+        // each halfwidth to obtain the length limit.
+        //
+        constexpr double cutLimitCoefficient = 4.0;
+        heData.patchCutLimits_ = cutLimitCoefficient * heData.halfwidths_;
+    }
+
+    // we define the interpolation length based on the cut limit
+    //constexpr double interpolationLimitCoefficient = 1.5;
+
+    const Int numHalfedges = joinData.halfedgesData_.length();
     if (numHalfedges == 0) {
         // nothing to do
     }
@@ -257,18 +272,24 @@ void VacVertexCell::computeJoin(detail::VacVertexCellFrameData& data) {
     else {
         // sort by incident angle
         std::sort(
-            data.halfedgesData_.begin(),
-            data.halfedgesData_.end(),
+            data.joinData_.halfedgesData_.begin(),
+            data.joinData_.halfedgesData_.end(),
             [](const detail::VacJoinHalfedgeFrameData& a,
                const detail::VacJoinHalfedgeFrameData& b) {
                 return a.angle() < b.angle();
             });
 
-        detail::VacJoinHalfedgeFrameData* previousHalfedge = &data.halfedgesData_.last();
-        double previousAngle = previousHalfedge->angle() - core::pi;
-        for (detail::VacJoinHalfedgeFrameData& halfedge : data.halfedgesData_) {
-            halfedge.angleToNext_ = halfedge.angle() - previousAngle;
-            previousAngle = halfedge.angle();
+        detail::VacJoinHalfedgeFrameData* halfedgeDataA =
+            &data.joinData_.halfedgesData_.last();
+        detail::VacJoinHalfedgeFrameData* halfedgeDataB =
+            &data.joinData_.halfedgesData_.first();
+        double angleA = halfedgeDataA->angle() - core::pi * 2;
+        double angleB = 0;
+        for (Int i = 0; i < data.joinData_.halfedgesData_.length();
+             ++i, halfedgeDataA = halfedgeDataB++, angleA = angleB) {
+
+            angleB = halfedgeDataB->angle();
+            halfedgeDataA->angleToNext_ = angleB - angleA;
         }
     }
 
@@ -340,6 +361,7 @@ void VacVertexCell::clearJoinHalfedgesJoinData() const {
     }
 }
 
+// this vertex is the halfedge start vertex
 void VacVertexCell::addJoinHalfedge_(const detail::VacJoinHalfedge& joinHalfedge) {
     joinHalfedges_.emplaceLast(joinHalfedge);
     for (auto& entry : frameDataEntries_) {
@@ -347,6 +369,7 @@ void VacVertexCell::addJoinHalfedge_(const detail::VacJoinHalfedge& joinHalfedge
     }
 }
 
+// this vertex is the halfedge start vertex
 void VacVertexCell::removeJoinHalfedge_(const detail::VacJoinHalfedge& joinHalfedge) {
     auto equal = detail::VacJoinHalfedge::GrouplessEqualTo();
     joinHalfedges_.removeOneIf(

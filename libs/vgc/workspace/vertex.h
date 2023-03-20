@@ -69,9 +69,11 @@ private:
     bool isReverse_;
 };
 
+// outgoing halfedge
 class VGC_WORKSPACE_API VacJoinHalfedgeFrameData {
 public:
     friend VacVertexCell;
+    friend class VacVertexCellFrameData;
 
     VacJoinHalfedgeFrameData(const VacJoinHalfedge& halfedge)
         : halfedge_(halfedge) {
@@ -79,6 +81,18 @@ public:
 
     const VacJoinHalfedge& halfedge() const {
         return halfedge_;
+    }
+
+    VacEdgeCell* edgeCell() const {
+        return halfedge_.edgeCell();
+    }
+
+    bool isReverse() const {
+        return halfedge_.isReverse();
+    }
+
+    Int group() const {
+        return halfedge_.group();
     }
 
     double angle() const {
@@ -93,8 +107,41 @@ private:
     VacJoinHalfedge halfedge_;
     VacEdgeCellFrameData* edgeData_ = nullptr;
     geometry::Vec2d outgoingTangent_ = {};
+    geometry::Vec2d halfwidths_ = {};
+    geometry::Vec2d patchCutLimits_ = {};
+    double patchLength_ = 0;
+    struct SidePatchData {
+        // straight join model data
+        double filletLength = 0;
+        double joinHalfwidth = 0;
+        bool isCutFillet = false;
+        double extLength = 0;
+        //Ray borderRay = {};
+
+        void clear() {
+            filletLength = 0;
+            joinHalfwidth = 0;
+            isCutFillet = false;
+            extLength = 0;
+        }
+    };
+    std::array<SidePatchData, 2> sidePatchData_ = {};
+    core::Array<geometry::CurveSample> workingSamples_;
     double angle_ = 0.0;
     double angleToNext_ = 0.0;
+};
+
+class VGC_WORKSPACE_API VacJoinFrameData {
+public:
+    friend class VacVertexCellFrameData;
+    friend VacVertexCell;
+
+    void clear() {
+        halfedgesData_.clear();
+    }
+
+private:
+    core::Array<detail::VacJoinHalfedgeFrameData> halfedgesData_;
 };
 
 class VGC_WORKSPACE_API VacVertexCellFrameData {
@@ -124,7 +171,7 @@ public:
     void clearJoinData() {
         debugLinesRenderGeometry_.reset();
         debugQuadRenderGeometry_.reset();
-        halfedgesData_.clear();
+        joinData_.clear();
         isComputing_ = false;
         isJoinComputed_ = false;
     }
@@ -136,8 +183,7 @@ private:
     geometry::Vec2d position_ = core::noInit;
     mutable graphics::GeometryViewPtr debugLinesRenderGeometry_;
     mutable graphics::GeometryViewPtr debugQuadRenderGeometry_;
-    // join data
-    core::Array<detail::VacJoinHalfedgeFrameData> halfedgesData_;
+    VacJoinFrameData joinData_;
     bool isComputing_ = false;
     bool isJoinComputed_ = false;
     bool isPositionComputed_ = false;

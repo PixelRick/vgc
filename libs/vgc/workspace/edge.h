@@ -20,6 +20,9 @@
 #include <vgc/core/arithmetic.h>
 #include <vgc/core/array.h>
 #include <vgc/dom/element.h>
+#include <vgc/geometry/vec2d.h>
+#include <vgc/geometry/vec2f.h>
+#include <vgc/geometry/vec4f.h>
 #include <vgc/graphics/engine.h>
 #include <vgc/topology/vac.h>
 #include <vgc/workspace/api.h>
@@ -82,22 +85,31 @@ struct EdgeGraphics {
 namespace detail {
 
 struct EdgeJoinPatchSample {
-    Int centerPointSampleIndex = -1;
     geometry::Vec2d centerPoint;
     geometry::Vec2d sidePoint;
-    geometry::Vec2d st;
+    geometry::Vec4f sideSTUV;
+    geometry::Vec2f centerSU;
+    Int centerPointSampleIndex = -1;
+};
+
+struct EdgeJoinPatchMergeLocation {
+    Int halfedgeNextSampleIndex = 0;
+    double t = 1.0;
+    geometry::CurveSample sample;
 };
 
 struct EdgeJoinPatch {
 
     void clear() {
-        samples.clear();
-        sampleOverride_ = 0;
+        sideSamples[0].clear();
+        sideSamples[1].clear();
+        mergeLocation = {};
+        isCap = false;
     }
 
-    core::Array<EdgeJoinPatchSample> samples;
-    bool isExtension = false;
-    Int sampleOverride_ = 0;
+    std::array<core::Array<EdgeJoinPatchSample>, 2> sideSamples;
+    EdgeJoinPatchMergeLocation mergeLocation = {};
+    bool isCap = false;
 };
 
 } // namespace detail
@@ -125,20 +137,22 @@ public:
 
     void clearStartJoinData() {
         patches_[0].clear();
-        patches_[1].clear();
         graphics_.clear();
         isGeometryComputed_ = false;
     }
 
     void clearEndJoinData() {
-        patches_[2].clear();
-        patches_[3].clear();
+        patches_[1].clear();
         graphics_.clear();
         isGeometryComputed_ = false;
     }
 
     const core::AnimTime& time() const {
         return time_;
+    }
+
+    const geometry::CurveSampleArray& samples() const {
+        return samples_;
     }
 
 private:
@@ -148,13 +162,9 @@ private:
     geometry::Vec2fArray controlPoints_;
     Int samplingVersion_ = -1;
     int edgeTesselationMode_ = -1;
-    // 0: start left patch
-    // 1: start right patch
-    // 2: end left patch
-    // 3: end right patch
-    std::array<detail::EdgeJoinPatch, 4> patches_;
-    // isExtension is true if cap is active
-    std::array<detail::EdgeJoinPatch, 2> caps_;
+    // [0]: start patch
+    // [1]: end patch
+    std::array<detail::EdgeJoinPatch, 2> patches_;
     EdgeGraphics graphics_;
     bool isStandaloneGeometryComputed_ = false;
     bool isGeometryComputed_ = false;
