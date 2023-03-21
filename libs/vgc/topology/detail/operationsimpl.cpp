@@ -138,8 +138,8 @@ KeyFace* Operations::createKeyFace(
     core::Id id,
     VacGroup* parentGroup,
     core::Array<KeyCycle> cycles,
-    VacNode* nextSibling = nullptr,
-    core::AnimTime t = {}) {
+    VacNode* nextSibling,
+    core::AnimTime t) {
 
     Vac* vac = parentGroup->vac();
     KeyFace* p = new KeyFace(id, t);
@@ -148,7 +148,7 @@ KeyFace* Operations::createKeyFace(
 
     // init cell
     p->cycles_ = std::move(cycles);
-    core::Array<VacCell> boundary = {};
+    core::Array<VacCell*> boundary = {};
     for (const KeyCycle& cycle : p->cycles_) {
         KeyVertex* v = cycle.steinerVertex_;
         if (v) {

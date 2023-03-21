@@ -250,6 +250,8 @@ protected:
     void removeDependency(Element* dependency);
     void clearDependencies();
 
+    void notifyChangesToDependents();
+    virtual void onDependencyChanged_(Element* dependency);
     virtual void onDependencyRemoved_(Element* dependency);
 
     /// dependent may be being destroyed, only use its pointer as key.

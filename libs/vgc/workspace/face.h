@@ -53,7 +53,6 @@ public:
         outlinePolyline_.clear();
         faceTesselationMode_ = -1;
         graphics_.clear();
-        isStandaloneGeometryComputed_ = false;
         isGeometryComputed_ = false;
     }
 
@@ -71,7 +70,6 @@ private:
     Int samplingVersion_ = -1;
     int faceTesselationMode_ = -1;
     FaceGraphics graphics_;
-    bool isStandaloneGeometryComputed_ = false;
     bool isGeometryComputed_ = false;
     bool isComputing_ = false;
 };
@@ -100,7 +98,7 @@ protected:
     virtual void computeStandaloneGeometry(VacFaceCellFrameData& data) = 0;
     virtual void computeGeometry(VacFaceCellFrameData& data) = 0;
 
-    virtual void onInputGeometryChanged() = 0;
+    virtual void onBoundaryGeometryChanged() = 0;
 };
 
 class VGC_WORKSPACE_API VacKeyFace : public VacFaceCell {
@@ -123,7 +121,7 @@ public:
         int newMode = core::clamp(mode, 0, 2);
         if (faceTesselationModeRequested_ != newMode) {
             faceTesselationModeRequested_ = newMode;
-            onInputGeometryChanged();
+            onBoundaryGeometryChanged();
         }
     }
 
@@ -139,6 +137,7 @@ public:
 protected:
     ElementStatus updateFromDom_(Workspace* workspace) override;
 
+    void onDependencyChanged_(Element* dependency) override;
     void onDependencyRemoved_(Element* dependency) override;
 
     void preparePaint_(core::AnimTime t, PaintOptions flags) override;
@@ -149,10 +148,9 @@ protected:
         PaintOptions flags = PaintOption::None) const override;
 
     VacFaceCellFrameData* frameData(core::AnimTime t) const override;
-    void computeStandaloneGeometry(VacFaceCellFrameData& data) override;
     void computeGeometry(VacFaceCellFrameData& data) override;
 
-    void onInputGeometryChanged() override;
+    void onBoundaryGeometryChanged() override;
 
 private:
     // currently updated during computeStandaloneGeometry

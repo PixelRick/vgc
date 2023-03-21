@@ -22,18 +22,9 @@
 
 namespace vgc::workspace {
 
-const VacFaceCellFrameData* VacFaceCell::computeStandaloneGeometryAt(core::AnimTime t) {
-    VacFaceCellFrameData* data = frameData(t);
-    if (data) {
-        computeStandaloneGeometry(*data);
-    }
-    return data;
-}
-
 const VacFaceCellFrameData* VacFaceCell::computeGeometryAt(core::AnimTime t) {
     VacFaceCellFrameData* data = frameData(t);
     if (data) {
-        computeStandaloneGeometry(*data);
         computeGeometry(*data);
     }
     return data;
@@ -78,6 +69,19 @@ ElementStatus VacKeyFace::updateFromDom_(Workspace* workspace) {
 
     onUpdateError_();
     return ElementStatus::InvalidAttribute;
+}
+
+void VacKeyFace::onDependencyChanged_(Element* dependency) {
+    VacElement* ve = dependency->toVacElement();
+    if (ve) {
+        vacomplex::Node* vnode = ve->vacNode();
+        if (vnode) {
+            vacomplex::Cell* cell = vnode->toCell();
+            if (cell->toKeyEdge()) {
+                onBoundaryGeometryChanged();
+            }
+        }
+    }
 }
 
 void VacKeyFace::onDependencyRemoved_(Element* dependency) {
@@ -125,11 +129,6 @@ VacFaceCellFrameData* VacKeyFace::frameData(core::AnimTime t) const {
     return nullptr;
 }
 
-void VacKeyFace::computeStandaloneGeometry(VacFaceCellFrameData& data) {
-
-    // todo
-}
-
 void VacKeyFace::computeGeometry(VacFaceCellFrameData& data) {
 
     if (data.isGeometryComputed_ || data.isComputing_) {
@@ -150,7 +149,7 @@ void VacKeyFace::computeGeometry(VacFaceCellFrameData& data) {
     data.graphics_.clear();
 }
 
-void VacKeyFace::onInputGeometryChanged() {
+void VacKeyFace::onBoundaryGeometryChanged() {
     frameData_.clear();
     bbox_ = geometry::Rect2d::empty;
 }

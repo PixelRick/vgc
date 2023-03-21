@@ -74,6 +74,15 @@ void Element::clearDependencies() {
     }
 }
 
+void Element::notifyChangesToDependents() {
+    for (Element* e : dependents_) {
+        e->onDependencyChanged_(this);
+    }
+}
+
+void Element::onDependencyChanged_(Element* /*dependency*/) {
+}
+
 void Element::onDependencyRemoved_(Element* /*dependency*/) {
 }
 
