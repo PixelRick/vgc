@@ -287,6 +287,7 @@ void Workspace::registerElementClass(
 }
 
 void Workspace::sync() {
+    // TODO: check version to skip emitPendingDiff inner logic
     // slots do check if a rebuild is necessary
     document_->emitPendingDiff();
     vac_->emitPendingDiff();
@@ -718,8 +719,9 @@ void Workspace::updateTreeAndVacFromDom_(const dom::Diff& diff) {
     //            we want the vac to be valid -> using only its operators
     //            limits bugs to their implementation.
 
-    bool needsFullUpdate =
+    bool hasModifiedPaths =
         (diff.removedNodes().length() > 0) || (diff.reparentedNodes().size() > 0);
+    bool hasNewPaths = (diff.createdNodes().length() > 0);
 
     std::set<Element*> parentsToOrderSync;
 
@@ -810,17 +812,29 @@ void Workspace::updateTreeAndVacFromDom_(const dom::Diff& diff) {
         }
     }
 
-    if (needsFullUpdate) {
-        // Update everything (paths may have changed.. etc).
+    if (hasNewPaths || hasModifiedPaths) {
         // Flag all elements with error for update.
         for (Element* element : elementsWithError_) {
-            element->hasPendingUpdate_ = true;
+            if (!element->hasPendingUpdate_) {
+                element->hasPendingUpdate_ = true;
+                elementsToUpdateFromDom_.emplaceLast(element);
+            }
         }
+    }
+
+    if (hasModifiedPaths) {
+        // Update everything for now.
+        // TODO: An element dependent on a Path should have it in its dependencies
+        // so we could force path reevaluation to the dependents of an element that moved,
+        // as well as errored elements.
         Element* root = vgcElement_;
         Element* element = root;
         Int depth = 0;
         while (element) {
-            updateElementFromDom(element);
+            if (!element->hasPendingUpdate_) {
+                element->hasPendingUpdate_ = true;
+                elementsToUpdateFromDom_.emplaceLast(element);
+            }
             iterDfsPreOrder(element, depth, root);
         }
     }
@@ -832,6 +846,7 @@ void Workspace::updateTreeAndVacFromDom_(const dom::Diff& diff) {
             // taken care of in the update loop further below.
             if (element && !element->hasPendingUpdate_) {
                 element->hasPendingUpdate_ = true;
+                // TODO: pass the set of modified attributes ids to the Element
                 updateElementFromDom(element);
             }
         }

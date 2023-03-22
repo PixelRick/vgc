@@ -211,12 +211,13 @@ void VacVertexCell::computeJoin(detail::VacVertexCellFrameData& data) {
     // collect standalone edge data and halfwidths at join
     for (const detail::VacJoinHalfedge& he : joinHalfedges_) {
         VacEdgeCell* cell = he.edgeCell();
-        VacEdgeCellFrameData* edgeData = cell->frameData(data.time());
+        auto edgeData = const_cast<VacEdgeCellFrameData*>(
+            cell->computeStandaloneGeometryAt(data.time()));
         if (!edgeData) {
             // huh ?
             continue;
         }
-        cell->computeStandaloneGeometry(*edgeData);
+
         const geometry::CurveSampleArray& samples = edgeData->samples_;
         if (samples.length() < 2) {
             continue;

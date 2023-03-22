@@ -235,7 +235,7 @@ private:
     mutable core::Array<detail::VacVertexCellFrameData> frameDataEntries_;
 };
 
-class VGC_WORKSPACE_API VacKeyVertex : public VacVertexCell {
+class VGC_WORKSPACE_API VacKeyVertex final : public VacVertexCell {
 private:
     friend class Workspace;
     friend class VacEdgeCell;
@@ -267,7 +267,7 @@ protected:
     ElementStatus updateFromDom_(Workspace* workspace) override;
 };
 
-class VGC_WORKSPACE_API VacInbetweenVertex : public VacVertexCell {
+class VGC_WORKSPACE_API VacInbetweenVertex final : public VacVertexCell {
 private:
     friend class Workspace;
 

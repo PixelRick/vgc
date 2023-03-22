@@ -187,22 +187,21 @@ public:
         return cell ? cell->toEdgeCellUnchecked() : nullptr;
     }
 
-    const VacEdgeCellFrameData* computeStandaloneGeometryAt(core::AnimTime t);
-    const VacEdgeCellFrameData* computeGeometryAt(core::AnimTime t);
+    virtual const VacEdgeCellFrameData* computeStandaloneGeometryAt(core::AnimTime t) = 0;
+    virtual const VacEdgeCellFrameData* computeGeometryAt(core::AnimTime t) = 0;
 
 protected:
     virtual VacEdgeCellFrameData* frameData(core::AnimTime t) const = 0;
-    virtual void computeStandaloneGeometry(VacEdgeCellFrameData& data) = 0;
-    virtual void computeGeometry(VacEdgeCellFrameData& data) = 0;
 
     virtual void onInputGeometryChanged() = 0;
+    virtual void onBoundaryGeometryChanged() = 0;
 
     virtual void clearStartJoinData() = 0;
     virtual void clearEndJoinData() = 0;
     virtual void clearJoinData() = 0;
 };
 
-class VGC_WORKSPACE_API VacKeyEdge : public VacEdgeCell {
+class VGC_WORKSPACE_API VacKeyEdge final : public VacEdgeCell {
 private:
     friend class Workspace;
     // for joins and caps
@@ -238,6 +237,12 @@ public:
         double* outDistance = nullptr,
         core::AnimTime t = {}) const override;
 
+    const VacEdgeCellFrameData* computeStandaloneGeometryAt(core::AnimTime t) override;
+    const VacEdgeCellFrameData* computeGeometryAt(core::AnimTime t) override;
+
+    const VacEdgeCellFrameData* computeStandaloneGeometry();
+    const VacEdgeCellFrameData* computeGeometry();
+
 protected:
     ElementStatus updateFromDom_(Workspace* workspace) override;
 
@@ -251,10 +256,9 @@ protected:
         PaintOptions flags = PaintOption::None) const override;
 
     VacEdgeCellFrameData* frameData(core::AnimTime t) const override;
-    void computeStandaloneGeometry(VacEdgeCellFrameData& data) override;
-    void computeGeometry(VacEdgeCellFrameData& data) override;
 
     void onInputGeometryChanged() override;
+    void onBoundaryGeometryChanged() override;
 
     void clearStartJoinData() override;
     void clearEndJoinData() override;
@@ -275,6 +279,8 @@ private:
     int edgeTesselationModeRequested_ = 2;
 
     void onUpdateError_();
+    void computeStandaloneGeometry_();
+    void computeGeometry_();
 };
 
 } // namespace vgc::workspace

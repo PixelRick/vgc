@@ -35,11 +35,9 @@ struct FaceGraphics {
 
     void clear() {
         fillGeometry_.reset();
-        selectionGeometry_.reset();
     }
 
     graphics::GeometryViewPtr fillGeometry_;
-    graphics::GeometryViewPtr selectionGeometry_;
 };
 
 class VGC_WORKSPACE_API VacFaceCellFrameData {
@@ -50,9 +48,8 @@ private:
 
 public:
     void clear() {
-        outlinePolyline_.clear();
-        faceTesselationMode_ = -1;
         graphics_.clear();
+        triangulation_.clear();
         isGeometryComputed_ = false;
     }
 
@@ -60,15 +57,11 @@ public:
         return time_;
     }
 
-    const geometry::Vec2dArray& outlinePolyline() const {
-        return outlinePolyline_;
-    }
-
 private:
     core::AnimTime time_;
-    geometry::Vec2dArray outlinePolyline_;
-    Int samplingVersion_ = -1;
-    int faceTesselationMode_ = -1;
+    // At the time of definition Curves2d only returns an array of triangle list vertices.
+    // TODO: use indexed geometry.
+    core::FloatArray triangulation_;
     FaceGraphics graphics_;
     bool isGeometryComputed_ = false;
     bool isComputing_ = false;
@@ -90,18 +83,17 @@ public:
         return cell ? cell->toFaceCellUnchecked() : nullptr;
     }
 
-    const VacFaceCellFrameData* computeStandaloneGeometryAt(core::AnimTime t);
     const VacFaceCellFrameData* computeGeometryAt(core::AnimTime t);
 
 protected:
     virtual VacFaceCellFrameData* frameData(core::AnimTime t) const = 0;
-    virtual void computeStandaloneGeometry(VacFaceCellFrameData& data) = 0;
+    ;
     virtual void computeGeometry(VacFaceCellFrameData& data) = 0;
 
     virtual void onBoundaryGeometryChanged() = 0;
 };
 
-class VGC_WORKSPACE_API VacKeyFace : public VacFaceCell {
+class VGC_WORKSPACE_API VacKeyFace final : public VacFaceCell {
 private:
     friend class Workspace;
 
@@ -115,14 +107,6 @@ public:
     vacomplex::KeyFace* vacKeyFaceNode() const {
         vacomplex::Cell* cell = vacCellUnchecked();
         return cell ? cell->toKeyFaceUnchecked() : nullptr;
-    }
-
-    void setTesselationMode(int mode) {
-        int newMode = core::clamp(mode, 0, 2);
-        if (faceTesselationModeRequested_ != newMode) {
-            faceTesselationModeRequested_ = newMode;
-            onBoundaryGeometryChanged();
-        }
     }
 
     geometry::Rect2d boundingBox(core::AnimTime t) const override;
@@ -160,6 +144,7 @@ private:
     int faceTesselationModeRequested_ = 2;
 
     void onUpdateError_();
+    void onStyleChanged_();
 };
 
 } // namespace vgc::workspace

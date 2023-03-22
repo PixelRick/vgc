@@ -22,23 +22,6 @@
 
 namespace vgc::workspace {
 
-const VacEdgeCellFrameData* VacEdgeCell::computeStandaloneGeometryAt(core::AnimTime t) {
-    VacEdgeCellFrameData* data = frameData(t);
-    if (data) {
-        computeStandaloneGeometry(*data);
-    }
-    return data;
-}
-
-const VacEdgeCellFrameData* VacEdgeCell::computeGeometryAt(core::AnimTime t) {
-    VacEdgeCellFrameData* data = frameData(t);
-    if (data) {
-        computeStandaloneGeometry(*data);
-        computeGeometry(*data);
-    }
-    return data;
-}
-
 VacKeyEdge::~VacKeyEdge() {
     for (Int i = 0; i < 2; ++i) {
         VacKeyVertex* const vertex = verticesInfo_[i].element;
@@ -154,15 +137,42 @@ bool VacKeyEdge::isSelectableAt(
     return false;
 }
 
+const VacEdgeCellFrameData* VacKeyEdge::computeStandaloneGeometryAt(core::AnimTime t) {
+    if (frameData_.time() == t) {
+        return computeStandaloneGeometry();
+    }
+    return nullptr;
+}
+
+const VacEdgeCellFrameData* VacKeyEdge::computeGeometryAt(core::AnimTime t) {
+    if (frameData_.time() == t) {
+        return computeGeometry();
+    }
+    return nullptr;
+}
+
+const VacEdgeCellFrameData* VacKeyEdge::computeStandaloneGeometry() {
+    computeStandaloneGeometry_();
+    return &frameData_;
+}
+
+const VacEdgeCellFrameData* VacKeyEdge::computeGeometry() {
+    computeGeometry_();
+    return &frameData_;
+}
+
 ElementStatus VacKeyEdge::updateFromDom_(Workspace* workspace) {
     namespace ds = dom::strings;
     dom::Element* const domElement = this->domElement();
+    if (!domElement) {
+        // todo: use owning composite when it is implemented
+        return ElementStatus::Ok;
+    }
 
+    // update dependencies
     std::array<std::optional<Element*>, 2> verticesOpt = {
         workspace->getElementFromPathAttribute(domElement, ds::startvertex, ds::vertex),
         workspace->getElementFromPathAttribute(domElement, ds::endvertex, ds::vertex)};
-
-    Element* parentElement = this->parent();
 
     std::array<VacKeyVertex*, 2> oldVertices = {};
     std::array<VacKeyVertex*, 2> newVertices = {};
@@ -224,6 +234,7 @@ ElementStatus VacKeyEdge::updateFromDom_(Workspace* workspace) {
 
     // update group
     vacomplex::Group* parentGroup = nullptr;
+    Element* parentElement = parent();
     if (parentElement) {
         workspace->updateElementFromDom(parentElement);
         vacomplex::Node* parentNode = parentElement->vacNode();
@@ -273,6 +284,8 @@ ElementStatus VacKeyEdge::updateFromDom_(Workspace* workspace) {
             onInputGeometryChanged();
         }
 
+        // TODO: check color change
+
         // XXX should we snap here ?
         //     group view matrices may not be ready..
         //     maybe we could add two init functions to workspace::Element
@@ -307,7 +320,7 @@ void VacKeyEdge::paint_(graphics::Engine* engine, core::AnimTime t, PaintOptions
     }
 
     // if not already done (should we leave preparePaint_ optional?)
-    const_cast<VacKeyEdge*>(this)->computeGeometry(frameData_);
+    const_cast<VacKeyEdge*>(this)->computeGeometry_();
 
     using namespace graphics;
     namespace ds = dom::strings;
@@ -321,8 +334,9 @@ void VacKeyEdge::paint_(graphics::Engine* engine, core::AnimTime t, PaintOptions
 
     EdgeGraphics& graphics = frameData_.graphics_;
 
-    if (flags.hasAny(strokeOptions)
-        || (!flags.has(PaintOption::Outline) && !graphics.strokeGeometry_)) {
+    if ((flags.hasAny(strokeOptions) || !flags.has(PaintOption::Outline))
+        && !graphics.strokeGeometry_) {
+
         graphics.strokeGeometry_ =
             engine->createDynamicTriangleStripView(BuiltinGeometryLayout::XYUV_iRGBA);
         graphics.joinGeometry_ = engine->createDynamicTriangleStripView(
@@ -569,8 +583,41 @@ VacEdgeCellFrameData* VacKeyEdge::frameData(core::AnimTime t) const {
     return nullptr;
 }
 
-void VacKeyEdge::computeStandaloneGeometry(VacEdgeCellFrameData& data) {
+void VacKeyEdge::onInputGeometryChanged() {
+    frameData_.clear();
+    bbox_ = geometry::Rect2d::empty;
+    for (VertexInfo& vi : verticesInfo_) {
+        if (vi.element) {
+            vi.element->onJoinEdgeGeometryChanged_(this);
+        }
+    }
+}
 
+void VacKeyEdge::onBoundaryGeometryChanged() {
+    // todo: tag for resnap
+    onInputGeometryChanged();
+}
+
+void VacKeyEdge::clearStartJoinData() {
+    frameData_.clearStartJoinData();
+}
+
+void VacKeyEdge::clearEndJoinData() {
+    frameData_.clearEndJoinData();
+}
+
+void VacKeyEdge::clearJoinData() {
+    frameData_.clearStartJoinData();
+    frameData_.clearEndJoinData();
+}
+
+void VacKeyEdge::onUpdateError_() {
+    removeVacNode();
+}
+
+void VacKeyEdge::computeStandaloneGeometry_() {
+
+    VacEdgeCellFrameData& data = frameData_;
     if (edgeTesselationModeRequested_ == data.edgeTesselationMode_) {
         return;
     }
@@ -642,8 +689,9 @@ void VacKeyEdge::computeStandaloneGeometry(VacEdgeCellFrameData& data) {
     data.graphics_.clear();
 }
 
-void VacKeyEdge::computeGeometry(VacEdgeCellFrameData& data) {
+void VacKeyEdge::computeGeometry_() {
 
+    VacEdgeCellFrameData& data = frameData_;
     if (data.isGeometryComputed_ || data.isComputing_) {
         return;
     }
@@ -652,7 +700,7 @@ void VacKeyEdge::computeGeometry(VacEdgeCellFrameData& data) {
         return;
     }
 
-    computeStandaloneGeometry(data);
+    computeStandaloneGeometry_();
 
     data.isComputing_ = true;
 
@@ -671,33 +719,6 @@ void VacKeyEdge::computeGeometry(VacEdgeCellFrameData& data) {
 
     // XXX clear less ?
     data.graphics_.clear();
-}
-
-void VacKeyEdge::onInputGeometryChanged() {
-    frameData_.clear();
-    bbox_ = geometry::Rect2d::empty;
-    for (VertexInfo& vi : verticesInfo_) {
-        if (vi.element) {
-            vi.element->onJoinEdgeGeometryChanged_(this);
-        }
-    }
-}
-
-void VacKeyEdge::clearStartJoinData() {
-    frameData_.clearStartJoinData();
-}
-
-void VacKeyEdge::clearEndJoinData() {
-    frameData_.clearEndJoinData();
-}
-
-void VacKeyEdge::clearJoinData() {
-    frameData_.clearStartJoinData();
-    frameData_.clearEndJoinData();
-}
-
-void VacKeyEdge::onUpdateError_() {
-    removeVacNode();
 }
 
 } // namespace vgc::workspace

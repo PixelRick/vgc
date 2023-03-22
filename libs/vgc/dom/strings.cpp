@@ -32,6 +32,7 @@ const core::StringId position("position");
 const core::StringId positions("positions");
 const core::StringId widths("widths");
 const core::StringId color("color");
+const core::StringId cycles("cycles");
 
 const core::StringId New_Document("New Document");
 const core::StringId Open_Document("Open Document");

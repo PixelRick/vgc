@@ -215,6 +215,14 @@ public:
         return Base::end();
     }
 
+    const core::Array<Element*>& dependencies() const {
+        return dependencies_;
+    }
+
+    const core::Array<Element*>& dependents() const {
+        return dependents_;
+    }
+
     void paint(
         graphics::Engine* engine,
         core::AnimTime t = {},

@@ -72,7 +72,7 @@ public:
         return steinerVertex_;
     }
 
-    core::Array<KeyHalfedge> halfedges() const {
+    const core::Array<KeyHalfedge>& halfedges() const {
         return halfedges_;
     }
 
