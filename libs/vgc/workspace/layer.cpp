@@ -29,7 +29,7 @@ ElementStatus Layer::updateFromDom_(Workspace* /*workspace*/) {
     dom::Element* const domElement = this->domElement();
 
     vacomplex::Node* node = vacNode();
-    topology::VacGroup* g = node ? node->toCellUnchecked()->toGroupUnchecked() : nullptr;
+    vacomplex::Group* g = node ? node->toCellUnchecked()->toGroupUnchecked() : nullptr;
     if (!g) {
         VacElement* parentElement = parentVacElement();
         if (!parentElement) {

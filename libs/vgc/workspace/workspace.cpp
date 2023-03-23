@@ -210,8 +210,8 @@ Workspace::Workspace(dom::DocumentPtr document)
 
     document->changed().connect(onDocumentDiff());
 
-    vac_ = topology::Vac::create();
-    vac_->changed().connect(onVacDiff());
+    vac_ = vacomplex::Complex::create();
+    //vac_->changed().connect(onVacDiff());
     vac_->onNodeAboutToBeRemoved().connect(onVacNodeAboutToBeRemoved());
 
     rebuildTreeFromDom_();
@@ -341,26 +341,26 @@ void Workspace::onDocumentDiff_(const dom::Diff& diff) {
     updateTreeAndVacFromDom_(diff);
 }
 
-void Workspace::onVacDiff_(const topology::VacDiff& diff) {
-    if (isVacBeingUpdated_) {
-        // Needed to know which cells break when updating from dom
-        pendingVacDiff_.merge(diff);
-        return;
-    }
-    pendingVacDiff_.clear();
-
-    bool domChanged = document_ && (document_->versionId() != lastSyncedDomVersionId_);
-    if (domChanged) {
-        VGC_ERROR(
-            LogVgcWorkspace,
-            "Both DOM and VAC of workspace have been edited since last synchronization. "
-            "Rebuilding VAC from DOM.");
-        rebuildFromDom();
-        return;
-    }
-
-    updateTreeAndDomFromVac_(diff);
-}
+//void Workspace::onVacDiff_(const topology::VacDiff& diff) {
+//    if (isVacBeingUpdated_) {
+//        // Needed to know which cells break when updating from dom
+//        pendingVacDiff_.merge(diff);
+//        return;
+//    }
+//    pendingVacDiff_.clear();
+//
+//    bool domChanged = document_ && (document_->versionId() != lastSyncedDomVersionId_);
+//    if (domChanged) {
+//        VGC_ERROR(
+//            LogVgcWorkspace,
+//            "Both DOM and VAC of workspace have been edited since last synchronization. "
+//            "Rebuilding VAC from DOM.");
+//        rebuildFromDom();
+//        return;
+//    }
+//
+//    updateTreeAndDomFromVac_(diff);
+//}
 
 void Workspace::removeElement_(Element* element) {
     removeElement_(element->id());
@@ -476,7 +476,10 @@ bool Workspace::updateElementFromDom(Element* element) {
     return true;
 }
 
-void Workspace::onVacNodeAboutToBeRemoved_(topology::VacNode* node) {
+void Workspace::onVacNodeAboutToBeRemoved_(vacomplex::Node* node) {
+    // Note: Should we bypass the following logic if deletion comes from workspace ?
+    //       Currently it is done by erasing the workspace element from elements_
+    //       before doing the vac element removal so that this whole callback is not called.
     auto it = elements_.find(node->id());
     if (it != elements_.end()) {
         Element* element = it->second.get();
@@ -484,11 +487,20 @@ void Workspace::onVacNodeAboutToBeRemoved_(topology::VacNode* node) {
         if (vacElement && vacElement->vacNode_) {
             vacElement->vacNode_ = nullptr;
             if (!element->isBeingUpdated_) {
+                // TODO: only clear graphics and append to corrupt list (elementsWithError_)
                 element->hasPendingUpdate_ = true;
                 elementsToUpdateFromDom_.emplaceLast(element);
             }
         }
     }
+}
+
+void Workspace::onVacNodeCreated_(
+    vacomplex::Node* node,
+    core::Span<vacomplex::Node*> operationSourceNodes) {
+}
+
+void Workspace::onVacCellGeometryChanged_(vacomplex::Cell* cell) {
 }
 
 void Workspace::fillVacElementListsUsingTagName_(
@@ -645,12 +657,12 @@ void Workspace::updateVacHierarchyFromTree_() {
     Element* e = root;
     Int depth = 0;
     while (e) {
-        topology::VacNode* node = e->vacNode();
+        vacomplex::Node* node = e->vacNode();
         if (node) {
             if (node->isGroup()) {
                 VacElement* child = e->firstChildVacElement();
                 if (child) {
-                    topology::VacGroup* g = static_cast<topology::VacGroup*>(node);
+                    vacomplex::Group* g = static_cast<vacomplex::Group*>(node);
                     topology::ops::moveToGroup(child->vacNode(), g, g->firstChild());
                 }
             }
@@ -667,7 +679,7 @@ void Workspace::updateVacHierarchyFromTree_() {
 }
 
 //bool Workspace::haveKeyEdgeBoundaryPathsChanged_(Element* e) {
-//    topology::VacNode* node = e->vacNode();
+//    vacomplex::Node* node = e->vacNode();
 //    if (!node) {
 //        return false;
 //    }
@@ -679,7 +691,7 @@ void Workspace::updateVacHierarchyFromTree_() {
 //    Element* ev1 = getElementFromPathAttribute(domElem, ds::endvertex, ds::vertex);
 //
 //    vacomplex::Node* node = vacNode();
-//    topology::KeyEdge* kv = node ? node->toCellUnchecked()->toKeyEdgeUnchecked() : nullptr;
+//    vacomplex::KeyEdge* kv = node ? node->toCellUnchecked()->toKeyEdgeUnchecked() : nullptr;
 //    if (!kv) {
 //        return false;
 //    }
@@ -868,17 +880,17 @@ void Workspace::updateTreeAndVacFromDom_(const dom::Diff& diff) {
     changed().emit();
 }
 
-void Workspace::updateTreeAndDomFromVac_(const topology::VacDiff& /*diff*/) {
-    if (!document_) {
-        VGC_ERROR(LogVgcWorkspace, "DOM is null.")
-        return;
-    }
-
-    detail::ScopedTemporaryBoolSet bgDom(isDomBeingUpdated_);
-
-    // todo later
-    throw core::RuntimeError("not implemented");
-}
+//void Workspace::updateTreeAndDomFromVac_(const vacomplex::Diff& /*diff*/) {
+//    if (!document_) {
+//        VGC_ERROR(LogVgcWorkspace, "DOM is null.")
+//        return;
+//    }
+//
+//    detail::ScopedTemporaryBoolSet bgDom(isDomBeingUpdated_);
+//
+//    // todo later
+//    throw core::RuntimeError("not implemented");
+//}
 
 void Workspace::debugPrintTree_() {
     visitDepthFirstPreOrder([](Element* e, Int depth) {

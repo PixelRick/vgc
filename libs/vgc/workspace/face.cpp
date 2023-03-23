@@ -167,7 +167,7 @@ void VacKeyFace::preparePaint_(core::AnimTime t, PaintOptions /*flags*/) {
 void VacKeyFace::paint_(graphics::Engine* engine, core::AnimTime t, PaintOptions flags)
     const {
 
-    topology::KeyFace* ke = vacKeyFaceNode();
+    vacomplex::KeyFace* ke = vacKeyFaceNode();
     if (!ke || t != ke->time()) {
         return;
     }
@@ -244,7 +244,7 @@ void VacKeyFace::computeGeometry(VacFaceCellFrameData& data) {
 
     geometry::Curves2d curves2d;
 
-    for (const topology::KeyCycle& cycle : kf->cycles()) {
+    for (const vacomplex::KeyCycle& cycle : kf->cycles()) {
         KeyVertex* kv = cycle.steinerVertex();
         if (kv) {
             Vec2d p = kv->position();

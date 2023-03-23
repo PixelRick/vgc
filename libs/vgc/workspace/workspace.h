@@ -24,6 +24,7 @@
 #include <vgc/core/flags.h>
 #include <vgc/core/id.h>
 #include <vgc/core/object.h>
+#include <vgc/core/span.h>
 #include <vgc/dom/document.h>
 #include <vgc/graphics/engine.h>
 #include <vgc/topology/vac.h>
@@ -104,13 +105,14 @@ public:
 
     VGC_SIGNAL(changed);
 
+    // updates from dom are deferred
     VGC_SLOT(onDocumentDiff, onDocumentDiff_);
-    VGC_SLOT(onVacDiff, onVacDiff_);
+    // updates from vac are direct (after each atomic operation)
     VGC_SLOT(onVacNodeAboutToBeRemoved, onVacNodeAboutToBeRemoved_);
+    VGC_SLOT(onVacNodeCreated, onVacNodeCreated_);
 
 protected:
     virtual void onDocumentDiff_(const dom::Diff& diff);
-    virtual void onVacDiff_(const topology::VacDiff& diff);
 
 private:
     static std::unordered_map<core::StringId, ElementCreator>& elementCreators();
@@ -127,14 +129,18 @@ private:
 
     Element* createAppendElement_(dom::Element* domElement, Element* parent);
 
-    void onVacNodeAboutToBeRemoved_(topology::VacNode* node);
+    void onVacNodeAboutToBeRemoved_(vacomplex::Node* node);
+    void onVacNodeCreated_(
+        vacomplex::Node* node,
+        core::Span<vacomplex::Node*> operationSourceNodes);
+    void onVacCellGeometryChanged_(vacomplex::Cell* cell);
 
     void
+
     fillVacElementListsUsingTagName_(Element* root, detail::VacElementLists& ce) const;
 
     dom::DocumentPtr document_;
-    topology::VacPtr vac_;
-    topology::VacDiff pendingVacDiff_;
+    vacomplex::ComplexPtr vac_;
     bool isDomBeingUpdated_ = false;
     bool isVacBeingUpdated_ = false;
     core::Id lastSyncedDomVersionId_ = {};
@@ -155,7 +161,6 @@ private:
     void updateVacHierarchyFromTree_();
 
     void updateTreeAndVacFromDom_(const dom::Diff& diff);
-    void updateTreeAndDomFromVac_(const topology::VacDiff& diff);
 
     void debugPrintTree_();
 };

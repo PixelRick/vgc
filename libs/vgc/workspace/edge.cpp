@@ -314,7 +314,7 @@ void VacKeyEdge::preparePaint_(core::AnimTime t, PaintOptions /*flags*/) {
 void VacKeyEdge::paint_(graphics::Engine* engine, core::AnimTime t, PaintOptions flags)
     const {
 
-    topology::KeyEdge* ke = vacKeyEdgeNode();
+    vacomplex::KeyEdge* ke = vacKeyEdgeNode();
     if (!ke || t != ke->time()) {
         return;
     }
@@ -624,7 +624,7 @@ void VacKeyEdge::computeStandaloneGeometry_() {
     if (data.isStandaloneGeometryComputed_ || data.isComputing_) {
         return;
     }
-    topology::KeyEdge* ke = vacKeyEdgeNode();
+    vacomplex::KeyEdge* ke = vacKeyEdgeNode();
     if (!ke) {
         return;
     }
@@ -695,7 +695,7 @@ void VacKeyEdge::computeGeometry_() {
     if (data.isGeometryComputed_ || data.isComputing_) {
         return;
     }
-    topology::KeyEdge* ke = vacKeyEdgeNode();
+    vacomplex::KeyEdge* ke = vacKeyEdgeNode();
     if (!ke) {
         return;
     }

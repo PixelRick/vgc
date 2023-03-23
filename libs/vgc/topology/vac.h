@@ -184,10 +184,12 @@ private:
 namespace vgc::vacomplex {
 
 using Complex = topology::Vac;
+using ComplexPtr = topology::VacPtr;
+
+using Node = topology::VacNode;
 
 using Cell = topology::VacCell;
 using Group = topology::VacGroup;
-using Node = topology::VacNode;
 
 using CellType = topology::VacCellType;
 using topology::CellSpatialType;
@@ -212,6 +214,8 @@ using topology::InbetweenVertex;
 
 using topology::EdgeGeometry;
 using topology::FaceGeometry;
+
+using topology::KeyCycle;
 
 } // namespace vgc::vacomplex
 

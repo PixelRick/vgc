@@ -266,7 +266,7 @@ protected:
 
 private:
     struct VertexInfo {
-        VacKeyVertex* element;
+        VacKeyVertex* element = nullptr;
         Int joinGroup = 0;
     };
 
