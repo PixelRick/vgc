@@ -399,6 +399,9 @@ private:
 
     void onHistoryHeadChanged_();
 
+    // TODO: differentiate history head changes from user changes
+    // For instance, we don't want a plugin to perform an automatic
+    // DOM modification in response to DOM changes caused by an undo.
     void onCreateNode_(Node* node);
     void onRemoveNode_(Node* node);
     void onMoveNode_(Node* node, const NodeRelatives& savedRelatives);

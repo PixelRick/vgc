@@ -177,8 +177,8 @@ private:
     friend class VacVertexCell;
 
 protected:
-    VacEdgeCell(Workspace* workspace, dom::Element* domElement)
-        : VacElement(workspace, domElement) {
+    VacEdgeCell(Workspace* workspace)
+        : VacElement(workspace) {
     }
 
 public:
@@ -211,8 +211,8 @@ private:
 public:
     ~VacKeyEdge() override;
 
-    VacKeyEdge(Workspace* workspace, dom::Element* domElement)
-        : VacEdgeCell(workspace, domElement) {
+    VacKeyEdge(Workspace* workspace)
+        : VacEdgeCell(workspace) {
     }
 
     vacomplex::KeyEdge* vacKeyEdgeNode() const {

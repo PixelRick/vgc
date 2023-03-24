@@ -113,24 +113,8 @@ bool SketchTool::onMousePress(MouseEvent* event) {
 bool SketchTool::onMouseRelease(MouseEvent* event) {
 
     if (event->button() == MouseButton::Left) {
-        if (isSketching_) {
-            finishCurve_();
-        }
-        if (drawCurveUndoGroup_) {
-            drawCurveUndoGroup_->close();
-            drawCurveUndoGroup_->undone().disconnect(drawCurveUndoGroupConnectionHandle_);
-            drawCurveUndoGroup_ = nullptr;
-        }
-        if (isSketching_) {
-            isSketching_ = false;
-            endVertex_ = nullptr;
-            edge_ = nullptr;
-            points_.clear();
-            widths_.clear();
-            lastInputPoints_.clear();
-            smoothedInputPoints_.clear();
-            smoothedInputArclengths_.clear();
-            requestRepaint();
+        finishCurve_();
+        if (resetData_()) {
             return true;
         }
     }
@@ -383,10 +367,16 @@ void SketchTool::startCurve_(const geometry::Vec2d& p, double width) {
     if (history) {
         drawCurveUndoGroup_ = history->createUndoGroup(Draw_Curve);
         drawCurveUndoGroupConnectionHandle_ = drawCurveUndoGroup_->undone().connect(
-            [this](core::UndoGroup*, bool /*isAbort*/) {
+            [this](core::UndoGroup* ug, bool /*isAbort*/) {
                 // isAbort should be true since we have no sub-group
-                isSketching_ = false;
-                drawCurveUndoGroup_ = nullptr;
+                if (drawCurveUndoGroup_) {
+                    VGC_ASSERT(ug == drawCurveUndoGroup_);
+                    drawCurveUndoGroup_->undone().disconnect(
+                        drawCurveUndoGroupConnectionHandle_);
+                    drawCurveUndoGroup_ = nullptr;
+                }
+                resetData_();
+                requestRepaint();
             });
     }
 
@@ -562,6 +552,28 @@ void SketchTool::finishCurve_() {
             workspace->sync();
         }
     }
+
+    requestRepaint();
+}
+
+bool SketchTool::resetData_() {
+    if (drawCurveUndoGroup_) {
+        drawCurveUndoGroup_->close();
+        drawCurveUndoGroup_->undone().disconnect(drawCurveUndoGroupConnectionHandle_);
+        drawCurveUndoGroup_ = nullptr;
+    }
+    if (isSketching_) {
+        isSketching_ = false;
+        endVertex_ = nullptr;
+        edge_ = nullptr;
+        points_.clear();
+        widths_.clear();
+        lastInputPoints_.clear();
+        smoothedInputPoints_.clear();
+        smoothedInputArclengths_.clear();
+        return true;
+    }
+    return false;
 }
 
 double SketchTool::snapDeformationLength() const {

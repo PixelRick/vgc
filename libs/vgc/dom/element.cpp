@@ -25,10 +25,10 @@
 
 namespace vgc::dom {
 
-Element::Element(Document* document, core::StringId tagName)
+Element::Element(Document* document, core::StringId tagName, core::Id internalId)
     : Node(document, NodeType::Element)
     , tagName_(tagName)
-    , internalId_(core::genId()) {
+    , internalId_(internalId) {
 
     document->elementByInternalIdMap_[internalId_] = this;
 }
@@ -46,7 +46,7 @@ void Element::onDestroyed() {
 /* static */
 Element* Element::create_(Node* parent, core::StringId tagName) {
     Document* doc = parent->document();
-    Element* e = new Element(doc, tagName);
+    Element* e = new Element(doc, tagName, core::genId());
     core::History::do_<CreateElementOperation>(doc->history(), e, parent, nullptr);
     return e;
 }

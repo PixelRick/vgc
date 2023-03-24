@@ -82,10 +82,10 @@ geometry::Rect2d VacKeyFace::boundingBox(core::AnimTime /*t*/) const {
 
 bool VacKeyFace::isSelectableAt(
     const geometry::Vec2d& p,
-    bool outlineOnly,
+    bool /*outlineOnly*/,
     double tol,
-    double* outDistance,
-    core::AnimTime t) const {
+    double* /*outDistance*/,
+    core::AnimTime /*t*/) const {
 
     using Vec2d = geometry::Vec2d;
 
@@ -256,12 +256,12 @@ void VacKeyFace::computeGeometry(VacFaceCellFrameData& data) {
                 const KeyEdge* ke = khe.edge();
                 Element* ve = workspace()->find(ke->id());
                 VacKeyEdge* vke = dynamic_cast<VacKeyEdge*>(ve);
-                const VacEdgeCellFrameData* data = nullptr;
+                const VacEdgeCellFrameData* edgeData = nullptr;
                 if (vke) {
-                    data = vke->computeStandaloneGeometry();
+                    edgeData = vke->computeStandaloneGeometry();
                 }
-                if (data) {
-                    const geometry::CurveSampleArray& samples = data->samples();
+                if (edgeData) {
+                    const geometry::CurveSampleArray& samples = edgeData->samples();
                     if (!khe.direction()) {
                         for (const geometry::CurveSample& s : samples) {
                             Vec2d p = s.position();

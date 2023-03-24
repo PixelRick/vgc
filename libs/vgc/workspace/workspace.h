@@ -55,7 +55,7 @@ private:
     void onDestroyed() override;
 
 public:
-    using ElementCreator = std::unique_ptr<Element> (*)(Workspace*, dom::Element*);
+    using ElementCreator = std::unique_ptr<Element> (*)(Workspace*);
 
     static WorkspacePtr create(dom::DocumentPtr document);
 
@@ -111,11 +111,8 @@ public:
     VGC_SLOT(onVacNodeAboutToBeRemoved, onVacNodeAboutToBeRemoved_);
     VGC_SLOT(onVacNodeCreated, onVacNodeCreated_);
 
-protected:
-    virtual void onDocumentDiff_(const dom::Diff& diff);
-
 private:
-    static std::unordered_map<core::StringId, ElementCreator>& elementCreators();
+    static std::unordered_map<core::StringId, ElementCreator>& elementCreators_();
 
     // This is the <vgc> element (the root).
     VacElement* vgcElement_;
@@ -127,7 +124,23 @@ private:
     void removeElement_(core::Id id);
     void clearElements_();
 
-    Element* createAppendElement_(dom::Element* domElement, Element* parent);
+    void
+    fillVacElementListsUsingTagName_(Element* root, detail::VacElementLists& ce) const;
+
+    dom::DocumentPtr document_;
+    vacomplex::ComplexPtr vac_;
+
+    void debugPrintTree_();
+
+    // ---------------
+    // VAC -> DOM Sync
+
+    bool isCreatingDomElementsFromVac_ = false;
+
+    void preElementUpdateFromVacToDom_(Element* element);
+    void postElementUpdateFromVacToDom_(Element* element);
+
+    void rebuildDomFromTree_();
 
     void onVacNodeAboutToBeRemoved_(vacomplex::Node* node);
     void onVacNodeCreated_(
@@ -135,34 +148,22 @@ private:
         core::Span<vacomplex::Node*> operationSourceNodes);
     void onVacCellGeometryChanged_(vacomplex::Cell* cell);
 
-    void
+    // ---------------
+    // DOM -> VAC Sync
 
-    fillVacElementListsUsingTagName_(Element* root, detail::VacElementLists& ce) const;
-
-    dom::DocumentPtr document_;
-    vacomplex::ComplexPtr vac_;
-    bool isDomBeingUpdated_ = false;
-    bool isVacBeingUpdated_ = false;
+    bool isCreatingVacElementsFromDom_ = false;
+    bool shouldSkipNextDomDiff_ = false;
     core::Id lastSyncedDomVersionId_ = {};
-    Int64 lastSyncedVacVersion_ = -1;
+
+    Element* createAppendElementFromDom_(dom::Element* domElement, Element* parent);
 
     void rebuildTreeFromDom_();
-    void rebuildDomFromTree_();
-
-    void rebuildTreeFromVac_();
     void rebuildVacFromTree_();
 
-    //void rebuildVacGroup_(Element* e);
-    //void rebuildKeyVertex_(Element* e);
-    //bool rebuildKeyEdge_(Element* e, bool force = false);
-
-    //bool haveKeyEdgeBoundaryPathsChanged_(Element* e);
-
     void updateVacHierarchyFromTree_();
-
     void updateTreeAndVacFromDom_(const dom::Diff& diff);
 
-    void debugPrintTree_();
+    void onDocumentDiff_(const dom::Diff& diff);
 };
 
 } // namespace vgc::workspace

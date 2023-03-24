@@ -199,8 +199,8 @@ private:
     friend class VacInbetweenVEdge;
 
 protected:
-    VacVertexCell(Workspace* workspace, dom::Element* domElement)
-        : VacElement(workspace, domElement) {
+    VacVertexCell(Workspace* workspace)
+        : VacElement(workspace) {
     }
 
 public:
@@ -245,8 +245,8 @@ private:
 public:
     ~VacKeyVertex() override = default;
 
-    VacKeyVertex(Workspace* workspace, dom::Element* domElement)
-        : VacVertexCell(workspace, domElement) {
+    VacKeyVertex(Workspace* workspace)
+        : VacVertexCell(workspace) {
     }
 
     vacomplex::KeyVertex* vacKeyVertexNode() const {
@@ -274,8 +274,8 @@ private:
 public:
     ~VacInbetweenVertex() override = default;
 
-    VacInbetweenVertex(Workspace* workspace, dom::Element* domElement)
-        : VacVertexCell(workspace, domElement) {
+    VacInbetweenVertex(Workspace* workspace)
+        : VacVertexCell(workspace) {
     }
 
     vacomplex::InbetweenVertex* vacInbetweenVertexNode() const {

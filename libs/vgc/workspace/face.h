@@ -73,8 +73,8 @@ private:
     friend class VacVertexCell;
 
 protected:
-    VacFaceCell(Workspace* workspace, dom::Element* domElement)
-        : VacElement(workspace, domElement) {
+    VacFaceCell(Workspace* workspace)
+        : VacElement(workspace) {
     }
 
 public:
@@ -100,8 +100,8 @@ private:
 public:
     ~VacKeyFace() override;
 
-    VacKeyFace(Workspace* workspace, dom::Element* domElement)
-        : VacFaceCell(workspace, domElement) {
+    VacKeyFace(Workspace* workspace)
+        : VacFaceCell(workspace) {
     }
 
     vacomplex::KeyFace* vacKeyFaceNode() const {

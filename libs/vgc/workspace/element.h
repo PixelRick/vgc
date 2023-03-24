@@ -110,9 +110,8 @@ private:
     using Base = topology::detail::TreeNodeBase<Element>;
 
 protected:
-    Element(Workspace* workspace, dom::Element* domElement)
-        : workspace_(workspace)
-        , domElement_(domElement) {
+    Element(Workspace* workspace)
+        : workspace_(workspace) {
     }
 
 public:
@@ -281,7 +280,7 @@ private:
     core::Id id_ = -1;
 
     // this pointer is not safe to use when tree is not synced with dom
-    dom::Element* domElement_;
+    dom::Element* domElement_ = nullptr;
 
     ElementFlags flags_;
     bool isVacElement_ = false;
@@ -303,8 +302,8 @@ private:
 public:
     ~UnsupportedElement() override = default;
 
-    UnsupportedElement(Workspace* workspace, dom::Element* domElement)
-        : Element(workspace, domElement) {
+    UnsupportedElement(Workspace* workspace)
+        : Element(workspace) {
     }
 };
 
@@ -315,8 +314,8 @@ private:
 public:
     ~VacElement() override;
 
-    VacElement(Workspace* workspace, dom::Element* domElement)
-        : Element(workspace, domElement)
+    VacElement(Workspace* workspace)
+        : Element(workspace)
         , vacNode_(nullptr) {
 
         isVacElement_ = true;

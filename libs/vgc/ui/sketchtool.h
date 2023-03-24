@@ -158,6 +158,7 @@ protected:
     void startCurve_(const geometry::Vec2d& p, double width);
     void continueCurve_(const geometry::Vec2d& p, double width);
     void finishCurve_();
+    bool resetData_();
 
     // The length of curve that snapping is allowed to deform
     double snapDeformationLength() const;

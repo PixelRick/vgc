@@ -34,8 +34,8 @@ private:
 public:
     ~Layer() override = default;
 
-    Layer(Workspace* workspace, dom::Element* domElement)
-        : VacElement(workspace, domElement) {
+    Layer(Workspace* workspace)
+        : VacElement(workspace) {
     }
 
     geometry::Rect2d boundingBox(core::AnimTime t) const override;

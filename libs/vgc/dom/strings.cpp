@@ -25,6 +25,7 @@ const core::StringId vgc("vgc");
 const core::StringId layer("layer");
 const core::StringId vertex("vertex");
 const core::StringId edge("edge");
+const core::StringId face("face");
 
 const core::StringId startvertex("startvertex");
 const core::StringId endvertex("endvertex");

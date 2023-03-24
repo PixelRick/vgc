@@ -17,6 +17,7 @@
 #ifndef VGC_DOM_OPERATION_H
 #define VGC_DOM_OPERATION_H
 
+#include <chrono>
 #include <iterator>
 #include <memory>
 #include <set>
