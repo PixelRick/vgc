@@ -33,6 +33,10 @@ VacKeyEdge::~VacKeyEdge() {
     }
 }
 
+std::optional<core::StringId> VacKeyEdge::domTagName() const {
+    return dom::strings::edge;
+}
+
 geometry::Rect2d VacKeyEdge::boundingBox(core::AnimTime /*t*/) const {
     return bbox_;
 }
@@ -260,24 +264,28 @@ ElementStatus VacKeyEdge::updateFromDom_(Workspace* workspace) {
         }
     }
 
+    // XXX warning on null parent group ?
+
+    const auto& points = domElement->getAttribute(ds::positions).getVec2dArray();
+    const auto& widths = domElement->getAttribute(ds::widths).getDoubleArray();
     if (!ke) {
-        const core::Id id = domElement->internalId();
         if (vacKvs[0] && vacKvs[1]) {
-            ke = topology::ops::createKeyOpenEdge(id, parentGroup, vacKvs[0], vacKvs[1]);
+            ke = topology::ops::createKeyOpenEdge(
+                vacKvs[0], vacKvs[1], points, widths, parentGroup);
         }
         else {
             // XXX warning if kv0 || kv1 ?
-            ke = topology::ops::createKeyClosedEdge(id, parentGroup);
+            ke = topology::ops::createKeyClosedEdge(points, widths, parentGroup);
         }
         setVacNode(ke);
+
+        if (!ke) {
+            onUpdateError_();
+            return ElementStatus::InvalidAttribute;
+        }
+        onInputGeometryChanged();
     }
-
-    // XXX warning on null parent group ?
-
-    if (ke) {
-        const auto& points = domElement->getAttribute(ds::positions).getVec2dArray();
-        const auto& widths = domElement->getAttribute(ds::widths).getDoubleArray();
-
+    else {
         if (&ke->points() != &points.get() || &ke->widths() != &widths.get()) {
             topology::ops::setKeyEdgeCurvePoints(ke, points);
             topology::ops::setKeyEdgeCurveWidths(ke, widths);
@@ -290,12 +298,13 @@ ElementStatus VacKeyEdge::updateFromDom_(Workspace* workspace) {
         //     group view matrices may not be ready..
         //     maybe we could add two init functions to workspace::Element
         //     one for intrinsic data, one for dependent data.
-
-        return ElementStatus::Ok;
     }
 
-    onUpdateError_();
-    return ElementStatus::InvalidAttribute;
+    return ElementStatus::Ok;
+}
+
+void VacKeyEdge::updateFromVac_() {
+    // TODO
 }
 
 void VacKeyEdge::onDependencyRemoved_(Element* dependency) {
@@ -657,22 +666,20 @@ void VacKeyEdge::computeStandaloneGeometry_() {
         samplingParams.setMinIntraSegmentSamples(minQuads - 1);
         samplingParams.setMaxIntraSegmentSamples(maxQuads - 1);
         curve.sampleRange(samplingParams, data.samples_);
+        bbox_ = geometry::Rect2d::empty;
         if (data.samples_.length()) {
             auto it = data.samples_.begin();
             geometry::Vec2d lastPoint = it->position();
+            bbox_.uniteWith(lastPoint);
             double s = 0;
             for (++it; it != data.samples_.end(); ++it) {
                 geometry::Vec2d point = it->position();
+                bbox_.uniteWith(point);
                 s += (point - lastPoint).length();
                 it->setS(s);
                 lastPoint = point;
             }
         }
-
-        //bbox_ = geometry::Rect2d::empty;
-        //for (auto sample : data.samples_) {
-        //    bbox_.uniteWith(sample.position());
-        //}
     }
     else {
         data.triangulation_ = curve.triangulate(maxAngle, 1, 64);

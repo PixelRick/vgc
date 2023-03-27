@@ -20,13 +20,17 @@
 
 namespace vgc::workspace {
 
+std::optional<core::StringId> Layer::domTagName() const {
+    return dom::strings::layer;
+}
+
 geometry::Rect2d Layer::boundingBox(core::AnimTime /*t*/) const {
     // todo, union of children
     return geometry::Rect2d::empty;
 }
 
 ElementStatus Layer::updateFromDom_(Workspace* /*workspace*/) {
-    dom::Element* const domElement = this->domElement();
+    //dom::Element* const domElement = this->domElement();
 
     vacomplex::Node* node = vacNode();
     vacomplex::Group* g = node ? node->toCellUnchecked()->toGroupUnchecked() : nullptr;
@@ -39,8 +43,7 @@ ElementStatus Layer::updateFromDom_(Workspace* /*workspace*/) {
         if (!parentNode) {
             return ElementStatus::ErrorInParent;
         }
-        g = topology::ops::createVacGroup(
-            domElement->internalId(), parentNode->toGroupUnchecked());
+        g = topology::ops::createVacGroup(parentNode->toGroupUnchecked());
         setVacNode(g);
     }
 
@@ -48,6 +51,10 @@ ElementStatus Layer::updateFromDom_(Workspace* /*workspace*/) {
     // ...
 
     return ElementStatus::Ok;
+}
+
+void Layer::updateFromVac_() {
+    // TODO
 }
 
 void Layer::paint_(

@@ -22,10 +22,14 @@
 
 namespace vgc::dom {
 
-// XXX todos:
-// - check create/remove conflicts in diff
+// XXX TODO:
+// - Check create/remove conflicts in diff
 //     -> if remove is followed by create then remove the elem from diff
 //     -> if there is a remove or create, remove the attribute changes
+// - Differentiate initial "do" from "redo" and "undo" in operations
+//   so that listeners of the target (dom) can respond differently.
+//   For instance, a plugin could create/modify something on "do" but should not
+//   on "redo" since its changes are already present in the undo group.
 
 CreateElementOperation::~CreateElementOperation() {
     if (keepAlive_) {

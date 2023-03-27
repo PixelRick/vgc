@@ -109,6 +109,8 @@ public:
         return cell ? cell->toKeyFaceUnchecked() : nullptr;
     }
 
+    std::optional<core::StringId> domTagName() const override;
+
     geometry::Rect2d boundingBox(core::AnimTime t) const override;
 
     bool isSelectableAt(
@@ -120,6 +122,7 @@ public:
 
 protected:
     ElementStatus updateFromDom_(Workspace* workspace) override;
+    void updateFromVac_() override;
 
     void onDependencyChanged_(Element* dependency) override;
     void onDependencyRemoved_(Element* dependency) override;

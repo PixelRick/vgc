@@ -76,6 +76,10 @@ const VacFaceCellFrameData* VacFaceCell::computeGeometryAt(core::AnimTime t) {
 VacKeyFace::~VacKeyFace() {
 }
 
+std::optional<core::StringId> VacKeyFace::domTagName() const {
+    return dom::strings::face;
+}
+
 geometry::Rect2d VacKeyFace::boundingBox(core::AnimTime /*t*/) const {
     return bbox_;
 }
@@ -143,6 +147,10 @@ ElementStatus VacKeyFace::updateFromDom_(Workspace* workspace) {
     return ElementStatus::InvalidAttribute;
 }
 
+void VacKeyFace::updateFromVac_() {
+    // TODO
+}
+
 void VacKeyFace::onDependencyChanged_(Element* dependency) {
     VacElement* ve = dependency->toVacElement();
     if (ve) {
@@ -156,7 +164,7 @@ void VacKeyFace::onDependencyChanged_(Element* dependency) {
     }
 }
 
-void VacKeyFace::onDependencyRemoved_(Element* dependency) {
+void VacKeyFace::onDependencyRemoved_(Element* /*dependency*/) {
 }
 
 void VacKeyFace::preparePaint_(core::AnimTime t, PaintOptions /*flags*/) {
@@ -192,7 +200,8 @@ void VacKeyFace::paint_(graphics::Engine* engine, core::AnimTime t, PaintOptions
         graphics.fillGeometry_ =
             engine->createDynamicTriangleListView(BuiltinGeometryLayout::XY_iRGBA);
 
-        core::Color color = domElement->getAttribute(ds::color).getColor();
+        core::Color color = domElement ? domElement->getAttribute(ds::color).getColor()
+                                       : core::Color(0, 0, 0, 0.5);
 
         engine->updateBufferData(
             graphics.fillGeometry_->vertexBuffer(0), //
@@ -254,7 +263,7 @@ void VacKeyFace::computeGeometry(VacFaceCellFrameData& data) {
             bool isFirst = true;
             for (const KeyHalfedge& khe : cycle.halfedges()) {
                 const KeyEdge* ke = khe.edge();
-                Element* ve = workspace()->find(ke->id());
+                Element* ve = workspace()->findVacElement(ke->id());
                 VacKeyEdge* vke = dynamic_cast<VacKeyEdge*>(ve);
                 const VacEdgeCellFrameData* edgeData = nullptr;
                 if (vke) {
@@ -317,6 +326,7 @@ void VacKeyFace::onUpdateError_() {
 }
 
 void VacKeyFace::onStyleChanged_() {
+    frameData_.graphics_.fillGeometry_.reset();
 }
 
 } // namespace vgc::workspace

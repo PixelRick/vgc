@@ -149,8 +149,8 @@ protected:
     // better, for example by having deferred widget draws which we would
     // enable for the Canvas.
     //
-    std::array<geometry::Vec2d, 3> minimalLatencyStrokePoints_;
-    std::array<double, 3> minimalLatencyStrokeWidths_;
+    std::array<geometry::Vec2d, 3> minimalLatencyStrokePoints_ = {};
+    std::array<double, 3> minimalLatencyStrokeWidths_ = {};
     graphics::GeometryViewPtr minimalLatencyStrokeGeometry_;
     bool minimalLatencyStrokeReload_ = false;
     geometry::Vec2f lastImmediateCursorPos_ = {};

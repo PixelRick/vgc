@@ -25,12 +25,10 @@
 
 namespace vgc::dom {
 
-Element::Element(Document* document, core::StringId tagName, core::Id internalId)
+Element::Element(Document* document, core::StringId tagName)
     : Node(document, NodeType::Element)
     , tagName_(tagName)
-    , internalId_(internalId) {
-
-    document->elementByInternalIdMap_[internalId_] = this;
+    , internalId_(core::genId()) {
 }
 
 void Element::onDestroyed() {
@@ -46,9 +44,14 @@ void Element::onDestroyed() {
 /* static */
 Element* Element::create_(Node* parent, core::StringId tagName) {
     Document* doc = parent->document();
-    Element* e = new Element(doc, tagName, core::genId());
-    core::History::do_<CreateElementOperation>(doc->history(), e, parent, nullptr);
-    return e;
+    ElementPtr e = new Element(doc, tagName);
+
+    if (!doc->elementByInternalIdMap_.try_emplace(e->internalId(), e.get()).second) {
+        throw LogicError("Internal id collision error.");
+    }
+
+    core::History::do_<CreateElementOperation>(doc->history(), e.get(), parent, nullptr);
+    return e.get();
 }
 
 /* static */

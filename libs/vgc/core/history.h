@@ -304,6 +304,7 @@ private:
     UndoGroup* head_ = nullptr;
     Int numNodes_ = 0;
     Int numLevels_ = 0;
+    bool isUndoingOrRedoing_ = false;
 
     // Assumes head_ is undoable.
     void undoOne_(bool forceAbort = false);

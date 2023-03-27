@@ -254,6 +254,8 @@ public:
         return cell ? cell->toKeyVertexUnchecked() : nullptr;
     }
 
+    std::optional<core::StringId> domTagName() const override;
+
     geometry::Rect2d boundingBox(core::AnimTime t) const override;
 
     bool isSelectableAt(
@@ -265,6 +267,7 @@ public:
 
 protected:
     ElementStatus updateFromDom_(Workspace* workspace) override;
+    void updateFromVac_() override;
 };
 
 class VGC_WORKSPACE_API VacInbetweenVertex final : public VacVertexCell {
@@ -283,10 +286,14 @@ public:
         return cell ? cell->toInbetweenVertexUnchecked() : nullptr;
     }
 
+    std::optional<core::StringId> domTagName() const override;
+
     geometry::Rect2d boundingBox(core::AnimTime t) const override;
 
 protected:
     ElementStatus updateFromDom_(Workspace* workspace) override;
+    void updateFromVac_() override;
+
     void preparePaint_(core::AnimTime t, PaintOptions flags) override;
 };
 

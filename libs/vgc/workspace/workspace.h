@@ -78,13 +78,22 @@ public:
         return vgcElement_;
     }
 
-    Element* find(core::Id id) const {
-        auto it = elements_.find(id);
+    Element* find(core::Id elementId) const {
+        auto it = elements_.find(elementId);
         return it != elements_.end() ? it->second.get() : nullptr;
     }
 
-    Element* find(const dom::Element* e) const {
-        return e ? find(e->internalId()) : nullptr;
+    Element* find(const dom::Element* element) const {
+        return element ? find(element->internalId()) : nullptr;
+    }
+
+    VacElement* findVacElement(core::Id nodeId) const {
+        auto it = elementByVacInternalId_.find(nodeId);
+        return it != elementByVacInternalId_.end() ? it->second : nullptr;
+    }
+
+    VacElement* findVacElement(const vacomplex::Node* node) const {
+        return node ? findVacElement(node->id()) : nullptr;
     }
 
     void sync();
@@ -112,11 +121,13 @@ public:
     VGC_SLOT(onVacNodeCreated, onVacNodeCreated_);
 
 private:
+    friend VacElement;
     static std::unordered_map<core::StringId, ElementCreator>& elementCreators_();
 
     // This is the <vgc> element (the root).
     VacElement* vgcElement_;
     std::unordered_map<core::Id, std::unique_ptr<Element>> elements_;
+    std::unordered_map<core::Id, VacElement*> elementByVacInternalId_;
     core::Array<Element*> elementsWithError_;
     core::Array<Element*> elementsToUpdateFromDom_;
 
@@ -137,8 +148,8 @@ private:
 
     bool isCreatingDomElementsFromVac_ = false;
 
-    void preElementUpdateFromVacToDom_(Element* element);
-    void postElementUpdateFromVacToDom_(Element* element);
+    void preUpdateDomFromVac_();
+    void postUpdateDomFromVac_();
 
     void rebuildDomFromTree_();
 

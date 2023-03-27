@@ -38,10 +38,13 @@ public:
         : VacElement(workspace) {
     }
 
+    std::optional<core::StringId> domTagName() const override;
+
     geometry::Rect2d boundingBox(core::AnimTime t) const override;
 
 protected:
     ElementStatus updateFromDom_(Workspace* workspace) override;
+    void updateFromVac_() override;
 
     void paint_(
         graphics::Engine* engine,

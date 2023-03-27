@@ -123,7 +123,7 @@ private:
 
 protected:
     Vac() {
-        resetRoot(core::genId());
+        resetRoot();
     }
 
     void onDestroyed() override;
@@ -133,7 +133,7 @@ public:
 
     void clear();
 
-    VacGroup* resetRoot(core::Id id);
+    VacGroup* resetRoot();
 
     VacGroup* rootGroup() const {
         return root_;
@@ -153,21 +153,27 @@ public:
         return version_;
     }
 
-    const VacDiff& pendingDiff() {
-        return diff_;
-    }
+    //const VacDiff& pendingDiff() {
+    //    return diff_;
+    //}
 
-    bool emitPendingDiff();
+    //bool emitPendingDiff();
 
-    VGC_SIGNAL(onNodeAboutToBeRemoved, (VacNode*, node))
-    VGC_SIGNAL(changed, (const VacDiff&, diff))
+    VGC_SIGNAL(nodeAboutToBeRemoved, (VacNode*, node))
+    VGC_SIGNAL(
+        nodeCreated,
+        (VacNode*, node),
+        (core::Span<VacNode*>, operationSourceNodes))
+    VGC_SIGNAL(cellGeometryChanged, (VacCell*, node))
+
+    //VGC_SIGNAL(changed, (const VacDiff&, diff))
 
 protected:
     void incrementVersion() {
         ++version_;
     }
 
-    bool insertNode(core::Id id, std::unique_ptr<VacNode>&& node);
+    bool insertNode(std::unique_ptr<VacNode>&& node);
 
 private:
     Int64 version_ = 0;
@@ -216,6 +222,7 @@ using topology::EdgeGeometry;
 using topology::FaceGeometry;
 
 using topology::KeyCycle;
+using topology::KeyHalfedge;
 
 } // namespace vgc::vacomplex
 

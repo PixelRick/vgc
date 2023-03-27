@@ -230,6 +230,8 @@ public:
         paint_(engine, t, flags);
     }
 
+    virtual std::optional<core::StringId> domTagName() const;
+
     virtual geometry::Rect2d boundingBox(core::AnimTime t = {}) const;
 
     /// Returns whether the element is selectable, that is:
@@ -331,6 +333,8 @@ protected:
     vacomplex::Cell* vacCellUnchecked() const {
         return vacNode_ ? vacNode_->toCellUnchecked() : nullptr;
     }
+
+    virtual void updateFromVac_() = 0;
 
     void removeVacNode();
     void setVacNode(vacomplex::Node* vacNode);

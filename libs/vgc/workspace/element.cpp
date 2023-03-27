@@ -26,6 +26,10 @@ Element::~Element() {
     clearDependencies();
 }
 
+std::optional<core::StringId> Element::domTagName() const {
+    return {};
+}
+
 geometry::Rect2d Element::boundingBox(core::AnimTime /*t*/) const {
     return geometry::Rect2d::empty;
 }
@@ -128,11 +132,17 @@ void VacElement::removeVacNode() {
         vacomplex::Node* tmp = vacNode_;
         vacNode_ = nullptr;
         topology::ops::removeNode(tmp, false);
+        const_cast<Workspace*>(workspace())->elementByVacInternalId_.erase(tmp->id());
     }
 }
 
 void VacElement::setVacNode(vacomplex::Node* vacNode) {
     removeVacNode();
+    if (vacNode) {
+        const_cast<Workspace*>(workspace())
+            ->elementByVacInternalId_.emplace(vacNode->id(), this);
+    }
+    //workspace()->elementByVacInternalId_
     vacNode_ = vacNode;
 }
 

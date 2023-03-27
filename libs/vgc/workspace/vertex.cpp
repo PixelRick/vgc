@@ -110,36 +110,6 @@ void VacVertexCellFrameData::debugPaint(graphics::Engine* engine) {
 
 } // namespace detail
 
-geometry::Rect2d VacKeyVertex::boundingBox(core::AnimTime /*t*/) const {
-    vacomplex::KeyVertex* kv = vacKeyVertexNode();
-    if (kv) {
-        geometry::Vec2d pos = vacKeyVertexNode()->position();
-        return geometry::Rect2d(pos, pos);
-    }
-    return geometry::Rect2d::empty;
-}
-
-bool VacKeyVertex::isSelectableAt(
-    const geometry::Vec2d& p,
-    bool /*outlineOnly*/,
-    double tol,
-    double* outDistance,
-    core::AnimTime /*t*/) const {
-
-    vacomplex::KeyVertex* kv = vacKeyVertexNode();
-    if (kv) {
-        geometry::Vec2d pos = vacKeyVertexNode()->position();
-        double d = (p - pos).length();
-        if (d < tol) {
-            if (outDistance) {
-                *outDistance = d;
-            }
-            return true;
-        }
-    }
-    return false;
-}
-
 void VacVertexCell::computeJoin(core::AnimTime t) {
     detail::VacVertexCellFrameData* c = frameData(t);
     if (c) {
@@ -298,34 +268,6 @@ void VacVertexCell::computeJoin(detail::VacVertexCellFrameData& data) {
     data.isComputing_ = false;
 }
 
-ElementStatus VacKeyVertex::updateFromDom_(Workspace* /*workspace*/) {
-    namespace ds = dom::strings;
-    dom::Element* const domElement = this->domElement();
-
-    vacomplex::KeyVertex* kv = vacKeyVertexNode();
-    if (!kv) {
-        VacElement* parentElement = parentVacElement();
-        if (!parentElement) {
-            return ElementStatus::ErrorInParent;
-        }
-        vacomplex::Node* parentNode = parentElement->vacNode();
-        if (!parentNode) {
-            return ElementStatus::ErrorInParent;
-        }
-        kv = topology::ops::createKeyVertex(
-            domElement->internalId(), parentNode->toGroupUnchecked());
-        setVacNode(kv);
-    }
-
-    const auto& position = domElement->getAttribute(ds::position).getVec2d();
-    if (kv->position() != position) {
-        topology::ops::setKeyVertexPosition(kv, position);
-        onInputGeometryChanged();
-    }
-
-    return ElementStatus::Ok;
-}
-
 void VacVertexCell::rebuildJoinHalfedgesArray() const {
 
     vacomplex::VertexCell* v = vacVertexCellNode();
@@ -392,6 +334,79 @@ void VacVertexCell::onJoinEdgeGeometryChanged_(VacEdgeCell* /*edge*/) {
     clearJoinHalfedgesJoinData();
 }
 
+std::optional<core::StringId> VacKeyVertex::domTagName() const {
+    return dom::strings::vertex;
+}
+
+geometry::Rect2d VacKeyVertex::boundingBox(core::AnimTime /*t*/) const {
+    vacomplex::KeyVertex* kv = vacKeyVertexNode();
+    if (kv) {
+        geometry::Vec2d pos = vacKeyVertexNode()->position();
+        return geometry::Rect2d(pos, pos);
+    }
+    return geometry::Rect2d::empty;
+}
+
+bool VacKeyVertex::isSelectableAt(
+    const geometry::Vec2d& p,
+    bool /*outlineOnly*/,
+    double tol,
+    double* outDistance,
+    core::AnimTime /*t*/) const {
+
+    vacomplex::KeyVertex* kv = vacKeyVertexNode();
+    if (kv) {
+        geometry::Vec2d pos = vacKeyVertexNode()->position();
+        double d = (p - pos).length();
+        if (d < tol) {
+            if (outDistance) {
+                *outDistance = d;
+            }
+            return true;
+        }
+    }
+    return false;
+}
+
+ElementStatus VacKeyVertex::updateFromDom_(Workspace* /*workspace*/) {
+    namespace ds = dom::strings;
+    dom::Element* const domElement = this->domElement();
+    if (!domElement) {
+        // TODO: error ?
+    }
+
+    const auto& position = domElement->getAttribute(ds::position).getVec2d();
+
+    vacomplex::KeyVertex* kv = vacKeyVertexNode();
+    if (!kv) {
+        VacElement* parentElement = parentVacElement();
+        if (!parentElement) {
+            return ElementStatus::ErrorInParent;
+        }
+        vacomplex::Node* parentNode = parentElement->vacNode();
+        if (!parentNode) {
+            return ElementStatus::ErrorInParent;
+        }
+        kv = topology::ops::createKeyVertex(position, parentNode->toGroupUnchecked());
+        setVacNode(kv);
+    }
+    else if (kv->position() != position) {
+        topology::ops::setKeyVertexPosition(kv, position);
+        onInputGeometryChanged();
+    }
+
+    return ElementStatus::Ok;
+}
+
+void VacKeyVertex::updateFromVac_() {
+    // TODO
+}
+
+std::optional<core::StringId> VacInbetweenVertex::domTagName() const {
+    // TODO: update
+    return dom::strings::vertex;
+}
+
 geometry::Rect2d VacInbetweenVertex::boundingBox(core::AnimTime t) const {
     vacomplex::InbetweenVertex* iv = vacInbetweenVertexNode();
     if (iv) {
@@ -403,6 +418,10 @@ geometry::Rect2d VacInbetweenVertex::boundingBox(core::AnimTime t) const {
 
 ElementStatus VacInbetweenVertex::updateFromDom_(Workspace* /*workspace*/) {
     return ElementStatus::Ok;
+}
+
+void VacInbetweenVertex::updateFromVac_() {
+    // TODO
 }
 
 void VacInbetweenVertex::preparePaint_(core::AnimTime /*t*/, PaintOptions /*flags*/) {

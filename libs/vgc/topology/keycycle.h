@@ -19,6 +19,7 @@
 
 #include <initializer_list>
 
+#include <vgc/core/span.h>
 #include <vgc/topology/api.h>
 #include <vgc/topology/keyhalfedge.h>
 
@@ -26,7 +27,7 @@ namespace vgc::topology {
 
 class VGC_TOPOLOGY_API KeyCycle {
 public:
-    explicit KeyCycle(std::initializer_list<KeyHalfedge> halfedges) noexcept
+    explicit KeyCycle(core::Span<const KeyHalfedge> halfedges) noexcept
         : halfedges_(halfedges) {
 
         if (halfedges_.isEmpty()) {
@@ -62,6 +63,10 @@ public:
                 halfedges_.clear();
             }
         }
+    }
+
+    explicit KeyCycle(std::initializer_list<KeyHalfedge> halfedges) noexcept
+        : KeyCycle(core::Span<const KeyHalfedge>(halfedges.begin(), halfedges.end())) {
     }
 
     explicit KeyCycle(KeyVertex* steinerVertex) noexcept
