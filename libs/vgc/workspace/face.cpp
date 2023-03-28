@@ -151,13 +151,13 @@ void VacKeyFace::updateFromVac_() {
     // TODO
 }
 
-void VacKeyFace::onDependencyChanged_(Element* dependency) {
+void VacKeyFace::onDependencyChanged_(Element* dependency, ChangeFlags changes) {
     VacElement* ve = dependency->toVacElement();
     if (ve) {
         vacomplex::Node* vnode = ve->vacNode();
         if (vnode) {
             vacomplex::Cell* cell = vnode->toCell();
-            if (cell->toKeyEdge()) {
+            if (cell->toKeyEdge() && changes.has(ChangeFlag::Geometry)) {
                 onBoundaryGeometryChanged();
             }
         }

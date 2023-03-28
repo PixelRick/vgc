@@ -22,6 +22,23 @@
 
 namespace vgc::workspace {
 
+namespace detail {
+
+graphics::GeometryViewPtr createStrokeGraphicsGeometry(
+    graphics::Engine* engine,
+    const StrokeStripGeometry& geometry) {
+    // TODO
+    return {};
+}
+
+graphics::GeometryViewPtr
+createStrokeGraphicsGeometry(graphics::Engine* engine, const StrokeGeometry& geometry) {
+    // TODO
+    return {};
+}
+
+} // namespace detail
+
 VacKeyEdge::~VacKeyEdge() {
     for (Int i = 0; i < 2; ++i) {
         VacKeyVertex* const vertex = verticesInfo_[i].element;
@@ -30,6 +47,14 @@ VacKeyEdge::~VacKeyEdge() {
             vertex->removeJoinHalfedge_(he);
             verticesInfo_[i].element = nullptr;
         }
+    }
+}
+
+void VacKeyEdge::setTesselationMode(int mode) {
+    int newMode = core::clamp(mode, 0, 2);
+    if (edgeTesselationModeRequested_ != newMode) {
+        edgeTesselationModeRequested_ = newMode;
+        onInputGeometryChanged();
     }
 }
 
@@ -254,6 +279,8 @@ ElementStatus VacKeyEdge::updateFromDom_(Workspace* workspace) {
 
     vacomplex::KeyEdge* ke = vacKeyEdgeNode();
 
+    ChangeFlags changeFlags = {};
+
     // check if it needs to be rebuilt
     if (ke) {
         vacomplex::KeyVertex* oldKv0 = ke->startVertex();
@@ -290,6 +317,7 @@ ElementStatus VacKeyEdge::updateFromDom_(Workspace* workspace) {
             topology::ops::setKeyEdgeCurvePoints(ke, points);
             topology::ops::setKeyEdgeCurveWidths(ke, widths);
             onInputGeometryChanged();
+            changeFlags.set(ChangeFlag::EdgeGeometry);
         }
 
         // TODO: check color change
@@ -305,6 +333,9 @@ ElementStatus VacKeyEdge::updateFromDom_(Workspace* workspace) {
 
 void VacKeyEdge::updateFromVac_() {
     // TODO
+}
+
+void VacKeyEdge::onDependencyChanged_(Element* dependency, ChangeFlags changes) {
 }
 
 void VacKeyEdge::onDependencyRemoved_(Element* dependency) {
@@ -344,20 +375,20 @@ void VacKeyEdge::paint_(graphics::Engine* engine, core::AnimTime t, PaintOptions
     EdgeGraphics& graphics = frameData_.graphics_;
 
     if ((flags.hasAny(strokeOptions) || !flags.has(PaintOption::Outline))
-        && !graphics.strokeGeometry_) {
+        && !graphics.strokeGeometry()) {
 
-        graphics.strokeGeometry_ =
-            engine->createDynamicTriangleStripView(BuiltinGeometryLayout::XYUV_iRGBA);
-        graphics.joinGeometry_ = engine->createDynamicTriangleStripView(
-            BuiltinGeometryLayout::XYUV_iRGBA, IndexFormat::UInt32);
+        graphics.setStrokeGeometry(
+            engine->createDynamicTriangleStripView(BuiltinGeometryLayout::XYUV_iRGBA));
+        graphics.setJoinGeometry(engine->createDynamicTriangleStripView(
+            BuiltinGeometryLayout::XYUV_iRGBA, IndexFormat::UInt32));
 
         GeometryViewCreateInfo createInfo = {};
         createInfo.setBuiltinGeometryLayout(BuiltinGeometryLayout::XYUV_iRGBA);
         createInfo.setPrimitiveType(PrimitiveType::TriangleStrip);
-        createInfo.setVertexBuffer(0, graphics.strokeGeometry_->vertexBuffer(0));
+        createInfo.setVertexBuffer(0, graphics.strokeGeometry()->vertexBuffer(0));
         BufferPtr selectionInstanceBuffer = engine->createVertexBuffer(Int(4) * 4);
         createInfo.setVertexBuffer(1, selectionInstanceBuffer);
-        graphics.selectionGeometry_ = engine->createGeometryView(createInfo);
+        graphics.setSelectionGeometry(engine->createGeometryView(createInfo));
 
         core::Color color = domElement->getAttribute(ds::color).getColor();
 
@@ -456,37 +487,37 @@ void VacKeyEdge::paint_(graphics::Engine* engine, core::AnimTime t, PaintOptions
         }
 
         engine->updateBufferData(
-            graphics.strokeGeometry_->vertexBuffer(0), //
+            graphics.strokeGeometry()->vertexBuffer(0), //
             std::move(strokeVertices));
         engine->updateBufferData(
-            graphics.strokeGeometry_->vertexBuffer(1), //
+            graphics.strokeGeometry()->vertexBuffer(1), //
             core::Array<float>({color.r(), color.g(), color.b(), color.a()}));
 
         engine->updateBufferData(
-            graphics.joinGeometry_->vertexBuffer(0), //
+            graphics.joinGeometry()->vertexBuffer(0), //
             std::move(joinVertices));
         engine->updateBufferData(
-            graphics.joinGeometry_->vertexBuffer(1), //
+            graphics.joinGeometry()->vertexBuffer(1), //
             core::Array<float>({color.g(), color.b(), color.r(), color.a()}));
         engine->updateBufferData(
-            graphics.joinGeometry_->indexBuffer(), //
+            graphics.joinGeometry()->indexBuffer(), //
             std::move(joinIndices));
     }
 
     constexpr PaintOptions centerlineOptions = {
         PaintOption::Outline, PaintOption::Selected};
 
-    if (flags.hasAny(centerlineOptions) && !graphics.centerlineGeometry_) {
-        graphics.centerlineGeometry_ = engine->createDynamicTriangleStripView(
-            BuiltinGeometryLayout::XYDxDy_iXYRotWRGBA);
+    if (flags.hasAny(centerlineOptions) && !graphics.centerlineGeometry()) {
+        graphics.setCenterlineGeometry(engine->createDynamicTriangleStripView(
+            BuiltinGeometryLayout::XYDxDy_iXYRotWRGBA));
 
         GeometryViewCreateInfo createInfo = {};
         createInfo.setBuiltinGeometryLayout(BuiltinGeometryLayout::XYDxDy_iXYRotWRGBA);
         createInfo.setPrimitiveType(PrimitiveType::TriangleStrip);
-        createInfo.setVertexBuffer(0, graphics.centerlineGeometry_->vertexBuffer(0));
+        createInfo.setVertexBuffer(0, graphics.centerlineGeometry()->vertexBuffer(0));
         BufferPtr selectionInstanceBuffer = engine->createVertexBuffer(0);
         createInfo.setVertexBuffer(1, selectionInstanceBuffer);
-        graphics.selectionGeometry_ = engine->createGeometryView(createInfo);
+        graphics.setSelectionGeometry(engine->createGeometryView(createInfo));
 
         core::FloatArray lineInstData;
         lineInstData.extend({0.f, 0.f, 1.f, 2.f, 0.02f, 0.64f, 1.0f, 1.f});
@@ -502,9 +533,9 @@ void VacKeyEdge::paint_(graphics::Engine* engine, core::AnimTime t, PaintOptions
         }
 
         engine->updateBufferData(
-            graphics.centerlineGeometry_->vertexBuffer(0), std::move(lineVertices));
+            graphics.centerlineGeometry()->vertexBuffer(0), std::move(lineVertices));
         engine->updateBufferData(
-            graphics.centerlineGeometry_->vertexBuffer(1), std::move(lineInstData));
+            graphics.centerlineGeometry()->vertexBuffer(1), std::move(lineInstData));
 
         core::Color color = domElement->getAttribute(ds::color).getColor();
 
@@ -526,9 +557,9 @@ void VacKeyEdge::paint_(graphics::Engine* engine, core::AnimTime t, PaintOptions
 
     constexpr PaintOptions pointsOptions = {PaintOption::Outline};
 
-    if (flags.hasAny(pointsOptions) && !graphics.pointsGeometry_) {
-        graphics.pointsGeometry_ = engine->createDynamicTriangleStripView(
-            BuiltinGeometryLayout::XYDxDy_iXYRotWRGBA);
+    if (flags.hasAny(pointsOptions) && !graphics.pointsGeometry()) {
+        graphics.setPointsGeometry(engine->createDynamicTriangleStripView(
+            BuiltinGeometryLayout::XYDxDy_iXYRotWRGBA));
 
         float pointHalfSize = 5.f;
 
@@ -559,25 +590,25 @@ void VacKeyEdge::paint_(graphics::Engine* engine, core::AnimTime t, PaintOptions
         }
 
         engine->updateBufferData(
-            graphics.pointsGeometry_->vertexBuffer(0), std::move(pointVertices));
+            graphics.pointsGeometry()->vertexBuffer(0), std::move(pointVertices));
         engine->updateBufferData(
-            graphics.pointsGeometry_->vertexBuffer(1), std::move(pointInstData));
+            graphics.pointsGeometry()->vertexBuffer(1), std::move(pointInstData));
     }
 
     if (flags.has(PaintOption::Selected)) {
         engine->setProgram(graphics::BuiltinProgram::SreenSpaceDisplacement);
-        engine->draw(graphics.selectionGeometry_);
+        engine->draw(graphics.selectionGeometry());
     }
     else if (!flags.has(PaintOption::Outline)) {
         engine->setProgram(graphics::BuiltinProgram::Simple);
-        engine->draw(graphics.strokeGeometry_);
-        engine->draw(graphics.joinGeometry_);
+        engine->draw(graphics.strokeGeometry());
+        engine->draw(graphics.joinGeometry());
     }
 
     if (flags.has(PaintOption::Outline)) {
         engine->setProgram(graphics::BuiltinProgram::SreenSpaceDisplacement);
-        engine->draw(graphics.centerlineGeometry_);
-        engine->drawInstanced(graphics.pointsGeometry_);
+        engine->draw(graphics.centerlineGeometry());
+        engine->drawInstanced(graphics.pointsGeometry());
     }
 }
 
@@ -600,6 +631,7 @@ void VacKeyEdge::onInputGeometryChanged() {
             vi.element->onJoinEdgeGeometryChanged_(this);
         }
     }
+    //notifyChangesToDependents(ChangeFlag::Geometry0);
 }
 
 void VacKeyEdge::onBoundaryGeometryChanged() {
@@ -690,6 +722,8 @@ void VacKeyEdge::computeStandaloneGeometry_() {
         data.controlPoints_.emplaceLast(geometry::Vec2f(p));
     }
 
+    alreadyNotifiedChanges_.unset(
+        {ChangeFlag::EdgeCenterline, ChangeFlag::EdgeOffsetLines});
     data.isStandaloneGeometryComputed_ = true;
     data.isComputing_ = false;
 
@@ -721,6 +755,7 @@ void VacKeyEdge::computeGeometry_() {
         v1->computeJoin(ke->time());
     }
 
+    alreadyNotifiedChanges_.unset({ChangeFlag::EdgeJoinedLines});
     data.isGeometryComputed_ = true;
     data.isComputing_ = false;
 

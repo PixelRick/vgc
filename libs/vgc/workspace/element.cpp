@@ -78,13 +78,13 @@ void Element::clearDependencies() {
     }
 }
 
-void Element::notifyChangesToDependents() {
+void Element::notifyChangesToDependents(ChangeFlags changes) {
     for (Element* e : dependents_) {
-        e->onDependencyChanged_(this);
+        e->onDependencyChanged_(this, changes);
     }
 }
 
-void Element::onDependencyChanged_(Element* /*dependency*/) {
+void Element::onDependencyChanged_(Element* /*dependency*/, ChangeFlags /*changes*/) {
 }
 
 void Element::onDependencyRemoved_(Element* /*dependency*/) {

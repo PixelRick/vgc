@@ -124,7 +124,7 @@ protected:
     ElementStatus updateFromDom_(Workspace* workspace) override;
     void updateFromVac_() override;
 
-    void onDependencyChanged_(Element* dependency) override;
+    void onDependencyChanged_(Element* dependency, ChangeFlags changes) override;
     void onDependencyRemoved_(Element* dependency) override;
 
     void preparePaint_(core::AnimTime t, PaintOptions flags) override;

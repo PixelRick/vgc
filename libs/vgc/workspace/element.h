@@ -95,6 +95,17 @@ enum class ElementStatus : Int8 {
     ErrorInParent,
 };
 
+enum class ChangeFlag : UInt {
+    None = 0x00,
+    EdgeCenterline = 0x01,
+    EdgeOffsetLines = 0x02,
+    EdgeJoinedLines = 0x04,
+    Color = 0x20,
+    Style = 0x40,
+    EdgeGeometry = EdgeCenterline | EdgeOffsetLines | EdgeJoinedLines,
+};
+VGC_DEFINE_FLAGS(ChangeFlags, ChangeFlag)
+
 constexpr bool operator!(const ElementStatus& status) noexcept {
     return status != ElementStatus::Ok;
 }
@@ -259,8 +270,8 @@ protected:
     void removeDependency(Element* dependency);
     void clearDependencies();
 
-    void notifyChangesToDependents();
-    virtual void onDependencyChanged_(Element* dependency);
+    void notifyChangesToDependents(ChangeFlags changes);
+    virtual void onDependencyChanged_(Element* dependency, ChangeFlags changes);
     virtual void onDependencyRemoved_(Element* dependency);
 
     /// dependent may be being destroyed, only use its pointer as key.
