@@ -28,10 +28,15 @@
 namespace vgc::workspace {
 
 class VacVertexCell;
+class VacKeyVertex;
+class VacInbetweenVertex;
 class VacEdgeCell;
 class VacEdgeCellFrameData;
+class VacVertexCellFrameData;
 
 namespace detail {
+
+class VacJoinFrameData;
 
 // references an incident halfedge in a join
 class VGC_WORKSPACE_API VacJoinHalfedge {
@@ -73,7 +78,8 @@ private:
 class VGC_WORKSPACE_API VacJoinHalfedgeFrameData {
 public:
     friend VacVertexCell;
-    friend class VacVertexCellFrameData;
+    friend VacVertexCellFrameData;
+    friend VacJoinFrameData;
 
     VacJoinHalfedgeFrameData(const VacJoinHalfedge& halfedge)
         : halfedge_(halfedge) {
@@ -129,24 +135,39 @@ private:
     core::Array<geometry::CurveSample> workingSamples_;
     double angle_ = 0.0;
     double angleToNext_ = 0.0;
+
+    void clearResult() {
+        workingSamples_.clear();
+        sidePatchData_[0].clear();
+        sidePatchData_[1].clear();
+    }
 };
 
 class VGC_WORKSPACE_API VacJoinFrameData {
-public:
-    friend class VacVertexCellFrameData;
+private:
+    friend VacVertexCellFrameData;
     friend VacVertexCell;
+
+    core::Array<VacJoinHalfedgeFrameData> halfedgesData_;
 
     void clear() {
         halfedgesData_.clear();
     }
 
-private:
-    core::Array<detail::VacJoinHalfedgeFrameData> halfedgesData_;
+    void clearResults() {
+        for (VacJoinHalfedgeFrameData& he : halfedgesData_) {
+            he.clearResult();
+        }
+    }
 };
+
+} // namespace detail
 
 class VGC_WORKSPACE_API VacVertexCellFrameData {
 public:
     friend VacVertexCell;
+    friend VacKeyVertex;
+    friend VacInbetweenVertex;
 
     VacVertexCellFrameData(const core::AnimTime& t)
         : time_(t) {
@@ -156,24 +177,12 @@ public:
         return time_;
     }
 
-    bool hasPosData() const {
-        return isJoinComputed_;
+    bool hasPosition() const {
+        return isPositionComputed_;
     }
 
     const geometry::Vec2d& position() const {
         return position_;
-    }
-
-    bool hasJoinData() const {
-        return isJoinComputed_;
-    }
-
-    void clearJoinData() {
-        debugLinesRenderGeometry_.reset();
-        debugQuadRenderGeometry_.reset();
-        joinData_.clear();
-        isComputing_ = false;
-        isJoinComputed_ = false;
     }
 
     void debugPaint(graphics::Engine* engine);
@@ -181,15 +190,30 @@ public:
 private:
     core::AnimTime time_;
     geometry::Vec2d position_ = core::noInit;
-    mutable graphics::GeometryViewPtr debugLinesRenderGeometry_;
-    mutable graphics::GeometryViewPtr debugQuadRenderGeometry_;
-    VacJoinFrameData joinData_;
-    bool isComputing_ = false;
-    bool isJoinComputed_ = false;
+    mutable graphics::GeometryViewPtr joinDebugLinesRenderGeometry_;
+    mutable graphics::GeometryViewPtr joinDebugQuadRenderGeometry_;
+    detail::VacJoinFrameData joinData_;
     bool isPositionComputed_ = false;
-};
+    bool isJoinComputed_ = false;
+    bool isComputing_ = false;
 
-} // namespace detail
+    bool hasJoinData() const {
+        return isJoinComputed_;
+    }
+
+    void clearJoinData() {
+        position_ = {};
+        joinData_.clearResults();
+        isJoinComputed_ = false;
+        joinDebugLinesRenderGeometry_.reset();
+        joinDebugQuadRenderGeometry_.reset();
+    }
+
+    void clearJoinResults() {
+        joinData_.clearResults();
+        isJoinComputed_ = false;
+    }
+};
 
 class VGC_WORKSPACE_API VacVertexCell : public VacElement {
 private:
@@ -209,30 +233,23 @@ public:
         return cell ? cell->toVertexCellUnchecked() : nullptr;
     }
 
-    void computeJoin(core::AnimTime t);
+    virtual const VacVertexCellFrameData* computeFrameDataAt(core::AnimTime t) = 0;
 
 protected:
-    void paint_(
-        graphics::Engine* engine,
-        core::AnimTime t,
-        PaintOptions flags = PaintOption::None) const override;
-
-    detail::VacVertexCellFrameData* frameData(core::AnimTime t) const;
-    void computePosition(detail::VacVertexCellFrameData& data);
-    void computeJoin(detail::VacVertexCellFrameData& data);
-
     void rebuildJoinHalfedgesArray() const;
     void clearJoinHalfedgesJoinData() const;
+
+    // only dirty results but keep precomputed data in VacJoinHalfedgeFrameData
+    virtual void dirtyJoinResults() = 0;
+
+private:
+    mutable core::Array<detail::VacJoinHalfedge> joinHalfedges_;
 
     void addJoinHalfedge_(const detail::VacJoinHalfedge& joinHalfedge);
     void removeJoinHalfedge_(const detail::VacJoinHalfedge& joinHalfedge);
 
-    void onInputGeometryChanged();
-    void onJoinEdgeGeometryChanged_(VacEdgeCell* edge);
-
-private:
-    mutable core::Array<detail::VacJoinHalfedge> joinHalfedges_;
-    mutable core::Array<detail::VacVertexCellFrameData> frameDataEntries_;
+    // should both dirty results and clear corresponding VacJoinHalfedgeFrameData
+    virtual void onJoinEdgeGeometryChange_(VacEdgeCell* edge) = 0;
 };
 
 class VGC_WORKSPACE_API VacKeyVertex final : public VacVertexCell {
@@ -246,7 +263,8 @@ public:
     ~VacKeyVertex() override = default;
 
     VacKeyVertex(Workspace* workspace)
-        : VacVertexCell(workspace) {
+        : VacVertexCell(workspace)
+        , frameData_({}) {
     }
 
     vacomplex::KeyVertex* vacKeyVertexNode() const {
@@ -266,35 +284,23 @@ public:
         core::AnimTime t = {}) const override;
 
 protected:
-    ElementStatus updateFromDom_(Workspace* workspace) override;
-    void updateFromVac_() override;
-};
+    void onPaintDraw(
+        graphics::Engine* engine,
+        core::AnimTime t,
+        PaintOptions flags = PaintOption::None) const override;
 
-class VGC_WORKSPACE_API VacInbetweenVertex final : public VacVertexCell {
+    void dirtyJoinResults() override;
+
 private:
-    friend class Workspace;
+    mutable VacVertexCellFrameData frameData_;
 
-public:
-    ~VacInbetweenVertex() override = default;
-
-    VacInbetweenVertex(Workspace* workspace)
-        : VacVertexCell(workspace) {
-    }
-
-    vacomplex::InbetweenVertex* vacInbetweenVertexNode() const {
-        vacomplex::Cell* cell = vacCellUnchecked();
-        return cell ? cell->toInbetweenVertexUnchecked() : nullptr;
-    }
-
-    std::optional<core::StringId> domTagName() const override;
-
-    geometry::Rect2d boundingBox(core::AnimTime t) const override;
-
-protected:
     ElementStatus updateFromDom_(Workspace* workspace) override;
     void updateFromVac_() override;
 
-    void preparePaint_(core::AnimTime t, PaintOptions flags) override;
+    void onJoinEdgeGeometryChange_(VacEdgeCell* edge) override;
+
+    void computePosition_();
+    void computeJoin_();
 };
 
 } // namespace vgc::workspace

@@ -17,6 +17,8 @@
 #ifndef VGC_WORKSPACE_EDGE_H
 #define VGC_WORKSPACE_EDGE_H
 
+#include <initializer_list>
+
 #include <vgc/core/arithmetic.h>
 #include <vgc/core/array.h>
 #include <vgc/dom/element.h>
@@ -43,14 +45,20 @@ namespace vgc::workspace {
 
 // Component (drawn and selectable..)
 
-class VGC_WORKSPACE_API StuvMesh {
+class VGC_WORKSPACE_API StuvMesh2d {
 public:
-    StuvMesh() noexcept = default;
+    StuvMesh2d() noexcept = default;
 
-    void clear() {
+    void reset(bool isStrip) {
+        isStrip_ = isStrip;
+        reset();
+    }
+
+    void reset() {
         xyVertices_.clear();
         stuvVertices_.clear();
         indices_.clear();
+        hasPrimRestart_ = false;
     }
 
     /// Returns the xy component of vertices.
@@ -76,6 +84,18 @@ public:
         return !isStrip_;
     }
 
+    bool isIndexed() const {
+        return indices_.length() > 0;
+    }
+
+    bool hasPrimitiveRestart() const {
+        return hasPrimRestart_;
+    }
+
+    Int numVertices() const {
+        return xyVertices_.length();
+    }
+
     Int appendVertex(const geometry::Vec2d& position, const geometry::Vec4d& stuv) {
         Int idx = xyVertices_.length();
         xyVertices_.emplaceLast(position);
@@ -84,9 +104,10 @@ public:
     }
 
     void appendIndex(Int i) {
-        const Int n = xyVertices_.length();
+        Int n = xyVertices_.length();
         if (i < 0 || i >= n) {
-            throw core::IndexError("Vertex index is out of range.");
+            throw core::IndexError(
+                core::format("Vertex index {} is out of range [0, {}).", i, n));
         }
         indices_.append(i);
     }
@@ -96,10 +117,11 @@ public:
     }
 
     void appendIndices(std::initializer_list<Int> is) {
-        const Int n = xyVertices_.length();
+        Int n = xyVertices_.length();
         for (Int i : is) {
             if (i < 0 || i >= n) {
-                throw core::IndexError("Vertex index is out of range.");
+                throw core::IndexError(
+                    core::format("Vertex index {} is out of range [0, {}).", i, n));
             }
         }
         indices_.extend(is);
@@ -109,103 +131,43 @@ public:
         indices_.extend(is);
     }
 
-    void setTopology(bool isStrip) {
-        isStrip_ = isStrip;
+    void appendPrimitiveRestartIndex() {
+        indices_.append(-1);
+        hasPrimRestart_ = true;
     }
 
 private:
     geometry::Vec2dArray xyVertices_;
     geometry::Vec4dArray stuvVertices_;
     core::IntArray indices_;
-    bool isStrip_;
+    bool isStrip_ = false;
+    bool hasPrimRestart_ = false;
 };
 
-/// \enum vgc::workspace::StrokeStripGeometry
-/// \brief Stores stroke geometry as a triangle strip of xy and stuv vertices.
-///
-class VGC_WORKSPACE_API StuvStripBuilder {
+class VGC_WORKSPACE_API StuvTriangleListMesh2dBuilder {
 public:
-    StuvStripBuilder(StuvMesh& mesh)
+    StuvTriangleListMesh2dBuilder(StuvMesh2d& mesh)
         : mesh_(mesh) {
 
-        mesh_.clear();
-        mesh_.setTopology(true);
+        mesh_.reset(false);
     }
 
     Int appendVertex(const geometry::Vec2d& position, const geometry::Vec4d& stuv) {
-        Int idx = meshVertices_.length();
-        meshVertices_.emplaceLast(position);
-        meshUVSTs_.emplaceLast(stuv);
-        return idx;
-    }
-
-    Int continueStrip(const geometry::Vec2d& position, const geometry::Vec4d& stuv) {
-        Int idx = appendVertex(position, stuv);
-        continueStrip(idx);
-        return idx;
-    }
-
-    void continueStrip(Int i) {
-        const Int n = meshVertices_.length();
-        if (i < 0 || i >= n) {
-            throw core::IndexError("Vertex index is out of range.");
-        }
-        meshIndices_.append(i);
-    }
-
-private:
-    ParameterizedMesh& mesh_;
-};
-
-class VGC_WORKSPACE_API StrokeGeometry {
-public:
-    void clear() {
-        meshVertices_.clear();
-        meshUVSTs_.clear();
-        meshIndices_.clear();
-    }
-
-    const geometry::Vec2dArray& meshVertices() const {
-        return meshVertices_;
-    }
-
-    const geometry::Vec4dArray& meshUVSTs() const {
-        return meshUVSTs_;
-    }
-
-    const core::IntArray& meshIndices() const {
-        return meshIndices_;
-    }
-
-    Int appendVertex(const geometry::Vec2d& position, const geometry::Vec4d& stuv) {
-        Int idx = meshVertices_.length();
-        meshVertices_.emplaceLast(position);
-        meshUVSTs_.emplaceLast(stuv);
-        return idx;
+        return mesh_.appendVertex(position, stuv);
     }
 
     void appendTriangle(Int i0, Int i1, Int i2) {
-        const Int n = meshVertices_.length();
-        if ((i0 < 0 || i0 >= n) || (i1 < 0 || i1 >= n) || (i1 < 0 || i1 >= n)) {
-            throw core::IndexError("Vertex index is out of range.");
-        }
-        meshIndices_.extend({i0, i1, i2});
+        mesh_.appendIndices({i0, i1, i2});
     }
 
 private:
-    geometry::Vec2dArray meshVertices_;
-    geometry::Vec4dArray meshUVSTs_;
-    core::IntArray meshIndices_;
+    StuvMesh2d& mesh_;
 };
 
 namespace detail {
 
-graphics::GeometryViewPtr createStrokeGraphicsGeometry(
-    graphics::Engine* engine,
-    const StrokeStripGeometry& geometry);
-
 graphics::GeometryViewPtr
-createStrokeGraphicsGeometry(graphics::Engine* engine, const StrokeGeometry& geometry);
+loadMeshGraphics(graphics::Engine* engine, const StuvMesh2d& mesh);
 
 } // namespace detail
 
@@ -310,28 +272,18 @@ struct EdgeJoinPatch {
 } // namespace detail
 
 enum class VacEdgeComputationStage : UInt8 {
+    /// No geometry computed.
     Clear,
-    Centerline,
-    OffsetLines,
-    JoinedLines,
-    Stroke,
-    EnumMax = Stroke,
-    EnumMin = Clear
+    /// KeyEdge: Snapped Centerline + OffsetLines.
+    /// InbetweenEdge: Interpolated and Snapped Centerline + OffsetLines.
+    PreJoinGeometry,
+    /// KeyEdge/InbetweenEdge: Join Patches.
+    PostJoinGeometry,
+    /// KeyEdge/InbetweenEdge: Final triangle mesh, with overlaps/cusps optionally removed.
+    StrokeMesh,
+    EnumMin = Clear,
+    EnumMax = StrokeMesh
 };
-
-inline constexpr VacEdgeComputationStage previousStage(VacEdgeComputationStage stage) {
-    if (stage == VacEdgeComputationStage::EnumMin) {
-        return stage;
-    }
-    return static_cast<VacEdgeComputationStage>(core::toUnderlying(stage) - 1);
-}
-
-inline constexpr VacEdgeComputationStage nextStage(VacEdgeComputationStage stage) {
-    if (stage == VacEdgeComputationStage::EnumMax) {
-        return stage;
-    }
-    return static_cast<VacEdgeComputationStage>(core::toUnderlying(stage) + 1);
-}
 
 class VGC_WORKSPACE_API VacEdgeCellFrameData {
 private:
@@ -341,119 +293,115 @@ private:
     friend class VacVertexCell;
 
 public:
-    VacEdgeCellFrameData() noexcept = default;
+    VacEdgeCellFrameData(const core::AnimTime& t) noexcept
+        : time_(t) {
+    }
+
+    virtual ~VacEdgeCellFrameData() = default;
+
+    virtual void clear() {
+        resetToStage(VacEdgeComputationStage::Clear);
+    }
 
     VacEdgeComputationStage stage() const {
         return stage_;
     }
 
+    void resetToStage(VacEdgeComputationStage stage);
+
     const core::AnimTime& time() const {
         return time_;
+    }
+
+    const geometry::CurveSampleArray& preJoinSamples() const {
+        return samples_;
+    }
+
+    const EdgeGraphics& graphics() const {
+        return graphics_;
+    }
+
+    bool isSelectableAt(
+        const geometry::Vec2d& pos,
+        bool outlineOnly,
+        double tol,
+        double* outDistance) const;
+
+private:
+    void clearStartJoinData() {
+        resetToStage(VacEdgeComputationStage::PreJoinGeometry);
+        patches_[0].clear();
+    }
+
+    void clearEndJoinData() {
+        resetToStage(VacEdgeComputationStage::PreJoinGeometry);
+        patches_[1].clear();
+    }
+
+private:
+    core::AnimTime time_;
+    geometry::Rect2d bbox_ = {};
+
+    // stage PreJoinGeometry
+    geometry::CurveSampleArray samples_;
+
+    // stage PostJoinGeometry
+    // [0]: start patch
+    // [1]: end patch
+    std::array<detail::EdgeJoinPatch, 2> patches_;
+
+    // stage StrokeMesh
+    StuvMesh2d stroke_;
+
+    // Note: only valid for a single engine at the moment.
+    EdgeGraphics graphics_;
+
+    VacEdgeComputationStage stage_ = VacEdgeComputationStage::Clear;
+    bool isComputing_ = false;
+};
+
+class VGC_WORKSPACE_API VacKeyEdgeFrameData final : public VacEdgeCellFrameData {
+private:
+    friend class VacKeyEdge;
+
+public:
+    VacKeyEdgeFrameData(const core::AnimTime& t) noexcept
+        : VacEdgeCellFrameData(t) {
+    }
+
+    ~VacKeyEdgeFrameData() override = default;
+
+    void clear() override {
+        controlPoints_.clear();
+        pointsGeometry_.reset();
+        inputSamples_.clear();
+        samplingVersion_ = -1;
+        edgeTesselationMode_ = -1;
+        VacEdgeCellFrameData::clear();
+    }
+
+    bool hasInputGeometry() const {
+        return samplingVersion_ >= 0;
     }
 
     const geometry::Vec2dArray& controlPoints() const {
         return controlPoints_;
     }
 
-    const geometry::CurveSampleArray& samples() const {
-        return samples_;
+    const graphics::GeometryViewPtr& pointsGeometry() const {
+        return pointsGeometry_;
     }
 
-    void clear() {
-        resetToStage(VacEdgeComputationStage::Clear);
-    }
-
-    void clearStartJoinData() {
-        resetToStage(VacEdgeComputationStage::JoinedLines);
-        patches_[0].clear();
-        resetToStage(previousStage(VacEdgeComputationStage::JoinedLines));
-    }
-
-    void clearEndJoinData() {
-        resetToStage(VacEdgeComputationStage::JoinedLines);
-        patches_[1].clear();
-        resetToStage(previousStage(VacEdgeComputationStage::JoinedLines));
-    }
-
-    void resetToStage(VacEdgeComputationStage stage) {
-        if (stage >= stage_) {
-            return;
-        }
-        switch (stage_) {
-        case VacEdgeComputationStage::Stroke:
-            if (stage >= stage_) {
-                break;
-            }
-            else {
-                strokeStrip_.clear();
-                stroke_.clear();
-                graphics_.clearStrokeGeometry();
-                graphics_.clearJoinGeometry();
-                [[fallthrough]];
-            }
-        case VacEdgeComputationStage::JoinedLines:
-            if (stage >= stage_) {
-                break;
-            }
-            else {
-                patches_[0].clear();
-                patches_[1].clear();
-                [[fallthrough]];
-            }
-        case VacEdgeComputationStage::OffsetLines:
-            if (stage >= stage_) {
-                break;
-            }
-            else {
-                samples_.clear();
-                triangulation_.clear();
-                graphics_.clearCenterlineGeometry();
-                graphics_.clearSelectionGeometry();
-                [[fallthrough]];
-            }
-        case VacEdgeComputationStage::Centerline:
-            if (stage >= stage_) {
-                break;
-            }
-            else {
-                samples_.clear();
-                triangulation_.clear();
-                [[fallthrough]];
-            }
-        case VacEdgeComputationStage::Clear:
-            if (stage >= stage_) {
-                break;
-            }
-            else {
-                controlPoints_.clear();
-                [[fallthrough]];
-            }
-        }
-        stage_ = stage;
+    const geometry::CurveSampleArray& inputSamples() const {
+        return inputSamples_;
     }
 
 private:
-    core::AnimTime time_;
     geometry::Vec2dArray controlPoints_;
-
-    // centerline + offsetLines stages
-    geometry::CurveSampleArray samples_;
-    geometry::Vec2dArray triangulation_; // to remove
+    graphics::GeometryViewPtr pointsGeometry_;
+    geometry::CurveSampleArray inputSamples_;
     Int samplingVersion_ = -1;
     int edgeTesselationMode_ = -1;
-
-    // joinedLines stage
-    // [0]: start patch
-    // [1]: end patch
-    std::array<detail::EdgeJoinPatch, 2> patches_;
-
-    // stroke stage
-    StrokeStripGeometry strokeStrip_;
-    StrokeGeometry stroke_;
-
-    EdgeGraphics graphics_;
-    VacEdgeComputationStage stage_ = VacEdgeComputationStage::Clear;
-    bool isComputing_ = false;
 };
 
 class VGC_WORKSPACE_API VacEdgeCell : public VacElement {
@@ -472,9 +420,11 @@ public:
         return cell ? cell->toEdgeCellUnchecked() : nullptr;
     }
 
-    virtual const VacEdgeCellFrameData* computeCenterlineAt(core::AnimTime t) = 0;
-    virtual const VacEdgeCellFrameData* computeOuterLinesAt(core::AnimTime t) = 0;
-    virtual const StrokeGeometry* computeStrokeGeometryAt(core::AnimTime t) = 0;
+    virtual const VacEdgeCellFrameData*
+    computeFrameDataAt(core::AnimTime t, VacEdgeComputationStage stage) = 0;
+
+private:
+    virtual void dirtyJoinDataAtVertex_(const VacVertexCell* vertexCell) = 0;
 };
 
 class VGC_WORKSPACE_API VacKeyEdge final : public VacEdgeCell {
@@ -488,7 +438,8 @@ public:
     ~VacKeyEdge() override;
 
     VacKeyEdge(Workspace* workspace)
-        : VacEdgeCell(workspace) {
+        : VacEdgeCell(workspace)
+        , frameData_({}) {
     }
 
     vacomplex::KeyEdge* vacKeyEdgeNode() const {
@@ -509,52 +460,56 @@ public:
         double* outDistance = nullptr,
         core::AnimTime t = {}) const override;
 
-    const VacEdgeCellFrameData* computeStandaloneGeometryAt(core::AnimTime t) override;
-    const VacEdgeCellFrameData* computeGeometryAt(core::AnimTime t) override;
+    const VacKeyEdgeFrameData* computeFrameData(VacEdgeComputationStage stage);
 
-    const VacEdgeCellFrameData* computeStandaloneGeometry();
-    const VacEdgeCellFrameData* computeGeometry();
+    const VacEdgeCellFrameData*
+    computeFrameDataAt(core::AnimTime t, VacEdgeComputationStage stage) override;
+
+protected:
+    void onPaintPrepare(core::AnimTime t, PaintOptions flags) override;
+
+    void onPaintDraw(
+        graphics::Engine* engine,
+        core::AnimTime t,
+        PaintOptions flags = PaintOption::None) const override;
 
 private:
     struct VertexInfo {
         VacKeyVertex* element = nullptr;
         Int joinGroup = 0;
     };
-
     std::array<VertexInfo, 2> verticesInfo_ = {};
 
-    // currently updated during computeStandaloneGeometry
-    geometry::Rect2d bbox_ = {};
-
-    mutable VacEdgeCellFrameData frameData_ = {};
+    mutable VacKeyEdgeFrameData frameData_;
     int edgeTesselationModeRequested_ = 2;
-    ChangeFlags alreadyNotifiedChanges_ = {};
-
-    ElementStatus updateFromDom_(Workspace* workspace) override;
-    void updateFromVac_() override;
 
     void onDependencyChanged_(Element* dependency, ChangeFlags changes) override;
     void onDependencyRemoved_(Element* dependency) override;
 
-    void preparePaint_(core::AnimTime t, PaintOptions flags) override;
+    ElementStatus updateFromDom_(Workspace* workspace) override;
+    void updateFromVac_() override;
 
-    void paint_(
-        graphics::Engine* engine,
-        core::AnimTime t,
-        PaintOptions flags = PaintOption::None) const override;
+    ChangeFlags alreadyNotifiedChanges_ = {};
+    ChangeFlags pendingNotifyChanges_ = {};
 
-    VacEdgeCellFrameData* frameData(core::AnimTime t) const;
+    void notifyChanges_();
 
-    void onInputGeometryChanged();
-    void onBoundaryGeometryChanged();
+    void computePreJoinGeometry_();
 
-    void clearStartJoinData();
-    void clearEndJoinData();
-    void clearJoinData();
+    void computePostJoinGeometry_();
+
+    void computeStrokeMesh_();
+
+    // it notifies dependents of the change
+    void dirtyPreJoinGeometry_(bool notifyDependents = true);
+    // it notifies dependents of the change
+    void dirtyPostJoinGeometry_(bool notifyDependents = true);
+    // it notifies dependents of the change
+    void dirtyStrokeMesh_(bool notifyDependents = true);
+
+    void dirtyJoinDataAtVertex_(const VacVertexCell* vertexCell) override;
 
     void onUpdateError_();
-    void computeStandaloneGeometry_();
-    void computeGeometry_();
 };
 
 } // namespace vgc::workspace

@@ -84,26 +84,10 @@ void Element::notifyChangesToDependents(ChangeFlags changes) {
     }
 }
 
-void Element::onDependencyChanged_(Element* /*dependency*/, ChangeFlags /*changes*/) {
+void Element::onPaintPrepare(core::AnimTime /*t*/, PaintOptions /*flags*/) {
 }
 
-void Element::onDependencyRemoved_(Element* /*dependency*/) {
-}
-
-void Element::onDependentElementRemoved_(Element* /*dependent*/) {
-}
-
-void Element::onDependentElementAdded_(Element* /*dependent*/) {
-}
-
-ElementStatus Element::updateFromDom_(Workspace* /*workspace*/) {
-    return ElementStatus::Ok;
-}
-
-void Element::preparePaint_(core::AnimTime /*t*/, PaintOptions /*flags*/) {
-}
-
-void Element::paint_(
+void Element::onPaintDraw(
     graphics::Engine* /*engine*/,
     core::AnimTime /*t*/,
     PaintOptions /*flags*/) const {
@@ -117,6 +101,22 @@ VacElement* Element::findFirstSiblingVacElement_(Element* start) {
         e = e->next();
     }
     return static_cast<VacElement*>(e);
+}
+
+ElementStatus Element::updateFromDom_(Workspace* /*workspace*/) {
+    return ElementStatus::Ok;
+}
+
+void Element::onDependencyChanged_(Element* /*dependency*/, ChangeFlags /*changes*/) {
+}
+
+void Element::onDependencyRemoved_(Element* /*dependency*/) {
+}
+
+void Element::onDependentElementRemoved_(Element* /*dependent*/) {
+}
+
+void Element::onDependentElementAdded_(Element* /*dependent*/) {
 }
 
 VacElement::~VacElement() {

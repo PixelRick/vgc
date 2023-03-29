@@ -144,7 +144,8 @@ inline Int calculateMaxMipLevels(Int width, Int height) {
     return static_cast<Int>(std::floor(std::log2((std::max)(width, height)))) + 1;
 }
 
-// XXX add something to limit the number of pending frames for each swapchain..
+// TODO: add something to limit the number of pending frames for each swapchain..
+// TODO: check resource ownership in Engine methods (check resource's registry == engine registry)
 
 /// \class vgc::graphics::Engine
 /// \brief Abstract interface for graphics rendering.

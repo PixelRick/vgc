@@ -97,12 +97,13 @@ enum class ElementStatus : Int8 {
 
 enum class ChangeFlag : UInt {
     None = 0x00,
-    EdgeCenterline = 0x01,
-    EdgeOffsetLines = 0x02,
-    EdgeJoinedLines = 0x04,
+    VertexPosition = 0x01,
+    EdgePreJoinGeometry = 0x02,
+    EdgePostJoinGeometry = 0x04,
+    EdgeStrokeMesh = 0x08,
     Color = 0x20,
     Style = 0x40,
-    EdgeGeometry = EdgeCenterline | EdgeOffsetLines | EdgeJoinedLines,
+    EdgeGeometry = EdgePreJoinGeometry | EdgePostJoinGeometry | EdgeStrokeMesh,
 };
 VGC_DEFINE_FLAGS(ChangeFlags, ChangeFlag)
 
@@ -238,7 +239,7 @@ public:
         core::AnimTime t = {},
         PaintOptions flags = PaintOption::None) const {
 
-        paint_(engine, t, flags);
+        onPaintDraw(engine, t, flags);
     }
 
     virtual std::optional<core::StringId> domTagName() const;
@@ -262,8 +263,6 @@ public:
         core::AnimTime t = {}) const;
 
 protected:
-    virtual ElementStatus updateFromDom_(Workspace* workspace);
-
     void addDependency(Element* dependency);
     /// Both `oldDependency` and `newDependency` can be null. Returns true if `oldDependency != newDependency`, false otherwise.
     bool replaceDependency(Element* oldDependency, Element* newDependency);
@@ -271,17 +270,11 @@ protected:
     void clearDependencies();
 
     void notifyChangesToDependents(ChangeFlags changes);
-    virtual void onDependencyChanged_(Element* dependency, ChangeFlags changes);
-    virtual void onDependencyRemoved_(Element* dependency);
-
-    /// dependent may be being destroyed, only use its pointer as key.
-    virtual void onDependentElementRemoved_(Element* dependent);
-    virtual void onDependentElementAdded_(Element* dependent);
 
     virtual void
-    preparePaint_(core::AnimTime t = {}, PaintOptions flags = PaintOption::None);
+    onPaintPrepare(core::AnimTime t = {}, PaintOptions flags = PaintOption::None);
 
-    virtual void paint_(
+    virtual void onPaintDraw(
         graphics::Engine* engine,
         core::AnimTime t = {},
         PaintOptions flags = PaintOption::None) const;
@@ -306,6 +299,15 @@ private:
     core::Array<Element*> dependents_;
 
     static VacElement* findFirstSiblingVacElement_(Element* start);
+
+    virtual void onDependencyChanged_(Element* dependency, ChangeFlags changes);
+    virtual void onDependencyRemoved_(Element* dependency);
+
+    /// dependent may be being destroyed, only use its pointer as key.
+    virtual void onDependentElementRemoved_(Element* dependent);
+    virtual void onDependentElementAdded_(Element* dependent);
+
+    virtual ElementStatus updateFromDom_(Workspace* workspace);
 };
 
 class VGC_WORKSPACE_API UnsupportedElement final : public Element {
@@ -345,14 +347,14 @@ protected:
         return vacNode_ ? vacNode_->toCellUnchecked() : nullptr;
     }
 
-    virtual void updateFromVac_() = 0;
-
     void removeVacNode();
     void setVacNode(vacomplex::Node* vacNode);
 
 private:
     // this pointer is not safe to use when tree is not synced with vac
     vacomplex::Node* vacNode_ = nullptr;
+
+    virtual void updateFromVac_() = 0;
 };
 
 vacomplex::Node* Element::vacNode() const {

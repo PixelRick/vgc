@@ -22,56 +22,57 @@
 
 namespace vgc::workspace {
 
-namespace detail {
-
-graphics::GeometryViewPtr createStrokeGraphicsGeometry(
-    graphics::Engine* engine,
-    const StrokeStripGeometry& geometry) {
-    // TODO
-    return {};
-}
-
-graphics::GeometryViewPtr
-createStrokeGraphicsGeometry(graphics::Engine* engine, const StrokeGeometry& geometry) {
-    // TODO
-    return {};
-}
-
-} // namespace detail
-
-VacKeyEdge::~VacKeyEdge() {
-    for (Int i = 0; i < 2; ++i) {
-        VacKeyVertex* const vertex = verticesInfo_[i].element;
-        if (vertex) {
-            detail::VacJoinHalfedge he(this, i == 1, 0);
-            vertex->removeJoinHalfedge_(he);
-            verticesInfo_[i].element = nullptr;
+void VacEdgeCellFrameData::resetToStage(VacEdgeComputationStage stage) {
+    if (stage >= stage_) {
+        return;
+    }
+    switch (stage_) {
+    case VacEdgeComputationStage::StrokeMesh:
+        if (stage >= stage_) {
+            break;
+        }
+        else {
+            [[fallthrough]];
+        }
+    case VacEdgeComputationStage::PostJoinGeometry:
+        if (stage >= stage_) {
+            break;
+        }
+        else {
+            stroke_.reset(false);
+            graphics_.clearStrokeGeometry();
+            graphics_.clearJoinGeometry();
+            [[fallthrough]];
+        }
+    case VacEdgeComputationStage::PreJoinGeometry:
+        if (stage >= stage_) {
+            break;
+        }
+        else {
+            // There is no dedicated post-join geometry at the moment.
+            // Stroke mesh is computed directly from join patches (managed by vertices)
+            // and pre-join geometry.
+            [[fallthrough]];
+        }
+    case VacEdgeComputationStage::Clear:
+        if (stage >= stage_) {
+            break;
+        }
+        else {
+            samples_.clear();
+            graphics_.clearCenterlineGeometry();
+            graphics_.clearSelectionGeometry();
+            [[fallthrough]];
         }
     }
+    stage_ = stage;
 }
 
-void VacKeyEdge::setTesselationMode(int mode) {
-    int newMode = core::clamp(mode, 0, 2);
-    if (edgeTesselationModeRequested_ != newMode) {
-        edgeTesselationModeRequested_ = newMode;
-        onInputGeometryChanged();
-    }
-}
-
-std::optional<core::StringId> VacKeyEdge::domTagName() const {
-    return dom::strings::edge;
-}
-
-geometry::Rect2d VacKeyEdge::boundingBox(core::AnimTime /*t*/) const {
-    return bbox_;
-}
-
-bool VacKeyEdge::isSelectableAt(
-    const geometry::Vec2d& p,
+bool VacEdgeCellFrameData::isSelectableAt(
+    const geometry::Vec2d& position,
     bool outlineOnly,
     double tol,
-    double* outDistance,
-    core::AnimTime t) const {
+    double* outDistance) const {
 
     using Vec2d = geometry::Vec2d;
 
@@ -82,29 +83,26 @@ bool VacKeyEdge::isSelectableAt(
     geometry::Rect2d inflatedBbox = bbox_;
     inflatedBbox.setPMin(inflatedBbox.pMin() - Vec2d(tol, tol));
     inflatedBbox.setPMax(inflatedBbox.pMax() + Vec2d(tol, tol));
-    if (!inflatedBbox.contains(p)) {
+    if (!inflatedBbox.contains(position)) {
         return false;
     }
     // use "binary search"-style tree/array of bboxes?
 
-    VacEdgeCellFrameData* data = frameData(t);
-    if (!data || data->samples_.isEmpty()) {
+    if (samples_.isEmpty()) {
         return false;
     }
 
     double shortestDistance = core::DoubleInfinity;
 
-    auto it1 = data->samples_.begin();
+    auto it1 = samples_.begin();
     // is p in sample outline-mode-selection disk?
-    shortestDistance = (std::min)(shortestDistance, (it1->position() - p).length());
+    shortestDistance =
+        (std::min)(shortestDistance, (it1->position() - position).length());
 
-    for (auto it0 = it1++; it1 != data->samples_.end(); it0 = it1++) {
+    for (auto it0 = it1++; it1 != samples_.end(); it0 = it1++) {
         // is p in sample outline-mode-selection disk?
-        shortestDistance = (std::min)(shortestDistance, (it1->position() - p).length());
-
-        // check projection works as expected
-        //static_assert(Vec2d(1, 1).dot(Vec2d(0, 1)) == 1.0);
-        //static_assert(Vec2d(1, 1).det(Vec2d(-1, 1)) == 2.0);
+        shortestDistance =
+            (std::min)(shortestDistance, (it1->position() - position).length());
 
         // in segment outline-mode-selection box?
         const Vec2d p0 = it0->position();
@@ -113,7 +111,7 @@ bool VacKeyEdge::isSelectableAt(
         const double seglen = seg.length();
         if (seglen > 0) { // if capsule is not a disk
             const Vec2d segdir = seg / seglen;
-            const Vec2d p0p = p - p0;
+            const Vec2d p0p = position - p0;
             const double tx = p0p.dot(segdir);
             // does p project in segment?
             if (tx >= 0 && tx <= seglen) {
@@ -127,10 +125,10 @@ bool VacKeyEdge::isSelectableAt(
             // does p belongs to quad ?
             // only works for convex or hourglass quads atm
             const Vec2d r0 = it0->sidePoint(0);
-            const Vec2d r0p = p - r0;
+            const Vec2d r0p = position - r0;
             if (it0->normal().det(r0p) <= 0) {
                 const Vec2d l1 = it1->sidePoint(1);
-                const Vec2d l1p = p - l1;
+                const Vec2d l1p = position - l1;
                 if (it1->normal().det(l1p) >= 0) {
                     const Vec2d r1r0 = (r0 - it1->sidePoint(0));
                     const Vec2d l0l1 = (l1 - it0->sidePoint(1));
@@ -166,193 +164,93 @@ bool VacKeyEdge::isSelectableAt(
     return false;
 }
 
-const VacEdgeCellFrameData* VacKeyEdge::computeStandaloneGeometryAt(core::AnimTime t) {
-    if (frameData_.time() == t) {
-        return computeStandaloneGeometry();
-    }
-    return nullptr;
-}
+namespace detail {
 
-const VacEdgeCellFrameData* VacKeyEdge::computeGeometryAt(core::AnimTime t) {
-    if (frameData_.time() == t) {
-        return computeGeometry();
-    }
-    return nullptr;
-}
-
-const VacEdgeCellFrameData* VacKeyEdge::computeStandaloneGeometry() {
-    computeStandaloneGeometry_();
-    return &frameData_;
-}
-
-const VacEdgeCellFrameData* VacKeyEdge::computeGeometry() {
-    computeGeometry_();
-    return &frameData_;
-}
-
-ElementStatus VacKeyEdge::updateFromDom_(Workspace* workspace) {
-    namespace ds = dom::strings;
-    dom::Element* const domElement = this->domElement();
-    if (!domElement) {
-        // todo: use owning composite when it is implemented
-        return ElementStatus::Ok;
-    }
-
-    // update dependencies
-    std::array<std::optional<Element*>, 2> verticesOpt = {
-        workspace->getElementFromPathAttribute(domElement, ds::startvertex, ds::vertex),
-        workspace->getElementFromPathAttribute(domElement, ds::endvertex, ds::vertex)};
-
-    std::array<VacKeyVertex*, 2> oldVertices = {};
-    std::array<VacKeyVertex*, 2> newVertices = {};
-    for (Int i = 0; i < 2; ++i) {
-        VacKeyVertex* const oldVertex = verticesInfo_[i].element;
-        VacKeyVertex* const otherVertex = verticesInfo_[1 - i].element;
-        Element* const newVertexElement = verticesOpt[i].value_or(nullptr);
-        // XXX impl custom safe cast
-        VacKeyVertex* const newVertex = dynamic_cast<VacKeyVertex*>(newVertexElement);
-        oldVertices[i] = oldVertex;
-        newVertices[i] = newVertex;
-        if (oldVertex != newVertex) {
-            if (oldVertex != otherVertex) {
-                removeDependency(oldVertex);
-            }
-            if (newVertex != otherVertex) {
-                addDependency(newVertex);
-            }
-            detail::VacJoinHalfedge he(this, i == 1, 0);
-            if (oldVertex) {
-                oldVertex->removeJoinHalfedge_(he);
-            }
-            if (newVertex) {
-                newVertex->addJoinHalfedge_(he);
-            }
-            verticesInfo_[i].element = newVertex;
-        }
-    }
-
-    // What's the cleanest way to report/notify that this edge has actually changed ?
-    // What are the different categories of changes that matter to dependents ?
-    // For instance an edge wanna know if a vertex moves or has a new style (new join)
-
-    if (verticesOpt[0].has_value() != verticesOpt[1].has_value()) {
-        onUpdateError_();
-        return ElementStatus::InvalidAttribute;
-    }
-
-    for (Int i = 0; i < 2; ++i) {
-        if (verticesOpt[i].has_value() && !newVertices[i]) {
-            onUpdateError_();
-            return ElementStatus::UnresolvedDependency;
-        }
-    }
-
-    // update vac to get vertex nodes
-    std::array<vacomplex::KeyVertex*, 2> vacKvs = {};
-    for (Int i = 0; i < 2; ++i) {
-        VacKeyVertex* v = newVertices[i];
-        if (v) {
-            workspace->updateElementFromDom(v);
-            vacKvs[i] = v->vacKeyVertexNode();
-            if (v->hasError() || !vacKvs[i]) {
-                onUpdateError_();
-                return ElementStatus::ErrorInDependency;
-            }
-        }
-    }
-
-    // update group
-    vacomplex::Group* parentGroup = nullptr;
-    Element* parentElement = parent();
-    if (parentElement) {
-        workspace->updateElementFromDom(parentElement);
-        vacomplex::Node* parentNode = parentElement->vacNode();
-        if (parentNode) {
-            // checked cast to group, could be something invalid
-            parentGroup = parentNode->toGroup();
-        }
-    }
-    if (!parentGroup) {
-        onUpdateError_();
-        return ElementStatus::ErrorInParent;
-    }
-
-    vacomplex::KeyEdge* ke = vacKeyEdgeNode();
-
-    ChangeFlags changeFlags = {};
-
-    // check if it needs to be rebuilt
-    if (ke) {
-        vacomplex::KeyVertex* oldKv0 = ke->startVertex();
-        vacomplex::KeyVertex* oldKv1 = ke->endVertex();
-        if (vacKvs[0] != oldKv0 || vacKvs[1] != oldKv1) {
-            removeVacNode();
-            ke = nullptr;
-        }
-    }
-
-    // XXX warning on null parent group ?
-
-    const auto& points = domElement->getAttribute(ds::positions).getVec2dArray();
-    const auto& widths = domElement->getAttribute(ds::widths).getDoubleArray();
-    if (!ke) {
-        if (vacKvs[0] && vacKvs[1]) {
-            ke = topology::ops::createKeyOpenEdge(
-                vacKvs[0], vacKvs[1], points, widths, parentGroup);
-        }
-        else {
-            // XXX warning if kv0 || kv1 ?
-            ke = topology::ops::createKeyClosedEdge(points, widths, parentGroup);
-        }
-        setVacNode(ke);
-
-        if (!ke) {
-            onUpdateError_();
-            return ElementStatus::InvalidAttribute;
-        }
-        onInputGeometryChanged();
-    }
-    else {
-        if (&ke->points() != &points.get() || &ke->widths() != &widths.get()) {
-            topology::ops::setKeyEdgeCurvePoints(ke, points);
-            topology::ops::setKeyEdgeCurveWidths(ke, widths);
-            onInputGeometryChanged();
-            changeFlags.set(ChangeFlag::EdgeGeometry);
-        }
-
-        // TODO: check color change
-
-        // XXX should we snap here ?
-        //     group view matrices may not be ready..
-        //     maybe we could add two init functions to workspace::Element
-        //     one for intrinsic data, one for dependent data.
-    }
-
-    return ElementStatus::Ok;
-}
-
-void VacKeyEdge::updateFromVac_() {
+graphics::GeometryViewPtr
+loadMeshGraphics(graphics::Engine* engine, const StuvMesh2d& mesh) {
     // TODO
+    return {};
 }
 
-void VacKeyEdge::onDependencyChanged_(Element* dependency, ChangeFlags changes) {
-}
+} // namespace detail
 
-void VacKeyEdge::onDependencyRemoved_(Element* dependency) {
-    for (VertexInfo& vi : verticesInfo_) {
-        if (vi.element == dependency) {
-            vi.element = nullptr;
+VacKeyEdge::~VacKeyEdge() {
+    for (Int i = 0; i < 2; ++i) {
+        VacKeyVertex* const vertex = verticesInfo_[i].element;
+        if (vertex) {
+            detail::VacJoinHalfedge he(this, i == 1, 0);
+            vertex->removeJoinHalfedge_(he);
+            verticesInfo_[i].element = nullptr;
         }
     }
 }
 
-void VacKeyEdge::preparePaint_(core::AnimTime t, PaintOptions /*flags*/) {
-    // todo, use paint options to not compute everything or with lower quality
-    computeGeometryAt(t);
+void VacKeyEdge::setTesselationMode(int mode) {
+    int newMode = core::clamp(mode, 0, 2);
+    if (edgeTesselationModeRequested_ != newMode) {
+        edgeTesselationModeRequested_ = newMode;
+        dirtyPreJoinGeometry_();
+    }
 }
 
-void VacKeyEdge::paint_(graphics::Engine* engine, core::AnimTime t, PaintOptions flags)
-    const {
+std::optional<core::StringId> VacKeyEdge::domTagName() const {
+    return dom::strings::edge;
+}
+
+geometry::Rect2d VacKeyEdge::boundingBox(core::AnimTime t) const {
+    if (frameData_.time() == t) {
+        return frameData_.bbox_;
+    }
+    return geometry::Rect2d::empty;
+}
+
+bool VacKeyEdge::isSelectableAt(
+    const geometry::Vec2d& position,
+    bool outlineOnly,
+    double tol,
+    double* outDistance,
+    core::AnimTime t) const {
+
+    if (frameData_.time() == t) {
+        return frameData_.isSelectableAt(position, outlineOnly, tol, outDistance);
+    }
+    return false;
+}
+
+const VacKeyEdgeFrameData* VacKeyEdge::computeFrameData(VacEdgeComputationStage stage) {
+    switch (stage) {
+    case VacEdgeComputationStage::StrokeMesh:
+        computeStrokeMesh_();
+        break;
+    case VacEdgeComputationStage::PreJoinGeometry:
+        computePreJoinGeometry_();
+        break;
+    case VacEdgeComputationStage::PostJoinGeometry:
+        computePostJoinGeometry_();
+        break;
+    case VacEdgeComputationStage::Clear:
+        break;
+    }
+    return &frameData_;
+}
+
+const VacEdgeCellFrameData*
+VacKeyEdge::computeFrameDataAt(core::AnimTime t, VacEdgeComputationStage stage) {
+    if (frameData_.time() == t) {
+        return computeFrameData(stage);
+    }
+    return nullptr;
+}
+
+void VacKeyEdge::onPaintPrepare(core::AnimTime /*t*/, PaintOptions /*flags*/) {
+    // todo, use paint options to not compute everything or with lower quality
+    computeStrokeMesh_();
+}
+
+void VacKeyEdge::onPaintDraw(
+    graphics::Engine* engine,
+    core::AnimTime t,
+    PaintOptions flags) const {
 
     vacomplex::KeyEdge* ke = vacKeyEdgeNode();
     if (!ke || t != ke->time()) {
@@ -360,7 +258,7 @@ void VacKeyEdge::paint_(graphics::Engine* engine, core::AnimTime t, PaintOptions
     }
 
     // if not already done (should we leave preparePaint_ optional?)
-    const_cast<VacKeyEdge*>(this)->computeGeometry_();
+    const_cast<VacKeyEdge*>(this)->computeStrokeMesh_();
 
     using namespace graphics;
     namespace ds = dom::strings;
@@ -396,12 +294,7 @@ void VacKeyEdge::paint_(graphics::Engine* engine, core::AnimTime t, PaintOptions
         geometry::Vec2fArray joinVertices;
         core::Array<UInt32> joinIndices;
 
-        if (edgeTesselationModeRequested_ > 2) {
-            for (const geometry::Vec2d& p : frameData_.triangulation_) {
-                strokeVertices.emplaceLast(geometry::Vec2f(p));
-            }
-        }
-        else if (frameData_.samples_.size() >= 2) {
+        if (frameData_.samples_.size() >= 2) {
 
             const detail::EdgeJoinPatchMergeLocation& mergeLocation0 =
                 frameData_.patches_[0].mergeLocation;
@@ -557,9 +450,9 @@ void VacKeyEdge::paint_(graphics::Engine* engine, core::AnimTime t, PaintOptions
 
     constexpr PaintOptions pointsOptions = {PaintOption::Outline};
 
-    if (flags.hasAny(pointsOptions) && !graphics.pointsGeometry()) {
-        graphics.setPointsGeometry(engine->createDynamicTriangleStripView(
-            BuiltinGeometryLayout::XYDxDy_iXYRotWRGBA));
+    if (flags.hasAny(pointsOptions) && !frameData_.pointsGeometry()) {
+        frameData_.pointsGeometry_ = engine->createDynamicTriangleStripView(
+            BuiltinGeometryLayout::XYDxDy_iXYRotWRGBA);
 
         float pointHalfSize = 5.f;
 
@@ -576,7 +469,7 @@ void VacKeyEdge::paint_(graphics::Engine* engine, core::AnimTime t, PaintOptions
         const Int numPoints = frameData_.controlPoints_.length();
         const float dl = 1.f / numPoints;
         for (Int j = 0; j < numPoints; ++j) {
-            geometry::Vec2f p = frameData_.controlPoints_[j];
+            geometry::Vec2f p = geometry::Vec2f(frameData_.controlPoints_[j]);
             float l = j * dl;
             pointInstData.extend(
                 {p.x(),
@@ -590,9 +483,9 @@ void VacKeyEdge::paint_(graphics::Engine* engine, core::AnimTime t, PaintOptions
         }
 
         engine->updateBufferData(
-            graphics.pointsGeometry()->vertexBuffer(0), std::move(pointVertices));
+            frameData_.pointsGeometry_->vertexBuffer(0), std::move(pointVertices));
         engine->updateBufferData(
-            graphics.pointsGeometry()->vertexBuffer(1), std::move(pointInstData));
+            frameData_.pointsGeometry_->vertexBuffer(1), std::move(pointInstData));
     }
 
     if (flags.has(PaintOption::Selected)) {
@@ -608,61 +501,184 @@ void VacKeyEdge::paint_(graphics::Engine* engine, core::AnimTime t, PaintOptions
     if (flags.has(PaintOption::Outline)) {
         engine->setProgram(graphics::BuiltinProgram::SreenSpaceDisplacement);
         engine->draw(graphics.centerlineGeometry());
-        engine->drawInstanced(graphics.pointsGeometry());
+        engine->drawInstanced(frameData_.pointsGeometry_);
     }
 }
 
-VacEdgeCellFrameData* VacKeyEdge::frameData(core::AnimTime t) const {
-    vacomplex::EdgeCell* cell = vacEdgeCellNode();
-    if (!cell) {
-        return nullptr;
-    }
-    if (frameData_.time() == t) {
-        return &frameData_;
-    }
-    return nullptr;
+void VacKeyEdge::onDependencyChanged_(Element* dependency, ChangeFlags changes) {
+    //    // todo: tag for resnap
+    //    onInputGeometryChanged();
+    dirtyPreJoinGeometry_();
 }
 
-void VacKeyEdge::onInputGeometryChanged() {
-    frameData_.clear();
-    bbox_ = geometry::Rect2d::empty;
+void VacKeyEdge::onDependencyRemoved_(Element* dependency) {
     for (VertexInfo& vi : verticesInfo_) {
-        if (vi.element) {
-            vi.element->onJoinEdgeGeometryChanged_(this);
+        if (vi.element == dependency) {
+            vi.element = nullptr;
         }
     }
-    //notifyChangesToDependents(ChangeFlag::Geometry0);
 }
 
-void VacKeyEdge::onBoundaryGeometryChanged() {
-    // todo: tag for resnap
-    onInputGeometryChanged();
-}
-
-void VacKeyEdge::clearStartJoinData() {
-    frameData_.clearStartJoinData();
-}
-
-void VacKeyEdge::clearEndJoinData() {
-    frameData_.clearEndJoinData();
-}
-
-void VacKeyEdge::clearJoinData() {
-    frameData_.clearStartJoinData();
-    frameData_.clearEndJoinData();
-}
-
-void VacKeyEdge::onUpdateError_() {
-    removeVacNode();
-}
-
-void VacKeyEdge::computeStandaloneGeometry_() {
-
-    VacEdgeCellFrameData& data = frameData_;
-    if (edgeTesselationModeRequested_ == data.edgeTesselationMode_) {
-        return;
+ElementStatus VacKeyEdge::updateFromDom_(Workspace* workspace) {
+    namespace ds = dom::strings;
+    dom::Element* const domElement = this->domElement();
+    if (!domElement) {
+        // todo: use owning composite when it is implemented
+        return ElementStatus::Ok;
     }
-    if (data.isStandaloneGeometryComputed_ || data.isComputing_) {
+
+    // update dependencies
+    std::array<std::optional<Element*>, 2> verticesOpt = {
+        workspace->getElementFromPathAttribute(domElement, ds::startvertex, ds::vertex),
+        workspace->getElementFromPathAttribute(domElement, ds::endvertex, ds::vertex)};
+
+    std::array<VacKeyVertex*, 2> oldVertices = {};
+    std::array<VacKeyVertex*, 2> newVertices = {};
+    for (Int i = 0; i < 2; ++i) {
+        VacKeyVertex* const oldVertex = verticesInfo_[i].element;
+        VacKeyVertex* const otherVertex = verticesInfo_[1 - i].element;
+        Element* const newVertexElement = verticesOpt[i].value_or(nullptr);
+        // XXX impl custom safe cast
+        VacKeyVertex* const newVertex = dynamic_cast<VacKeyVertex*>(newVertexElement);
+        oldVertices[i] = oldVertex;
+        newVertices[i] = newVertex;
+        if (oldVertex != newVertex) {
+            if (oldVertex != otherVertex) {
+                removeDependency(oldVertex);
+            }
+            if (newVertex != otherVertex) {
+                addDependency(newVertex);
+            }
+            detail::VacJoinHalfedge he(this, i == 1, 0);
+            if (oldVertex) {
+                oldVertex->removeJoinHalfedge_(he);
+            }
+            if (newVertex) {
+                newVertex->addJoinHalfedge_(he);
+            }
+            verticesInfo_[i].element = newVertex;
+        }
+    }
+
+    // What's the cleanest way to report/notify that this edge has actually changed ?
+    // What are the different categories of changes that matter to dependents ?
+    // For instance an edge wanna know if a vertex moves or has a new style (new join)
+
+    if (verticesOpt[0].has_value() != verticesOpt[1].has_value()) {
+        onUpdateError_();
+        return ElementStatus::InvalidAttribute;
+    }
+
+    for (Int i = 0; i < 2; ++i) {
+        if (verticesOpt[i].has_value() && !newVertices[i]) {
+            onUpdateError_();
+            return ElementStatus::UnresolvedDependency;
+        }
+    }
+
+    // update vac to get vertex nodes
+    std::array<vacomplex::KeyVertex*, 2> vacKvs = {};
+    for (Int i = 0; i < 2; ++i) {
+        VacKeyVertex* v = newVertices[i];
+        if (v) {
+            workspace->updateElementFromDom(v);
+            vacKvs[i] = v->vacKeyVertexNode();
+            if (v->hasError() || !vacKvs[i]) {
+                onUpdateError_();
+                return ElementStatus::ErrorInDependency;
+            }
+        }
+    }
+
+    // update group
+    vacomplex::Group* parentGroup = nullptr;
+    Element* parentElement = parent();
+    if (parentElement) {
+        workspace->updateElementFromDom(parentElement);
+        vacomplex::Node* parentNode = parentElement->vacNode();
+        if (parentNode) {
+            // checked cast to group, could be something invalid
+            parentGroup = parentNode->toGroup();
+        }
+    }
+    if (!parentGroup) {
+        onUpdateError_();
+        return ElementStatus::ErrorInParent;
+    }
+
+    vacomplex::KeyEdge* ke = vacKeyEdgeNode();
+
+    ChangeFlags changeFlags = {};
+
+    // check if it needs to be rebuilt
+    if (ke) {
+        vacomplex::KeyVertex* oldKv0 = ke->startVertex();
+        vacomplex::KeyVertex* oldKv1 = ke->endVertex();
+        if (vacKvs[0] != oldKv0 || vacKvs[1] != oldKv1) {
+            removeVacNode();
+            // TODO: only dirty pre-snapped data
+            ke = nullptr;
+        }
+    }
+
+    // XXX warning on null parent group ?
+
+    const auto& points = domElement->getAttribute(ds::positions).getVec2dArray();
+    const auto& widths = domElement->getAttribute(ds::widths).getDoubleArray();
+    if (!ke) {
+        if (vacKvs[0] && vacKvs[1]) {
+            ke = topology::ops::createKeyOpenEdge(
+                vacKvs[0], vacKvs[1], points, widths, parentGroup);
+        }
+        else {
+            // XXX warning if kv0 || kv1 ?
+            ke = topology::ops::createKeyClosedEdge(points, widths, parentGroup);
+        }
+        setVacNode(ke);
+
+        if (!ke) {
+            onUpdateError_();
+            return ElementStatus::InvalidAttribute;
+        }
+
+        dirtyPreJoinGeometry_();
+        frameData_.clear(); // also clear cached input geometry
+    }
+    else {
+        if (&ke->points() != &points.get() || &ke->widths() != &widths.get()) {
+            topology::ops::setKeyEdgeCurvePoints(ke, points);
+            topology::ops::setKeyEdgeCurveWidths(ke, widths);
+            dirtyPreJoinGeometry_();
+            frameData_.clear(); // also clear cached input geometry
+            changeFlags.set(ChangeFlag::EdgeGeometry);
+        }
+
+        // TODO: check color change
+
+        // XXX should we snap here ?
+        //     group view matrices may not be ready..
+        //     maybe we could add two init functions to workspace::Element
+        //     one for intrinsic data, one for dependent data.
+    }
+
+    notifyChanges_();
+    return ElementStatus::Ok;
+}
+
+void VacKeyEdge::updateFromVac_() {
+    // TODO
+}
+
+void VacKeyEdge::notifyChanges_() {
+    if (pendingNotifyChanges_) {
+        notifyChangesToDependents(pendingNotifyChanges_);
+    }
+}
+
+void VacKeyEdge::computePreJoinGeometry_() {
+
+    VacKeyEdgeFrameData& data = frameData_;
+    if (data.stage_ >= VacEdgeComputationStage::PreJoinGeometry || data.isComputing_) {
         return;
     }
     vacomplex::KeyEdge* ke = vacKeyEdgeNode();
@@ -672,9 +688,9 @@ void VacKeyEdge::computeStandaloneGeometry_() {
 
     data.isComputing_ = true;
 
-    // TODO: compute vertices pos and snap
+    // alreadyNotifiedChanges_
 
-    // check if we need an update
+    // TODO: compute vertices pos and snap edge geometry
 
     data.edgeTesselationMode_ = edgeTesselationModeRequested_;
 
@@ -685,36 +701,40 @@ void VacKeyEdge::computeStandaloneGeometry_() {
     double maxAngle = 0.05;
     Int minQuads = 1;
     Int maxQuads = 64;
-    if (edgeTesselationModeRequested_ <= 2) {
-        if (edgeTesselationModeRequested_ == 0) {
-            maxQuads = 1;
-        }
-        else if (edgeTesselationModeRequested_ == 1) {
-            minQuads = 2;
-            maxQuads = 8;
-        }
-        geometry::CurveSamplingParameters samplingParams = {};
-        samplingParams.setMaxAngle(maxAngle * 0.5); // matches triangulate()
-        samplingParams.setMinIntraSegmentSamples(minQuads - 1);
-        samplingParams.setMaxIntraSegmentSamples(maxQuads - 1);
-        curve.sampleRange(samplingParams, data.samples_);
-        bbox_ = geometry::Rect2d::empty;
-        if (data.samples_.length()) {
-            auto it = data.samples_.begin();
-            geometry::Vec2d lastPoint = it->position();
-            bbox_.uniteWith(lastPoint);
-            double s = 0;
-            for (++it; it != data.samples_.end(); ++it) {
-                geometry::Vec2d point = it->position();
-                bbox_.uniteWith(point);
-                s += (point - lastPoint).length();
-                it->setS(s);
-                lastPoint = point;
-            }
-        }
+    switch (edgeTesselationModeRequested_) {
+    case 0:
+        break;
+    case 1:
+        maxQuads = 1;
+        break;
+    case 2:
+        minQuads = 2;
+        maxQuads = 8;
+        break;
+    default:
+        minQuads = 64;
+        maxQuads = 64;
+        break;
     }
-    else {
-        data.triangulation_ = curve.triangulate(maxAngle, 1, 64);
+
+    geometry::CurveSamplingParameters samplingParams = {};
+    samplingParams.setMaxAngle(maxAngle * 0.5); // matches triangulate()
+    samplingParams.setMinIntraSegmentSamples(minQuads - 1);
+    samplingParams.setMaxIntraSegmentSamples(maxQuads - 1);
+    curve.sampleRange(samplingParams, data.samples_);
+    data.bbox_ = geometry::Rect2d::empty;
+    if (data.samples_.length()) {
+        auto it = data.samples_.begin();
+        geometry::Vec2d lastPoint = it->position();
+        data.bbox_.uniteWith(lastPoint);
+        double s = 0;
+        for (++it; it != data.samples_.end(); ++it) {
+            geometry::Vec2d point = it->position();
+            data.bbox_.uniteWith(point);
+            s += (point - lastPoint).length();
+            it->setS(s);
+            lastPoint = point;
+        }
     }
     data.samplingVersion_++;
 
@@ -722,45 +742,89 @@ void VacKeyEdge::computeStandaloneGeometry_() {
         data.controlPoints_.emplaceLast(geometry::Vec2f(p));
     }
 
-    alreadyNotifiedChanges_.unset(
-        {ChangeFlag::EdgeCenterline, ChangeFlag::EdgeOffsetLines});
-    data.isStandaloneGeometryComputed_ = true;
+    alreadyNotifiedChanges_.unset(ChangeFlag::EdgePreJoinGeometry);
+    data.stage_ = VacEdgeComputationStage::PreJoinGeometry;
     data.isComputing_ = false;
 
     data.graphics_.clear();
 }
 
-void VacKeyEdge::computeGeometry_() {
+void VacKeyEdge::computePostJoinGeometry_() {
 
     VacEdgeCellFrameData& data = frameData_;
-    if (data.isGeometryComputed_ || data.isComputing_) {
-        return;
-    }
-    vacomplex::KeyEdge* ke = vacKeyEdgeNode();
-    if (!ke) {
+    if (data.stage_ >= VacEdgeComputationStage::PostJoinGeometry || data.isComputing_) {
         return;
     }
 
-    computeStandaloneGeometry_();
+    computePreJoinGeometry_();
 
     data.isComputing_ = true;
 
     // XXX shouldn't do it for draft -> add quality enum for current cached geometry
     VacKeyVertex* v0 = verticesInfo_[0].element;
     if (v0) {
-        v0->computeJoin(ke->time());
+        v0->computeJoin_();
     }
     VacKeyVertex* v1 = verticesInfo_[1].element;
     if (v1 && v1 != v0) {
-        v1->computeJoin(ke->time());
+        v1->computeJoin_();
     }
 
-    alreadyNotifiedChanges_.unset({ChangeFlag::EdgeJoinedLines});
-    data.isGeometryComputed_ = true;
+    alreadyNotifiedChanges_.unset(ChangeFlag::EdgePostJoinGeometry);
+    data.stage_ = VacEdgeComputationStage::PostJoinGeometry;
     data.isComputing_ = false;
+}
 
-    // XXX clear less ?
-    data.graphics_.clear();
+void VacKeyEdge::computeStrokeMesh_() {
+    VacEdgeCellFrameData& data = frameData_;
+    if (data.stage_ >= VacEdgeComputationStage::StrokeMesh || data.isComputing_) {
+        return;
+    }
+
+    computePostJoinGeometry_();
+
+    data.isComputing_ = true;
+
+    // TODO: use mesh builder
+    // TODO: implement overlaps removal pass
+
+    alreadyNotifiedChanges_.unset(ChangeFlag::EdgeStrokeMesh);
+    data.stage_ = VacEdgeComputationStage::StrokeMesh;
+    data.isComputing_ = false;
+}
+
+void VacKeyEdge::dirtyPreJoinGeometry_(bool notifyDependents) {
+    //    frameData_.clear();
+    //    bbox_ = geometry::Rect2d::empty;
+    //    for (VertexInfo& vi : verticesInfo_) {
+    //        if (vi.element) {
+    //            vi.element->onJoinEdgeGeometryChanged_(this);
+    //        }
+    //    }
+    //    //notifyChangesToDependents(ChangeFlag::Geometry0);
+    if (notifyDependents) {
+        notifyChanges_();
+    }
+}
+
+void VacKeyEdge::dirtyPostJoinGeometry_(bool notifyDependents) {
+    if (notifyDependents) {
+        notifyChanges_();
+    }
+}
+
+void VacKeyEdge::dirtyStrokeMesh_(bool notifyDependents) {
+    if (notifyDependents) {
+        notifyChanges_();
+    }
+}
+
+void VacKeyEdge::dirtyJoinDataAtVertex_(const VacVertexCell* vertexCell) {
+    notifyChanges_();
+}
+
+void VacKeyEdge::onUpdateError_() {
+    removeVacNode();
 }
 
 } // namespace vgc::workspace
