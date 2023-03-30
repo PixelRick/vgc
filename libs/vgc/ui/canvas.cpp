@@ -212,13 +212,18 @@ void Canvas::onColorChanged_(const core::Color& color) {
     core::History* history = workspace()->history();
     if (element && element->domElement()) {
         core::UndoGroup* ug = nullptr;
+        static core::StringId Change_Color("Change Color");
         if (history) {
-            static core::StringId Change_Color("Change Color");
             ug = history->createUndoGroup(Change_Color);
         }
         element->domElement()->setAttribute(dom::strings::color, color);
         if (ug) {
-            ug->close();
+            if (ug->parent() && ug->parent()->name() == Change_Color) {
+                ug->amend();
+            }
+            else {
+                ug->close();
+            }
         }
     }
 }
@@ -236,7 +241,7 @@ bool Canvas::onKeyPress(KeyEvent* event) {
         requestRepaint();
         break;
     case Key::I:
-        requestedTesselationMode_ = (requestedTesselationMode_ + 1) % 3;
+        requestedTesselationMode_ = (requestedTesselationMode_ + 1) % 4;
         reTesselate = true;
         requestRepaint();
         break;

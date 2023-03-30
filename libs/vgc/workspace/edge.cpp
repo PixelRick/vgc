@@ -184,7 +184,7 @@ VacKeyEdge::~VacKeyEdge() {
 }
 
 void VacKeyEdge::setTesselationMode(int mode) {
-    int newMode = core::clamp(mode, 0, 2);
+    int newMode = core::clamp(mode, 0, 3);
     if (edgeTesselationModeRequested_ != newMode) {
         edgeTesselationModeRequested_ = newMode;
         dirtyInputSampling_();
@@ -444,10 +444,10 @@ void VacKeyEdge::onPaintDraw(
                 {0.f,
                  0.f,
                  1.f,
-                 1.f,
-                 std::round(1.0f - color.r()),
-                 std::round(1.0f - color.g()),
-                 std::round(1.0f - color.b()),
+                 2.f,
+                 0.0f, //std::round(1.0f - color.r()),
+                 0.7f, //std::round(1.0f - color.g()),
+                 1.0f, //std::round(1.0f - color.b()),
                  1.f}));
     }
 
