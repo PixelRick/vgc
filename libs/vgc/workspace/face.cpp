@@ -157,7 +157,7 @@ void VacKeyFace::onDependencyChanged_(Element* dependency, ChangeFlags changes) 
         vacomplex::Node* vnode = ve->vacNode();
         if (vnode) {
             vacomplex::Cell* cell = vnode->toCell();
-            if (cell->toKeyEdge() && changes.has(ChangeFlag::Geometry)) {
+            if (cell->toKeyEdge() && changes.has(ChangeFlag::EdgePreJoinGeometry)) {
                 onBoundaryGeometryChanged();
             }
         }
@@ -167,13 +167,15 @@ void VacKeyFace::onDependencyChanged_(Element* dependency, ChangeFlags changes) 
 void VacKeyFace::onDependencyRemoved_(Element* /*dependency*/) {
 }
 
-void VacKeyFace::preparePaint_(core::AnimTime t, PaintOptions /*flags*/) {
+void VacKeyFace::onPaintPrepare(core::AnimTime t, PaintOptions /*flags*/) {
     // todo, use paint options to not compute everything or with lower quality
     computeGeometryAt(t);
 }
 
-void VacKeyFace::paint_(graphics::Engine* engine, core::AnimTime t, PaintOptions flags)
-    const {
+void VacKeyFace::onPaintDraw(
+    graphics::Engine* engine,
+    core::AnimTime t,
+    PaintOptions flags) const {
 
     vacomplex::KeyFace* ke = vacKeyFaceNode();
     if (!ke || t != ke->time()) {
@@ -267,10 +269,12 @@ void VacKeyFace::computeGeometry(VacFaceCellFrameData& data) {
                 VacKeyEdge* vke = dynamic_cast<VacKeyEdge*>(ve);
                 const VacEdgeCellFrameData* edgeData = nullptr;
                 if (vke) {
-                    edgeData = vke->computeStandaloneGeometry();
+                    edgeData =
+                        vke->computeFrameData(VacEdgeComputationStage::PreJoinGeometry);
                 }
                 if (edgeData) {
-                    const geometry::CurveSampleArray& samples = edgeData->samples();
+                    const geometry::CurveSampleArray& samples =
+                        edgeData->preJoinSamples();
                     if (!khe.direction()) {
                         for (const geometry::CurveSample& s : samples) {
                             Vec2d p = s.position();

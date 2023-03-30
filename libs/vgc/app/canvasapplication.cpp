@@ -656,7 +656,9 @@ void CanvasApplication::createColorPalette_(ui::Widget* parent) {
 
 void CanvasApplication::onColorChanged_() {
     if (canvas_ && palette_) {
-        tool_->setPenColor(palette_->selectedColor());
+        core::Color color = palette_->selectedColor();
+        tool_->setPenColor(color);
+        canvas_->onColorChanged_(color);
     }
 }
 

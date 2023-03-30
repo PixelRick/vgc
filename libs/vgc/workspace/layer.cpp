@@ -29,6 +29,12 @@ geometry::Rect2d Layer::boundingBox(core::AnimTime /*t*/) const {
     return geometry::Rect2d::empty;
 }
 
+void Layer::onPaintDraw(
+    graphics::Engine* /*engine*/,
+    core::AnimTime /*t*/,
+    PaintOptions /*flags*/) const {
+}
+
 ElementStatus Layer::updateFromDom_(Workspace* /*workspace*/) {
     //dom::Element* const domElement = this->domElement();
 
@@ -55,12 +61,6 @@ ElementStatus Layer::updateFromDom_(Workspace* /*workspace*/) {
 
 void Layer::updateFromVac_() {
     // TODO
-}
-
-void Layer::paint_(
-    graphics::Engine* /*engine*/,
-    core::AnimTime /*t*/,
-    PaintOptions /*flags*/) const {
 }
 
 } // namespace vgc::workspace

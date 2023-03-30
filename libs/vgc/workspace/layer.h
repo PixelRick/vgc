@@ -43,15 +43,14 @@ public:
     geometry::Rect2d boundingBox(core::AnimTime t) const override;
 
 protected:
-    ElementStatus updateFromDom_(Workspace* workspace) override;
-    void updateFromVac_() override;
-
-    void paint_(
+    void onPaintDraw(
         graphics::Engine* engine,
         core::AnimTime t,
         PaintOptions flags = PaintOption::None) const override;
 
 private:
+    ElementStatus updateFromDom_(Workspace* workspace) override;
+    void updateFromVac_() override;
 };
 
 } // namespace vgc::workspace

@@ -21,6 +21,7 @@
 
 #include <vgc/core/arithmetic.h>
 #include <vgc/core/array.h>
+#include <vgc/core/color.h>
 #include <vgc/dom/element.h>
 #include <vgc/geometry/vec2d.h>
 #include <vgc/geometry/vec2f.h>
@@ -307,7 +308,7 @@ public:
         return stage_;
     }
 
-    void resetToStage(VacEdgeComputationStage stage);
+    bool resetToStage(VacEdgeComputationStage stage);
 
     const core::AnimTime& time() const {
         return time_;
@@ -328,17 +329,6 @@ public:
         double* outDistance) const;
 
 private:
-    void clearStartJoinData() {
-        resetToStage(VacEdgeComputationStage::PreJoinGeometry);
-        patches_[0].clear();
-    }
-
-    void clearEndJoinData() {
-        resetToStage(VacEdgeComputationStage::PreJoinGeometry);
-        patches_[1].clear();
-    }
-
-private:
     core::AnimTime time_;
     geometry::Rect2d bbox_ = {};
 
@@ -352,6 +342,8 @@ private:
 
     // stage StrokeMesh
     StuvMesh2d stroke_;
+    core::Color color_;
+    bool hasPendingColorChange_ = false;
 
     // Note: only valid for a single engine at the moment.
     EdgeGraphics graphics_;
@@ -360,48 +352,12 @@ private:
     bool isComputing_ = false;
 };
 
+// wrapper to benefit from "final" specifier.
 class VGC_WORKSPACE_API VacKeyEdgeFrameData final : public VacEdgeCellFrameData {
-private:
-    friend class VacKeyEdge;
-
 public:
     VacKeyEdgeFrameData(const core::AnimTime& t) noexcept
         : VacEdgeCellFrameData(t) {
     }
-
-    ~VacKeyEdgeFrameData() override = default;
-
-    void clear() override {
-        controlPoints_.clear();
-        pointsGeometry_.reset();
-        inputSamples_.clear();
-        samplingVersion_ = -1;
-        edgeTesselationMode_ = -1;
-        VacEdgeCellFrameData::clear();
-    }
-
-    bool hasInputGeometry() const {
-        return samplingVersion_ >= 0;
-    }
-
-    const geometry::Vec2dArray& controlPoints() const {
-        return controlPoints_;
-    }
-
-    const graphics::GeometryViewPtr& pointsGeometry() const {
-        return pointsGeometry_;
-    }
-
-    const geometry::CurveSampleArray& inputSamples() const {
-        return inputSamples_;
-    }
-
-private:
-    geometry::Vec2dArray controlPoints_;
-    graphics::GeometryViewPtr pointsGeometry_;
-    geometry::CurveSampleArray inputSamples_;
-    Int samplingVersion_ = -1;
-    int edgeTesselationMode_ = -1;
 };
 
 class VGC_WORKSPACE_API VacEdgeCell : public VacElement {
@@ -481,7 +437,13 @@ private:
     std::array<VertexInfo, 2> verticesInfo_ = {};
 
     mutable VacKeyEdgeFrameData frameData_;
+    geometry::Vec2dArray controlPoints_;
+    mutable graphics::GeometryViewPtr controlPointsGeometry_;
+    geometry::CurveSampleArray inputSamples_;
+    Int samplingVersion_ = -1;
+    int edgeTesselationMode_ = -1;
     int edgeTesselationModeRequested_ = 2;
+    bool isInputSamplingDirty_ = true;
 
     void onDependencyChanged_(Element* dependency, ChangeFlags changes) override;
     void onDependencyRemoved_(Element* dependency) override;
@@ -494,17 +456,14 @@ private:
 
     void notifyChanges_();
 
-    void computePreJoinGeometry_();
+    bool computeInputSampling_();
+    bool computePreJoinGeometry_();
+    bool computePostJoinGeometry_();
+    bool computeStrokeMesh_();
 
-    void computePostJoinGeometry_();
-
-    void computeStrokeMesh_();
-
-    // it notifies dependents of the change
+    void dirtyInputSampling_(bool notifyDependents = true);
     void dirtyPreJoinGeometry_(bool notifyDependents = true);
-    // it notifies dependents of the change
     void dirtyPostJoinGeometry_(bool notifyDependents = true);
-    // it notifies dependents of the change
     void dirtyStrokeMesh_(bool notifyDependents = true);
 
     void dirtyJoinDataAtVertex_(const VacVertexCell* vertexCell) override;

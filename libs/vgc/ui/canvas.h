@@ -109,6 +109,11 @@ public:
 
     VGC_SIGNAL(changed);
 
+    // temporary method
+    void onColorChanged_(const core::Color& color);
+    // temporary method
+    void clearSelection_();
+
 protected:
     // Reimplementation of Widget virtual methods
     bool onKeyPress(KeyEvent* event) override;
@@ -151,7 +156,7 @@ protected:
     geometry::Camera2d cameraAtPress_;
 
     // Selection
-    core::Array<std::pair<workspace::Element*, double>> selectionCandidateElements_;
+    core::Array<std::pair<core::Id, double>> selectionCandidateElements_;
     Int selectedElementId_ = 0;
     workspace::Element* selectedElement_() const;
 

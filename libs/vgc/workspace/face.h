@@ -127,9 +127,9 @@ protected:
     void onDependencyChanged_(Element* dependency, ChangeFlags changes) override;
     void onDependencyRemoved_(Element* dependency) override;
 
-    void preparePaint_(core::AnimTime t, PaintOptions flags) override;
+    void onPaintPrepare(core::AnimTime t, PaintOptions flags) override;
 
-    void paint_(
+    void onPaintDraw(
         graphics::Engine* engine,
         core::AnimTime t,
         PaintOptions flags = PaintOption::None) const override;

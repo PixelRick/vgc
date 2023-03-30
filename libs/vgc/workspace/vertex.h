@@ -34,18 +34,14 @@ class VacEdgeCell;
 class VacEdgeCellFrameData;
 class VacVertexCellFrameData;
 
-namespace detail {
-
-class VacJoinFrameData;
-
 // references an incident halfedge in a join
 class VGC_WORKSPACE_API VacJoinHalfedge {
 public:
     friend VacVertexCell;
 
-    VacJoinHalfedge(VacEdgeCell* edgeCell, bool isReverse, Int32 group)
+    VacJoinHalfedge(VacEdgeCell* edgeCell, bool isReverse, Int32 joinGroup)
         : edgeCell_(edgeCell)
-        , group_(group)
+        , joinGroup_(joinGroup)
         , isReverse_(isReverse) {
     }
 
@@ -57,8 +53,8 @@ public:
         return isReverse_;
     }
 
-    Int group() const {
-        return group_;
+    Int joinGroup() const {
+        return joinGroup_;
     }
 
     struct GrouplessEqualTo {
@@ -70,16 +66,22 @@ public:
 
 private:
     VacEdgeCell* edgeCell_;
-    Int32 group_;
+    Int32 joinGroup_;
     bool isReverse_;
 };
+
+namespace detail {
+
+class VacJoinFrameData;
 
 // outgoing halfedge
 class VGC_WORKSPACE_API VacJoinHalfedgeFrameData {
 public:
-    friend VacVertexCell;
-    friend VacVertexCellFrameData;
     friend VacJoinFrameData;
+    friend VacVertexCellFrameData;
+    friend VacVertexCell;
+    friend VacKeyVertex;
+    friend VacInbetweenVertex;
 
     VacJoinHalfedgeFrameData(const VacJoinHalfedge& halfedge)
         : halfedge_(halfedge) {
@@ -97,8 +99,8 @@ public:
         return halfedge_.isReverse();
     }
 
-    Int group() const {
-        return halfedge_.group();
+    Int joinGroup() const {
+        return halfedge_.joinGroup();
     }
 
     double angle() const {
@@ -109,13 +111,30 @@ public:
         return angleToNext_;
     }
 
+    void clearJoinData() {
+        edgeData_ = nullptr;
+        inputSamples_.clear();
+        patchLength_ = 0;
+        workingSamples_.clear();
+        sidePatchData_[0].clear();
+        sidePatchData_[1].clear();
+    }
+
 private:
     VacJoinHalfedge halfedge_;
+
+    // precomputation cache
     VacEdgeCellFrameData* edgeData_ = nullptr;
     geometry::Vec2d outgoingTangent_ = {};
     geometry::Vec2d halfwidths_ = {};
     geometry::Vec2d patchCutLimits_ = {};
+    core::Array<geometry::CurveSample> inputSamples_;
+    double angle_ = 0.0;
+    double angleToNext_ = 0.0;
+
+    // join result
     double patchLength_ = 0;
+    core::Array<geometry::CurveSample> workingSamples_;
     struct SidePatchData {
         // straight join model data
         double filletLength = 0;
@@ -132,43 +151,33 @@ private:
         }
     };
     std::array<SidePatchData, 2> sidePatchData_ = {};
-    core::Array<geometry::CurveSample> workingSamples_;
-    double angle_ = 0.0;
-    double angleToNext_ = 0.0;
-
-    void clearResult() {
-        workingSamples_.clear();
-        sidePatchData_[0].clear();
-        sidePatchData_[1].clear();
-    }
 };
 
 class VGC_WORKSPACE_API VacJoinFrameData {
 private:
     friend VacVertexCellFrameData;
     friend VacVertexCell;
+    friend VacKeyVertex;
+    friend VacInbetweenVertex;
 
-    core::Array<VacJoinHalfedgeFrameData> halfedgesData_;
-
+public:
     void clear() {
-        halfedgesData_.clear();
+        halfedgesFrameData_.clear();
     }
 
-    void clearResults() {
-        for (VacJoinHalfedgeFrameData& he : halfedgesData_) {
-            he.clearResult();
-        }
-    }
+private:
+    core::Array<VacJoinHalfedgeFrameData> halfedgesFrameData_;
 };
 
 } // namespace detail
 
 class VGC_WORKSPACE_API VacVertexCellFrameData {
-public:
+private:
     friend VacVertexCell;
     friend VacKeyVertex;
     friend VacInbetweenVertex;
 
+public:
     VacVertexCellFrameData(const core::AnimTime& t)
         : time_(t) {
     }
@@ -185,8 +194,6 @@ public:
         return position_;
     }
 
-    void debugPaint(graphics::Engine* engine);
-
 private:
     core::AnimTime time_;
     geometry::Vec2d position_ = core::noInit;
@@ -197,22 +204,18 @@ private:
     bool isJoinComputed_ = false;
     bool isComputing_ = false;
 
-    bool hasJoinData() const {
+    bool hasJoinData_() const {
         return isJoinComputed_;
     }
 
-    void clearJoinData() {
-        position_ = {};
-        joinData_.clearResults();
+    void clearJoinData_() {
+        joinData_.clear();
         isJoinComputed_ = false;
         joinDebugLinesRenderGeometry_.reset();
         joinDebugQuadRenderGeometry_.reset();
     }
 
-    void clearJoinResults() {
-        joinData_.clearResults();
-        isJoinComputed_ = false;
-    }
+    void debugPaint_(graphics::Engine* engine);
 };
 
 class VGC_WORKSPACE_API VacVertexCell : public VacElement {
@@ -237,19 +240,22 @@ public:
 
 protected:
     void rebuildJoinHalfedgesArray() const;
-    void clearJoinHalfedgesJoinData() const;
+    void dirtyJoinHalfedgesJoinData_(const VacEdgeCell* exluded) const;
 
-    // only dirty results but keep precomputed data in VacJoinHalfedgeFrameData
-    virtual void dirtyJoinResults() = 0;
+    // incident join halfedges
+    const core::Array<VacJoinHalfedge>& joinHalfedges() const {
+        return joinHalfedges_;
+    }
 
 private:
-    mutable core::Array<detail::VacJoinHalfedge> joinHalfedges_;
+    mutable core::Array<VacJoinHalfedge> joinHalfedges_;
 
-    void addJoinHalfedge_(const detail::VacJoinHalfedge& joinHalfedge);
-    void removeJoinHalfedge_(const detail::VacJoinHalfedge& joinHalfedge);
+    void addJoinHalfedge_(const VacJoinHalfedge& joinHalfedge);
+    void removeJoinHalfedge_(const VacJoinHalfedge& joinHalfedge);
 
-    // should both dirty results and clear corresponding VacJoinHalfedgeFrameData
-    virtual void onJoinEdgeGeometryChange_(VacEdgeCell* edge) = 0;
+    virtual void onAddJoinHalfedge_(const VacJoinHalfedge& joinHalfedge) = 0;
+    virtual void onRemoveJoinHalfedge_(const VacJoinHalfedge& joinHalfedge) = 0;
+    virtual void onJoinEdgePreJoinGeometryChanged_(const VacEdgeCell* edge) = 0;
 };
 
 class VGC_WORKSPACE_API VacKeyVertex final : public VacVertexCell {
@@ -283,13 +289,13 @@ public:
         double* outDistance = nullptr,
         core::AnimTime t = {}) const override;
 
+    const VacVertexCellFrameData* computeFrameDataAt(core::AnimTime t) override;
+
 protected:
     void onPaintDraw(
         graphics::Engine* engine,
         core::AnimTime t,
         PaintOptions flags = PaintOption::None) const override;
-
-    void dirtyJoinResults() override;
 
 private:
     mutable VacVertexCellFrameData frameData_;
@@ -297,10 +303,17 @@ private:
     ElementStatus updateFromDom_(Workspace* workspace) override;
     void updateFromVac_() override;
 
-    void onJoinEdgeGeometryChange_(VacEdgeCell* edge) override;
+    void onAddJoinHalfedge_(const VacJoinHalfedge& joinHalfedge) override;
+    void onRemoveJoinHalfedge_(const VacJoinHalfedge& joinHalfedge) override;
+    void onJoinEdgePreJoinGeometryChanged_(const VacEdgeCell* edge) override;
 
     void computePosition_();
     void computeJoin_();
+
+    void dirtyPosition_();
+    void dirtyJoin_();
+
+    void onUpdateError_();
 };
 
 } // namespace vgc::workspace
