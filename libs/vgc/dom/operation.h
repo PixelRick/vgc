@@ -300,9 +300,15 @@ public:
         return modifiedElements_;
     }
 
+    bool isUndoOrRedo() const {
+        return isUndoOrRedo_;
+    }
+
 private:
     friend Document;
 
+    // TODO: Use NodePtr to prevent dangling pointers when a reader
+    //       edits the DOM while processing the lists.
     core::Array<Node*> createdNodes_;
     core::Array<Node*> removedNodes_;
     std::set<Node*> reparentedNodes_;
@@ -310,8 +316,11 @@ private:
 
     std::unordered_map<Element*, std::set<core::StringId>> modifiedElements_;
 
+    bool isUndoOrRedo_ = false;
+
     Diff() = default;
 
+    // it does not change isUndoOrRedo_ value.
     void reset() {
         createdNodes_.clear();
         removedNodes_.clear();

@@ -89,6 +89,7 @@ VGC_DEFINE_FLAGS(ElementFlags, ElementFlag)
 
 enum class ElementStatus : Int8 {
     Ok,
+    InternalError,
     InvalidAttribute,
     UnresolvedDependency,
     ErrorInDependency,
@@ -184,16 +185,16 @@ public:
 
     inline VacElement* parentVacElement() const;
 
-    Element* previous() const {
-        return Base::previous();
+    Element* previousSibling() const {
+        return Base::previousSibling();
     }
 
-    Element* next() const {
-        return Base::next();
+    Element* nextSibling() const {
+        return Base::nextSibling();
     }
 
-    VacElement* nextVacElement() const {
-        Element* e = next();
+    VacElement* nextSiblingVacElement() const {
+        Element* e = nextSibling();
         return findFirstSiblingVacElement_(e);
     }
 
@@ -302,6 +303,7 @@ private:
 
     virtual void onDependencyChanged_(Element* dependency, ChangeFlags changes);
     virtual void onDependencyRemoved_(Element* dependency);
+    virtual void onDependencyMoved_(Element* dependency);
 
     /// dependent may be being destroyed, only use its pointer as key.
     virtual void onDependentElementRemoved_(Element* dependent);

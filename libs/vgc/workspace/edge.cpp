@@ -332,13 +332,11 @@ void VacKeyEdge::onPaintDraw(
                     geometry::Vec2d p0 = s.leftPoint();
                     geometry::Vec2d p1 = s.rightPoint();
                     strokeVertices.emplaceLast(geometry::Vec2f(p0));
-                    strokeVertices.emplaceLast(
-                        static_cast<float>(s.s()),
-                        static_cast<float>(-s.leftHalfwidth()));
+                    strokeVertices.emplaceLast(static_cast<float>(s.s()), -1.f);
+                    //static_cast<float>(-s.leftHalfwidth()));
                     strokeVertices.emplaceLast(geometry::Vec2f(p1));
-                    strokeVertices.emplaceLast(
-                        static_cast<float>(s.s()),
-                        static_cast<float>(s.rightHalfwidth()));
+                    strokeVertices.emplaceLast(static_cast<float>(s.s()), 1.f);
+                    //static_cast<float>(s.rightHalfwidth()));
                 }
             }
 
@@ -526,10 +524,12 @@ void VacKeyEdge::onDependencyRemoved_(Element* dependency) {
 
 ElementStatus VacKeyEdge::updateFromDom_(Workspace* workspace) {
     namespace ds = dom::strings;
+    // TODO: update using owning composite when it is implemented
     dom::Element* const domElement = this->domElement();
     if (!domElement) {
-        // todo: use owning composite when it is implemented
-        return ElementStatus::Ok;
+        // TODO: throw ?
+        onUpdateError_();
+        return ElementStatus::InternalError;
     }
 
     // update dependencies
@@ -537,33 +537,12 @@ ElementStatus VacKeyEdge::updateFromDom_(Workspace* workspace) {
         workspace->getElementFromPathAttribute(domElement, ds::startvertex, ds::vertex),
         workspace->getElementFromPathAttribute(domElement, ds::endvertex, ds::vertex)};
 
-    std::array<VacKeyVertex*, 2> oldVertices = {};
     std::array<VacKeyVertex*, 2> newVertices = {};
     for (Int i = 0; i < 2; ++i) {
-        VacKeyVertex* const oldVertex = verticesInfo_[i].element;
-        VacKeyVertex* const otherVertex = verticesInfo_[1 - i].element;
-        Element* const newVertexElement = verticesOpt[i].value_or(nullptr);
-        // XXX impl custom safe cast
-        VacKeyVertex* const newVertex = dynamic_cast<VacKeyVertex*>(newVertexElement);
-        oldVertices[i] = oldVertex;
-        newVertices[i] = newVertex;
-        if (oldVertex != newVertex) {
-            if (oldVertex != otherVertex) {
-                removeDependency(oldVertex);
-            }
-            if (newVertex != otherVertex) {
-                addDependency(newVertex);
-            }
-            VacJoinHalfedge he(this, i == 0, 0);
-            if (oldVertex) {
-                oldVertex->removeJoinHalfedge_(he);
-            }
-            if (newVertex) {
-                newVertex->addJoinHalfedge_(he);
-            }
-            verticesInfo_[i].element = newVertex;
-        }
+        newVertices[i] = dynamic_cast<VacKeyVertex*>(verticesOpt[i].value_or(nullptr));
     }
+
+    updateVertices_(newVertices);
 
     // What's the cleanest way to report/notify that this edge has actually changed ?
     // What are the different categories of changes that matter to dependents ?
@@ -678,7 +657,77 @@ ElementStatus VacKeyEdge::updateFromDom_(Workspace* workspace) {
 }
 
 void VacKeyEdge::updateFromVac_() {
-    // TODO
+    namespace ds = dom::strings;
+    vacomplex::KeyEdge* ke = vacKeyEdgeNode();
+    if (!ke) {
+        if (status() != ElementStatus::Ok) {
+            // Element is already corrupt, no need to fail loudly.
+            return;
+        }
+        // TODO: error or throw ?
+        return;
+    }
+
+    dom::Element* const domElement = this->domElement();
+    if (!domElement) {
+        // TODO: use owning composite when implemented
+        return;
+    }
+
+    const auto& points = domElement->getAttribute(ds::positions).getVec2dArray();
+    if (ke->points() != points) {
+        domElement->setAttribute(ds::positions, points);
+    }
+
+    const auto& widths = domElement->getAttribute(ds::widths).getDoubleArray();
+    if (ke->widths() != widths) {
+        domElement->setAttribute(ds::widths, widths);
+    }
+
+    const Workspace* w = workspace();
+    std::array<VacKeyVertex*, 2> oldVertices = {
+        verticesInfo_[0].element, verticesInfo_[1].element};
+    // TODO: check bool(ke->startVertex()) == bool(newVertices[0])
+    //             bool(ke->endVertex()) == bool(newVertices[1])
+    std::array<VacKeyVertex*, 2> newVertices = {
+        static_cast<VacKeyVertex*>(w->findVacElement(ke->startVertex())),
+        static_cast<VacKeyVertex*>(w->findVacElement(ke->endVertex())),
+    };
+    updateVertices_(newVertices);
+
+    // TODO: check domElement() != nullptr
+    if (oldVertices[0] != newVertices[0]) {
+        domElement->setAttribute(
+            ds::startvertex, newVertices[0]->domElement()->getPathFromId());
+    }
+    if (oldVertices[1] != newVertices[1]) {
+        domElement->setAttribute(
+            ds::startvertex, newVertices[1]->domElement()->getPathFromId());
+    }
+}
+
+void VacKeyEdge::updateVertices_(const std::array<VacKeyVertex*, 2>& newVertices) {
+    for (Int i = 0; i < 2; ++i) {
+        VacKeyVertex* const oldVertex = verticesInfo_[i].element;
+        VacKeyVertex* const otherVertex = verticesInfo_[1 - i].element;
+        VacKeyVertex* const newVertex = newVertices[i];
+        if (oldVertex != newVertex) {
+            if (oldVertex != otherVertex) {
+                removeDependency(oldVertex);
+            }
+            if (newVertex != otherVertex) {
+                addDependency(newVertex);
+            }
+            VacJoinHalfedge he(this, i == 0, 0);
+            if (oldVertex) {
+                oldVertex->removeJoinHalfedge_(he);
+            }
+            if (newVertex) {
+                newVertex->addJoinHalfedge_(he);
+            }
+            verticesInfo_[i].element = newVertex;
+        }
+    }
 }
 
 void VacKeyEdge::notifyChanges_() {

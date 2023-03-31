@@ -98,7 +98,7 @@ void Element::onPaintDraw(
 VacElement* Element::findFirstSiblingVacElement_(Element* start) {
     Element* e = start;
     while (e && !e->isVacElement()) {
-        e = e->next();
+        e = e->nextSibling();
     }
     return static_cast<VacElement*>(e);
 }
@@ -111,6 +111,11 @@ void Element::onDependencyChanged_(Element* /*dependency*/, ChangeFlags /*change
 }
 
 void Element::onDependencyRemoved_(Element* /*dependency*/) {
+    // child classes typically have to invalidate data when a dependency is removed
+}
+
+void Element::onDependencyMoved_(Element* /*dependency*/) {
+    // child classes typically have to update paths when a dependency moves
 }
 
 void Element::onDependentElementRemoved_(Element* /*dependent*/) {

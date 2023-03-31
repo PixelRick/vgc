@@ -82,7 +82,7 @@ void iterDfsPreOrderSkipChildren(Node*& it, Int& depth, core::TypeIdentity<Node>
     Node* next = nullptr;
     // breadth next
     while (it) {
-        next = TreeLinksGetter::next(it);
+        next = TreeLinksGetter::nextSibling(it);
         if (next) {
             it = next;
             return;
@@ -171,7 +171,7 @@ void visitDfs(
         // breadth next
         Node* next = nullptr;
         while (node) {
-            next = TreeLinksGetter::next(node);
+            next = TreeLinksGetter::nextSibling(node);
             if (next) {
                 node = next;
                 break;
@@ -201,9 +201,10 @@ Workspace::Workspace(dom::DocumentPtr document)
     document->changed().connect(onDocumentDiff());
 
     vac_ = vacomplex::Complex::create();
-    //vac_->changed().connect(onVacDiff());
     vac_->nodeAboutToBeRemoved().connect(onVacNodeAboutToBeRemoved());
     vac_->nodeCreated().connect(onVacNodeCreated());
+    vac_->nodeMoved().connect(onVacNodeMoved());
+    vac_->cellModified().connect(onVacCellModified());
 
     rebuildTreeFromDom_();
     rebuildVacFromTree_();
@@ -478,11 +479,8 @@ void Workspace::onVacNodeCreated_(
         VGC_ERROR(LogVgcWorkspace, "Unexpected vacomplex::Node parent.");
         return;
     }
-    dom::Element* domParent = parent->domElement();
-    if (!domParent) {
-        VGC_ERROR(LogVgcWorkspace, "Parent has no dom::Element.");
-        return;
-    }
+
+    // TODO: add constructors expecting operationSourceNodes
 
     // create the workspace and dom elements
     std::unique_ptr<Element> u = {};
@@ -509,35 +507,100 @@ void Workspace::onVacNodeCreated_(
         }
     }
 
-    VacElement* e = u->toVacElement();
-    if (!e) {
+    VacElement* element = u->toVacElement();
+    if (!element) {
         // TODO: error ?
         return;
     }
 
+    Element* nextSibling = findVacElement(node->nextSibling());
+    parent->insertChildUnchecked(nextSibling, element);
+
+    // dom update
+
+    dom::Element* domParent = parent->domElement();
+    if (!domParent) {
+        VGC_ERROR(LogVgcWorkspace, "Parent has no dom::Element.");
+        return;
+    }
+
     preUpdateDomFromVac_();
-    dom::ElementPtr domElement = dom::Element::create(domParent, e->domTagName().value());
+
+    dom::ElementPtr domElement =
+        dom::Element::create(domParent, element->domTagName().value());
     const core::Id id = domElement->internalId();
 
     const auto& p = elements_.emplace(id, std::move(u));
     if (!p.second) {
-        // TODO: should probably throw
+        // TODO: throw ?
+        postUpdateDomFromVac_();
         return;
     }
 
-    if (parent) {
-        parent->appendChild(e);
-    }
+    element->domElement_ = domElement.get();
+    element->id_ = id;
+    element->setVacNode(node);
 
-    e->domElement_ = domElement.get();
-    e->id_ = id;
-    e->setVacNode(node);
+    element->updateFromVac_();
 
-    e->updateFromVac_();
     postUpdateDomFromVac_();
 }
 
-void Workspace::onVacCellGeometryChanged_(vacomplex::Cell* cell) {
+void Workspace::onVacNodeMoved_(vacomplex::Node* /*node*/) {
+    if (isCreatingVacElementsFromDom_) {
+        return;
+    }
+
+    throw core::LogicError(
+        "Moving Vac Nodes is not supported yet. It requires updating paths.");
+
+    /*
+    VacElement* vacElement = findVacElement(node->id());
+    if (!vacElement) {
+        VGC_ERROR(LogVgcWorkspace, "Unexpected vacomplex::Node");
+        // TODO: recover from error by creating the Cell in workspace and DOM ?
+        return;
+    }
+
+    Element* parent = findVacElement(node->parentGroup());
+    if (!parent) {
+        VGC_ERROR(LogVgcWorkspace, "Unexpected vacomplex::Node parent.");
+        return;
+    }
+
+    Element* nextSibling = findVacElement(node->nextSibling());
+    parent->insertChildUnchecked(nextSibling, vacElement);
+
+    // dom update
+
+    dom::Element* domElement = vacElement->domElement();
+    if (!domElement) {
+        VGC_ERROR(LogVgcWorkspace, "VacElement has no dom::Element.");
+        return;
+    }
+
+    dom::Element* domParent = parent->domElement();
+    if (!domParent) {
+        VGC_ERROR(LogVgcWorkspace, "Parent has no dom::Element.");
+        return;
+    }
+
+    dom::Element* domNext = nullptr;
+    if (nextSibling) {
+        domNext = nextSibling->domElement();
+        if (!domNext) {
+            VGC_ERROR(LogVgcWorkspace, "Next VacElement has no dom::Element.");
+            return;
+        }
+    }
+
+    preUpdateDomFromVac_();
+    domParent->insertChild(domNext, domElement);
+    postUpdateDomFromVac_();
+    */
+}
+
+void Workspace::onVacCellModified_(vacomplex::Cell* cell) {
     if (isCreatingVacElementsFromDom_) {
         return;
     }
@@ -548,8 +611,11 @@ void Workspace::onVacCellGeometryChanged_(vacomplex::Cell* cell) {
         // TODO: recover from error by creating the Cell in workspace and DOM ?
         return;
     }
+
+    // dom update
+
     preUpdateDomFromVac_();
-    // TODO
+    vacElement->updateFromVac_();
     postUpdateDomFromVac_();
 }
 
@@ -713,7 +779,7 @@ void Workspace::updateVacHierarchyFromTree_() {
             }
 
             if (e->parent()) {
-                VacElement* next = e->nextVacElement();
+                VacElement* next = e->nextSiblingVacElement();
                 topology::ops::moveToGroup(
                     node, node->parentGroup(), (next ? next->vacNode() : nullptr));
             }
@@ -871,7 +937,7 @@ void Workspace::updateTreeAndVacFromDom_(const dom::Diff& diff) {
                 element->insertChildUnchecked(child, missingChild);
                 child = missingChild;
             }
-            child = child->next();
+            child = child->nextSibling();
             domChild = domChild->nextSiblingElement();
         }
     }

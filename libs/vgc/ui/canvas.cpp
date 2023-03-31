@@ -218,18 +218,21 @@ void Canvas::onColorChanged_(const core::Color& color) {
         }
         element->domElement()->setAttribute(dom::strings::color, color);
         if (ug) {
-            if (ug->parent() && ug->parent()->name() == Change_Color) {
+            if (canMergeColorChange_ && ug->parent() && ug->parent()->name() == Change_Color) {
                 ug->amend();
             }
             else {
+                canMergeColorChange_ = true;
                 ug->close();
             }
         }
+        workspace()->sync();
     }
 }
 
 void Canvas::clearSelection_() {
     selectionCandidateElements_.clear();
+    canMergeColorChange_ = false;
     selectedElementId_ = 0;
 }
 
@@ -418,6 +421,7 @@ bool Canvas::onMousePress(MouseEvent* event) {
             selectedElementId_ =
                 (selectedElementId_ + 1) % selectionCandidateElements_.size();
         }
+        canMergeColorChange_ = false;
         requestRepaint();
         return true;
     }
@@ -515,6 +519,7 @@ void Canvas::onPaintDraw(graphics::Engine* engine, PaintOptions /*options*/) {
     //  - setup target for layers (painting a layer means using its result)
     bool paintOutline = showControlPoints_;
     if (workspace_) {
+        workspace_->sync();
         //VGC_PROFILE_SCOPE("Canvas:WorkspaceVisit");
         workspace_->visitDepthFirst(
             [](workspace::Element* /*e*/, Int /*depth*/) {

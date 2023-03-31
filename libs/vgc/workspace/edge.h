@@ -451,6 +451,8 @@ private:
     ElementStatus updateFromDom_(Workspace* workspace) override;
     void updateFromVac_() override;
 
+    void updateVertices_(const std::array<VacKeyVertex*, 2>& newVertices);
+
     ChangeFlags alreadyNotifiedChanges_ = {};
     ChangeFlags pendingNotifyChanges_ = {};
 

@@ -82,6 +82,13 @@ void History::setMaxLevels(Int n) {
 }
 
 bool History::abort() {
+    if (isUndoingOrRedoing_) {
+        throw LogicError("Cannot abort when the history is already doing an undo/redo.");
+    }
+
+    isUndoingOrRedoing_ = true;
+    aboutToUndo().emit();
+
     bool aborted = false;
     // abort current open groups chain
     while (head_->isOpen()) {
@@ -100,49 +107,75 @@ bool History::abort() {
         }
         aborted = true;
     }
+
+    undone().emit();
+    isUndoingOrRedoing_ = false;
     if (aborted) {
         headChanged().emit(head_);
-        return true;
     }
-    return false;
+
+    return aborted;
 }
 
 bool History::undo() {
+    if (isUndoingOrRedoing_) {
+        throw LogicError("Cannot undo when the history is already doing an undo/redo.");
+    }
+
     if (head_ != root_) {
+        isUndoingOrRedoing_ = true;
+        aboutToUndo().emit();
+
         do {
             undoOne_();
             // also undo direct ancestors if open
         } while (head_->isOpen());
+
+        undone().emit();
+        isUndoingOrRedoing_ = false;
         headChanged().emit(head_);
         return true;
     }
+
     return false;
 }
 
 bool History::redo() {
+    if (isUndoingOrRedoing_) {
+        throw LogicError("Cannot redo when the history is already doing an undo/redo.");
+    }
+
     UndoGroup* child = head_->mainChild();
     if (child) {
+        isUndoingOrRedoing_ = true;
+        aboutToRedo().emit();
+
         do {
             redoOne_();
         } while (head_->isOpen() && head_->mainChild());
+
+        redone().emit();
+        isUndoingOrRedoing_ = false;
         headChanged().emit(head_);
         return true;
     }
+
     return false;
 }
 
 void History::goTo(UndoGroup* node) {
-    // The common ancestor of node and head_ is the first node that is not
-    // undone in the path from node to root.
-    // It always exists and it can be head_ itself.
-
     if (isUndoingOrRedoing_) {
         throw LogicError("Cannot goto when the history is already doing an undo/redo.");
     }
 
+    // The common ancestor of node and head_ is the first node that is not
+    // undone in the path from node to root.
+    // It always exists and it can be head_ itself.
     if (head_ == node) {
         return;
     }
+
+    isUndoingOrRedoing_ = true;
 
     // While searching for the common ancestor we have to reorder the branches
     // of visited nodes to setup the new main path.
@@ -155,28 +188,33 @@ void History::goTo(UndoGroup* node) {
     }
 
     // First undo all between head_ and common ancestor.
+    aboutToUndo().emit();
     while (head_ != a) {
         undoOne_();
     }
+    undone().emit();
 
+    aboutToRedo().emit();
     // Then redo all from common ancestor to node (included).
     while (head_ != node) {
         redoOne_();
     }
+    redone().emit();
 
+    isUndoingOrRedoing_ = false;
     headChanged().emit(head_);
 }
 
 UndoGroup* History::createUndoGroup(core::StringId name) {
+    if (isUndoingOrRedoing_) {
+        throw LogicError("Cannot create an undo group when the history is already doing "
+            "an undo/redo.");
+    }
+
     // Check current ongoing node (if any) doesn't have recorded operations.
     if (head_->isOpen() && head_->numOperations()) {
         throw LogicError("Cannot nest an undo group under another if the latter already "
                          "contains operations.");
-    }
-
-    if (isUndoingOrRedoing_) {
-        throw LogicError("Cannot create an undo group when the history is already doing "
-                         "an undo/redo.");
     }
 
     // Destroy first ongoing in main redos if present.
@@ -206,14 +244,7 @@ void History::undoOne_(bool forceAbort) {
         abort = true;
     }
 
-    if (isUndoingOrRedoing_) {
-        throw LogicError(
-            "Cannot undo an undo group when the history is already doing an undo/redo.");
-    }
-
-    isUndoingOrRedoing_ = true;
     head_->undo_(abort);
-    isUndoingOrRedoing_ = false;
 
     if (!head_->openAncestor_) {
         --numLevels_;
@@ -227,14 +258,7 @@ void History::undoOne_(bool forceAbort) {
 void History::redoOne_() {
     UndoGroup* child = head_->mainChild();
 
-    if (isUndoingOrRedoing_) {
-        throw LogicError(
-            "Cannot redo an undo group when the history is already doing an undo/redo.");
-    }
-
-    isUndoingOrRedoing_ = true;
     child->redo_();
-    isUndoingOrRedoing_ = false;
 
     if (!head_->openAncestor_) {
         ++numLevels_;
@@ -243,6 +267,11 @@ void History::redoOne_() {
 }
 
 bool History::closeUndoGroup_(UndoGroup* node) {
+    if (isUndoingOrRedoing_) {
+        throw LogicError(
+            "Cannot close an undo group when the history is doing an undo/redo.");
+    }
+
     // Requirements:
     // - `node` is ongoing
     // - `node` is not undone (implies node is in main branch)
@@ -250,11 +279,6 @@ bool History::closeUndoGroup_(UndoGroup* node) {
 
     if (!node->isOpen()) {
         throw LogicError("Cannot close an undo group which is already closed.");
-    }
-
-    if (isUndoingOrRedoing_) {
-        throw LogicError(
-            "Cannot close an undo group when the history is doing an undo/redo.");
     }
 
     if (node->isUndone()) {
@@ -305,6 +329,11 @@ bool History::closeUndoGroupUnchecked_(UndoGroup* node) {
 }
 
 bool History::amendUndoGroup_(UndoGroup* node) {
+    if (isUndoingOrRedoing_) {
+        throw LogicError(
+            "Cannot amend an undo group when the history is doing an undo/redo.");
+    }
+
     // Requirements:
     // - `node` is ongoing
     // - `node` is not undone (implies node is in main branch)
@@ -312,11 +341,6 @@ bool History::amendUndoGroup_(UndoGroup* node) {
 
     if (!node->isOpen()) {
         throw LogicError("Cannot amend an undo group which is already closed.");
-    }
-
-    if (isUndoingOrRedoing_) {
-        throw LogicError(
-            "Cannot amend an undo group when the history is doing an undo/redo.");
     }
 
     if (node->isUndone()) {

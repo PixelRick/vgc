@@ -159,6 +159,7 @@ protected:
     core::Array<std::pair<core::Id, double>> selectionCandidateElements_;
     Int selectedElementId_ = 0;
     workspace::Element* selectedElement_() const;
+    bool canMergeColorChange_ = true;
 
     // Graphics resources
     // VgcGraph

@@ -119,6 +119,8 @@ public:
     // updates from vac are direct (after each atomic operation)
     VGC_SLOT(onVacNodeAboutToBeRemoved, onVacNodeAboutToBeRemoved_);
     VGC_SLOT(onVacNodeCreated, onVacNodeCreated_);
+    VGC_SLOT(onVacNodeMoved, onVacNodeMoved_);
+    VGC_SLOT(onVacCellModified, onVacCellModified_);
 
 private:
     friend VacElement;
@@ -157,7 +159,8 @@ private:
     void onVacNodeCreated_(
         vacomplex::Node* node,
         core::Span<vacomplex::Node*> operationSourceNodes);
-    void onVacCellGeometryChanged_(vacomplex::Cell* cell);
+    void onVacNodeMoved_(vacomplex::Node* node);
+    void onVacCellModified_(vacomplex::Cell* cell);
 
     // ---------------
     // DOM -> VAC Sync

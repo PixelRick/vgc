@@ -213,12 +213,12 @@ ElementStatus VacKeyVertex::updateFromDom_(Workspace* /*workspace*/) {
     namespace ds = dom::strings;
     dom::Element* const domElement = this->domElement();
     if (!domElement) {
-        // TODO: error ?
+        // TODO: throw ?
+        onUpdateError_();
+        return ElementStatus::InternalError;
     }
 
     const auto& position = domElement->getAttribute(ds::position).getVec2d();
-
-    ChangeFlags changes_ = {};
 
     vacomplex::KeyVertex* kv = vacKeyVertexNode();
     if (!kv) {
@@ -245,7 +245,28 @@ ElementStatus VacKeyVertex::updateFromDom_(Workspace* /*workspace*/) {
 }
 
 void VacKeyVertex::updateFromVac_() {
-    // TODO
+    namespace ds = dom::strings;
+    vacomplex::KeyVertex* kv = vacKeyVertexNode();
+    if (!kv) {
+        if (status() != ElementStatus::Ok) {
+            // Element is already corrupt, no need to fail loudly.
+            return;
+        }
+        // TODO: error or throw ?
+        return;
+    }
+
+    dom::Element* const domElement = this->domElement();
+    if (!domElement) {
+        // TODO: use owning composite when implemented
+        return;
+    }
+
+    const auto& position = domElement->getAttribute(ds::position).getVec2d();
+    if (kv->position() != position) {
+        domElement->setAttribute(ds::position, kv->position());
+        dirtyPosition_();
+    }
 }
 
 void VacKeyVertex::onAddJoinHalfedge_(const VacJoinHalfedge& joinHalfedge) {

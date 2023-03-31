@@ -164,7 +164,8 @@ public:
         nodeCreated,
         (VacNode*, node),
         (core::Span<VacNode*>, operationSourceNodes))
-    VGC_SIGNAL(cellGeometryChanged, (VacCell*, node))
+    VGC_SIGNAL(nodeMoved, (VacNode*, node))
+    VGC_SIGNAL(cellModified, (VacCell*, cell))
 
     //VGC_SIGNAL(changed, (const VacDiff&, diff))
 

@@ -302,6 +302,10 @@ public:
     }
 
     VGC_SIGNAL(headChanged, (UndoGroup*, newNode))
+    VGC_SIGNAL(aboutToUndo)
+    VGC_SIGNAL(undone)
+    VGC_SIGNAL(aboutToRedo)
+    VGC_SIGNAL(redone)
 
 private:
     Int maxLevels_ = 1000;
@@ -312,10 +316,10 @@ private:
     Int numLevels_ = 0;
     bool isUndoingOrRedoing_ = false;
 
-    // Assumes head_ is undoable.
+    // Assumes head_ is undoable. Does not emit headChanged().
     void undoOne_(bool forceAbort = false);
 
-    // Assumes head_->mainChild() exists.
+    // Assumes head_->mainChild() exists. Does not emit headChanged().
     void redoOne_();
 
     bool closeUndoGroup_(UndoGroup* node);
