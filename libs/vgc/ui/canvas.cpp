@@ -206,7 +206,30 @@ void deleteElement(workspace::Element* element, workspace::Workspace* workspace)
 
 } // namespace
 
+// temporary method to test color change of element
+void Canvas::onColorChanged_(const core::Color& color) {
+    workspace::Element* element = selectedElement_();
+    core::History* history = workspace()->history();
+    if (element && element->domElement()) {
+        core::UndoGroup* ug = nullptr;
+        static core::StringId Change_Color("Change Color");
+        if (history) {
+            ug = history->createUndoGroup(Change_Color);
+        }
+        element->domElement()->setAttribute(dom::strings::color, color);
+        if (ug) {
+            ug->close(
+                canMergeColorChange_ && ug->parent()
+                && ug->parent()->name() == Change_Color);
+            canMergeColorChange_ = true;
+        }
+        workspace()->sync();
+    }
+}
+
 void Canvas::clearSelection() {
+    selectionCandidateElements_.clear();
+    canMergeColorChange_ = false;
     selectedElementId_ = -1;
 }
 

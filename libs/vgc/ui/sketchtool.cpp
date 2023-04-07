@@ -23,6 +23,7 @@
 #include <vgc/core/stringid.h>
 #include <vgc/geometry/curve.h>
 #include <vgc/graphics/strings.h>
+#include <vgc/topology/vac.h>
 #include <vgc/ui/boolsettingedit.h>
 #include <vgc/ui/column.h>
 #include <vgc/ui/cursor.h>
@@ -649,6 +650,20 @@ void SketchTool::finishCurve_() {
             endVertex_ = snapVertex->domElement();
             edge_->setAttribute(ds::positions, points_);
             edge_->setAttribute(ds::endvertex, endVertex_->getPathFromId());
+            workspace->sync();
+        }
+    }
+
+    // testing faces, do not PR this
+    if (edgeCell) {
+        vacomplex::KeyEdge* ke = edgeCell->vacKeyEdgeNode();
+        if (ke && ke->startVertex() == ke->endVertex()) {
+            vacomplex::KeyFace* kf = topology::ops::createKeyFace(
+                vacomplex::KeyCycle({vacomplex::KeyHalfedge(ke, 0)}), ke->parentGroup());
+            workspace::VacElement* f = workspace->findVacElement(kf);
+            if (f && f->domElement()) {
+                f->domElement()->setAttribute(ds::color, penColor_);
+            }
             workspace->sync();
         }
     }

@@ -117,6 +117,9 @@ public:
     // since the "current selection" can be shared across several canvases
     // in case of split view, etc.
     //
+    
+    // temporary method
+    void onColorChanged_(const core::Color& color);
 
     /// Deselects all selected elements and make the list of selection
     /// candidates empty.
@@ -186,6 +189,7 @@ protected:
     core::Array<std::pair<core::Id, double>>
     computeSelectionCandidates_(const geometry::Vec2f& position) const;
     workspace::Element* selectedElement_() const;
+    bool canMergeColorChange_ = true;
 
     // Graphics resources
     // VgcGraph
