@@ -209,6 +209,9 @@ void deleteElement(workspace::Element* element, workspace::Workspace* workspace)
 void Canvas::clearSelection_() {
     selectionCandidateElements_.clear();
     selectedElementId_ = 0;
+    paintCandidatePendingTriangles_.clear();
+    hasPaintCandidate_ = false;
+    requestRepaint();
 }
 
 bool Canvas::onKeyPress(KeyEvent* event) {
@@ -338,6 +341,10 @@ bool Canvas::onMouseMove(MouseEvent* event) {
         requestRepaint();
         return true;
     }
+    else if (isBucketPainting_) {
+        doBucketPaintTest_(mousePos);
+        return true;
+    }
 
     return false;
 }
@@ -350,7 +357,7 @@ bool Canvas::onMousePress(MouseEvent* event) {
     mousePressed_ = true;
     mouseButtonAtPress_ = event->button();
 
-    if (isPanning_ || isRotating_ || isZooming_) {
+    if (isPanning_ || isRotating_ || isZooming_ || isBucketPainting_) {
         return true;
     }
 
@@ -384,8 +391,7 @@ bool Canvas::onMousePress(MouseEvent* event) {
         && event->button() == MouseButton::Left) {
         if (mousePosAtPress_ != mousePos) {
             mousePosAtPress_ = mousePos;
-            selectionCandidateElements_.clear();
-            selectedElementId_ = 0;
+            clearSelection_();
 
             geometry::Vec2d viewCoords = mousePos;
             geometry::Vec2d worldCoords =
@@ -424,9 +430,13 @@ bool Canvas::onMousePress(MouseEvent* event) {
         requestRepaint();
         return true;
     }
+    else if (event->button() == MouseButton::Right) {
+        isBucketPainting_ = true;
+        doBucketPaintTest_(mousePos);
+        return true;
+    }
 
-    selectionCandidateElements_.clear();
-    selectedElementId_ = 0;
+    clearSelection_();
     return false;
 }
 
@@ -440,6 +450,7 @@ bool Canvas::onMouseRelease(MouseEvent* event) {
     isPanning_ = false;
     isZooming_ = false;
     mousePressed_ = false;
+    isBucketPainting_ = false;
 
     return true;
 }
@@ -478,6 +489,9 @@ void Canvas::onPaintCreate(graphics::Engine* engine) {
     createInfo.setFillMode(FillMode::Wireframe);
     wireframeRS_ = engine->createRasterizerState(createInfo);
     bgGeometry_ = engine->createDynamicTriangleStripView(BuiltinGeometryLayout::XYRGB);
+
+    paintCandidateFillGeometry_ =
+        engine->createDynamicTriangleListView(BuiltinGeometryLayout::XY_iRGBA);
 
     reload_ = true;
 }
@@ -569,6 +583,19 @@ void Canvas::onPaintDraw(graphics::Engine* engine, PaintOptions options) {
         selectedElement->paint(engine, {}, workspace::PaintOption::Selected);
     }
 
+    if (hasPaintCandidate_ && paintCandidateFillGeometry_) {
+        if (!paintCandidatePendingTriangles_.isEmpty()) {
+            engine->updateBufferData(
+                paintCandidateFillGeometry_->vertexBuffer(0), //
+                paintCandidatePendingTriangles_);
+            engine->updateBufferData(
+                paintCandidateFillGeometry_->vertexBuffer(1), //
+                core::Array<float>({1, 0, 0, 1}));
+        }
+        engine->setProgram(graphics::BuiltinProgram::SimplePreview);
+        engine->draw(paintCandidateFillGeometry_);
+    }
+
     engine->popViewMatrix();
     engine->popPipelineParameters(modifiedParameters);
 
@@ -581,6 +608,7 @@ void Canvas::onPaintDraw(graphics::Engine* engine, PaintOptions options) {
 void Canvas::onPaintDestroy(graphics::Engine* engine) {
     SuperClass::onPaintDestroy(engine);
     bgGeometry_.reset();
+    paintCandidateFillGeometry_.reset();
     fillRS_.reset();
     wireframeRS_.reset();
 }
@@ -597,6 +625,18 @@ workspace::Element* Canvas::selectedElement_() const {
     }
     else {
         return nullptr;
+    }
+}
+
+void Canvas::doBucketPaintTest_(const geometry::Vec2d& mousePos) {
+    geometry::Vec2d worldCoords =
+        camera_.viewMatrix().inverted().transformPointAffine(mousePos);
+    topology::detail::computeKeyFaceCandidateAt(
+        worldCoords, workspace()->vac()->rootGroup(), paintCandidatePendingTriangles_);
+    bool hadPaintCandidate = hasPaintCandidate_;
+    hasPaintCandidate_ = !paintCandidatePendingTriangles_.isEmpty();
+    if (hasPaintCandidate_ || hadPaintCandidate) {
+        requestRepaint();
     }
 }
 
