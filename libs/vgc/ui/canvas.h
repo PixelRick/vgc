@@ -112,6 +112,8 @@ public:
     VGC_SIGNAL(changed);
 
     // temporary method
+    void onColorChanged_(const core::Color& color);
+    // temporary method
     void clearSelection_();
     void clearPaintCandidate_();
 
@@ -120,6 +122,7 @@ protected:
     bool onKeyPress(KeyEvent* event) override;
     bool onMouseMove(MouseEvent* event) override;
     bool onMousePress(MouseEvent* event) override;
+    void preMousePress(MouseEvent* event) override;
     bool onMouseRelease(MouseEvent* event) override;
     bool onMouseEnter() override;
     bool onMouseLeave() override;
@@ -167,6 +170,7 @@ protected:
     core::Array<topology::KeyCycle> paintCandidateCycles_;
     bool hasPaintCandidate_ = false;
     bool isBucketPainting_ = false;
+    core::Color paintColor_ = {};
 
     void doBucketPaintTest_(const geometry::Vec2d& mousePos);
 
