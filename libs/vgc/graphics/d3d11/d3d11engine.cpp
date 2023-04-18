@@ -967,6 +967,36 @@ void D3d11Engine::createBuiltinShaders_() {
             shaderBlob, device_, "simple_textured_debug.f.hlsl");
     }
 
+    // Create the simple textured shader (fragment)
+    {
+        D3d11Program* program = simpleTexturedDebugProgram.get();
+        ComPtr<ID3DBlob> errorBlob;
+        ComPtr<ID3DBlob> pixelShaderBlob;
+
+        HRESULT hres = D3DCompileFromFile(
+            shaderPath_("simple_textured_debug.f.hlsl").wstring().c_str(),
+            NULL, NULL, "main", "ps_4_0", 0, 0,
+            pixelShaderBlob.releaseAndGetAddressOf(),
+            errorBlob.releaseAndGetAddressOf());
+
+        if (hres < 0) {
+            std::string errString =
+                (errorBlob ? std::string(
+                    static_cast<const char*>(errorBlob->GetBufferPointer()))
+                    : core::format("unknown D3DCompile error (0x{:X}).", hres));
+            throw core::RuntimeError(errString);
+        }
+        errorBlob.reset();
+
+        ComPtr<ID3D11PixelShader> pixelShader;
+        device_->CreatePixelShader(
+            pixelShaderBlob->GetBufferPointer(),
+            pixelShaderBlob->GetBufferSize(),
+            NULL,
+            pixelShader.releaseAndGetAddressOf());
+        program->pixelShader_ = pixelShader;
+    }
+
     D3d11ProgramPtr sreenSpaceDisplacementProgram(
         new D3d11Program(resourceRegistry_, BuiltinProgram::ScreenSpaceDisplacement));
     sreenSpaceDisplacementProgram_ = sreenSpaceDisplacementProgram;
@@ -1000,6 +1030,8 @@ void D3d11Engine::createBuiltinShaders_() {
         device_->CreateDepthStencilState(
             &desc, depthStencilState_.releaseAndGetAddressOf());
     }
+
+#undef VGC_D3D11_CREATE_BUILTIN_INPUT_LAYOUT
 }
 
 SwapChainPtr D3d11Engine::constructSwapChain_(const SwapChainCreateInfo& createInfo) {

@@ -22,6 +22,7 @@
 #include <vgc/core/algorithm.h>
 #include <vgc/core/array.h>
 #include <vgc/core/colors.h>
+#include <vgc/core/stopwatch.h>
 #include <vgc/geometry/bezier.h>
 #include <vgc/geometry/catmullrom.h>
 
@@ -615,10 +616,69 @@ bool sampleIter_(
         radii = {widths[i0] * 0.5, widths[i1] * 0.5, widths[i2] * 0.5, widths[i3] * 0.5};
         // XXX use something that does not overshoot
         uniformCatmullRomToBezierInPlace(radii.data());
+
+        //-------------------------
+        //-------------------------
+        // experimental outline tangents computation
+        //
+        // der at 0: 3(P1-P0)
+        // der at 1: 3(P3-P2)
+        // derder at 0: 6(P2-2P1+P0)
+        // derder at 1: 6(P3-2P2+P1)
+        //
+        Int iA = (std::max)(idx - 2, Int(0));
+        std::array<Vec2d, 4> cpsA = {
+            positions[iA], positions[i0], positions[i1], positions[i2]};
+        uniformCatmullRomToBezierCappedInPlace(cpsA.data());
+        Int iB = (std::min)(idx + 3, numPts - 1);
+        std::array<Vec2d, 4> cpsB = {
+            positions[i1], positions[i2], positions[i3], positions[iB]};
+        uniformCatmullRomToBezierCappedInPlace(cpsB.data());
+        Vec2d pA = cps[0];
+        Vec2d pB = cps[3];
+        Vec2d dpA = 3 * (cpsA[3] - cpsA[2]);
+        Vec2d dp0 = 3 * (cps[1] - cps[0]);
+        Vec2d dp1 = 3 * (cps[3] - cps[2]);
+        Vec2d dpB = 3 * (cpsB[1] - cpsB[0]);
+        Vec2d ddpA = 6 * (cpsA[3] - 2 * cpsA[2] + cpsA[1]);
+        Vec2d ddp0 = 6 * (cps[2] - 2 * cps[1] + cps[0]);
+        Vec2d ddp1 = 6 * (cps[3] - 2 * cps[2] + cps[1]);
+        Vec2d ddpB = 6 * (cpsB[2] - 2 * cpsB[1] + cpsB[0]);
+        std::array<double, 4> radiiA = {
+            widths[iA] * 0.5, widths[i0] * 0.5, widths[i1] * 0.5, widths[i2] * 0.5};
+        uniformCatmullRomToBezierInPlace(radiiA.data());
+        std::array<double, 4> radiiB = {
+            widths[i1] * 0.5, widths[i2] * 0.5, widths[i3] * 0.5, widths[iB] * 0.5};
+        uniformCatmullRomToBezierInPlace(radiiB.data());
+
+        //double wA = widths[i0];
+        //double wB = widths[i3];
+        //double dwA = 3 * (radiiA[3] - radiiA[2]);
+        //double dw0 = 3 * (radii[1] - radii[0]);
+        //double dw1 = 3 * (radii[3] - radii[2]);
+        //double dwB = 3 * (radiiB[1] - radiiB[0]);
+
+        //// finally, compute outline tangents
+
+        //auto computeTerm1 = [](Vec2d dp, Vec2d ddp, double /*w*/, double dw) {
+        //    return dw / dp.length();
+        //};
+        //auto computeTerm2 = [](Vec2d dp, Vec2d ddp, double /*w*/, double /*dw*/) {
+        //    Vec2d dpSwitched = Vec2d(dp.y(), dp.x());
+        //    Vec2d ddpSwitched = Vec2d(ddp.y(), ddp.x());
+        //    return (dp); // todo (see notion, the equation is there)
+        //};
+
+        //Vec2d doA = {};
+
+        //-------------------------
+        //-------------------------
     }
 
     IterativeSamplingSample s0 = {};
     IterativeSamplingSample sN = {};
+
+    static core::Stopwatch sw = {};
 
     // Compute first sample of segment.
     if (!data.previousSampleN.has_value()) {

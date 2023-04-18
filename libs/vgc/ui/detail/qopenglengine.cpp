@@ -1111,6 +1111,70 @@ void QglEngine::initContext_() {
 
 void QglEngine::initBuiltinResources_() {
 
+    // Builtin layouts
+    struct VertexAttribDesc {
+        const char* name;
+        GLint numElements;
+        GLenum elementType;
+        uintptr_t bufferIndex;
+        uintptr_t offset;
+        bool isPerInstance;
+        GLboolean normalized;
+        GLsizei stride;
+    };
+
+#define VGC_QGL_CREATE_BUILTIN_INPUT_LAYOUT(layout_tag)                                  \
+    do {                                                                                 \
+        constexpr Int8 layoutIndex =                                                     \
+            core::toUnderlying(BuiltinGeometryLayout::##layout_tag);                     \
+        core::Array<GlAttribPointerDesc>& layout =                                       \
+            program->builtinLayouts_[layoutIndex];                                       \
+        for (const auto& desc : layout_##layout_tag) {                                   \
+            GlAttribPointerDesc& desc2 = layout.emplaceLast();                           \
+            desc2.index = prog->attributeLocation(desc.name);                            \
+            desc2.numElements = desc.numElements;                                        \
+            desc2.elementType = desc.elementType;                                        \
+            desc2.normalized = desc.normalized;                                          \
+            desc2.stride = desc.stride;                                                  \
+            desc2.offset = desc.offset;                                                  \
+            desc2.bufferIndex = desc.bufferIndex;                                        \
+            desc2.isPerInstance = desc.isPerInstance;                                    \
+        }                                                                                \
+    } while (0)
+
+    // clang-format off
+    GlAttribPointerDesc layout_XYRGB[] = {
+        {"pos",    2, GL_FLOAT, 0, 0,                                false, 0},
+        {"col",    3, GL_FLOAT, 0, offsetof(Vertex_XYRGB, r),        false, 0},
+    };
+    GlAttribPointerDesc layout_XYRGBA[] = {
+        {"pos",    2, GL_FLOAT, 0, 0,                                false, 0},
+        {"col",    4, GL_FLOAT, 0, offsetof(Vertex_XYRGBA, r),       false, 0},
+    };                                                               
+    GlAttribPointerDesc layout_XY_iRGBA[] = {                        
+        {"pos",    2, GL_FLOAT, 0, 0,                                false, 0},
+        {"col",    4, GL_FLOAT, 1, 0,                                true,  0},
+    };                                                               
+    GlAttribPointerDesc layout_XYUVRGBA[] = {                        
+        {"pos",    2, GL_FLOAT, 0, 0,                                false, 0},
+        {"uv",     2, GL_FLOAT, 0, offsetof(Vertex_XYUVRGBA, u),     false, 0},
+        {"col",    4, GL_FLOAT, 0, offsetof(Vertex_XYUVRGBA, r),     false, 0},
+    };                                                               
+    GlAttribPointerDesc layout_XYUV_iRGBA[] = {                      
+        {"pos",    2, GL_FLOAT, 0, 0,                                false, 0},
+        {"uv",     2, GL_FLOAT, 0, offsetof(Vertex_XYUV, u),         false, 0},
+        {"col",    4, GL_FLOAT, 1, 0,                                true,  0},
+    };
+    GlAttribPointerDesc layout_XYDxDy_iXYRotWRGBA[] = {
+        {"pos",    2, GL_FLOAT, 0, 0,                                false, 0, },
+        {"disp",   2, GL_FLOAT, 0, offsetof(Vertex_XYDxDy, dx),      false, 0, },
+        {"ipos",   2, GL_FLOAT, 1, 0,                                true,  1, sizeof(Vertex_XYRotWRGBA)},
+        {"rotate", 1, GL_FLOAT, 1, offsetof(Vertex_XYRotWRGBA, rot), true,  1, sizeof(Vertex_XYRotWRGBA)},
+        {"offset", 1, GL_FLOAT, 1, offsetof(Vertex_XYRotWRGBA, w),   true,  1, sizeof(Vertex_XYRotWRGBA)},
+        {"col",    4, GL_FLOAT, 1, offsetof(Vertex_XYRotWRGBA, r),   true,  1, sizeof(Vertex_XYRotWRGBA)},
+    };
+    // clang-format on
+
     // Initialize the simple shader
     {
         QglProgram* program = simpleProgram_.get_static_cast<QglProgram>();
@@ -1214,6 +1278,8 @@ void QglEngine::initBuiltinResources_() {
 
         program->initBuiltinLayout(BuiltinGeometryLayout::XYDxDy_iXYRotWRGBA);
     }
+
+#undef VGC_QGL_CREATE_BUILTIN_INPUT_LAYOUT
 }
 
 void QglEngine::initFramebuffer_(Framebuffer* aFramebuffer) {

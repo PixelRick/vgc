@@ -34,6 +34,35 @@ class VacEdgeCell;
 class VacEdgeCellFrameData;
 class VacVertexCellFrameData;
 
+namespace detail {
+
+struct Ray {
+    geometry::Vec2d origin;
+    geometry::Vec2d dir;
+
+    std::optional<geometry::Vec2d> intersectWith(const Ray& other) const {
+
+        const geometry::Vec2d d0 = dir;
+        const geometry::Vec2d d1 = other.dir;
+
+        // Solve 2x2 system using Cramer's rule.
+        double delta = d0.det(d1);
+        if (std::abs(delta) > core::epsilon) {
+            geometry::Vec2d p0p1 = other.origin - origin;
+            double inv_delta = 1 / delta;
+            double t0 = p0p1.det(d1) * inv_delta;
+            double t1 = p0p1.det(d0) * inv_delta;
+            return geometry::Vec2d(t0, t1);
+        }
+
+        return std::nullopt;
+    }
+
+    geometry::Vec2d pointAt(double t) const {
+        return origin + t * dir;
+    }
+};
+
 // references an incident halfedge in a join
 class VGC_WORKSPACE_API VacJoinHalfedge {
 public:
