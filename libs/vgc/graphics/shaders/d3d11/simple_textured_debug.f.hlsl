@@ -21,11 +21,11 @@ float4 main(PS_INPUT input)
     //    return float4(0.f, 0.f, -input.uv.y, 0.5f);
     //}
 
-    // smooth brush test (easings.net/#easeInOutQuad)
-    //float x = 1.f - abs(input.uv.y);
-    //float k = -2 * x + 2;
-    //float ca = x < 0.5 ? 2 * x * x : 1 - k * k / 2;
-    //return float4(input.col.rgb, input.col.a * ca);
+    // smooth brush test(easings.net / #easeInOutQuad)
+    float x = 1.f - abs(1 - input.uv.x);
+    float k = -2 * x + 2;
+    float ca = x < 0.5 ? 2 * x * x : 1 - k * k / 2;
+    return float4(input.col.rgb * round(abs(input.uv.y)), input.col.a * ca);
 
     const float square_size = 0.05;
     const float m = square_size * 2;
