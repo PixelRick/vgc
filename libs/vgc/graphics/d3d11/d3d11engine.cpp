@@ -983,7 +983,13 @@ void D3d11Engine::createBuiltinShaders_() {
     }
 
     // Create the simple instanced shader (fragment)
-    { sreenSpaceDisplacementProgram->pixelShader_ = simpleProgram->pixelShader_; }
+    {
+        D3d11Program* program = sreenSpaceDisplacementProgram.get();
+
+        ComPtr<ID3DBlob> shaderBlob;
+        program->pixelShader_ =
+            compileAndCreatePixelShader(shaderBlob, device_, "shiny.f.hlsl");
+    }
 
     // Create depth-stencil State
     {

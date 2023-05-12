@@ -70,6 +70,7 @@ vgc_add_library(graphics
         fonts/Roboto/Roboto-ThinItalic.ttf
         fonts/Roboto/Roboto-Thin.ttf
         shaders/d3d11/screen_space_displacement.v.hlsl
+        shaders/d3d11/shiny.f.hlsl
         shaders/d3d11/simple.f.hlsl
         shaders/d3d11/simple.v.hlsl
         shaders/d3d11/simple_preview.f.hlsl

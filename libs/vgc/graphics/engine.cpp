@@ -455,7 +455,7 @@ void Engine::setProgram(const ProgramPtr& program) {
     ProgramPtr oldTop = programStack_.top();
     if (program != oldTop) {
         if (program && (!oldTop || !program->isBuiltin() != oldTop->isBuiltin())) {
-            dirtyPipelineParameters_ |= PipelineParameter::VertexShaderConstantBuffers;
+            dirtyPipelineParameters_ |= PipelineParameter::AllShadersConstantBuffers;
         }
         programStack_.top() = program;
         dirtyPipelineParameters_ |= PipelineParameter::Program;
@@ -466,7 +466,7 @@ void Engine::pushProgram(const ProgramPtr& program) {
     ProgramPtr oldTop = programStack_.top();
     if (program != oldTop) {
         if (program && (!oldTop || !program->isBuiltin() != oldTop->isBuiltin())) {
-            dirtyPipelineParameters_ |= PipelineParameter::VertexShaderConstantBuffers;
+            dirtyPipelineParameters_ |= PipelineParameter::AllShadersConstantBuffers;
         }
         dirtyPipelineParameters_ |= PipelineParameter::Program;
     }
@@ -479,7 +479,7 @@ void Engine::popProgram() {
     ProgramPtr newTop = programStack_.top();
     if (newTop != oldTop) {
         if (newTop && (!oldTop || newTop->isBuiltin() != oldTop->isBuiltin())) {
-            dirtyPipelineParameters_ |= PipelineParameter::VertexShaderConstantBuffers;
+            dirtyPipelineParameters_ |= PipelineParameter::AllShadersConstantBuffers;
         }
         dirtyPipelineParameters_ |= PipelineParameter::Program;
     }
