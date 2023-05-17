@@ -585,7 +585,7 @@ void VacKeyEdge::onPaintDraw(
         engine->draw(graphics.selectionGeometry());
     }
     else if (!flags.has(PaintOption::Outline)) {
-        engine->setProgram(graphics::BuiltinProgram::Simple /*TexturedDebug*/);
+        engine->setProgram(graphics::BuiltinProgram::SimpleTexturedDebug);
         engine->draw(graphics.strokeGeometry());
         //engine->draw(graphics.joinGeometry());
     }

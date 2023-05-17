@@ -16,7 +16,9 @@ struct PS_INPUT {
     float4 pos : SV_POSITION;
     float4 clipPos : POSITION0;
     float2 uv : TEXCOORD0;
+    float2 pt : POSITION1;
     float4 col : COLOR0;
+    
 };
 
 PS_INPUT main(VS_INPUT input) {
@@ -26,5 +28,6 @@ PS_INPUT main(VS_INPUT input) {
     output.clipPos = output.pos;
     output.uv = input.uv;
     output.col = input.col;
+    output.pt = input.pos.xy;
     return output;
 }
