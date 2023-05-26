@@ -16,6 +16,7 @@
 
 #include <vgc/workspace/vertex.h>
 
+#include <vgc/geometry/bezier.h>
 #include <vgc/geometry/vec4f.h>
 #include <vgc/graphics/detail/shapeutil.h>
 #include <vgc/workspace/colors.h>
@@ -370,7 +371,9 @@ void VacKeyVertex::computeJoin_() {
         }
 
         const geometry::CurveSampleArray& samples = edgeData->preJoinSamples();
-        if (samples.length() < 2) {
+        Int numSamples = samples.length();
+
+        if (numSamples < 2) {
             continue;
         }
 
@@ -380,15 +383,17 @@ void VacKeyVertex::computeJoin_() {
 
         const bool isReverse = he.isReverse();
         if (!isReverse) {
-            geometry::CurveSample sample = samples.first();
+            geometry::CurveSample sample = samples.getUnchecked(0);
             heData.halfwidths_ = sample.halfwidths();
             heData.joinSample_ = sample;
+            heData.joinPreviousSample_ = samples.getUnchecked(1);
         }
         else {
-            geometry::CurveSample sample = samples.last();
+            geometry::CurveSample sample = samples.getUnchecked(numSamples - 1);
             heData.halfwidths_[0] = sample.halfwidth(1);
             heData.halfwidths_[1] = sample.halfwidth(0);
             heData.joinSample_ = sample;
+            heData.joinPreviousSample_ = samples.getUnchecked(numSamples - 2);
         }
     }
 
@@ -439,10 +444,116 @@ void VacKeyVertex::computeJoin_() {
             Vec2d capOrigin = joinSample.position();
 
             bool isStyleRadial = true;
-            if (isStyleRadial) {
-                // constant S; radial gradient T, V
-                Vec2d base = dir * maxHalfwidth;
-                for (Int i = 0; i <= 32; ++i) {
+            bool isCircular = false;
+            if (isCircular) {
+                if (isStyleRadial) {
+                    // constant S; radial gradient T, V
+                    Vec2d base = dir * maxHalfwidth;
+                    for (Int i = 0; i <= 32; ++i) {
+                        detail::EdgeJoinPatchSample& ps0 =
+                            patch.sideSamples[0].emplaceLast();
+                        detail::EdgeJoinPatchSample& ps1 =
+                            patch.sideSamples[1].emplaceLast();
+
+                        double a = core::pi * 0.5 * i / 32.f;
+                        double x = std::cos(a);
+                        double y = std::sin(a);
+                        double h0 = joinSample.halfwidth(0) * y;
+                        double h1 = joinSample.halfwidth(1) * y;
+
+                        Vec2d midPoint = capOrigin + x * base;
+
+                        ps0.centerPoint = capOrigin;
+                        ps1.centerPoint = ps0.centerPoint;
+                        ps0.centerSTV = geometry::Vec3f(0, 0, 0);
+                        ps1.centerSTV = ps0.centerSTV;
+
+                        ps0.sidePoint = midPoint + h0 * normal;
+                        ps1.sidePoint = midPoint - h1 * normal;
+                        ps0.sideSTV = geometry::Vec3f(
+                            0,
+                            static_cast<float>(
+                                (ps0.sidePoint - ps0.centerPoint).length()),
+                            1.f);
+                        ps1.sideSTV = geometry::Vec3f(
+                            0,
+                            static_cast<float>(
+                                (ps1.sidePoint - ps1.centerPoint).length()),
+                            1.f);
+                    }
+                }
+                else {
+                    // constant S; directional gradient T, V
+                    patch.extensionS = static_cast<float>(maxHalfwidth);
+                    for (Int i = 0; i <= 32; ++i) {
+                        detail::EdgeJoinPatchSample& ps0 =
+                            patch.sideSamples[0].emplaceLast();
+                        detail::EdgeJoinPatchSample& ps1 =
+                            patch.sideSamples[1].emplaceLast();
+
+                        double a = core::pi * 0.5 * i / 32.f;
+                        double x = std::sin(a);
+                        double y = std::cos(a);
+                        double h0 = joinSample.halfwidth(0) * y;
+                        double h1 = joinSample.halfwidth(1) * y;
+                        double s = x * maxHalfwidth;
+                        float sf = static_cast<float>(s);
+
+                        Vec2d midPoint = capOrigin + dir * s;
+
+                        ps0.centerPoint = midPoint;
+                        ps1.centerPoint = ps0.centerPoint;
+                        ps0.centerSTV = geometry::Vec3f(sf, 0, 0);
+                        ps1.centerSTV = ps0.centerSTV;
+
+                        ps0.sidePoint = midPoint + h0 * normal;
+                        ps1.sidePoint = midPoint - h1 * normal;
+                        ps0.sideSTV = geometry::Vec3f(
+                            sf, static_cast<float>(h0), static_cast<float>(y));
+                        ps1.sideSTV = geometry::Vec3f(
+                            sf, static_cast<float>(h1), static_cast<float>(y));
+                    }
+                }
+            }
+            else { // !isCircular
+                geometry::CurveSample joinSamplePrev = halfedgeData.joinPreviousSample_;
+                Vec2d t0 =
+                    (joinSample.sidePoint(0) - joinSamplePrev.sidePoint(0)).normalized();
+                Vec2d t1 =
+                    (joinSample.sidePoint(1) - joinSamplePrev.sidePoint(1)).normalized();
+                double w = joinSample.halfwidth(0) + joinSample.halfwidth(1);
+
+                // todo: sample in special space ??
+
+                double oneThird = 1.0 / 3.0;
+                std::array<const geometry::Vec2d, 4> controlPoints = {
+                    joinSample.sidePoint(0),
+                    joinSample.sidePoint(0)
+                        + t0 * (oneThird + dir.dot(t0) * oneThird) * w,
+                    joinSample.sidePoint(1)
+                        + t1 * (oneThird + dir.dot(t1) * oneThird) * w,
+                    joinSample.sidePoint(1)};
+
+                if (isStyleRadial) {
+                    // constant S; radial gradient T, V
+                    Vec2d base = dir * maxHalfwidth;
+                    bool previousIsSide0 = true;
+                    Int numPoints = 63;
+                    geometry::Vec2dArray points;
+                    for (Int i = 0; i < numPoints; ++i) {
+                        double u = static_cast<double>(i) / (numPoints - 1);
+                        points[i] = geometry::cubicBezierPosCasteljau<geometry::Vec2d>(
+                            controlPoints, u);
+                    }
+
+                    Int indexOfSep = 0;
+
+                    /*
+                    if (previousIsSide0) {
+                        Vec2d op = pos - capOrigin;
+                        Vec2d opn = op.normalized();
+                    }
+
                     detail::EdgeJoinPatchSample& ps0 = patch.sideSamples[0].emplaceLast();
                     detail::EdgeJoinPatchSample& ps1 = patch.sideSamples[1].emplaceLast();
 
@@ -469,36 +580,39 @@ void VacKeyVertex::computeJoin_() {
                         0,
                         static_cast<float>((ps1.sidePoint - ps1.centerPoint).length()),
                         1.f);
+                    */
                 }
-            }
-            else {
-                // constant S; directional gradient T, V
-                patch.extensionS = static_cast<float>(maxHalfwidth);
-                for (Int i = 0; i <= 32; ++i) {
-                    detail::EdgeJoinPatchSample& ps0 = patch.sideSamples[0].emplaceLast();
-                    detail::EdgeJoinPatchSample& ps1 = patch.sideSamples[1].emplaceLast();
+                else {
+                    // constant S; directional gradient T, V
+                    patch.extensionS = static_cast<float>(maxHalfwidth);
+                    for (Int i = 0; i <= 32; ++i) {
+                        detail::EdgeJoinPatchSample& ps0 =
+                            patch.sideSamples[0].emplaceLast();
+                        detail::EdgeJoinPatchSample& ps1 =
+                            patch.sideSamples[1].emplaceLast();
 
-                    double a = core::pi * 0.5 * i / 32.f;
-                    double x = std::sin(a);
-                    double y = std::cos(a);
-                    double h0 = joinSample.halfwidth(0) * y;
-                    double h1 = joinSample.halfwidth(1) * y;
-                    double s = x * maxHalfwidth;
-                    float sf = static_cast<float>(s);
+                        double a = core::pi * 0.5 * i / 32.f;
+                        double x = std::sin(a);
+                        double y = std::cos(a);
+                        double h0 = joinSample.halfwidth(0) * y;
+                        double h1 = joinSample.halfwidth(1) * y;
+                        double s = x * maxHalfwidth;
+                        float sf = static_cast<float>(s);
 
-                    Vec2d midPoint = capOrigin + dir * s;
+                        Vec2d midPoint = capOrigin + dir * s;
 
-                    ps0.centerPoint = midPoint;
-                    ps1.centerPoint = ps0.centerPoint;
-                    ps0.centerSTV = geometry::Vec3f(sf, 0, 0);
-                    ps1.centerSTV = ps0.centerSTV;
+                        ps0.centerPoint = midPoint;
+                        ps1.centerPoint = ps0.centerPoint;
+                        ps0.centerSTV = geometry::Vec3f(sf, 0, 0);
+                        ps1.centerSTV = ps0.centerSTV;
 
-                    ps0.sidePoint = midPoint + h0 * normal;
-                    ps1.sidePoint = midPoint - h1 * normal;
-                    ps0.sideSTV = geometry::Vec3f(
-                        sf, static_cast<float>(h0), static_cast<float>(y));
-                    ps1.sideSTV = geometry::Vec3f(
-                        sf, static_cast<float>(h1), static_cast<float>(y));
+                        ps0.sidePoint = midPoint + h0 * normal;
+                        ps1.sidePoint = midPoint - h1 * normal;
+                        ps0.sideSTV = geometry::Vec3f(
+                            sf, static_cast<float>(h0), static_cast<float>(y));
+                        ps1.sideSTV = geometry::Vec3f(
+                            sf, static_cast<float>(h1), static_cast<float>(y));
+                    }
                 }
             }
         }
