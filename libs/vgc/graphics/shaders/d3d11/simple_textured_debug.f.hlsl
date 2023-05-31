@@ -39,10 +39,10 @@ float4 main(PS_INPUT input)
     const float m = square_size * 2;
     float2 uvm = (m + (input.uv % m)) % m;
 
-    //if (bool(uvm.x < square_size) != bool(uvm.y < square_size))
-    //{
-    //    discard;
-    //}
+    if (bool(uvm.x < square_size) != bool(uvm.y < square_size))
+    {
+        discard;
+    }
     // lerp(input.col.rgb, input.col.gbr, input.uv.x / 160.0 % 0.5);
     float3 c1 = input.col.rgb;
     if (input.uv.y < 0)
@@ -50,7 +50,7 @@ float4 main(PS_INPUT input)
         float a = 1 - round(avg(c1));
         c1 = (c1 + float3(a, a, a)) * 0.5;
     }
-    return float4(c1, input.col.a * 2);
+    return float4(c1, 0.5);
     
     
 }
