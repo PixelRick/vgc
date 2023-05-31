@@ -292,34 +292,25 @@ Int filterSculptPointsStep(
     return i;
 }
 
-} // namespace
+bool computeSculptPoints(
+    core::Array<SculptPoint>& sculptPoints,
+    core::Array<Int>& pointSampleIndices,
+    Int& startSampleIndex,
+    Int& endSampleIndex,
 
-geometry::Vec2d FreehandEdgeGeometry::sculptGrab(
+    const geometry::Vec2dArray& points,
+    const core::DoubleArray& widths,
     const geometry::Vec2d& startPosition,
-    const geometry::Vec2d& endPosition,
     double radius,
-    double /*strength*/,
     double tolerance) {
-
-    // Let's consider tolerance will be ~= pixelSize for now.
-    //
-    // sampleStep is screen-space-dependent.
-    //   -> doesn't look like a good parameter..
-
-    VGC_ASSERT(isBeingEdited_);
-    if (points_.isEmpty()) {
-        return endPosition;
-    }
-
-    geometry::Vec2d delta = endPosition - startPosition;
 
     geometry::Curve curve;
     geometry::CurveSampleArray samples;
     core::Array<Int> pointSampleIndices;
 
-    curve.setPositions(points_);
-    curve.setWidths(widths_);
-    Int numPoints = points_.length();
+    curve.setPositions(points);
+    curve.setWidths(widths);
+    Int numPoints = points.length();
 
     // Ideally we would like a version of Curve::sampleRange that only samples the centerline.
     // and a geometry::distanceToCurve() that accepts the results as argument.
@@ -338,7 +329,7 @@ geometry::Vec2d FreehandEdgeGeometry::sculptGrab(
 
     geometry::DistanceToCurve d = geometry::distanceToCurve(samples, startPosition);
     if (d.distance() > radius) {
-        return endPosition;
+        return -1;
     }
 
     Int segmentIndex = d.segmentIndex();
@@ -436,6 +427,39 @@ geometry::Vec2d FreehandEdgeGeometry::sculptGrab(
         }
     }
 
+    return startSampleIndex;
+}
+
+} // namespace
+
+geometry::Vec2d FreehandEdgeGeometry::sculptGrab(
+    const geometry::Vec2d& startPosition,
+    const geometry::Vec2d& endPosition,
+    double radius,
+    double /*strength*/,
+    double tolerance) {
+
+    // Let's consider tolerance will be ~= pixelSize for now.
+    //
+    // sampleStep is screen-space-dependent.
+    //   -> doesn't look like a good parameter..
+
+    VGC_ASSERT(isBeingEdited_);
+
+    Int numPoints = points_.length();
+    if (numPoints == 0) {
+        return endPosition;
+    }
+
+    geometry::Vec2d delta = endPosition - startPosition;
+
+    core::Array<SculptPoint> sculptPoints;
+    Int startSampleIndex = computeSculptPoints(
+        sculptPoints, points_, widths_, startPosition, radius, tolerance);
+    if (startSampleIndex < 0) {
+        return endPosition;
+    }
+
     bool hasWidths = !widths_.isEmpty();
 
     Int startPointIndex = 0;
@@ -507,6 +531,13 @@ geometry::Vec2d FreehandEdgeGeometry::sculptGrab(
 
     // In arclength mode, step is not supported so we have to do this only once.
     // In spatial mode, step is supported and we may have to do this at every step.
+}
+
+geometry::Vec2d sculptSmooth(
+    const geometry::Vec2d& startPosition,
+    const geometry::Vec2d& endPosition,
+    double radius,
+    double strength) {
 }
 
 void FreehandEdgeGeometry::snap(

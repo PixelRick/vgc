@@ -179,6 +179,16 @@ public:
         double strength,
         double tolerance) = 0;
 
+    /// Returns the new position of the smooth point.
+    ///
+    // Todo: later add falloff kind, arclength/spatial.
+    //
+    virtual geometry::Vec2d sculptSmooth(
+        const geometry::Vec2d& startPosition,
+        const geometry::Vec2d& endPosition,
+        double radius,
+        double strength) = 0;
+
 protected:
     // todo: argument to tell when it is only an affine transformation ?
     void dirtyEdgeSampling() const;

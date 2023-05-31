@@ -80,6 +80,12 @@ public:
         double strength,
         double tolerance) override;
 
+    geometry::Vec2d sculptSmooth(
+        const geometry::Vec2d& startPosition,
+        const geometry::Vec2d& endPosition,
+        double radius,
+        double strength) override;
+
     bool updateFromDomEdge_(dom::Element* element) override;
     void writeToDomEdge_(dom::Element* element) const override;
     void removeFromDomEdge_(dom::Element* element) const override;
