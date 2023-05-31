@@ -294,10 +294,9 @@ Int filterSculptPointsStep(
 
 bool computeSculptPoints(
     core::Array<SculptPoint>& sculptPoints,
-    core::Array<Int>& pointSampleIndices,
-    Int& startSampleIndex,
-    Int& endSampleIndex,
-
+    Int& middlePointIndex,
+    Int& startPointIndex,
+    Int& endPointIndex,
     const geometry::Vec2dArray& points,
     const core::DoubleArray& widths,
     const geometry::Vec2d& startPosition,
@@ -329,7 +328,7 @@ bool computeSculptPoints(
 
     geometry::DistanceToCurve d = geometry::distanceToCurve(samples, startPosition);
     if (d.distance() > radius) {
-        return -1;
+        return false;
     }
 
     Int segmentIndex = d.segmentIndex();
@@ -350,6 +349,7 @@ bool computeSculptPoints(
             geometry::lerp(middleSample, samples[segmentIndex + 1], segmentParameter);
     }
     sculptPoints.emplaceLast(middleSample.position(), middleSample.halfwidth(0) * 2, 1);
+    middlePointIndex = sculptPoints.length();
 
     // Here we want to uniformly sample the curve over an arclength of
     // `radius` on both sides of the closest point.
@@ -427,7 +427,25 @@ bool computeSculptPoints(
         }
     }
 
-    return startSampleIndex;
+    startPointIndex = 0;
+    for (Int i = 0; i < numPoints; ++i) {
+        Int pointSampleIndex = pointSampleIndices[i];
+        if (pointSampleIndex > startSampleIndex) {
+            break;
+        }
+        startPointIndex = i;
+    }
+
+    endPointIndex = numPoints - 1;
+    for (Int i = 0; i < numPoints; ++i) {
+        Int pointSampleIndex = pointSampleIndices[i];
+        if (pointSampleIndex >= endSampleIndex) {
+            endPointIndex = i;
+            break;
+        }
+    }
+
+    return true;
 }
 
 } // namespace
@@ -454,31 +472,24 @@ geometry::Vec2d FreehandEdgeGeometry::sculptGrab(
     geometry::Vec2d delta = endPosition - startPosition;
 
     core::Array<SculptPoint> sculptPoints;
-    Int startSampleIndex = computeSculptPoints(
-        sculptPoints, points_, widths_, startPosition, radius, tolerance);
-    if (startSampleIndex < 0) {
+    Int middlePointIndex = 0;
+    Int startPointIndex = 0;
+    Int endPointIndex = 0;
+    bool foundPointInRadius = computeSculptPoints(
+        sculptPoints,
+        middlePointIndex,
+        startPointIndex,
+        endPointIndex,
+        points_,
+        widths_,
+        startPosition,
+        radius,
+        tolerance);
+    if (!foundPointInRadius) {
         return endPosition;
     }
 
     bool hasWidths = !widths_.isEmpty();
-
-    Int startPointIndex = 0;
-    for (Int i = 0; i < numPoints; ++i) {
-        Int pointSampleIndex = pointSampleIndices[i];
-        if (pointSampleIndex > startSampleIndex) {
-            break;
-        }
-        startPointIndex = i;
-    }
-
-    Int endPointIndex = numPoints - 1;
-    for (Int i = 0; i < numPoints; ++i) {
-        Int pointSampleIndex = pointSampleIndices[i];
-        if (pointSampleIndex >= endSampleIndex) {
-            endPointIndex = i;
-            break;
-        }
-    }
 
     for (Int i = 0; i < sculptPoints.length(); ++i) {
         SculptPoint& sp = sculptPoints[i];
@@ -522,7 +533,7 @@ geometry::Vec2d FreehandEdgeGeometry::sculptGrab(
 
     dirtyEdgeSampling();
 
-    return middleSample.position() + delta;
+    return sculptPoints[middlePointIndex].pos;
 
     // Depending on the sculpt kernel we may have to duplicate the points
     // at the sculpt boundary to "extrude" properly.
