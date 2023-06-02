@@ -148,6 +148,11 @@ public:
         EdgeSnapTransformationMode mode =
             EdgeSnapTransformationMode::LinearInArclength) const = 0;
 
+    virtual EdgeSampling computeSampling(
+        geometry::CurveSamplingQuality quality,
+        EdgeSnapTransformationMode mode =
+        EdgeSnapTransformationMode::LinearInArclength) const = 0;
+
     virtual void startEdit() = 0;
     virtual void resetEdit() = 0;
     virtual void finishEdit() = 0;

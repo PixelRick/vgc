@@ -61,6 +61,10 @@ public:
         const geometry::Vec2d& snapEndPosition,
         vacomplex::EdgeSnapTransformationMode mode) const override;
 
+    vacomplex::EdgeSampling computeSampling(
+        geometry::CurveSamplingQuality quality,
+        vacomplex::EdgeSnapTransformationMode mode) const override;
+
     void startEdit() override;
     void resetEdit() override;
     void finishEdit() override;
@@ -79,14 +83,14 @@ public:
         double radius,
         double strength,
         double tolerance,
-        bool isClosed = false) override;
+        bool isClosed) override;
 
     geometry::Vec2d sculptSmooth(
         const geometry::Vec2d& position,
         double radius,
         double strength,
         double tolerance,
-        bool isClosed = false) override;
+        bool isClosed) override;
 
     bool updateFromDomEdge_(dom::Element* element) override;
     void writeToDomEdge_(dom::Element* element) const override;

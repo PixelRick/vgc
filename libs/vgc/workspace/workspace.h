@@ -241,14 +241,14 @@ public:
     /// Example:
     ///
     /// ```cpp
-    /// Element* startVertexWorkspaceElement = workspace->getElementFromPathAttribute(
+    /// std::optional<Element*> startVertexWorkspaceElement = workspace->getElementFromPathAttribute(
     ///     edgeDomElement,
     ///     dom::strings::startvertex,
     ///     dom::strings::vertex);
     /// ```
     ///
-    Element* getElementFromPathAttribute(
-        dom::Element* domElement,
+    std::optional<Element*> getElementFromPathAttribute(
+        const dom::Element* domElement,
         core::StringId attrName,
         core::StringId tagNameFilter = {}) const;
 

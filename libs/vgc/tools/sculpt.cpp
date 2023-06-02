@@ -138,7 +138,8 @@ public:
                         cursorPositionInWorkspace,
                         options::sculptRadius()->value(),
                         1,
-                        pixelSize);
+                        pixelSize,
+                        ke->isClosed());
                     tool_->setActionCircleCenter(grabbedPoint);
                     tool_->setActionCircleEnabled(true);
                 }
