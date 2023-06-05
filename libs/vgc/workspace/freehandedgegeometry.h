@@ -63,12 +63,17 @@ public:
 
     vacomplex::EdgeSampling computeSampling(
         geometry::CurveSamplingQuality quality,
+        bool isClosed,
         vacomplex::EdgeSnapTransformationMode mode) const override;
 
     void startEdit() override;
     void resetEdit() override;
     void finishEdit() override;
     void abortEdit() override;
+
+    /// Expects delta in object space.
+    ///
+    void translate(const geometry::Vec2d& delta) override;
 
     /// Expects positions in object space.
     ///

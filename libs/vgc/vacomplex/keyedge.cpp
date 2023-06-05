@@ -109,7 +109,7 @@ EdgeSampling KeyEdge::computeSampling_(geometry::CurveSamplingQuality quality) c
         return geometry_->computeSampling(quality, snapStartPosition, snapEndPosition);
     }
     else {
-        return geometry_->computeSampling(quality);
+        return geometry_->computeSampling(quality, true);
     }
 }
 

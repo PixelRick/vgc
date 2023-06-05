@@ -124,9 +124,12 @@ vacomplex::EdgeSampling FreehandEdgeGeometry::computeSampling(
 
 vacomplex::EdgeSampling FreehandEdgeGeometry::computeSampling(
     geometry::CurveSamplingQuality quality,
+    bool isClosed,
     vacomplex::EdgeSnapTransformationMode /*mode*/) const {
 
-    geometry::Curve curve;
+    geometry::Curve curve(
+        isClosed ? geometry::Curve::Type::ClosedUniformCatmullRom
+                 : geometry::Curve::Type::OpenUniformCatmullRom);
     geometry::CurveSampleArray samples;
     geometry::Vec2dArray tmpPoints;
     core::DoubleArray tmpWidths;
@@ -196,6 +199,47 @@ void FreehandEdgeGeometry::abortEdit() {
     }
 }
 
+void FreehandEdgeGeometry::translate(const geometry::Vec2d& delta) {
+    const geometry::Vec2dArray& points = this->points();
+    points_ = points;
+    for (geometry::Vec2d& p : points_) {
+        p += delta;
+    }
+    if (!isBeingEdited_) {
+        sharedConstPoints_ = SharedConstPoints(std::move(points_));
+        points_ = geometry::Vec2dArray();
+    }
+    originalArclengths_.clear();
+    dirtyEdgeSampling();
+}
+
+void FreehandEdgeGeometry::snap(
+    const geometry::Vec2d& snapStartPosition,
+    const geometry::Vec2d& snapEndPosition,
+    vacomplex::EdgeSnapTransformationMode /*mode*/) {
+
+    const geometry::Vec2dArray& points = this->points();
+    if (!points.isEmpty() && points.first() == snapStartPosition
+        && points.last() == snapEndPosition) {
+        // already snapped
+        return;
+    }
+
+    if (isBeingEdited_) {
+        computeSnappedLinearS_(
+            points_, points, originalArclengths_, snapStartPosition, snapEndPosition);
+    }
+    else {
+        computeSnappedLinearS_(
+            points_, points, originalArclengths_, snapStartPosition, snapEndPosition);
+        sharedConstPoints_ = SharedConstPoints(std::move(points_));
+        points_ = geometry::Vec2dArray();
+    }
+
+    originalArclengths_.clear();
+    dirtyEdgeSampling();
+}
+
 namespace {
 
 struct SculptPoint {
@@ -207,28 +251,34 @@ struct SculptPoint {
     }
 
     geometry::Vec2d pos;
+    // halfwidths are not supported yet.
     double width = 0;
+    // signed distance in arclength from central sculpt point.
     double d = 0;
+    // position in arclength on the related edge.
     double s = 0;
 };
 
 struct SculptSampling {
     core::Array<SculptPoint> sculptPoints;
     Int middleSculptPointIndex = -1;
-    geometry::Vec2d radiusCaps = {};
-    geometry::Vec2d intervalS = {};
+    // sampling boundaries in arclength from central sculpt point.
+    geometry::Vec2d cappedRadii = {};
     double ds = 0;
+    // is sculpt points interval closed ?
     bool isClosed = false;
+    // is sculpt points interval across the join ?
     bool isOverlappingStart = false;
 };
 
+// sMsp: middle sculpt point position in arclength on edge.
 // Assumes:
 // - radius > 0
-// - mspS is in [samples.first.s(), samples.last.s()].
+// - sMsp is in [samples.first.s(), samples.last.s()].
 void computeSculptSampling(
     SculptSampling& outSampling,
     geometry::CurveSampleArray& samples,
-    double mspS,
+    double sMsp,
     double radius,
     double maxDs,
     bool isClosed) {
@@ -236,7 +286,6 @@ void computeSculptSampling(
     core::Array<SculptPoint>& sculptPoints = outSampling.sculptPoints;
 
     Int numSamples = samples.length();
-    Int numSamplingSegments = numSamples - 1;
     VGC_ASSERT(numSamples > 0);
 
     // Here we want to uniformly sample the curve over an arclength of `radius` on both
@@ -244,50 +293,50 @@ void computeSculptSampling(
 
     Int numSculptSamplesBeforeMsp = 0;
     Int numSculptSamplesAfterMsp = 0;
+    geometry::Vec2d cappedRadii = {};
     double ds = 0;
-    geometry::Vec2d radiusCaps = {};
 
-    double totalS = samples.last().s();
-    double halfS = totalS * 0.5;
+    double curveLength = samples.last().s();
 
     if (!isClosed) {
         double n = std::ceil(radius / maxDs);
         // guaranteed >= 1
         Int minSculptSamplesPerSide = static_cast<Int>(n);
         ds = radius / minSculptSamplesPerSide;
-        double beforeMspS = mspS;
-        if (radius <= beforeMspS) {
+        double sBeforeMsp = sMsp;
+        if (radius <= sBeforeMsp) {
             numSculptSamplesBeforeMsp = minSculptSamplesPerSide;
-            radiusCaps[0] = radius;
+            cappedRadii[0] = radius;
         }
         else {
-            numSculptSamplesBeforeMsp = static_cast<Int>(beforeMspS / ds);
-            radiusCaps[0] = beforeMspS;
+            numSculptSamplesBeforeMsp = static_cast<Int>(sBeforeMsp / ds);
+            cappedRadii[0] = sBeforeMsp;
         }
-        double afterMspS = totalS - mspS;
-        if (radius <= afterMspS) {
+        double sAfterMsp = curveLength - sMsp;
+        if (radius <= sAfterMsp) {
             numSculptSamplesAfterMsp = minSculptSamplesPerSide;
-            radiusCaps[1] = radius;
+            cappedRadii[1] = radius;
         }
         else {
-            numSculptSamplesAfterMsp = static_cast<Int>(afterMspS / ds);
-            radiusCaps[1] = afterMspS;
+            numSculptSamplesAfterMsp = static_cast<Int>(sAfterMsp / ds);
+            cappedRadii[1] = sAfterMsp;
         }
     }
     else { // isClosed
-        if (halfS <= radius) {
+        double curveHalfLength = curveLength * 0.5;
+        if (curveHalfLength <= radius) {
             // If the sculpt interval encompasses the full curve and the curve is closed
             // then we want to produce a closed sculpt sampling.
             // To have the sculpt endpoints spaced by `ds` we have to adjust ds and
             // numSculptSamplesPerSide.
             //
-            double n = std::ceil((halfS - maxDs * 0.5) / maxDs);
+            double n = std::ceil((curveHalfLength - maxDs * 0.5) / maxDs);
             numSculptSamplesBeforeMsp = static_cast<Int>(n);
             numSculptSamplesAfterMsp = static_cast<Int>(n);
-            ds = halfS / (n + 0.5);
+            ds = curveHalfLength / (n + 0.5);
             outSampling.isClosed = true;
-            radiusCaps[0] = halfS;
-            radiusCaps[1] = halfS;
+            cappedRadii[0] = curveHalfLength;
+            cappedRadii[1] = curveHalfLength;
         }
         else {
             // If the curve is closed then we do not cap the radii to the input interval.
@@ -296,21 +345,17 @@ void computeSculptSampling(
             numSculptSamplesBeforeMsp = static_cast<Int>(n);
             numSculptSamplesAfterMsp = static_cast<Int>(n);
             ds = radius / n;
-            radiusCaps[0] = radius;
-            radiusCaps[1] = radius;
+            cappedRadii[0] = radius;
+            cappedRadii[1] = radius;
         }
     }
-
-    // CURRENT PROBLEM: if mspS == totalS then it returns 0
-    // and this breaks doResamplingStep since it cannot create the last point.
 
     Int spEndIndex = numSculptSamplesAfterMsp + 1;
     Int spIndex = -numSculptSamplesBeforeMsp;
 
+    double sculptPointSOffset = (sMsp + spIndex * ds) < 0 ? curveLength : 0;
+    double nextSculpPointS = sculptPointSOffset + sMsp + spIndex * ds;
     const geometry::CurveSample* sa1 = &samples[0];
-    double sculptPointSOffset = (mspS + spIndex * ds) < 0 ? totalS : 0;
-    auto calcSculptPointS = [&](Int i) { return sculptPointSOffset + mspS + i * ds; };
-    double nextSculpPointS = calcSculptPointS(spIndex);
 
     auto doResamplingStep = [&](Int sampleIndex2) -> bool {
         const geometry::CurveSample* sa2 = &samples[sampleIndex2];
@@ -334,7 +379,7 @@ void computeSculptSampling(
                     // all sculpt points have been sampled.
                     return true;
                 }
-                nextSculpPointS = calcSculptPointS(spIndex);
+                nextSculpPointS = sculptPointSOffset + sMsp + spIndex * ds;
             }
         }
         sa1 = sa2;
@@ -347,9 +392,9 @@ void computeSculptSampling(
     }
     if (isClosed && !isDone) {
         // loop and skip first point..
-        sculptPointSOffset -= totalS;
-        nextSculpPointS -= totalS;
         outSampling.isOverlappingStart = true;
+        sculptPointSOffset -= curveLength;
+        nextSculpPointS -= curveLength;
         sa1 = &samples[0];
         for (Int sampleIndex = 1; sampleIndex < numSamples && !isDone; ++sampleIndex) {
             isDone = doResamplingStep(sampleIndex);
@@ -358,10 +403,7 @@ void computeSculptSampling(
     VGC_ASSERT(isDone);
 
     outSampling.middleSculptPointIndex = numSculptSamplesBeforeMsp;
-    outSampling.radiusCaps = radiusCaps;
-    outSampling.intervalS = geometry::Vec2d(
-        std::fmod(mspS - radiusCaps[0] + totalS, totalS),
-        std::fmod(mspS + radiusCaps[1], totalS));
+    outSampling.cappedRadii = cappedRadii;
     outSampling.ds = ds;
 }
 
@@ -527,62 +569,81 @@ geometry::Vec2d FreehandEdgeGeometry::sculptGrab(
     }
 
     // Compute middle sculpt point info (closest point).
-    Int mspSegmentIndex = d.segmentIndex();
-    double mspSegmentParameter = d.segmentParameter();
-    geometry::CurveSample mspSample = samples[mspSegmentIndex];
-    if (mspSegmentParameter > 0 && mspSegmentIndex + 1 < samples.length()) {
-        const geometry::CurveSample& s2 = samples[mspSegmentIndex + 1];
-        mspSample = geometry::lerp(mspSample, s2, mspSegmentParameter);
+    Int sMspegmentIndex = d.segmentIndex();
+    double sMspegmentParameter = d.segmentParameter();
+    geometry::CurveSample sMspample = samples[sMspegmentIndex];
+    if (sMspegmentParameter > 0 && sMspegmentIndex + 1 < samples.length()) {
+        const geometry::CurveSample& s2 = samples[sMspegmentIndex + 1];
+        sMspample = geometry::lerp(sMspample, s2, sMspegmentParameter);
     }
-    double mspS = mspSample.s();
+    double sMsp = sMspample.s();
 
     const double maxDs = (tolerance * 2.0);
 
     SculptSampling sculptSampling = {};
-    computeSculptSampling(sculptSampling, samples, mspS, radius, maxDs, isClosed);
+    computeSculptSampling(sculptSampling, samples, sMsp, radius, maxDs, isClosed);
 
     core::Array<SculptPoint>& sculptPoints = sculptSampling.sculptPoints;
 
     geometry::Vec2d delta = endPosition - startPosition;
-    geometry::Vec2d uMins =
-        geometry::Vec2d(1.0, 1.0) - sculptSampling.radiusCaps / radius;
-    geometry::Vec2d wMins(cubicEaseInOut(uMins[0]), cubicEaseInOut(uMins[1]));
 
-    for (Int i = 0; i < sculptPoints.length(); ++i) {
-        SculptPoint& sp = sculptPoints[i];
-        double u = 0;
-        double wMin = 0;
-        if (sp.d < 0) {
-            u = 1.0 - (-sp.d / radius);
-            wMin = wMins[0];
+    if (!isClosed) {
+        geometry::Vec2d uMins =
+            geometry::Vec2d(1.0, 1.0) - sculptSampling.cappedRadii / radius;
+        geometry::Vec2d wMins(cubicEaseInOut(uMins[0]), cubicEaseInOut(uMins[1]));
+        for (Int i = 0; i < sculptPoints.length(); ++i) {
+            SculptPoint& sp = sculptPoints[i];
+            double u = 1.0;
+            double wMin = 0;
+            if (sp.d < 0) {
+                u -= (-sp.d / radius);
+                wMin = wMins[0];
+            }
+            else if (sp.d > 0) {
+                u -= (sp.d / radius);
+                wMin = wMins[1];
+            }
+            double w = cubicEaseInOut(u);
+            double t = (w - wMin) / (1 - wMin);
+            sp.pos += delta * t;
         }
-        else if (sp.d > 0) {
-            u = 1.0 - (sp.d / radius);
-            wMin = wMins[1];
+    }
+    else {
+        // In this case capped radii are expected to be equal.
+        double cappedRadius = sculptSampling.cappedRadii[0];
+        double uMin = 1.0 - cappedRadius / radius;
+        double wMin = cubicEaseInOut(uMin);
+        for (Int i = 0; i < sculptPoints.length(); ++i) {
+            SculptPoint& sp = sculptPoints[i];
+            double u = 1.0;
+            if (sp.d < 0) {
+                u -= (-sp.d / cappedRadius);
+            }
+            else if (sp.d > 0) {
+                u -= (sp.d / cappedRadius);
+            }
+            double w = cubicEaseInOut(u);
+            w *= (1.0 - wMin);
+            w += wMin;
+            sp.pos += delta * w;
         }
-        else {
-            // when sculpt point is an endpoint
-            u = 1.0;
-            wMin = 0.0;
-        }
-        double w = cubicEaseInOut(u);
-        double t = isClosed ? w : (w - wMin) / (1 - wMin);
-        sp.pos += delta * t;
     }
 
-    core::IntArray indices({0, sculptPoints.length() - 1});
-    filterSculptPointsStep(sculptPoints, indices, 0, tolerance * 0.5);
-    Int numPatchPoints = indices.length();
+    core::IntArray indices = {};
 
-    constexpr bool keepAll = false;
-    if (keepAll) {
-        indices.clear();
+    constexpr bool isFilteringEnabled = true;
+    if (isFilteringEnabled) {
+        indices.extend({0, sculptPoints.length() - 1});
+        filterSculptPointsStep(sculptPoints, indices, 0, tolerance * 0.5);
+    }
+    else {
+        indices.reserve(sculptPoints.length());
         for (Int i = 0; i < sculptPoints.length(); ++i) {
             indices.append(i);
         }
-        numPatchPoints = sculptPoints.length();
     }
 
+    Int numPatchPoints = indices.length();
     bool hasWidths = !widths_.isEmpty();
 
     double s0 = sculptSampling.sculptPoints.first().s;
@@ -605,27 +666,28 @@ geometry::Vec2d FreehandEdgeGeometry::sculptGrab(
         }
     }
     else if (sculptSampling.isOverlappingStart) {
-        if (sn > s0) {
-            // only known case: s0 was totalS but modulo'd to 0
-            s0 = samples.last().s();
-        }
-
+        VGC_ASSERT(s0 >= sn);
         // original points to keep are in the middle of the original array
+        //
+        //  original points:  x----x--x----x-----x----x
+        //  sculpt points:      x x x n)        (0 x x
+        //  keepIndex:                     x            (first > sn)
+        //  keepCount:                     1            (count until next >= sn)
+        //
         Int keepIndex = 0;
         for (Int i = 0; i < numPoints; ++i) {
             keepIndex = i;
-            if (pointsS[i] >= sn) {
+            if (pointsS[i] > sn) {
                 break;
             }
         }
-        Int keepIndexEnd = 0;
+        Int keepCount = 0;
         for (Int i = keepIndex; i < numPoints; ++i) {
-            keepIndexEnd = i;
-            if (pointsS[i] > s0) {
+            if (pointsS[i] >= s0) {
                 break;
             }
+            ++keepCount;
         }
-        Int keepCount = keepIndexEnd - keepIndex;
 
         points_.erase(points_.begin(), points_.begin() + keepIndex);
         points_.resize(keepCount + numPatchPoints + 1);
@@ -645,36 +707,36 @@ geometry::Vec2d FreehandEdgeGeometry::sculptGrab(
         }
     }
     else {
-        if (s0 > sn) {
-            // only known case: sn was totalS but modulo'd to 0
-            sn = samples.last().s();
-        }
-
+        VGC_ASSERT(s0 <= sn);
         // original points to keep are at the beginning and end of the original array
+        //
+        //  original points:  x----x--x----x-----x----x
+        //  sculpt points:        (0 x x x n)
+        //  insertIndex:           x                    (first >= sn)
+        //  insertEndIndex:                      x      (next > sn)
+        //
         Int insertIndex = 0;
-        for (Int i = 0; i < numPoints; ++i) {
-            insertIndex = i;
-            if (pointsS[i] >= s0) {
+        for (; insertIndex < numPoints; ++insertIndex) {
+            if (pointsS[insertIndex] >= s0) {
                 break;
             }
         }
-        // force keep first points
+        // force keep first point
         if (insertIndex < 1) {
             insertIndex = 1;
         }
-        Int insertIndexEnd = 0;
-        for (Int i = insertIndex; i < numPoints; ++i) {
-            insertIndexEnd = i;
-            if (pointsS[i] > sn) {
+        Int insertEndIndex = insertIndex;
+        for (; insertEndIndex < numPoints; ++insertEndIndex) {
+            if (pointsS[insertEndIndex] > sn) {
                 break;
             }
         }
-        // force keep last points
-        if (insertIndexEnd > numPoints - 1) {
-            insertIndexEnd = numPoints - 1;
+        // force keep last point
+        if (insertEndIndex > numPoints - 1) {
+            insertEndIndex = numPoints - 1;
         }
 
-        points_.erase(points_.begin() + insertIndex, points_.begin() + insertIndexEnd);
+        points_.erase(points_.begin() + insertIndex, points_.begin() + insertEndIndex);
         points_.insert(insertIndex, numPatchPoints, {});
         for (Int i = 0; i < numPatchPoints; ++i) {
             const SculptPoint& sp = sculptPoints[indices[i]];
@@ -682,7 +744,7 @@ geometry::Vec2d FreehandEdgeGeometry::sculptGrab(
         }
         if (hasWidths) {
             widths_.erase(
-                widths_.begin() + insertIndex, widths_.begin() + insertIndexEnd);
+                widths_.begin() + insertIndex, widths_.begin() + insertEndIndex);
             widths_.insert(insertIndex, numPatchPoints, {});
             for (Int i = 0; i < numPatchPoints; ++i) {
                 const SculptPoint& sp = sculptPoints[indices[i]];
@@ -712,33 +774,6 @@ geometry::Vec2d FreehandEdgeGeometry::sculptSmooth(
     bool /*isClosed*/) {
 
     return position;
-}
-
-void FreehandEdgeGeometry::snap(
-    const geometry::Vec2d& snapStartPosition,
-    const geometry::Vec2d& snapEndPosition,
-    vacomplex::EdgeSnapTransformationMode /*mode*/) {
-
-    const geometry::Vec2dArray& points = this->points();
-    if (!points.isEmpty() && points.first() == snapStartPosition
-        && points.last() == snapEndPosition) {
-        // already snapped
-        return;
-    }
-
-    if (isBeingEdited_) {
-        computeSnappedLinearS_(
-            points_, points, originalArclengths_, snapStartPosition, snapEndPosition);
-    }
-    else {
-        computeSnappedLinearS_(
-            points_, points, originalArclengths_, snapStartPosition, snapEndPosition);
-        sharedConstPoints_ = SharedConstPoints(std::move(points_));
-        points_ = geometry::Vec2dArray();
-    }
-
-    originalArclengths_.clear();
-    dirtyEdgeSampling();
 }
 
 bool FreehandEdgeGeometry::updateFromDomEdge_(dom::Element* element) {
@@ -821,11 +856,11 @@ void FreehandEdgeGeometry::computeSnappedLinearS_(
             if (srcArclengths.isEmpty()) {
                 computeArclengths_(srcArclengths, srcPoints);
             }
-            double totalS = srcArclengths.last();
-            if (totalS > 0) {
+            double curveLength = srcArclengths.last();
+            if (curveLength > 0) {
                 // linear deformation in rough "s"
                 for (Int i = 0; i < numPoints; ++i) {
-                    double t = srcArclengths[i] / totalS;
+                    double t = srcArclengths[i] / curveLength;
                     outPoints[i] = srcPoints[i] + (d1 + t * (d2 - d1));
                 }
             }

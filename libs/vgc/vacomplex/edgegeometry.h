@@ -174,6 +174,7 @@ public:
 
     virtual EdgeSampling computeSampling(
         geometry::CurveSamplingQuality quality,
+        bool isClosed = false,
         EdgeSnapTransformationMode mode =
             EdgeSnapTransformationMode::LinearInArclength) const = 0;
 
@@ -181,6 +182,10 @@ public:
     virtual void resetEdit() = 0;
     virtual void finishEdit() = 0;
     virtual void abortEdit() = 0;
+
+    /// Expects delta in object space.
+    ///
+    virtual void translate(const geometry::Vec2d& delta) = 0;
 
     /// Expects positions in object space.
     ///
