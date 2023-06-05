@@ -536,6 +536,38 @@ struct CubicBezierData {
     }
 };
 
+// Currently assumes first derivative at endpoint is non null.
+// TODO: Support null derivatives (using limit analysis).
+Vec2d computeOffsetLineTangentsAtEndPoint(const CubicBezierData& data, Int endpoint) {
+
+    Vec2d p = {};
+    Vec2d dp = {};
+    Vec2d ddp = {};
+    double w = {};
+    double dw = {};
+
+    if (endpoint) {
+        p = data.positions[3];
+        dp = 3 * (data.positions[3] - data.positions[2]);
+        ddp = 6 * (data.positions[3] - 2 * data.positions[2] + data.positions[1]);
+        w = data.halfwidths[3];
+        dw = 3 * (data.halfwidths[3] - data.halfwidths[2]);
+    }
+    else {
+        p = data.positions[0];
+        dp = 3 * (data.positions[1] - data.positions[0]);
+        ddp = 6 * (data.positions[2] - 2 * data.positions[1] + data.positions[0]);
+        w = data.halfwidths[0];
+        dw = 3 * (data.halfwidths[1] - data.halfwidths[0]);
+    }
+
+    double dpl = dp.length();
+    Vec2d n = dp.orthogonalized() / dpl;
+    Vec2d dn = dp * (ddp.det(dp)) / (dpl * dpl * dpl);
+
+    return dp + dn * w + n * dw;
+}
+
 // ---------------------------------------------------------------------------------------
 // Simple adaptive sampling in model space. Adapts to the curve widths in the same pass.
 // To be deprecated in favor of the multi-view sampling further below.
