@@ -593,15 +593,20 @@ geometry::Vec2d FreehandEdgeGeometry::sculptGrab(
         geometry::Vec2d wMins(cubicEaseInOut(uMins[0]), cubicEaseInOut(uMins[1]));
         for (Int i = 0; i < sculptPoints.length(); ++i) {
             SculptPoint& sp = sculptPoints[i];
-            double u = 1.0;
-            double wMin = 0;
+            double u = {};
+            double wMin = {};
             if (sp.d < 0) {
-                u -= (-sp.d / radius);
+                u = 1.0 - (-sp.d / radius);
                 wMin = wMins[0];
             }
             else if (sp.d > 0) {
-                u -= (sp.d / radius);
+                u = 1.0 - (sp.d / radius);
                 wMin = wMins[1];
+            }
+            else {
+                // middle sculpt point
+                u = 1.0;
+                wMin = 0.0;
             }
             double w = cubicEaseInOut(u);
             double t = (w - wMin) / (1 - wMin);
@@ -615,12 +620,16 @@ geometry::Vec2d FreehandEdgeGeometry::sculptGrab(
         double wMin = cubicEaseInOut(uMin);
         for (Int i = 0; i < sculptPoints.length(); ++i) {
             SculptPoint& sp = sculptPoints[i];
-            double u = 1.0;
+            double u = {};
             if (sp.d < 0) {
-                u -= (-sp.d / cappedRadius);
+                u = 1.0 - (-sp.d / cappedRadius);
             }
             else if (sp.d > 0) {
-                u -= (sp.d / cappedRadius);
+                u = 1.0 - (sp.d / cappedRadius);
+            }
+            else {
+                // middle sculpt point
+                u = 1.0;
             }
             double w = cubicEaseInOut(u);
             w *= (1.0 - wMin);
