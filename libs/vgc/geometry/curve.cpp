@@ -552,7 +552,11 @@ struct CubicBezierData {
 
 // Currently assumes first derivative at endpoint is non null.
 // TODO: Support null derivatives (using limit analysis).
-Vec2d computeOffsetLineTangentsAtEndPoint(const CubicBezierData& data, Int endpoint) {
+// TODO: Support different halfwidth on both sides.
+void computeOffsetLineTangentsAtEndPoint(
+    std::array<geometry::Vec2d, 2>& outTangents,
+    const CubicBezierData& data,
+    Int endpoint) {
 
     Vec2d p = {};
     Vec2d dp = {};
@@ -579,7 +583,9 @@ Vec2d computeOffsetLineTangentsAtEndPoint(const CubicBezierData& data, Int endpo
     Vec2d n = dp.orthogonalized() / dpl;
     Vec2d dn = dp * (ddp.det(dp)) / (dpl * dpl * dpl);
 
-    return dp + dn * w + n * dw;
+    Vec2d a = dn * w + n * dw;
+    outTangents[0] = (dp + a).normalized();
+    outTangents[1] = (dp - a).normalized();
 }
 
 // ---------------------------------------------------------------------------------------
@@ -898,6 +904,20 @@ void Curve::sampleRange(
             lastPoint = point;
         }
     }
+}
+
+void Curve::getOffsetLineTangentsAtSegmentEndpoint(
+    std::array<geometry::Vec2d, 2>& outTangents,
+    Int segmentIndex,
+    Int endpointIndex) const {
+
+    if (numPoints() < 2) {
+        throw vgc::core::IndexError(
+            "cannot compute tangents of a curve with less than 2 points.");
+    }
+
+    CubicBezierData bezierData = CubicBezierData(this, segmentIndex);
+    computeOffsetLineTangentsAtEndPoint(outTangents, bezierData, endpointIndex);
 }
 
 void Curve::onWidthsChanged_() {

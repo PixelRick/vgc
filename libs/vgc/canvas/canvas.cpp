@@ -536,28 +536,25 @@ bool Canvas::onMouseScroll(ui::ScrollEvent* event) {
             // no change
         }
         else if (steps > 0) {
-            newZoom = levels[0];
-            Int i = 0;
-            for (; i < n; ++i) {
-                newZoom = levels[i];
-                if (levels[i] > oldZoom) {
-                    break;
+            newZoom = oldZoom * fallbackZoomFactor;
+            if (newZoom > levels[0] && oldZoom < levels[n - 1]) {
+                for (Int i = 0; i < n; ++i) {
+                    newZoom = levels[i];
+                    if (newZoom > oldZoom) {
+                        break;
+                    }
                 }
-            }
-            if (i == n) {
-                newZoom = oldZoom * fallbackZoomFactor;
             }
         }
         else { // steps < 0
-            Int i = 0;
-            for (; i < n; ++i) {
-                if (oldZoom <= levels[i]) {
-                    break;
+            newZoom = oldZoom / fallbackZoomFactor;
+            if (newZoom < levels[n - 1] && oldZoom > levels[0]) {
+                for (Int i = n - 1; i >= 0; --i) {
+                    newZoom = levels[i];
+                    if (newZoom < oldZoom) {
+                        break;
+                    }
                 }
-                newZoom = levels[i];
-            }
-            if (i == 0) {
-                newZoom = oldZoom / fallbackZoomFactor;
             }
         }
     }

@@ -322,7 +322,8 @@ public:
                         positionInWorkspace,
                         options::sculptRadius()->value(),
                         1,
-                        pixelSize);
+                        pixelSize,
+                        ke->isClosed());
                     tool_->setActionCircleCenter(smoothedPoint);
                     tool_->setActionCircleEnabled(true);
                 }
