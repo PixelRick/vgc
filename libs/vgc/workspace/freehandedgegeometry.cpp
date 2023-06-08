@@ -493,29 +493,38 @@ Int filterPointsStep(
     Int endIndex = indices[i + 1];
     while (indices[i] != endIndex) {
 
-        // Get line AB. Fast continue if AB too small.
+        // Get line AB.
         Int iA = indices[i];
         Int iB = indices[i + 1];
         geometry::Vec2d a = positionGetter(points[iA]);
         geometry::Vec2d b = positionGetter(points[iB]);
         geometry::Vec2d ab = b - a;
         double abLen = ab.length();
-        if (abLen < core::epsilon) {
-            ++i;
-            continue;
-        }
 
         // Compute which sample between A and B has a position
         // furthest from the line AB.
         double maxDist = tolerance;
         Int maxDistPointIndex = -1;
-        for (Int j = iA + 1; j < iB; ++j) {
-            geometry::Vec2d p = positionGetter(points[j]);
-            geometry::Vec2d ap = p - a;
-            double dist = (std::abs)(ab.det(ap) / abLen);
-            if (dist > maxDist) {
-                maxDist = dist;
-                maxDistPointIndex = j;
+        if (abLen > 0) {
+            for (Int j = iA + 1; j < iB; ++j) {
+                geometry::Vec2d p = positionGetter(points[j]);
+                geometry::Vec2d ap = p - a;
+                double dist = (std::abs)(ab.det(ap) / abLen);
+                if (dist > maxDist) {
+                    maxDist = dist;
+                    maxDistPointIndex = j;
+                }
+            }
+        }
+        else {
+            for (Int j = iA + 1; j < iB; ++j) {
+                geometry::Vec2d p = positionGetter(points[j]);
+                geometry::Vec2d ap = p - a;
+                double dist = ap.length();
+                if (dist > maxDist) {
+                    maxDist = dist;
+                    maxDistPointIndex = j;
+                }
             }
         }
 
@@ -601,14 +610,14 @@ geometry::Vec2d FreehandEdgeGeometry::sculptGrab(
     }
 
     // Compute middle sculpt point info (closest point).
-    Int sMspegmentIndex = d.segmentIndex();
-    double sMspegmentParameter = d.segmentParameter();
-    geometry::CurveSample sMspample = samples[sMspegmentIndex];
-    if (sMspegmentParameter > 0 && sMspegmentIndex + 1 < samples.length()) {
-        const geometry::CurveSample& s2 = samples[sMspegmentIndex + 1];
-        sMspample = geometry::lerp(sMspample, s2, sMspegmentParameter);
+    Int mspSegmentIndex = d.segmentIndex();
+    double mspSegmentParameter = d.segmentParameter();
+    geometry::CurveSample mspSample = samples[mspSegmentIndex];
+    if (mspSegmentParameter > 0 && mspSegmentIndex + 1 < samples.length()) {
+        const geometry::CurveSample& s2 = samples[mspSegmentIndex + 1];
+        mspSample = geometry::lerp(mspSample, s2, mspSegmentParameter);
     }
-    double sMsp = sMspample.s();
+    double sMsp = mspSample.s();
 
     const double maxDs = (tolerance * 2.0);
 
@@ -714,6 +723,7 @@ geometry::Vec2d FreehandEdgeGeometry::sculptGrab(
     double sn = sculptSampling.sculptPoints.last().s;
     Int numPatchPoints = indices.length();
 
+    // Insert sculpt points in input points
     if (sculptSampling.isClosed) {
         points_.resize(numPatchPoints + 1);
         for (Int i = 0; i < numPatchPoints; ++i) {
@@ -740,19 +750,18 @@ geometry::Vec2d FreehandEdgeGeometry::sculptGrab(
         //  keepCount:                     1            (count until next >= sn)
         //
         Int keepIndex = 0;
-        for (Int i = 0; i < numPoints; ++i) {
-            keepIndex = i;
-            if (pointsS[i] > sn) {
+        for (Int keepIndex = 0; keepIndex < numPoints; ++keepIndex) {
+            if (pointsS[keepIndex] > sn) {
                 break;
             }
         }
-        Int keepCount = 0;
-        for (Int i = keepIndex; i < numPoints; ++i) {
-            if (pointsS[i] >= s0) {
+        Int keepEndIndex = keepIndex;
+        for (; keepEndIndex < numPoints; ++keepEndIndex) {
+            if (pointsS[keepEndIndex] >= s0) {
                 break;
             }
-            ++keepCount;
         }
+        Int keepCount = keepEndIndex - keepIndex;
 
         points_.erase(points_.begin(), points_.begin() + keepIndex);
         points_.resize(keepCount + numPatchPoints + 1);
@@ -863,14 +872,14 @@ geometry::Vec2d FreehandEdgeGeometry::sculptSmooth(
     }
 
     // Compute middle sculpt point info (closest point).
-    Int sMspegmentIndex = d.segmentIndex();
-    double sMspegmentParameter = d.segmentParameter();
-    geometry::CurveSample sMspample = samples[sMspegmentIndex];
-    if (sMspegmentParameter > 0 && sMspegmentIndex + 1 < samples.length()) {
-        const geometry::CurveSample& s2 = samples[sMspegmentIndex + 1];
-        sMspample = geometry::lerp(sMspample, s2, sMspegmentParameter);
+    Int mspSegmentIndex = d.segmentIndex();
+    double mspSegmentParameter = d.segmentParameter();
+    geometry::CurveSample mspSample = samples[mspSegmentIndex];
+    if (mspSegmentParameter > 0 && mspSegmentIndex + 1 < samples.length()) {
+        const geometry::CurveSample& s2 = samples[mspSegmentIndex + 1];
+        mspSample = geometry::lerp(mspSample, s2, mspSegmentParameter);
     }
-    double sMsp = sMspample.s();
+    double sMsp = mspSample.s();
 
     const double maxDs = (std::max)(radius / 100, tolerance * 2.0);
 
@@ -879,9 +888,6 @@ geometry::Vec2d FreehandEdgeGeometry::sculptSmooth(
 
     core::Array<SculptPoint>& sculptPoints = sculptSampling.sculptPoints;
     core::Array<SculptPoint> originalSculptPoints = sculptPoints;
-
-    double t = 0.1 * strength;
-    double ot = 1.0 - t;
 
     if (!sculptSampling.isClosed) {
         const Int n = sculptPoints.length();
@@ -944,11 +950,98 @@ geometry::Vec2d FreehandEdgeGeometry::sculptSmooth(
                 wSum += 2 * w;
             }
             sp.pos /= wSum;
-            sp.pos = t * sp.pos + ot * originalSculptPoints[i].pos;
         }
     }
 
     bool hasWidths = !widths_.isEmpty();
+
+    if (isClosed) {
+        numPoints = numPoints - 1;
+    }
+
+    // For each pair of consecutive sculpt points, average the original points in between
+    // and move them.
+    // constraints:
+    //  - filter can only work with ordered indices.
+    //  - we want to filter with one more point on each side of the
+    //    sculpt interval.
+    // assumptions:
+    //  - having multiple input points between sculpt points is rare.
+
+    double s0 = sculptSampling.sculptPoints.first().s;
+    double sN = sculptSampling.sculptPoints.last().s;
+
+    // Search index of first point at or before s0.
+    Int p0Index = 0;
+    for (; p0Index < numPoints - 1; ++p0Index) {
+        if (pointsS[p0Index + 1] > s0) {
+            break;
+        }
+    }
+    // Search index of first point at or after sN.
+    Int pNIndex = 0;
+    for (; pNIndex < numPoints; ++pNIndex) {
+        if (pointsS[pNIndex] >= sN) {
+            break;
+        }
+    }
+
+    // Potential problem when sculpt sampling is close from being closed:
+    // original points:  x----x--0----------1----x
+    //  sculpt points:       x x x n)    (0 x x
+    // Here point N-1 (0) is modified but point 0 isn't since considered as
+    // the constant point before s0.
+
+    geometry::Vec2dArray newPoints;
+    core::DoubleArray newWidths;
+    if (pNIndex >= p0Index) {
+        Int numPointsInSculptRange = pNIndex - p0Index + 1;
+        newPoints.reserve(numPointsInSculptRange);
+        if (hasWidths) {
+            newWidths.reserve(numPointsInSculptRange);
+        }
+    }
+    else {
+        Int numPointsInSculptRange = numPoints - pNIndex + p0Index;
+        newPoints.reserve(numPointsInSculptRange);
+        if (hasWidths) {
+            newWidths.reserve(numPointsInSculptRange);
+        }
+    }
+
+    double t = 0.1 * strength;
+    double ot = 1.0 - t;
+
+    if (!sculptSampling.isOverlappingStart) {
+        // s0 <= sn
+        Int insertIndex = 0;
+        for (; insertIndex < numPoints; ++insertIndex) {
+            if (pointsS[insertIndex] >= s0) {
+                break;
+            }
+        }
+        Int insertEndIndex = insertIndex;
+        for (; insertEndIndex < numPoints; ++insertEndIndex) {
+            if (pointsS[insertEndIndex] > sn) {
+                break;
+            }
+        }
+    }
+    else {
+        // s0 >= sn
+        Int insertIndex = 0;
+        for (; insertIndex < numPoints; ++insertIndex) {
+            if (pointsS[insertIndex] >= s0) {
+                break;
+            }
+        }
+        Int insertEndIndex = insertIndex;
+        for (; insertEndIndex < numPoints; ++insertEndIndex) {
+            if (pointsS[insertEndIndex] > sn) {
+                break;
+            }
+        }
+    }
 
     core::IntArray indices = {};
 
@@ -992,6 +1085,7 @@ geometry::Vec2d FreehandEdgeGeometry::sculptSmooth(
     double sn = sculptSampling.sculptPoints.last().s;
     Int numPatchPoints = indices.length();
 
+    // Insert sculpt points in input points
     if (sculptSampling.isClosed) {
         points_.resize(numPatchPoints + 1);
         for (Int i = 0; i < numPatchPoints; ++i) {
