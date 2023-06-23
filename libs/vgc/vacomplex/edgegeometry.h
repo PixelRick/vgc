@@ -218,6 +218,18 @@ public:
         double tolerance,
         bool isClosed = false) = 0;
 
+    /// Returns the position of the grabbed point (center of deformation falloff).
+    ///
+    // Note: choose properly between tolerance/samplingDelta/quality.
+    // Todo: later add falloff kind, arclength/spatial, keep vertices.
+    //
+    virtual geometry::Vec2d sculptRadius(
+        const geometry::Vec2d& position,
+        double delta,
+        double radius,
+        double tolerance,
+        bool isClosed = false) = 0;
+
     /// Returns the new position of the smooth point.
     ///
     // Todo: later add falloff kind, arclength/spatial.

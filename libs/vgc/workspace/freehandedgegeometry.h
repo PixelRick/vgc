@@ -94,6 +94,13 @@ public:
         double tolerance,
         bool isClosed) override;
 
+    geometry::Vec2d sculptRadius(
+        const geometry::Vec2d& position,
+        double delta,
+        double radius,
+        double tolerance,
+        bool isClosed = false) override;
+
     geometry::Vec2d sculptSmooth(
         const geometry::Vec2d& position,
         double radius,
