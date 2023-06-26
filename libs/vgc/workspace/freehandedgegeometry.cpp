@@ -125,9 +125,9 @@ vacomplex::EdgeSampling FreehandEdgeGeometry::computeSampling(
         stroke.setWidths(widths);
     }
 
-    if (isBeingEdited_) {
-        quality = geometry::CurveSamplingQuality::AdaptiveLow;
-    }
+    //if (isBeingEdited_) {
+    //    quality = geometry::CurveSamplingQuality::AdaptiveLow;
+    //}
 
     stroke.sampleRange(samples, geometry::CurveSamplingParameters(quality));
     VGC_ASSERT(samples.length() > 0);
@@ -170,9 +170,9 @@ vacomplex::EdgeSampling FreehandEdgeGeometry::computeSampling(
         stroke.setWidths(widths);
     }
 
-    if (isBeingEdited_) {
-        quality = geometry::CurveSamplingQuality::AdaptiveLow;
-    }
+    //if (isBeingEdited_) {
+    //    quality = geometry::CurveSamplingQuality::AdaptiveLow;
+    //}
 
     stroke.sampleRange(samples, geometry::CurveSamplingParameters(quality));
     VGC_ASSERT(samples.length() > 0);
@@ -573,12 +573,18 @@ void computeSculptSampling(
                 // Skip the segment if it is degenerate.
                 if (d > 0) {
                     double invD = 1.0 / d;
+
+                    //CubicBezierStroke
+
                     while (nextSculptPointS <= sa2->s()) {
                         // Sample a sculpt point at t in segment [sa1:0, sa2:1].
                         double t = (nextSculptPointS - sa1->s()) * invD;
+
+                        //
                         double u = 1.0 - t;
                         geometry::Vec2d p = u * sa1->position() + t * sa2->position();
                         double w = (u * sa1->halfwidth(0) + t * sa2->halfwidth(0)) * 2.0;
+
                         double distanceToMiddle;
                         if (isClosed) {
                             // If the curve is closed, s can wrap so we need to compute
@@ -669,7 +675,7 @@ template<typename TPoint, typename PositionGetter, typename WidthGetter>
     core::Array<TPoint>& points,
     core::IntArray& indices,
     Int intervalStart,
-    double tolerance,
+    double /*tolerance*/,
     PositionGetter positionGetter,
     WidthGetter widthGetter) {
 
@@ -687,12 +693,15 @@ template<typename TPoint, typename PositionGetter, typename WidthGetter>
 
         // Compute which sample between A and B has an offset point
         // furthest from the offset line AB.
-        double maxOffsetDiff = tolerance;
         Int maxOffsetDiffPointIndex = -1;
         if (abLen > 0) {
             geometry::Vec2d dir = ab / abLen;
             double wA = widthGetter(points[iA], iA);
             double wB = widthGetter(points[iB], iB);
+            // Catmull-Rom is not a linear interpolation, since we don't
+            // compute the ground truth here we thus need a bigger threshold.
+            // For now we use X% of the max width from linear interp. value.
+            double maxOffsetDiff = /*std::max(wA, wB)*/ abLen * 0.2;
             for (Int j = iA + 1; j < iB; ++j) {
                 geometry::Vec2d p = positionGetter(points[j], j);
                 geometry::Vec2d ap = p - a;
@@ -1171,7 +1180,7 @@ geometry::Vec2d FreehandEdgeGeometry::sculptRadius(
 
     core::IntArray indices = {};
 
-    constexpr bool isFilteringEnabled = true;
+    constexpr bool isFilteringEnabled = false;
     if (isFilteringEnabled) {
         if (!isClosed) {
             // When the sampling is capped at an edge endpoint we want to be able

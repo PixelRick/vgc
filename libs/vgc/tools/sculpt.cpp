@@ -692,6 +692,8 @@ Sculpt::Sculpt()
     radiusAction->tool_ = this;
     auto smoothAction = createAction<SculptSmoothAction>();
     smoothAction->tool_ = this;
+    auto editSculptRadiusAction = createAction<EditSculptRadiusAction>();
+    editSculptRadiusAction->tool_ = this;
 }
 
 SculptPtr Sculpt::create() {
