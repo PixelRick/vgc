@@ -582,25 +582,29 @@ void computeSculptSampling(
                     double invD = 1.0 / d;
 
                     //CubicBezierStroke
-                    auto stroke =
-                        geometry::detail::CubicBezierStroke::fromCatmullRomSpline(
-                            geometry::detail::CatmullRomSplineParameterization::
-                                Centripetal,
-                            positions,
-                            widths,
-                            isClosed,
-                            iSample2 - 1);
+                    //auto stroke =
+                    //    geometry::detail::CubicBezierStroke::fromCatmullRomSpline(
+                    //        geometry::detail::CatmullRomSplineParameterization::
+                    //            Centripetal,
+                    //        positions,
+                    //        widths,
+                    //        isClosed,
+                    //        iSample2 - 1);
 
                     while (nextSculptPointS <= sa2->s()) {
                         // Sample a sculpt point at t in segment [sa1:0, sa2:1].
                         double t = (nextSculptPointS - sa1->s()) * invD;
 
-                        geometry::Vec2d p = stroke.evalPosition(t);
-                        double w = stroke.evalHalfwidths(t) * 2.0;
+                        //geometry::Vec2d p = stroke.evalPosition(t);
+                        //double w = stroke.evalHalfwidths(t) * 2.0;
 
-                        //double u = 1.0 - t;
-                        //geometry::Vec2d p = u * sa1->position() + t * sa2->position();
-                        //double w = (u * sa1->halfwidth(0) + t * sa2->halfwidth(0)) * 2.0;
+                        double u = 1.0 - t;
+                        geometry::Vec2d p = u * sa1->position() + t * sa2->position();
+                        double w = (u * sa1->halfwidth(0) + t * sa2->halfwidth(0)) * 2.0;
+
+                        //VGC_DEBUG_TMP("sa1: {}", sa1->position());
+                        //VGC_DEBUG_TMP("sa2: {}", sa2->position());
+                        //VGC_DEBUG_TMP("t={} p={} p1={}", t, p, p1);
 
                         double distanceToMiddle;
                         if (isClosed) {
@@ -692,6 +696,7 @@ template<typename TPoint, typename PositionGetter, typename WidthGetter>
     core::Array<TPoint>& points,
     core::IntArray& indices,
     Int intervalStart,
+    bool isClosed,
     double /*tolerance*/,
     PositionGetter positionGetter,
     WidthGetter widthGetter) {
@@ -699,13 +704,43 @@ template<typename TPoint, typename PositionGetter, typename WidthGetter>
     Int i = intervalStart;
     Int endIndex = indices[i + 1];
     while (indices[i] != endIndex) {
-
         Int iA = indices[i];
         Int iB = indices[i + 1];
+        if (iA + 1 == iB) {
+            ++i;
+            continue;
+        }
+
         geometry::Vec2d a = positionGetter(points[iA], iA);
         geometry::Vec2d b = positionGetter(points[iB], iB);
-        geometry::Vec2d ab = b - a;
+        double wA = widthGetter(points[iA], iA);
+        double wB = widthGetter(points[iB], iB);
 
+        core::Array<geometry::Vec2d> knotPs;
+        core::Array<double> knotWs;
+        if (i - 1 >= 0) {
+            Int j = indices[i - 1];
+            knotPs.append(positionGetter(points[j], j));
+            knotWs.append(widthGetter(points[j], j));
+        }
+        Int i0 = knotPs.length();
+        knotPs.append(a);
+        knotWs.append(wA);
+        knotPs.append(b);
+        knotWs.append(wB);
+        if (i + 2 < indices.length()) {
+            Int j = indices[i + 1];
+            knotPs.append(positionGetter(points[j], j));
+            knotWs.append(widthGetter(points[j], j));
+        }
+        auto stroke = geometry::detail::CubicBezierStroke::fromCatmullRomSpline(
+            geometry::detail::CatmullRomSplineParameterization::Centripetal,
+            knotPs,
+            knotWs,
+            isClosed,
+            i0);
+
+        geometry::Vec2d ab = b - a;
         double abLen = ab.length();
 
         // Compute which sample between A and B has an offset point
@@ -713,8 +748,7 @@ template<typename TPoint, typename PositionGetter, typename WidthGetter>
         Int maxOffsetDiffPointIndex = -1;
         if (abLen > 0) {
             geometry::Vec2d dir = ab / abLen;
-            double wA = widthGetter(points[iA], iA);
-            double wB = widthGetter(points[iB], iB);
+
             // Catmull-Rom is not a linear interpolation, since we don't
             // compute the ground truth here we thus need a bigger threshold.
             // For now we use X% of the max width from linear interp. value.
@@ -749,6 +783,7 @@ Int filterPointsStep(
     core::Array<TPoint>& points,
     core::IntArray& indices,
     Int intervalStart,
+    bool isClosed,
     double tolerance,
     PositionGetter positionGetter,
     WidthGetter widthGetter) {
@@ -756,10 +791,13 @@ Int filterPointsStep(
     Int i = intervalStart;
     Int endIndex = indices[i + 1];
     while (indices[i] != endIndex) {
-
-        // Get line AB.
         Int iA = indices[i];
         Int iB = indices[i + 1];
+        if (iA + 1 == iB) {
+            ++i;
+            continue;
+        }
+
         geometry::Vec2d a = positionGetter(points[iA], iA);
         geometry::Vec2d b = positionGetter(points[iB], iB);
         geometry::Vec2d ab = b - a;
@@ -799,9 +837,9 @@ Int filterPointsStep(
             indices.insert(i + 1, maxDistPointIndex);
         }
         else {
-            //i = filterSculptPointsWidthStep(
-            //    points, indices, i, tolerance, positionGetter, widthGetter);
-            ++i;
+            i = filterSculptPointsWidthStep(
+                points, indices, i, tolerance, positionGetter, widthGetter);
+            //++i;
         }
     }
     return i;
@@ -961,6 +999,7 @@ geometry::Vec2d FreehandEdgeGeometry::sculptGrab(
             sculptPoints,
             indices,
             0,
+            isClosed,
             tolerance * 0.5,
             [](const SculptPoint& p, Int) { return p.pos; },
             [](const SculptPoint& p, Int) { return p.width; });
@@ -1231,6 +1270,7 @@ geometry::Vec2d FreehandEdgeGeometry::sculptRadius(
             sculptPoints,
             indices,
             0,
+            isClosed,
             tolerance * 0.5,
             [](const SculptPoint& p, Int) { return p.pos; },
             [](const SculptPoint& p, Int) { return p.width; });
@@ -1642,11 +1682,12 @@ public:
 
         core::IntArray indices;
         indices.extend({simplifyFirstIndex, simplifyLastIndex});
-        if (hasWidths_ && 0) {
+        if (hasWidths_) {
             filterPointsStep(
                 newKnotPositions_,
                 indices,
                 0,
+                isClosed,
                 simplifyTolerance,
                 [](const geometry::Vec2d& p, Int) { return p; },
                 [&](const geometry::Vec2d&, Int i) -> double {
@@ -1658,6 +1699,7 @@ public:
                 newKnotPositions_,
                 indices,
                 0,
+                isClosed,
                 simplifyTolerance,
                 [](const geometry::Vec2d& p, Int) { return p; },
                 [](const geometry::Vec2d&, Int) -> double { return 1.0; });
