@@ -437,6 +437,14 @@ public:
         , maxIntraSegmentSamples_(maxIntraSegmentSamples) {
     }
 
+    double maxDs() const {
+        return maxDs_;
+    }
+
+    void setMaxDs(double maxDs) {
+        maxDs_ = maxDs;
+    }
+
     double maxAngle() const {
         return maxAngle_;
     }
@@ -474,6 +482,7 @@ public:
     }
 
 private:
+    double maxDs_ = core::DoubleInfinity;
     double maxAngle_ = 0.05; // 2PI / 0.05 ~= 125.66
     Int minIntraSegmentSamples_ = 0;
     Int maxIntraSegmentSamples_ = 63;

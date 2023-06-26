@@ -561,6 +561,13 @@ void computeSculptSampling(
             nextSculptPointS = samples.first().s(); // = 0
         }
 
+        core::Array<geometry::Vec2d> positions(numSamples, core::noInit);
+        core::Array<double> widths(numSamples, core::noInit);
+        for (Int i = 0; i < (isClosed ? numSamples - 1 : numSamples); ++i) {
+            positions[i] = samples[i].position();
+            widths[i] = samples[i].halfwidth(0) * 2.0;
+        }
+
         const Int maxIter = isClosed ? 2 : 1; // If the curve is closed we allow 2 passes.
         for (Int iter = 0; iter < maxIter; ++iter) {
             // Iterate over sample segments
@@ -575,15 +582,25 @@ void computeSculptSampling(
                     double invD = 1.0 / d;
 
                     //CubicBezierStroke
+                    auto stroke =
+                        geometry::detail::CubicBezierStroke::fromCatmullRomSpline(
+                            geometry::detail::CatmullRomSplineParameterization::
+                                Centripetal,
+                            positions,
+                            widths,
+                            isClosed,
+                            iSample2 - 1);
 
                     while (nextSculptPointS <= sa2->s()) {
                         // Sample a sculpt point at t in segment [sa1:0, sa2:1].
                         double t = (nextSculptPointS - sa1->s()) * invD;
 
-                        //
-                        double u = 1.0 - t;
-                        geometry::Vec2d p = u * sa1->position() + t * sa2->position();
-                        double w = (u * sa1->halfwidth(0) + t * sa2->halfwidth(0)) * 2.0;
+                        geometry::Vec2d p = stroke.evalPosition(t);
+                        double w = stroke.evalHalfwidths(t) * 2.0;
+
+                        //double u = 1.0 - t;
+                        //geometry::Vec2d p = u * sa1->position() + t * sa2->position();
+                        //double w = (u * sa1->halfwidth(0) + t * sa2->halfwidth(0)) * 2.0;
 
                         double distanceToMiddle;
                         if (isClosed) {
@@ -701,7 +718,7 @@ template<typename TPoint, typename PositionGetter, typename WidthGetter>
             // Catmull-Rom is not a linear interpolation, since we don't
             // compute the ground truth here we thus need a bigger threshold.
             // For now we use X% of the max width from linear interp. value.
-            double maxOffsetDiff = /*std::max(wA, wB)*/ abLen * 0.2;
+            double maxOffsetDiff = /*std::max(wA, wB)*/ abLen * 0.05;
             for (Int j = iA + 1; j < iB; ++j) {
                 geometry::Vec2d p = positionGetter(points[j], j);
                 geometry::Vec2d ap = p - a;
@@ -782,8 +799,9 @@ Int filterPointsStep(
             indices.insert(i + 1, maxDistPointIndex);
         }
         else {
-            i = filterSculptPointsWidthStep(
-                points, indices, i, tolerance, positionGetter, widthGetter);
+            //i = filterSculptPointsWidthStep(
+            //    points, indices, i, tolerance, positionGetter, widthGetter);
+            ++i;
         }
     }
     return i;
@@ -811,6 +829,8 @@ geometry::Vec2d FreehandEdgeGeometry::sculptGrab(
         return endPosition;
     }
 
+    const double maxDs = (tolerance * 2.0);
+
     // Note: We sample with widths even though we only need widths for samples in radius.
     // We could benefit from a two step sampling (sample centerline points, then sample
     // cross sections on an sub-interval).
@@ -818,6 +838,10 @@ geometry::Vec2d FreehandEdgeGeometry::sculptGrab(
     geometry::StrokeView2d stroke(isClosed ? closedCurveType : openCurveType);
     stroke.setPositions(points_);
     stroke.setWidths(widths_);
+    geometry::CurveSamplingParameters samplingParams(
+        geometry::CurveSamplingQuality::AdaptiveLow);
+    //samplingParams.setMaxDs(0.5 * maxDs);
+    //samplingParams.setMaxIntraSegmentSamples(2047);
     core::Array<double> pointsS(numPoints, core::noInit);
     samples.emplaceLast();
     for (Int i = 0; i < numPoints; ++i) {
@@ -848,8 +872,6 @@ geometry::Vec2d FreehandEdgeGeometry::sculptGrab(
         mspSample = geometry::lerp(mspSample, s2, mspSegmentParameter);
     }
     double sMiddle = mspSample.s();
-
-    const double maxDs = (tolerance * 2.0);
 
     SculptSampling sculptSampling = {};
     computeSculptSampling(
@@ -1077,6 +1099,8 @@ geometry::Vec2d FreehandEdgeGeometry::sculptRadius(
         return position;
     }
 
+    const double maxDs = (tolerance * 2.0);
+
     // Note: We sample with widths even though we only need widths for samples in radius.
     // We could benefit from a two step sampling (sample centerline points, then sample
     // cross sections on an sub-interval).
@@ -1084,6 +1108,10 @@ geometry::Vec2d FreehandEdgeGeometry::sculptRadius(
     geometry::Curve curve(isClosed ? closedCurveType : openCurveType);
     curve.setPositions(points_);
     curve.setWidths(widths_);
+    geometry::CurveSamplingParameters samplingParams(
+        geometry::CurveSamplingQuality::AdaptiveLow);
+    //samplingParams.setMaxDs(0.5 * maxDs);
+    //samplingParams.setMaxIntraSegmentSamples(2047);
     core::Array<double> pointsS(numPoints, core::noInit);
     samples.emplaceLast();
     for (Int i = 0; i < numPoints; ++i) {
@@ -1091,7 +1119,7 @@ geometry::Vec2d FreehandEdgeGeometry::sculptRadius(
         samples.pop();
         curve.sampleRange(
             samples,
-            geometry::CurveSamplingQuality::AdaptiveHigh,
+            samplingParams,
             i,
             Int{(!isClosed && i == numPoints - 1) ? 0 : 1},
             true);
@@ -1114,8 +1142,6 @@ geometry::Vec2d FreehandEdgeGeometry::sculptRadius(
         closestSample = geometry::lerp(closestSample, s2, closestSegmentParameter);
     }
     double sMiddle = closestSample.s();
-
-    const double maxDs = (tolerance * 2.0);
 
     SculptSampling sculptSampling = {};
     computeSculptSampling(
@@ -1180,7 +1206,7 @@ geometry::Vec2d FreehandEdgeGeometry::sculptRadius(
 
     core::IntArray indices = {};
 
-    constexpr bool isFilteringEnabled = false;
+    constexpr bool isFilteringEnabled = true;
     if (isFilteringEnabled) {
         if (!isClosed) {
             // When the sampling is capped at an edge endpoint we want to be able
@@ -1537,7 +1563,7 @@ public:
         // around the sculpt center. Using a uniform sampling is important in
         // order to be able to compute meaningful weighted averages.
 
-        if (!initStrokeSampling_(samplingQuality)) {
+        if (!initStrokeSampling_(samplingQuality, maxDs)) {
             return false;
         }
 
@@ -1616,7 +1642,7 @@ public:
 
         core::IntArray indices;
         indices.extend({simplifyFirstIndex, simplifyLastIndex});
-        if (hasWidths_) {
+        if (hasWidths_ && 0) {
             filterPointsStep(
                 newKnotPositions_,
                 indices,
@@ -1740,13 +1766,17 @@ public:
     }
 
 private:
-    bool initStrokeSampling_(geometry::CurveSamplingQuality quality) {
+    bool initStrokeSampling_(geometry::CurveSamplingQuality quality, double maxDs) {
         if (numKnots_ < 2) {
             return false;
         }
         geometry::StrokeView2d stroke(isClosed_ ? closedCurveType : openCurveType);
         stroke.setPositions(*knotPositions_);
         stroke.setWidths(*knotWidths_);
+        geometry::CurveSamplingParameters samplingParams(
+            geometry::CurveSamplingQuality::AdaptiveLow);
+        //samplingParams.setMaxDs(0.5 * maxDs);
+        //samplingParams.setMaxIntraSegmentSamples(2047);
         knotsS_.resizeNoInit(numKnots_);
         knotsS_[0] = 0;
         samples_.clear();
@@ -1754,13 +1784,13 @@ private:
         bool computeArclength = true;
         for (Int i = 0; i < numKnots_ - 1; ++i) {
             Int numSegments = 1;
-            stroke.sampleRange(samples_, quality, i, numSegments, computeArclength);
+            stroke.sampleRange(samples_, samplingParams, i, numSegments, computeArclength);
             knotsS_[i + 1] = samples_.last().s();
             samples_.pop();
         }
         Int numExtraSegments = isClosed_ ? 1 : 0;
         stroke.sampleRange(
-            samples_, quality, numKnots_ - 1, numExtraSegments, computeArclength);
+            samples_, samplingParams, numKnots_ - 1, numExtraSegments, computeArclength);
         totalS_ = samples_.last().s();
         return true;
     }

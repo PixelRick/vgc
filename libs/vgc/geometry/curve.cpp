@@ -1219,7 +1219,9 @@ bool sampleIter_(
                             IterativeSamplingSampleNode* n1) -> bool {
         IterativeSamplingSampleNode* node = &data.sampleTree[nextNodeIndex];
         node->sample.computeFrom(bezierData, 0.5 * (n0->sample.u + n1->sample.u));
-        if (shouldKeepNewSample_(n0->sample, node->sample, n1->sample, cosMaxAngle)) {
+        double ds = (n0->sample.pos - n1->sample.pos).length();
+        if (ds > params.maxDs()
+            || shouldKeepNewSample_(n0->sample, node->sample, n1->sample, cosMaxAngle)) {
             nextNodeIndex++;
             linkNode(node, n0);
             return true;
