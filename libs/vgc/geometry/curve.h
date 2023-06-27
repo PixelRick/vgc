@@ -75,7 +75,7 @@ public:
         const Vec2d& position,
         const Vec2d& normal,
         const Vec2d& halfwidths,
-        double s) noexcept
+        double s = 0) noexcept
 
         : position_(position)
         , normal_(normal)
@@ -499,6 +499,73 @@ public:
 
 private:
     core::Array<Vec2d> values_;
+};
+
+/// \class vgc::geometry::AbstractCurve
+/// \brief An abstract model of 2D curve (no thickness or other attributes).
+///
+class AbstractCurve {
+public:
+    virtual ~AbstractCurve() = default;
+
+    /// Returns whether the curve is closed.
+    ///
+    virtual bool isClosed() const = 0;
+
+    /// Returns the number of segments of the curve.
+    ///
+    /// \sa `eval()`.
+    ///
+    virtual Int numSegments() const = 0;
+
+    /// Returns the position of the curve point from segment `segmentIndex` at
+    /// parameter `u`.
+    ///
+    virtual Vec2d eval(Int segmentIndex, double u) const = 0;
+
+    /// Returns the position of the curve point from segment `segmentIndex` at
+    /// parameter `u`. It additionally sets the value of `derivative` as the
+    /// position derivative at `u` with respect to the parameter u.
+    ///
+    virtual Vec2d
+    evalWithDerivative(Int segmentIndex, double u, Vec2d& derivative) const = 0;
+};
+
+using StrokeSample = CurveSample;
+
+/// \class vgc::geometry::AbstractCurve
+/// \brief An abstract model of 2D stroke ().
+///
+class AbstractStroke {
+public:
+    virtual ~AbstractStroke() = default;
+
+    /// Returns whether the stroke is closed.
+    ///
+    virtual bool isClosed() const = 0;
+
+    /// Returns the number of segments of the stroke.
+    ///
+    /// \sa `eval()`.
+    ///
+    virtual Int numSegments() const = 0;
+
+    /// Returns the position of the centerline point from segment `segmentIndex` at
+    /// parameter `u`.
+    ///
+    virtual Vec2d evalCenterLine(Int segmentIndex, double u) const = 0;
+
+    /// Returns the position of the centerline point from segment `segmentIndex` at
+    /// parameter `u`. It additionally sets the value of `derivative` as the
+    /// position derivative at `u` with respect to the parameter u.
+    ///
+    virtual Vec2d
+    evalCenterLineWithDerivative(Int segmentIndex, double u, Vec2d& derivative) const = 0;
+
+    /// Returns a `StrokeSample` from the segment `segmentIndex` at
+    /// parameter `u`. The attribute `s` of the sample is left to 0.
+    ///
+    virtual StrokeSample eval(Int segmentIndex, double u, Vec2d& derivative) const = 0;
 };
 
 /// Specifies the type of the curve, that is, how the

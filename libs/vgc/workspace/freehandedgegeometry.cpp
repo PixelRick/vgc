@@ -716,29 +716,29 @@ template<typename TPoint, typename PositionGetter, typename WidthGetter>
         double wA = widthGetter(points[iA], iA);
         double wB = widthGetter(points[iB], iB);
 
-        core::Array<geometry::Vec2d> knotPs;
-        core::Array<double> knotWs;
-        if (i - 1 >= 0) {
-            Int j = indices[i - 1];
-            knotPs.append(positionGetter(points[j], j));
-            knotWs.append(widthGetter(points[j], j));
-        }
-        Int i0 = knotPs.length();
-        knotPs.append(a);
-        knotWs.append(wA);
-        knotPs.append(b);
-        knotWs.append(wB);
-        if (i + 2 < indices.length()) {
-            Int j = indices[i + 1];
-            knotPs.append(positionGetter(points[j], j));
-            knotWs.append(widthGetter(points[j], j));
-        }
-        auto stroke = geometry::detail::CubicBezierStroke::fromCatmullRomSpline(
-            geometry::detail::CatmullRomSplineParameterization::Centripetal,
-            knotPs,
-            knotWs,
-            isClosed,
-            i0);
+        //core::Array<geometry::Vec2d> knotPs;
+        //core::Array<double> knotWs;
+        //if (i - 1 >= 0) {
+        //    Int j = indices[i - 1];
+        //    knotPs.append(positionGetter(points[j], j));
+        //    knotWs.append(widthGetter(points[j], j));
+        //}
+        //Int i0 = knotPs.length();
+        //knotPs.append(a);
+        //knotWs.append(wA);
+        //knotPs.append(b);
+        //knotWs.append(wB);
+        //if (i + 2 < indices.length()) {
+        //    Int j = indices[i + 1];
+        //    knotPs.append(positionGetter(points[j], j));
+        //    knotWs.append(widthGetter(points[j], j));
+        //}
+        //auto stroke = geometry::detail::CubicBezierStroke::fromCatmullRomSpline(
+        //    geometry::detail::CatmullRomSplineParameterization::Centripetal,
+        //    knotPs,
+        //    knotWs,
+        //    isClosed,
+        //    i0);
 
         geometry::Vec2d ab = b - a;
         double abLen = ab.length();
@@ -837,9 +837,9 @@ Int filterPointsStep(
             indices.insert(i + 1, maxDistPointIndex);
         }
         else {
-            i = filterSculptPointsWidthStep(
-                points, indices, i, tolerance, positionGetter, widthGetter);
-            //++i;
+            //i = filterSculptPointsWidthStep(
+            //    points, indices, i, isClosed, tolerance, positionGetter, widthGetter);
+            ++i;
         }
     }
     return i;
@@ -1126,11 +1126,6 @@ geometry::Vec2d FreehandEdgeGeometry::sculptRadius(
     double tolerance,
     bool isClosed) {
 
-    // Let's consider tolerance will be ~= pixelSize for now.
-    //
-    // sampleStep is screen-space-dependent.
-    //   -> doesn't look like a good parameter..
-
     VGC_ASSERT(isBeingEdited_);
 
     Int numPoints = points_.length();
@@ -1138,6 +1133,18 @@ geometry::Vec2d FreehandEdgeGeometry::sculptRadius(
         return position;
     }
 
+    // Sanitize widths_.
+    if (widths_.length() != numPoints) {
+        if (widths_.isEmpty()) {
+            widths_.resize(numPoints, 1.0);
+        }
+        else {
+            widths_.resize(1);
+            widths_.resize(numPoints, widths_[0]);
+        }
+    }
+
+    // Let's consider tolerance is ~= pixelSize for now.
     const double maxDs = (tolerance * 2.0);
 
     // Note: We sample with widths even though we only need widths for samples in radius.
@@ -1149,20 +1156,17 @@ geometry::Vec2d FreehandEdgeGeometry::sculptRadius(
     curve.setWidths(widths_);
     geometry::CurveSamplingParameters samplingParams(
         geometry::CurveSamplingQuality::AdaptiveLow);
-    //samplingParams.setMaxDs(0.5 * maxDs);
-    //samplingParams.setMaxIntraSegmentSamples(2047);
-    core::Array<double> pointsS(numPoints, core::noInit);
-    samples.emplaceLast();
-    for (Int i = 0; i < numPoints; ++i) {
-        pointsS[i] = samples.last().s();
+
+    core::Array<Int> knotToSampleIndex(numPoints, core::noInit);
+    knotToSampleIndex[0] = 0;
+    for (Int i = 0; i < numPoints - 1; ++i) {
+        curve.sampleRange(samples, samplingParams, i, 1, true);
+        knotToSampleIndex[i + 1] = samples.length() - 1;
         samples.pop();
-        curve.sampleRange(
-            samples,
-            samplingParams,
-            i,
-            Int{(!isClosed && i == numPoints - 1) ? 0 : 1},
-            true);
     }
+    curve.sampleRange(
+        samples, samplingParams, numPoints - 1, Int{isClosed ? 1 : 0}, true);
+    const double curveLength = samples.last().s();
 
     // Note: we could have a distanceToCurve specialized for our geometry.
     // It could check each control polygon region first to skip sampling the ones
@@ -1182,212 +1186,28 @@ geometry::Vec2d FreehandEdgeGeometry::sculptRadius(
     }
     double sMiddle = closestSample.s();
 
-    SculptSampling sculptSampling = {};
-    computeSculptSampling(
-        sculptSampling, samples, sMiddle, radius, maxDs, isClosed, false);
-
-    core::Array<SculptPoint>& sculptPoints = sculptSampling.sculptPoints;
-
-    geometry::Vec2d projectDir(0, 1);
-
-    if (!isClosed) {
-        geometry::Vec2d uMins =
-            geometry::Vec2d(1.0, 1.0) - sculptSampling.cappedRadii / radius;
-        geometry::Vec2d wMins(cubicEaseInOut(uMins[0]), cubicEaseInOut(uMins[1]));
-        for (Int i = 0; i < sculptPoints.length(); ++i) {
-            SculptPoint& sp = sculptPoints[i];
-            double u = {};
-            double wMin = {};
-            if (sp.d < 0) {
-                u = 1.0 - (-sp.d / radius);
-                wMin = wMins[0];
-            }
-            else if (sp.d > 0) {
-                u = 1.0 - (sp.d / radius);
-                wMin = wMins[1];
-            }
-            else {
-                // middle sculpt point
-                u = 1.0;
-                wMin = 0.0;
-            }
-            double w = cubicEaseInOut(u);
-            double t = (w - wMin) / (1 - wMin);
-            sp.width = std::max<double>(0, sp.width + delta * t);
+    // First pass: update widths of original knots.
+    for (Int i = 0; i < numPoints; ++i) {
+        geometry::CurveSample& sample = samples[knotToSampleIndex[i]];
+        double s = sample.s();
+        double d = std::abs(s - sMiddle);
+        if (isClosed) {
+            d = std::min(d, std::abs(s + curveLength - sMiddle));
         }
-    }
-    else {
-        // In this case capped radii are expected to be equal.
-        double cappedRadius = sculptSampling.cappedRadii[0];
-        double uMin = 1.0 - cappedRadius / radius;
-        double wMin = cubicEaseInOut(uMin);
-        for (Int i = 0; i < sculptPoints.length(); ++i) {
-            SculptPoint& sp = sculptPoints[i];
-            double u = {};
-            if (sp.d < 0) {
-                u = 1.0 - (-sp.d / cappedRadius);
-            }
-            else if (sp.d > 0) {
-                u = 1.0 - (sp.d / cappedRadius);
-            }
-            else {
-                // middle sculpt point
-                u = 1.0;
-            }
-            double w = cubicEaseInOut(u);
-            w *= (1.0 - wMin);
-            w += wMin;
-            sp.width = std::max<double>(0, sp.width + delta * w);
+        if (d < radius) {
+            double w = widths_[i];
+            double t = 1.0 - cubicEaseInOut(d / radius);
+            w = std::max<double>(0, w + delta * t);
+            widths_[i] = w;
         }
     }
 
-    bool hasWidths = !widths_.isEmpty();
-
-    core::IntArray indices = {};
-
-    constexpr bool isFilteringEnabled = true;
-    if (isFilteringEnabled) {
-        if (!isClosed) {
-            // When the sampling is capped at an edge endpoint we want to be able
-            // to remove the uniformely sampled sculpt point next to the endpoint
-            // since it is closer than ds.
-            if (sculptSampling.cappedRadii[0] < radius) {
-                double width = hasWidths ? widths_.first() : samples[0].halfwidth(0) * 2;
-                sculptPoints.emplaceFirst(
-                    points_.first(),
-                    width,
-                    -sculptSampling.cappedRadii[0],
-                    pointsS.first());
-            }
-            if (sculptSampling.cappedRadii[1] < radius) {
-                double width = hasWidths ? widths_.last() : samples[0].halfwidth(0) * 2;
-                sculptPoints.emplaceLast(
-                    points_.last(), width, sculptSampling.cappedRadii[1], pointsS.last());
-            }
-        }
-        indices.extend({0, sculptPoints.length() - 1});
-        filterPointsStep(
-            sculptPoints,
-            indices,
-            0,
-            isClosed,
-            tolerance * 0.5,
-            [](const SculptPoint& p, Int) { return p.pos; },
-            [](const SculptPoint& p, Int) { return p.width; });
-    }
-    else {
-        indices.reserve(sculptPoints.length());
-        for (Int i = 0; i < sculptPoints.length(); ++i) {
-            indices.append(i);
-        }
-    }
-
-    double s0 = sculptSampling.sculptPoints.first().s;
-    double sN = sculptSampling.sculptPoints.last().s;
-    Int numPatchPoints = indices.length();
-
-    // Insert sculpt points in input points
-    if (sculptSampling.isClosed) {
-        points_.resize(numPatchPoints);
-        for (Int i = 0; i < numPatchPoints; ++i) {
-            const SculptPoint& sp = sculptPoints[indices[i]];
-            points_[i] = sp.pos;
-        }
-        if (hasWidths) {
-            widths_.resize(numPatchPoints);
-            for (Int i = 0; i < numPatchPoints; ++i) {
-                const SculptPoint& sp = sculptPoints[indices[i]];
-                widths_[i] = sp.width;
-            }
-        }
-    }
-    else if (sculptSampling.isRadiusOverlappingStart && sN <= s0) {
-        // original points to keep are in the middle of the original array
-        //
-        //  original points:  x----x--x----x-----x----x
-        //  sculpt points:      x x x n)        (0 x x
-        //  keepIndex:                     x            (first > sn)
-        //  keepCount:                     1            (count until next >= sn)
-        //
-        Int keepIndex = 0;
-        for (; keepIndex < numPoints; ++keepIndex) {
-            if (pointsS[keepIndex] > sN) {
-                break;
-            }
-        }
-        Int keepEndIndex = keepIndex;
-        for (; keepEndIndex < numPoints; ++keepEndIndex) {
-            if (pointsS[keepEndIndex] >= s0) {
-                break;
-            }
-        }
-        Int keepCount = keepEndIndex - keepIndex;
-
-        points_.erase(points_.begin(), points_.begin() + keepIndex);
-        points_.resize(keepCount + numPatchPoints);
-        for (Int i = 0; i < numPatchPoints; ++i) {
-            const SculptPoint& sp = sculptPoints[indices[i]];
-            points_[keepCount + i] = sp.pos;
-        }
-        if (hasWidths) {
-            widths_.erase(widths_.begin(), widths_.begin() + keepIndex);
-            widths_.resize(keepCount + numPatchPoints);
-            for (Int i = 0; i < numPatchPoints; ++i) {
-                const SculptPoint& sp = sculptPoints[indices[i]];
-                widths_[keepCount + i] = sp.width;
-            }
-        }
-    }
-    else {
-        VGC_ASSERT(s0 <= sN);
-        // original points to keep are at the beginning and end of the original array
-        //
-        //  original points:  x----x--x----x-----x----x
-        //  sculpt points:        (0 x x x n)
-        //  insertIndex:           x                    (first >= sn)
-        //  insertEndIndex:                      x      (next > sn)
-        //
-        Int insertIndex = 0;
-        for (; insertIndex < numPoints; ++insertIndex) {
-            if (pointsS[insertIndex] >= s0) {
-                break;
-            }
-        }
-        Int insertEndIndex = insertIndex;
-        for (; insertEndIndex < numPoints; ++insertEndIndex) {
-            if (pointsS[insertEndIndex] > sN) {
-                break;
-            }
-        }
-
-        points_.erase(points_.begin() + insertIndex, points_.begin() + insertEndIndex);
-        points_.insert(insertIndex, numPatchPoints, {});
-        for (Int i = 0; i < numPatchPoints; ++i) {
-            const SculptPoint& sp = sculptPoints[indices[i]];
-            points_[insertIndex + i] = sp.pos;
-        }
-        if (hasWidths) {
-            widths_.erase(
-                widths_.begin() + insertIndex, widths_.begin() + insertEndIndex);
-            widths_.insert(insertIndex, numPatchPoints, {});
-            for (Int i = 0; i < numPatchPoints; ++i) {
-                const SculptPoint& sp = sculptPoints[indices[i]];
-                widths_[insertIndex + i] = sp.width;
-            }
-        }
-    }
+    //samplingParams.setMaxDs(0.5 * maxDs);
+    //samplingParams.setMaxIntraSegmentSamples(2047);
 
     dirtyEdgeSampling();
 
-    return sculptPoints[sculptSampling.closestSculptPointIndex].pos;
-
-    // Depending on the sculpt kernel we may have to duplicate the points
-    // at the sculpt boundary to "extrude" properly.
-
-    // problem: cannot reuse distanceToCurve.. samples don't have their segment index :(
-
-    // In arclength mode, step is not supported so we have to do this only once.
-    // In spatial mode, step is supported and we may have to do this at every step.
+    return closestSample.position();
 }
 
 namespace {
