@@ -49,14 +49,18 @@ VGC_DECLARE_ENUM(CurveSamplingQuality)
 class StrokeSample2d {
 public:
     constexpr StrokeSample2d() noexcept
-        : s_(0) {
+        : s_(0)
+        , segmentIndex_(-1)
+        , u_(-1)
+        , isCorner_(false) {
     }
 
     VGC_WARNING_PUSH
     VGC_WARNING_MSVC_DISABLE(26495) // member variable uninitialized
     StrokeSample2d(core::NoInit) noexcept
         : position_(core::noInit)
-        , normal_(core::noInit) {
+        , normal_(core::noInit)
+        , halfwidths_(core::noInit) {
     }
     VGC_WARNING_POP
 
@@ -68,7 +72,10 @@ public:
         : position_(position)
         , normal_(normal)
         , halfwidths_(halfwidth, halfwidth)
-        , s_(0) {
+        , s_(0)
+        , segmentIndex_(-1)
+        , u_(-1)
+        , isCorner_(false) {
     }
 
     constexpr StrokeSample2d(
@@ -80,7 +87,10 @@ public:
         : position_(position)
         , normal_(normal)
         , halfwidths_(halfwidths)
-        , s_(s) {
+        , s_(s)
+        , segmentIndex_(-1)
+        , u_(-1)
+        , isCorner_(false) {
     }
 
     const Vec2d& position() const {
@@ -200,7 +210,23 @@ private:
     Vec2d position_;
     Vec2d normal_;
     Vec2d halfwidths_;
-    double s_; // total arclength from start point
+    double s_; // arclength from stroke start point.
+    Int segmentIndex_;
+    double u_; // parameter in stroke segment.
+
+    // TODO: Let's add isCorner to the sample classes, and make it true only for the first
+    //        sample of the two that makes a corner (hard turn).
+    //
+    // Example:  knots     0------1/2/3-------4
+    //           segments      1   2 3   4
+    //   => segments 2 and 3 have zero-length.
+    //      sampling [1, 1] returns 2 non-corner samples.
+    //      sampling [1, 3] returns 3 samples, 2nd is corner.
+    //      sampling [2, 2] returns 2 samples, 1st is corner.
+    //      sampling [2, 3] returns 2 samples, 1st is corner.
+    //      sampling [3, 3] returns 1 non-corner sample.
+    //      sampling [3, 4] returns 2 non-corner samples.
+    bool isCorner_;
 };
 
 namespace detail {
@@ -501,12 +527,12 @@ private:
     core::Array<Vec2d> values_;
 };
 
-/// \class vgc::geometry::AbstractCurve
+/// \class vgc::geometry::AbstractCurve2d
 /// \brief An abstract model of 2D curve (no thickness or other attributes).
 ///
-class AbstractCurve {
+class AbstractCurve2d {
 public:
-    virtual ~AbstractCurve() = default;
+    virtual ~AbstractCurve2d() = default;
 
     /// Returns whether the curve is closed.
     ///
@@ -531,14 +557,12 @@ public:
     evalWithDerivative(Int segmentIndex, double u, Vec2d& derivative) const = 0;
 };
 
-using StrokeSample = CurveSample;
-
-/// \class vgc::geometry::AbstractCurve
-/// \brief An abstract model of 2D stroke ().
+/// \class vgc::geometry::AbstractStroke2d
+/// \brief An abstract model of 2D stroke.
 ///
-class AbstractStroke {
+class AbstractStroke2d {
 public:
-    virtual ~AbstractStroke() = default;
+    virtual ~AbstractStroke2d() = default;
 
     /// Returns whether the stroke is closed.
     ///
@@ -550,22 +574,50 @@ public:
     ///
     virtual Int numSegments() const = 0;
 
+    /// Returns whether the stroke segment at `index` is a corner (has no length).
+    ///
+    virtual bool isSegmentCorner(Int index) const = 0;
+
     /// Returns the position of the centerline point from segment `segmentIndex` at
     /// parameter `u`.
     ///
-    virtual Vec2d evalCenterLine(Int segmentIndex, double u) const = 0;
+    virtual Vec2d evalCenterline(Int segmentIndex, double u) const = 0;
 
     /// Returns the position of the centerline point from segment `segmentIndex` at
     /// parameter `u`. It additionally sets the value of `derivative` as the
     /// position derivative at `u` with respect to the parameter u.
     ///
     virtual Vec2d
-    evalCenterLineWithDerivative(Int segmentIndex, double u, Vec2d& derivative) const = 0;
+    evalCenterlineWithDerivative(Int segmentIndex, double u, Vec2d& derivative) const = 0;
 
     /// Returns a `StrokeSample` from the segment `segmentIndex` at
     /// parameter `u`. The attribute `s` of the sample is left to 0.
     ///
-    virtual StrokeSample eval(Int segmentIndex, double u, Vec2d& derivative) const = 0;
+    virtual StrokeSample2d eval(Int segmentIndex, double u) const = 0;
+
+    /// Returns a `StrokeSample` from the segment `segmentIndex` at
+    /// parameter `u`. The attribute `s` of the sample is left to 0.
+    /// It additionally sets the value of `derivative` as the
+    /// position derivative at `u` with respect to the parameter u.
+    ///
+    virtual StrokeSample2d
+    evalWithDerivative(Int segmentIndex, double u, Vec2d& derivative) const = 0;
+
+    virtual void sampleSegment(
+        Int segmentIndex,
+        const CurveSamplingParameters& params,
+        StrokeSample2dArray& out) const;
+
+    virtual void sampleRange(
+        Int startKnot = 0,
+        Int numSegments = -1,
+        bool withArclengths = true,
+        const CurveSamplingParameters& params,
+        StrokeSample2dArray& out) const;
+
+protected:
+    virtual StrokeSample2d computeUniqueSampleOfPonctualStroke() = 0;
+    // VIRTUAL computeUniqueSampleOfPonctualStroke_
 };
 
 /// Specifies the type of the curve, that is, how the
