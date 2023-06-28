@@ -1270,167 +1270,165 @@ bool sampleIter_(
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 //--------------------------------------------------------------------------------------------------
 
-template<typename TSampleEx>
-class AdaptiveSamplingNode {
+using AdaptiveSamplingParameters = CurveSamplingParameters;
+
+template<typename TSample>
+class AdaptiveSamplerCRTP {
+private:
+    struct Node {
+    public:
+        Node() = default;
+
+        TSample sample;
+        double u;
+        Node* previous = nullptr;
+        Node* next = nullptr;
+    };
+
 public:
-    AdaptiveSamplingNode() = default;
+    // Samples the segment [data.segmentIndex, data.segmentIndex + 1], and appends the
+    // result to outAppend.
+    //
+    // KeepPredicate signature must match:
+    //   `bool(const TSample& previousSample,
+    //         const TSample& sample,
+    //         const TSample& nextSample)`
+    //
+    // The first sample of the segment is appended only if the cache `data` is new.
+    // The last sample is always appended.
+    //
+    template<typename USample, typename Evaluator, typename KeepPredicate>
+    void sample(
+        Evaluator evaluator,
+        KeepPredicate keepPredicate,
+        const AdaptiveSamplingParameters& params,
+        core::Array<USample>& outAppend) {
 
-    TSampleEx sample;
-    double u;
-    AdaptiveSamplingNode* previous = nullptr;
-    AdaptiveSamplingNode* next = nullptr;
-};
+        const Int minISS = params.minIntraSegmentSamples(); // 0 -> 2 samples minimum
+        const Int maxISS = params.maxIntraSegmentSamples(); // 1 -> 3 samples maximum
+        const Int minSamples = std::max<Int>(0, minISS) + 2;
+        const Int maxSamples = std::max<Int>(minSamples, maxISS + 2);
 
-template<typename TSampleEx>
-class AdaptiveSamplingCache {
-public:
-    using Node = AdaptiveSamplingNode<TSampleEx>;
+        resetSampleTree_(maxSamples);
 
-    std::optional<TSampleEx> previousSampleN;
-    Int segmentIndex = 0;
-    double cosMaxAngle;
-    core::Span<Node> sampleTree;
+        // Setup first and last sample nodes of segment.
+        Node* s0 = &sampleTree_[0];
+        s0->sample = evaluator(0);
+        s0->u = 0;
+        Node* sN = &sampleTree_[1];
+        sN->sample = evaluator(1);
+        sN->u = 1;
+        s0->previous = nullptr;
+        s0->next = sN;
+        sN->previous = s0;
+        sN->next = nullptr;
 
-    void resetSampleTree(Int newStorageLength) {
-        if (newStorageLength > sampleTree.length()) {
-            sampleTreeStorage_ = std::make_unique<Node[]>(newStorageLength);
-            sampleTree = core::Span<Node>(sampleTreeStorage_.get(), newStorageLength);
+        Int nextNodeIndex = 2;
+
+        // Compute `minIntraSegmentSamples` uniform samples.
+        Node* previousNode = s0;
+        for (Int i = 1; i < minISS; ++i) {
+            Node* node = &sampleTree_[nextNodeIndex];
+            double u = static_cast<double>(i) / minISS;
+            node->sample = evaluator(u);
+            node->u = u;
+            ++nextNodeIndex;
+            linkNode_(node, previousNode);
+            previousNode = node;
+        }
+
+        const Int sampleTreeLength = sampleTree_.length();
+        Int previousLevelStartIndex = 2;
+        Int previousLevelEndIndex = nextNodeIndex;
+
+        // Fallback to using the last sample as previous level sample
+        // when we added no uniform samples.
+        if (previousLevelStartIndex == previousLevelEndIndex) {
+            previousLevelStartIndex = 1;
+        }
+
+        while (nextNodeIndex < sampleTreeLength) {
+            // Since we create a candidate on the left and right of each previous level node,
+            // each pass can add as much as twice the amount of nodes of the previous level.
+            for (Int i = previousLevelStartIndex; i < previousLevelEndIndex; ++i) {
+                Node* previousLevelNode = &sampleTree_[i];
+                // Try subdivide left.
+                if (trySubdivide_(
+                        evaluator,
+                        keepPredicate,
+                        nextNodeIndex,
+                        previousLevelNode->previous,
+                        previousLevelNode)
+                    && nextNodeIndex == sampleTreeLength) {
+                    break;
+                }
+                // We subdivide right only if it is not the last point.
+                if (!previousLevelNode->next) {
+                    continue;
+                }
+                // Try subdivide right.
+                if (trySubdivide_(
+                        evaluator,
+                        keepPredicate,
+                        nextNodeIndex,
+                        previousLevelNode,
+                        previousLevelNode->next)
+                    && nextNodeIndex == sampleTreeLength) {
+                    break;
+                }
+            }
+            if (nextNodeIndex == previousLevelEndIndex) {
+                // No new candidate, let's stop here.
+                break;
+            }
+            previousLevelStartIndex = previousLevelEndIndex;
+            previousLevelEndIndex = nextNodeIndex;
+        }
+
+        Node* node = sampleTree_[0];
+        while (node) {
+            outAppend.emplaceLast(node->sample);
+            node = node->next;
         }
     }
 
 private:
+    core::Span<Node> sampleTree_;
     std::unique_ptr<Node[]> sampleTreeStorage_;
-};
 
-template<typename TSampleEx>
-using AdaptiveSamplingKeepPredicate = bool(
-    const TSampleEx& previousSample,
-    const TSampleEx& sample,
-    const TSampleEx& nextSample,
-    const CurveSamplingParameters& params);
-
-// Samples the segment [data.segmentIndex, data.segmentIndex + 1], and append the
-// result to outAppend.
-//
-// The first sample of the segment is appended only if the cache `data` is new.
-// The last sample is always appended.
-//
-template<typename TEvaluator, typename TSample, typename TSampleEx>
-bool sampleRangeIter_(
-    const TEvaluator& evaluator,
-    const CurveSamplingParameters& params,
-    AdaptiveSamplingCache<TSampleEx>& data,
-    AdaptiveSamplingKeepPredicate<TSampleEx> keepPredicate,
-    core::Array<TSample>& outAppend) {
-
-    using Node = AdaptiveSamplingCache<TSampleEx>::Node;
-
-    const double cosMaxAngle = data.cosMaxAngle;
-    const Int minISS = params.minIntraSegmentSamples(); // 0 -> 2 samples minimum
-    const Int maxISS = params.maxIntraSegmentSamples(); // 1 -> 3 samples maximum
-    const Int minSamples = std::max<Int>(0, minISS) + 2;
-    const Int maxSamples = std::max<Int>(minSamples, maxISS + 2);
-
-    data.resetSampleTree(maxSamples);
-
-    // Setup first and last sample nodes of segment.
-    Node* s0 = &data.sampleTree[0];
-    s0->u = 0;
-    if (data.previousSampleN.has_value()) {
-        // Re-use last sample of previous segment.
-        s0->sample = *data.previousSampleN;
+    void resetSampleTree_(Int newStorageLength) {
+        if (newStorageLength > sampleTree_.length()) {
+            sampleTreeStorage_ = std::make_unique<Node[]>(newStorageLength);
+            sampleTree_ = core::Span<Node>(sampleTreeStorage_.get(), newStorageLength);
+        }
     }
-    else {
-        s0->sample = evaluator.eval(data.segmentIndex, 0);
-        outAppend.emplaceLast(s0->sample);
-    }
-    Node* sN = &data.sampleTree[1];
-    sN->sample.computeFrom(bezierData, 1);
-    sN->u = 1;
-    s0->previous = nullptr;
-    s0->next = sN;
-    sN->previous = s0;
-    sN->next = nullptr;
 
-    auto linkNode = [](Node* node, Node* previous) {
+    template<typename Evaluator, typename KeepPredicate>
+    bool trySubdivide_(
+        Evaluator evaluator,
+        KeepPredicate keepPredicate,
+        Int& nodeIndex,
+        Node* n0,
+        Node* n1) {
+
+        Node* node = &sampleTree_[nodeIndex];
+        node->sample = evaluator(0.5 * (n0->u + n1->u));
+        if (keepPredicate(n0->sample, node->sample, n1->sample)) {
+            ++nodeIndex;
+            linkNode_(node, n0);
+            return true;
+        }
+        return false;
+    };
+
+    static void linkNode_(Node* node, Node* previous) {
         Node* next = previous->next;
         next->previous = node;
         previous->next = node;
         node->previous = previous;
         node->next = next;
     };
-    Int nextNodeIndex = 2;
-
-    // Compute `minIntraSegmentSamples` uniform samples.
-    Node* previousNode = s0;
-    for (Int i = 1; i < minISS; ++i) {
-        Node* node = &data.sampleTree[nextNodeIndex++];
-        double u = static_cast<double>(i) / minISS;
-        node->sample = evaluator.eval(data.segmentIndex, u);
-        node->u = u;
-        linkNode(node, previousNode);
-        previousNode = node;
-    }
-
-    const Int sampleTreeLength = data.sampleTree.length();
-    Int previousLevelStartIndex = 2;
-    Int previousLevelEndIndex = nextNodeIndex;
-
-    // Fallback to using the last sample as previous level sample
-    // when we added no uniform samples.
-    if (previousLevelStartIndex == previousLevelEndIndex) {
-        previousLevelStartIndex = 1;
-    }
-
-    auto trySubdivide = [&](Node* n0, Node* n1) -> bool {
-        Node* node = &data.sampleTree[nextNodeIndex];
-        node->sample = evaluator.eval(data.segmentIndex, 0.5 * (n0->u + n1->u));
-        if (keepPredicate(n0->sample, node->sample, n1->sample, params)) {
-            nextNodeIndex++;
-            linkNode(node, n0);
-            return true;
-        }
-        return false;
-    };
-
-    while (nextNodeIndex < sampleTreeLength) {
-        // Since we create a candidate on the left and right of each previous level node,
-        // each pass can add as much as twice the amount of nodes of the previous level.
-        for (Int i = previousLevelStartIndex; i < previousLevelEndIndex; ++i) {
-            Node* previousLevelNode = &data.sampleTree[i];
-            // Try subdivide left.
-            bool found = trySubdivide(previousLevelNode->previous, previousLevelNode);
-            if (found && nextNodeIndex == sampleTreeLength) {
-                break;
-            }
-            // We subdivide right only if it is not the last point.
-            if (!previousLevelNode->next) {
-                continue;
-            }
-            // Try subdivide right.
-            found = trySubdivide(previousLevelNode, previousLevelNode->next);
-            if (found && nextNodeIndex == sampleTreeLength) {
-                break;
-            }
-        }
-        if (nextNodeIndex == previousLevelEndIndex) {
-            // No new candidate, let's stop here.
-            break;
-        }
-        previousLevelStartIndex = previousLevelEndIndex;
-        previousLevelEndIndex = nextNodeIndex;
-    }
-
-    Node* node = data.sampleTree[0].next;
-    while (node) {
-        outAppend.emplaceLast(node->sample);
-        node = node->next;
-    }
-
-    data.segmentIndex += 1;
-    data.previousSampleN = sN->sample;
-    return true;
-}
+};
 
 //template<typename TEvaluator, typename TSample, typename TSampleEx>
 //void sampleRange_(
