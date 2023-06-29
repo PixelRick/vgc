@@ -393,16 +393,20 @@ void VacKeyVertex::computeJoin_() {
             geometry::StrokeSample2d sample = samples.getUnchecked(numSamples - 1);
             heData.halfwidths_[0] = sample.halfwidth(1);
             heData.halfwidths_[1] = sample.halfwidth(0);
-            heData.joinSample_ = geometry::StrokeSample2d(
-                sample.position(), -sample.normal(), heData.halfwidths_, 0);
+            heData.joinSample_ = sample;
+            heData.joinSample_.setDerivative(-heData.joinSample_.derivative());
+            heData.joinSample_.setHalfwidths(heData.halfwidths_);
+            heData.joinSample_.setS(0);
+
             geometry::StrokeSample2d previousSample =
                 samples.getUnchecked(numSamples - 2);
-            geometry::Vec2d previousHw = previousSample.halfwidths();
-            heData.joinPreviousSample_ = geometry::StrokeSample2d(
-                previousSample.position(),
-                -previousSample.normal(),
-                geometry::Vec2d(previousHw[1], previousHw[0]),
-                sample.s() - previousSample.s());
+            geometry::Vec2d previousHws = previousSample.halfwidths();
+            heData.joinPreviousSample_ = previousSample;
+            heData.joinPreviousSample_.setDerivative(
+                -heData.joinPreviousSample_.derivative());
+            heData.joinPreviousSample_.setHalfwidths(
+                geometry::Vec2d(previousHws[1], previousHws[0]));
+            heData.joinPreviousSample_.setS(sample.s() - previousSample.s());
         }
     }
 
@@ -942,12 +946,14 @@ void VacKeyVertex::computeJoin_() {
                             geometry::lerp(*previousIt, *it, tStop);
                         const double distance =
                             (vertexPosition - mergeSample.position()).length();
-                        workingSamples.emplaceLast(
-                            mergeSample.position(),
-                            -mergeSample.normal(),
-                            geometry::Vec2d(
-                                mergeSample.halfwidth(1), mergeSample.halfwidth(0)),
-                            endS - mergeSample.s());
+                        workingSamples
+                            .emplaceLast(
+                                mergeSample.position(),
+                                -mergeSample.derivative(),
+                                geometry::Vec2d(
+                                    mergeSample.halfwidth(1), mergeSample.halfwidth(0)))
+                            .setS(endS - mergeSample.s());
+
                         patchLength = (std::min)(patchLengthLimit, distance);
                         detail::EdgeJoinPatchMergeLocation& mergeLocation =
                             heData.edgeData_->patches_[1].mergeLocation;
@@ -957,11 +963,12 @@ void VacKeyVertex::computeJoin_() {
                         break;
                     }
                     else {
-                        workingSamples.emplaceLast(
-                            sample.position(),
-                            -sample.normal(),
-                            geometry::Vec2d(sample.halfwidth(1), sample.halfwidth(0)),
-                            s);
+                        workingSamples
+                            .emplaceLast(
+                                sample.position(),
+                                -sample.derivative(),
+                                geometry::Vec2d(sample.halfwidth(1), sample.halfwidth(0)))
+                            .setS(s);
                         previousSqDist = sqDist;
                     }
                 }
@@ -1136,9 +1143,9 @@ void VacKeyVertex::computeJoin_() {
                         const double ot = 1 - t;
                         geometry::StrokeSample2d newSample(
                             centerBorder.pointAt(d),
-                            centerBorderNormal,
-                            previousIt->halfwidths() * ot + it->halfwidths() * t,
-                            sFilletMax);
+                            -centerBorderNormal.orthogonalized(),
+                            previousIt->halfwidths() * ot + it->halfwidths() * t);
+                        newSample.setS(sFilletMax);
                         it = workingSamples.emplace(it, newSample);
                         previousIt = it++;
                         break;
@@ -1146,7 +1153,7 @@ void VacKeyVertex::computeJoin_() {
                     double ts = s / sMax;
                     double d = ts * halfedgeData.patchLength_;
                     it->setPosition(centerBorder.pointAt(d));
-                    it->setNormal(centerBorderNormal);
+                    it->setDerivative(-centerBorderNormal.orthogonalized());
                     geometry::Vec2f hwf(it->halfwidths());
                     if (s == sFilletMax) {
                         previousIt = it++;
@@ -1163,8 +1170,9 @@ void VacKeyVertex::computeJoin_() {
                         const double ot = 1 - t;
                         Vec2d rayPoint = centerBorder.pointAt(d);
                         it->setPosition(rayPoint * ot + it->position() * t);
-                        it->setNormal(
-                            (centerBorderNormal * ot + it->normal() * t).normalized());
+                        it->setDerivative(-(centerBorderNormal * ot + it->normal() * t)
+                                               .normalized()
+                                               .orthogonalized());
                     }
                 }
             }

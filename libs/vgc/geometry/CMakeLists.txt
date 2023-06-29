@@ -41,6 +41,7 @@ vgc_add_library(geometry
 
     CPP_SOURCE_FILES
         camera2d.cpp
+        catmullrom.cpp
         curve.cpp
         curves2d.cpp
         logcategories.cpp

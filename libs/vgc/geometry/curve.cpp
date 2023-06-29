@@ -1260,21 +1260,82 @@ bool sampleIter_(
     IterativeSamplingSampleNode* node = &data.sampleTree[0];
     while (node) {
         const IterativeSamplingSample& ss = node->sample;
-        outAppend.emplaceLast(ss.pos, ss.normal, ss.radius);
+        outAppend.emplaceLast(ss.pos, ss.tangent, ss.radius);
         node = node->next;
     }
 
     return true;
 }
 
+} // namespace
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 //--------------------------------------------------------------------------------------------------
+
+namespace detail {
+
+bool isCenterlineSegmentUnderTolerance(
+    const StrokeSampleEx2d& s0,
+    const StrokeSampleEx2d& s1,
+    double cosMaxAngle) {
+
+    // Test angle between curve normals and center segment normal.
+    Vec2d l = s1.position() - s0.position();
+    Vec2d n = l.orthogonalized();
+    double nl = n.length();
+    double maxDot = cosMaxAngle * nl;
+    if (n.dot(s0.normal()) < maxDot) {
+        return false;
+    }
+    if (n.dot(s1.normal()) < maxDot) {
+        return false;
+    }
+    return true;
+}
+
+bool areOffsetLinesAnglesUnderTolerance(
+    const StrokeSampleEx2d& s0,
+    const StrokeSampleEx2d& s1,
+    const StrokeSampleEx2d& s2,
+    double cosMaxAngle) {
+
+    // Test angle between offset line segments of s0s1 and s1s2 on both sides.
+    Vec2d l01 = s1.sidePoints_[1] - s0.sidePoints_[1];
+    Vec2d l12 = s2.sidePoints_[1] - s1.sidePoints_[1];
+    double ll = l01.length() * l12.length();
+    if (l01.dot(l12) < cosMaxAngle * ll) {
+        return false;
+    }
+    Vec2d r01 = s1.sidePoints_[0] - s0.sidePoints_[0];
+    Vec2d r12 = s2.sidePoints_[0] - s1.sidePoints_[0];
+    double rl = r01.length() * r12.length();
+    if (r01.dot(r12) < cosMaxAngle * rl) {
+        return false;
+    }
+    return true;
+}
+
+bool shouldKeepNewSample(
+    const StrokeSampleEx2d& previousSample,
+    const StrokeSampleEx2d& sample,
+    const StrokeSampleEx2d& nextSample,
+    const CurveSamplingParameters& params) {
+
+    return !isCenterlineSegmentUnderTolerance(
+               previousSample, nextSample, params.cosMaxAngle())
+           || !areOffsetLinesAnglesUnderTolerance(
+               previousSample, sample, nextSample, params.cosMaxAngle());
+}
+
+} // namespace detail
+
+namespace {
 
 using OptionalInt = std::optional<Int>;
 
 // Returns the index of the segment just before the given `knotIndex`, if any.
 //
-OptionalInt segmentBeforeKnot_(const AbstractStroke2d* stroke, Int knotIndex) {
+OptionalInt indexOfSegmentBeforeKnot_(const AbstractStroke2d* stroke, Int knotIndex) {
     if (stroke->isClosed()) {
         Int segmentIndex = knotIndex - 1;
         if (segmentIndex < 0) {
@@ -1292,13 +1353,44 @@ OptionalInt segmentBeforeKnot_(const AbstractStroke2d* stroke, Int knotIndex) {
     }
 }
 
-OptionalInt
-firstNonCornerSegmentAfterKnot_(const AbstractStroke2d* stroke, Int knotIndex) {
+OptionalInt indexOfFirstNonZeroLengthSegmentBeforeKnot_(
+    const AbstractStroke2d* stroke,
+    Int knotIndex) {
+
+    if (stroke->isClosed()) {
+        Int numSegments = stroke->numSegments();
+        Int start = knotIndex - 1 + numSegments; // Ensures `start - i >= 0`
+        for (Int i = 0; i < numSegments; ++i) {
+            Int segmentIndex = (start - i) % numSegments;
+            if (!stroke->isZeroLengthSegment(segmentIndex)) {
+                return segmentIndex;
+            }
+        }
+        return std::nullopt;
+    }
+    else {
+        Int segmentIndex = knotIndex - 1;
+        while (segmentIndex >= 0) {
+            if (!stroke->isZeroLengthSegment(segmentIndex)) {
+                return segmentIndex;
+            }
+            else {
+                --segmentIndex;
+            }
+        }
+        return std::nullopt;
+    }
+}
+
+OptionalInt indexOfFirstNonZeroLengthSegmentAfterKnot_(
+    const AbstractStroke2d* stroke,
+    Int knotIndex) {
+
     if (stroke->isClosed()) {
         Int numSegments = stroke->numSegments();
         for (Int i = 0; i < numSegments; ++i) {
             Int segmentIndex = (knotIndex + i) % numSegments;
-            if (!stroke->isSegmentCorner(segmentIndex)) {
+            if (!stroke->isZeroLengthSegment(segmentIndex)) {
                 return segmentIndex;
             }
         }
@@ -1308,38 +1400,11 @@ firstNonCornerSegmentAfterKnot_(const AbstractStroke2d* stroke, Int knotIndex) {
         Int segmentIndex = knotIndex;
         Int numSegments = stroke->numSegments();
         while (segmentIndex < numSegments) {
-            if (!stroke->isSegmentCorner(segmentIndex)) {
+            if (!stroke->isZeroLengthSegment(segmentIndex)) {
                 return segmentIndex;
             }
             else {
                 ++segmentIndex;
-            }
-        }
-        return std::nullopt;
-    }
-}
-
-OptionalInt
-firstNonCornerSegmentBeforeKnot_(const AbstractStroke2d* stroke, Int knotIndex) {
-    if (stroke->isClosed()) {
-        Int numSegments = stroke->numSegments();
-        Int start = knotIndex - 1 + numSegments; // Ensures `start - i >= 0`
-        for (Int i = 0; i < numSegments; ++i) {
-            Int segmentIndex = (start - i) % numSegments;
-            if (!stroke->isSegmentCorner(segmentIndex)) {
-                return segmentIndex;
-            }
-        }
-        return std::nullopt;
-    }
-    else {
-        Int segmentIndex = knotIndex - 1;
-        while (segmentIndex >= 0) {
-            if (!stroke->isSegmentCorner(segmentIndex)) {
-                return segmentIndex;
-            }
-            else {
-                --segmentIndex;
             }
         }
         return std::nullopt;
@@ -1353,23 +1418,23 @@ firstNonCornerSegmentBeforeKnot_(const AbstractStroke2d* stroke, Int knotIndex) 
 // - There is more than 1 knot but they are all equal.
 //
 // Note that this is different from `numSegmentsToSample == 0` with at
-// least one non-corner segment in the curve, in which case we still
-// need to evaluate one of the non-corner segments in order to provide
+// least one non-zero-length segment in the curve, in which case we still
+// need to evaluate one of the non-zero-length segments in order to provide
 // a meaningful normal.
 //
-StrokeSample2d computeUniqueSampleOfZeroLengthStroke_(const StrokeView2d* stroke) {
-    // VIRTUAL computeUniqueSampleOfPonctualStroke_
-    double halfwidth;
-    if (stroke->widthVariability() == StrokeView2d::AttributeVariability::Constant) {
-        halfwidth = 0.5 * stroke->width();
-    }
-    else {
-        halfwidth = 0.5 * stroke->widths()[0];
-    }
-    Vec2d position = stroke->positions()[0];
-    Vec2d normal(0, 0);
-    return StrokeSample2d(position, normal, halfwidth);
-}
+//StrokeSample2d computeUniqueSampleOfZeroLengthStroke_(const StrokeView2d* stroke) {
+//    // VIRTUAL computeUniqueSampleOfPonctualStroke_
+//    double halfwidth;
+//    if (stroke->widthVariability() == StrokeView2d::AttributeVariability::Constant) {
+//        halfwidth = 0.5 * stroke->width();
+//    }
+//    else {
+//        halfwidth = 0.5 * stroke->widths()[0];
+//    }
+//    Vec2d position = stroke->positions()[0];
+//    Vec2d normal(0, 0);
+//    return StrokeSample2d(position, normal, halfwidth);
+//}
 
 //StrokeSample2d
 //computeSampleFromBezier_(const StrokeView2d* stroke, Int segmentIndex, double u) {
@@ -1380,379 +1445,334 @@ StrokeSample2d computeUniqueSampleOfZeroLengthStroke_(const StrokeView2d* stroke
 //    return StrokeSample2d(s.pos, s.normal, s.radius);
 //}
 
-// We need to output a single sample, corresponding to the position/width/normal
-// at the given `startKnot`.
-//
-// We do this by finding a non-corner segment before (or after) the knot, and
-// using the last (or first) sample of this segment.
-//
-StrokeSample2d computeSingleSampleAtKnot_(const AbstractStroke2d* stroke, Int knotIndex) {
+} // namespace
 
-    Int segmentIndex;
-    double u;
-
-    // Determine whether the segment just before the knot exists and is not a
-    // corner segment.
-    OptionalInt previousSegment = segmentBeforeKnot_(stroke, knotIndex);
-    if (previousSegment && !stroke->isSegmentCorner(*previousSegment)) {
-
-        // If this is the case, use the last sample of this previous segment.
-        segmentIndex = *previousSegment;
-        u = 1;
+Vec2d AbstractStroke2d::evalCenterline(Int segmentIndex, double u) const {
+    if (fixEvalLocation_(segmentIndex, u)) {
+        return evalNonZeroCenterline(segmentIndex, u);
     }
     else {
-        // Otherwise, use the first non-corner segment after the knot.
-        if (OptionalInt i = firstNonCornerSegmentAfterKnot_(stroke, knotIndex)) {
-            segmentIndex = *i;
-            u = 0;
-        }
-        else {
-            // If there is no non-corner segment after, use the first non-corner
-            // segment before.
-            if (OptionalInt j = firstNonCornerSegmentBeforeKnot_(stroke, knotIndex)) {
-                segmentIndex = *j;
-                u = 1;
-            }
-            else {
-                // Otherwise, this means that all segments are corner segments.
-                return computeUniqueSampleOfZeroLengthStroke_(stroke);
-            }
-        }
+        StrokeSample2d sample = zeroLengthStrokeSample();
+        return sample.position();
     }
-
-    // Generate the sample from the selected segment
-    return computeSampleFromBezier_(stroke, segmentIndex, u);
 }
 
-void appendSamplesOfCornerSegment_(
-    const AbstractStroke2d* stroke,
+Vec2d AbstractStroke2d::evalCenterlineWithDerivative(
     Int segmentIndex,
-    StrokeSample2dArray& out) {
+    double u,
+    Vec2d& derivative) const {
 
-    Int numSegments = stroke->numSegments();
-    Int isClosed = stroke->isClosed();
-    Int startKnot = segmentIndex;
-    Int endKnot = segmentIndex + 1;
-    if (isClosed && endKnot > numSegments) {
-        endKnot -= numSegments;
-    }
-
-    // Determine whether the segment just before this segment
-    // exists and is non-corner.
-    OptionalInt nonCornerPrevious = segmentBeforeKnot_(stroke, startKnot);
-    if (nonCornerPrevious && !stroke->isSegmentCorner(*nonCornerPrevious)) {
-        nonCornerPrevious = std::nullopt;
-    }
-
-    // Determine whether a non-corner segment exists after this segment
-    OptionalInt nonCornerAfter = firstNonCornerSegmentBeforeKnot_(stroke, endKnot);
-
-    if (nonCornerPrevious) {
-        if (nonCornerAfter) {
-
-            // If the previous segment is non-corner, and there exists a
-            // non-corner segment after this segment, then this corner segment
-            // is responsible for the join. For now, we do a bevel from the
-            // last sample of the previous segment to the first sample of the
-            // first non-corner segment after this segment.
-            //
-            // In the future, we may want to support round join/miter joins,
-            // although this is complicated in case of varying width, and for
-            // now the design is to only have such complicated joins we only
-            // implement this complexity at vertices, not at handle this
-            // complexity at vertices.
-            //
-            out.append(stroke->eval(*nonCornerPrevious, 1));
-            out.append(stroke->eval(*nonCornerAfter, 0));
-        }
-        else {
-            // This is the end of an open curve: no join to compute, just use
-            // the last sample of the previous segment.
-            //
-            out.append(stroke->eval(*nonCornerPrevious, 1));
-        }
+    if (fixEvalLocation_(segmentIndex, u)) {
+        return evalNonZeroCenterlineWithDerivative(segmentIndex, u, derivative);
     }
     else {
-        if (nonCornerAfter) {
+        StrokeSample2d sample = zeroLengthStrokeSample();
+        derivative = sample.tangent();
+        return sample.position();
+    }
+}
 
-            // Only add the first sample of the first non-corner segment after
-            // this segment. Any potential join is already handled by a corner
+StrokeSample2d AbstractStroke2d::eval(Int segmentIndex, double u) const {
+    if (fixEvalLocation_(segmentIndex, u)) {
+        return evalNonZero(segmentIndex, u);
+    }
+    else {
+        StrokeSample2d sample = zeroLengthStrokeSample();
+        return sample;
+    }
+}
+
+void AbstractStroke2d::sampleSegment(
+    Int segmentIndex,
+    const CurveSamplingParameters& params,
+    StrokeSample2dArray& out) const {
+
+    if (isZeroLengthSegment(segmentIndex)) {
+        Int numSegments = this->numSegments();
+        Int startKnot = segmentIndex;
+        Int endKnot = startKnot + 1;
+        if (isClosed() && endKnot > numSegments) {
+            endKnot -= numSegments;
+        }
+
+        // Determine whether the segment just before this segment
+        // exists and is non-zero-length.
+        OptionalInt nonZeroJustBefore = indexOfSegmentBeforeKnot_(this, startKnot);
+        if (nonZeroJustBefore && isZeroLengthSegment(*nonZeroJustBefore)) {
+            nonZeroJustBefore = std::nullopt;
+        }
+
+        // Determine whether a non-zero-length segment exists after this segment
+        OptionalInt nonZeroAfter =
+            indexOfFirstNonZeroLengthSegmentAfterKnot_(this, endKnot);
+
+        if (nonZeroJustBefore) {
+            if (nonZeroAfter) {
+                // If the previous segment is non-zero-length, and there exists
+                // a non-zero-length segment after this segment, then this
+                // zero-length segment is responsible for the join. For now, we
+                // do a bevel from the last sample of the previous segment to the
+                // first sample of the first non-zero-length segment after this
+                // segment.
+                //
+                // In the future, we may want to support round join/miter joins,
+                // although this is complicated in case of varying width, and for
+                // now the design is to only have such complicated joins we only
+                // implement this complexity at vertices, not at handle this
+                // complexity at vertices.
+                //
+                out.append(evalNonZero(*nonZeroJustBefore, 1));
+                out.last().setCornerStart(true);
+                out.append(evalNonZero(*nonZeroAfter, 0));
+            }
+            else {
+                // This is the end of an open curve: no join to compute, just use
+                // the last sample of the previous segment.
+                //
+                out.append(evalNonZero(*nonZeroJustBefore, 1));
+            }
+        }
+        else if (nonZeroAfter) {
+            // Only add the first sample of the first non-zero-length segment after
+            // this segment. Any potential join is already handled by a zero-length
             // segment before this one.
             //
-            out.append(stroke->eval(*nonCornerAfter, 0));
+            out.append(evalNonZero(*nonZeroAfter, 0));
         }
         else {
             // This is the end of an open curve: no join to compute, just use
-            // the last sample of the first non-corner segment before this
+            // the last sample of the first non-zero-length segment before this
             // segment.
             //
-            OptionalInt nonCornerBefore =
-                firstNonCornerSegmentBeforeKnot_(stroke, startKnot);
+            OptionalInt nonZeroBefore =
+                indexOfFirstNonZeroLengthSegmentBeforeKnot_(this, startKnot);
 
-            if (nonCornerBefore) {
-                out.append(stroke->eval(*nonCornerBefore, 1));
+            if (nonZeroBefore) {
+                out.append(evalNonZero(*nonZeroBefore, 1));
             }
             else {
-                // We are a corner segment, and there is no non-corner segment
-                // before or after us, so this means all segments are corners.
+                // Segment at segmentIndex is zero-length, and there is no non-zero-length
+                // segment before or after it, so this means all segments are zero-length.
                 //
-                StrokeSample2d sample =
-                    stroke->computeUniqueSampleOfZeroLengthStroke_(stroke);
-                out.append(sample);
+                out.append(zeroLengthStrokeSample());
             }
+        }
+    }
+    else {
+        return sampleNonZeroSegment(segmentIndex, params, out);
+    }
+}
+
+void AbstractStroke2d::sampleRange(
+    StrokeSample2dArray& out,
+    const CurveSamplingParameters& params,
+    Int startKnotIndex,
+    Int numSegments,
+    bool computeArcLengths) const {
+
+    Int numKnots = this->numKnots();
+    Int numSegmentsInStroke = this->numSegments();
+
+    // Verify we have at least one knot, since a post-condition of this
+    // function is to return at least one sample.
+    if (numKnots == 0) {
+        throw vgc::core::IndexError("Cannot sample a stroke with 0 knots.");
+    }
+
+    // Verify and wrap startKnotIndex
+    if (startKnotIndex < -numKnots || startKnotIndex > numKnots - 1) {
+        throw vgc::core::IndexError(vgc::core::format(
+            "Parameter startKnot ({}) out of valid knot index range [{}, {}].",
+            startKnotIndex,
+            -numKnots,
+            numKnots - 1));
+    }
+    if (startKnotIndex < 0) {
+        startKnotIndex += numKnots; // -1 becomes numKnots - 1 (=> last knot)
+    }
+
+    // Verify and wrap numSegments
+    if (numSegments < -numSegmentsInStroke - 1 || numSegments > numSegmentsInStroke) {
+        throw vgc::core::IndexError(vgc::core::format(
+            "Parameter numSegments ({}) out of valid number of segments range "
+            "[{}, {}].",
+            numSegments,
+            -numSegmentsInStroke - 1,
+            numSegmentsInStroke));
+    }
+    if (numSegments < 0) {
+        numSegments += numSegmentsInStroke + 1; // -1 becomes n (=> all segments)
+    }
+    if (!isClosed() && numSegments > numSegmentsInStroke - startKnotIndex) {
+        throw vgc::core::IndexError(core::format(
+            "Parameter numSegments ({} after negative-wrap) exceeds remaining "
+            "number of segments when starting at the given startKnotIndex ({} after "
+            "negative-wrap): valid range is [0, {}] since the curve is open and has {} "
+            "knots.",
+            numSegments,
+            startKnotIndex,
+            numSegmentsInStroke - startKnotIndex,
+            numKnots));
+    }
+
+    // Remember old length of `out`
+    const Int oldLength = out.length();
+
+    if (numSegments == 0) {
+        StrokeSample2d sample = sampleKnot_(startKnotIndex);
+        out.append(sample);
+    }
+    else {
+        // Reserve memory space
+        if (out.isEmpty()) {
+            Int minSegmentSamples = params.minIntraSegmentSamples() + 1;
+            out.reserve(1 + numSegments * minSegmentSamples);
+        }
+
+        // Iterate over all segments
+        IterativeSamplingCache data = {};
+        data.cosMaxAngle = std::cos(params.maxAngle());
+        for (Int i = 0; i < numSegments; ++i) {
+            Int segmentIndex = (startKnotIndex + i) % numSegmentsInStroke;
+            if (i != 0) {
+                // Remove last sample of previous segment (recomputed below)
+                out.pop();
+            }
+            sampleSegment(segmentIndex, params, out);
+        }
+    }
+
+    // Compute arc lengths.
+    //
+    if (computeArcLengths) {
+
+        // Compute arc length of first new sample
+        double s = 0;
+        auto it = out.begin() + oldLength;
+        if (oldLength > 0) {
+            StrokeSample2d& firstNewSample = *it;
+            StrokeSample2d& lastOldSample = *(it - 1);
+            s = lastOldSample.s()
+                + (firstNewSample.position() - lastOldSample.position()).length();
+        }
+        it->setS(s);
+        Vec2d lastPoint = it->position();
+
+        // Compute arclength of all subsequent samples
+        for (++it; it != out.end(); ++it) {
+            Vec2d point = it->position();
+            s += (point - lastPoint).length();
+            it->setS(s);
+            lastPoint = point;
         }
     }
 }
 
-using AdaptiveSamplingParameters = CurveSamplingParameters;
+StrokeSample2d AbstractStroke2d::sampleKnot_(Int index) const {
 
-template<typename TSample>
-class AdaptiveSamplerCRTP {
-private:
-    struct Node {
-    public:
-        Node() = default;
-
-        TSample sample;
-        double u;
-        Node* previous = nullptr;
-        Node* next = nullptr;
-    };
-
-public:
-    // Samples the segment [data.segmentIndex, data.segmentIndex + 1], and appends the
-    // result to outAppend.
-    //
-    // KeepPredicate signature must match:
-    //   `bool(const TSample& previousSample,
-    //         const TSample& sample,
-    //         const TSample& nextSample)`
-    //
-    // The first sample of the segment is appended only if the cache `data` is new.
-    // The last sample is always appended.
-    //
-    template<typename USample, typename Evaluator, typename KeepPredicate>
-    void sample(
-        Evaluator evaluator,
-        KeepPredicate keepPredicate,
-        const AdaptiveSamplingParameters& params,
-        core::Array<USample>& outAppend) {
-
-        const Int minISS = params.minIntraSegmentSamples(); // 0 -> 2 samples minimum
-        const Int maxISS = params.maxIntraSegmentSamples(); // 1 -> 3 samples maximum
-        const Int minSamples = std::max<Int>(0, minISS) + 2;
-        const Int maxSamples = std::max<Int>(minSamples, maxISS + 2);
-
-        resetSampleTree_(maxSamples);
-
-        // Setup first and last sample nodes of segment.
-        Node* s0 = &sampleTree_[0];
-        s0->sample = evaluator(0);
-        s0->u = 0;
-        Node* sN = &sampleTree_[1];
-        sN->sample = evaluator(1);
-        sN->u = 1;
-        s0->previous = nullptr;
-        s0->next = sN;
-        sN->previous = s0;
-        sN->next = nullptr;
-
-        Int nextNodeIndex = 2;
-
-        // Compute `minIntraSegmentSamples` uniform samples.
-        Node* previousNode = s0;
-        for (Int i = 1; i < minISS; ++i) {
-            Node* node = &sampleTree_[nextNodeIndex];
-            double u = static_cast<double>(i) / minISS;
-            node->sample = evaluator(u);
-            node->u = u;
-            ++nextNodeIndex;
-            linkNode_(node, previousNode);
-            previousNode = node;
-        }
-
-        const Int sampleTreeLength = sampleTree_.length();
-        Int previousLevelStartIndex = 2;
-        Int previousLevelEndIndex = nextNodeIndex;
-
-        // Fallback to using the last sample as previous level sample
-        // when we added no uniform samples.
-        if (previousLevelStartIndex == previousLevelEndIndex) {
-            previousLevelStartIndex = 1;
-        }
-
-        while (nextNodeIndex < sampleTreeLength) {
-            // Since we create a candidate on the left and right of each previous level node,
-            // each pass can add as much as twice the amount of nodes of the previous level.
-            for (Int i = previousLevelStartIndex; i < previousLevelEndIndex; ++i) {
-                Node* previousLevelNode = &sampleTree_[i];
-                // Try subdivide left.
-                if (trySubdivide_(
-                        evaluator,
-                        keepPredicate,
-                        nextNodeIndex,
-                        previousLevelNode->previous,
-                        previousLevelNode)
-                    && nextNodeIndex == sampleTreeLength) {
-                    break;
-                }
-                // We subdivide right only if it is not the last point.
-                if (!previousLevelNode->next) {
-                    continue;
-                }
-                // Try subdivide right.
-                if (trySubdivide_(
-                        evaluator,
-                        keepPredicate,
-                        nextNodeIndex,
-                        previousLevelNode,
-                        previousLevelNode->next)
-                    && nextNodeIndex == sampleTreeLength) {
-                    break;
-                }
-            }
-            if (nextNodeIndex == previousLevelEndIndex) {
-                // No new candidate, let's stop here.
-                break;
-            }
-            previousLevelStartIndex = previousLevelEndIndex;
-            previousLevelEndIndex = nextNodeIndex;
-        }
-
-        Node* node = sampleTree_[0];
-        while (node) {
-            outAppend.emplaceLast(node->sample);
-            node = node->next;
-        }
+    // Use the first non-zero-length segment after the knot if it exists.
+    if (OptionalInt i = indexOfFirstNonZeroLengthSegmentAfterKnot_(this, index)) {
+        return evalNonZero(*i, 0);
     }
 
-private:
-    core::Span<Node> sampleTree_;
-    std::unique_ptr<Node[]> sampleTreeStorage_;
-
-    void resetSampleTree_(Int newStorageLength) {
-        if (newStorageLength > sampleTree_.length()) {
-            sampleTreeStorage_ = std::make_unique<Node[]>(newStorageLength);
-            sampleTree_ = core::Span<Node>(sampleTreeStorage_.get(), newStorageLength);
-        }
+    // Otherwise, use the first non-zero-length segment before the knot if it exists.
+    if (OptionalInt i = indexOfFirstNonZeroLengthSegmentBeforeKnot_(this, index)) {
+        return evalNonZero(*i, 1);
     }
 
-    template<typename Evaluator, typename KeepPredicate>
-    bool trySubdivide_(
-        Evaluator evaluator,
-        KeepPredicate keepPredicate,
-        Int& nodeIndex,
-        Node* n0,
-        Node* n1) {
+    // Otherwise, this means that all segments are zero-length segments.
+    return zeroLengthStrokeSample();
+}
 
-        Node* node = &sampleTree_[nodeIndex];
-        node->sample = evaluator(0.5 * (n0->u + n1->u));
-        if (keepPredicate(n0->sample, node->sample, n1->sample)) {
-            ++nodeIndex;
-            linkNode_(node, n0);
+bool AbstractStroke2d::fixEvalLocation_(Int& segmentIndex, double& u) const {
+
+    if (isZeroLengthSegment(segmentIndex)) {
+
+        Int numSegments = this->numSegments();
+        Int isClosed = this->isClosed();
+        Int startKnot = segmentIndex;
+        Int endKnot = startKnot + 1;
+        if (isClosed && endKnot > numSegments) {
+            endKnot -= numSegments;
+        }
+
+        // Determine whether a non-zero-length segment exists after this segment.
+        OptionalInt nonZeroAfter =
+            indexOfFirstNonZeroLengthSegmentAfterKnot_(this, endKnot);
+        if (nonZeroAfter) {
+            segmentIndex = *nonZeroAfter;
+            u = 0;
             return true;
         }
+
+        // Determine whether a non-zero-length segment exists before this segment.
+        OptionalInt nonZeroBefore =
+            indexOfFirstNonZeroLengthSegmentBeforeKnot_(this, startKnot);
+        if (nonZeroBefore) {
+            segmentIndex = *nonZeroBefore;
+            u = 1;
+            return true;
+        }
+
+        // Otherwise, it's a zero-length stroke.
         return false;
-    };
-
-    static void linkNode_(Node* node, Node* previous) {
-        Node* next = previous->next;
-        next->previous = node;
-        previous->next = node;
-        node->previous = previous;
-        node->next = next;
-    };
-};
-
-//template<typename TEvaluator, typename TSample, typename TSampleEx>
-//void sampleRange_(
-//    const TEvaluator* evaluator,
-//    const CurveSamplingParameters& params,
-//    Int startSegmentIndex,
-//    AdaptiveSamplingKeepPredicate<TSampleEx> keepPredicate,
-//    core::Array<TSample>& outAppend);
-
-struct StrokeSample2dEx {
-    VGC_WARNING_PUSH
-    VGC_WARNING_MSVC_DISABLE(26495) // member variable uninitialized
-    StrokeSample2dEx() noexcept
-        : position(core::noInit)
-        , normal(core::noInit)
-        , halfwidths(core::noInit)
-        , derivative(core::noInit) {
     }
-    VGC_WARNING_POP
-
-    StrokeSample2dEx(const StrokeSample2d& sample, const Vec2d& derivative)
-        : position(sample.position())
-        , normal(sample.normal())
-        , halfwidths(sample.halfwidths())
-        , derivative(derivative) {
-
-        sidePoints[0] = position + (halfwidths[0] * normal);
-        sidePoints[1] = position - (halfwidths[1] * normal);
+    else {
+        // It is a non-zero-length segment.
+        return true;
     }
+}
 
-    Vec2d position;
-    Vec2d normal;
-    Vec2d halfwidths;
-    Vec2d derivative;
-    std::array<Vec2d, 2> sidePoints;
+namespace {
 
-    operator StrokeSample2d() {
-        return StrokeSample2d(position, normal, halfwidths);
-    }
-};
+//class YukselSplineStroke2d : public AbstractStroke2d {
+//public:
+//    template<typename PositionsRange, typename WidthsRange>
+//    YukselSplineStroke2d(bool isClosed, PositionsRange&& positions, WidthsRange&& widths)
+//        : AbstractStroke2d(isClosed)
+//        , positions_(std::forward<PositionsRange>(positions))
+//        , widths_(std::forward<WidthsRange>(widths)) {
+//    }
+//
+//protected:
+//    virtual Int numKnots_() const override {
+//    }
+//
+//    virtual bool isZeroLengthSegment_(Int segmentIndex) const override {
+//    }
+//
+//    virtual Vec2d evalNonZeroCenterline(Int segmentIndex, double u) const override {
+//    }
+//
+//    virtual Vec2d evalNonZeroCenterlineWithDerivative(
+//        Int segmentIndex,
+//        double u,
+//        Vec2d& dp) const override {
+//    }
+//
+//    virtual StrokeSample2d evalNonZero(Int segmentIndex, double u) const override {
+//    }
+//
+//    virtual void sampleNonZeroSegment(
+//        Int segmentIndex,
+//        const CurveSamplingParameters& params,
+//        StrokeSample2dArray& out) const override {
+//    }
+//
+//    virtual StrokeSample2d zeroLengthStrokeSample() const override {
+//    }
+//
+//private:
+//    core::Array<Vec2d> positions_ = {};
+//    core::Array<double> widths_ = {};
+//};
 
-class StrokeEvaluator {
-public:
-    StrokeEvaluator(AbstractStroke2d* stroke)
-        : stroke_(stroke) {
-    }
-
-    StrokeSample2dEx eval(Int segmentIndex, double u) {
-        Vec2d derivative = core::noInit;
-        return StrokeSample2dEx(stroke_->eval(segmentIndex, u, derivative), derivative);
-    }
-
-private:
-    const AbstractStroke2d* const stroke_;
-};
-
-class YukselSplineStrokeView : public AbstractStroke2d {
-public:
-    template<typename PositionsRange, typename WidthsRange>
-    YukselSplineStrokeView(PositionsRange&& positions, WidthsRange&& widths)
-        : positions_(std::forward<PositionsRange>(positions))
-        , widths_(std::forward<WidthsRange>(widths)) {
-    }
-
-    bool isClosed() const override {
-        return isClosed_;
-    }
-
-    Int numSegments() const override {
-        const Int numKnots = positions_.length();
-        isClosed_ ? numKnots : std::max<Int>(0, numKnots - 1);
-    }
-
-    Vec2d evalCenterLine(Int segmentIndex, double u) const override {
-    }
-
-    Vec2d evalCenterLineWithDerivative(Int segmentIndex, double u, Vec2d& derivative)
-        const override {
-    }
-
-    StrokeSample2d eval(Int segmentIndex, double u, Vec2d& derivative) const override {
-    }
-
-    bool isClosed_ = false;
-    core::Array<Vec2d> positions_ = {};
-    core::Array<double> widths_ = {};
-};
+} // namespace
 
 //--------------------------------------------------------------------------------------------------
 ////////////////////////////////////////////////////////////////////////////////////////////////////
+
+namespace {
 
 using OptionalInt = std::optional<Int>;
 
@@ -1848,8 +1868,8 @@ StrokeSample2d computeUniqueSampleOfZeroLengthStroke_(const StrokeView2d* stroke
         halfwidth = 0.5 * stroke->widths()[0];
     }
     Vec2d position = stroke->positions()[0];
-    Vec2d normal(0, 0);
-    return StrokeSample2d(position, normal, halfwidth);
+    Vec2d der(0, 0);
+    return StrokeSample2d(position, der, halfwidth);
 }
 
 StrokeSample2d
@@ -1857,7 +1877,7 @@ computeSampleFromBezier_(const StrokeView2d* stroke, Int segmentIndex, double u)
     auto bezier = CubicBezierStroke::fromStroke(stroke, segmentIndex);
     IterativeSamplingSample s;
     s.computeFrom(bezier, u);
-    return StrokeSample2d(s.pos, s.normal, s.radius);
+    return StrokeSample2d(s.pos, s.tangent, s.radius);
 }
 
 // We need to output a single sample, corresponding to the position/width/normal

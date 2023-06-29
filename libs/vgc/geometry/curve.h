@@ -49,48 +49,54 @@ VGC_DECLARE_ENUM(CurveSamplingQuality)
 class StrokeSample2d {
 public:
     constexpr StrokeSample2d() noexcept
-        : s_(0)
+        : derivativeInvLength_(1)
+        , s_(0)
         , segmentIndex_(-1)
         , u_(-1)
-        , isCorner_(false) {
+        , isCornerStart_(false) {
     }
 
     VGC_WARNING_PUSH
     VGC_WARNING_MSVC_DISABLE(26495) // member variable uninitialized
     StrokeSample2d(core::NoInit) noexcept
         : position_(core::noInit)
-        , normal_(core::noInit)
+        , derivative_(core::noInit)
         , halfwidths_(core::noInit) {
     }
     VGC_WARNING_POP
 
-    constexpr StrokeSample2d(
+    StrokeSample2d(
         const Vec2d& position,
-        const Vec2d& normal,
-        double halfwidth = 0.5) noexcept
+        const Vec2d& derivative,
+        double halfwidth,
+        Int segmentIndex = -1,
+        double u = 0) noexcept
 
         : position_(position)
-        , normal_(normal)
+        , derivative_(derivative)
         , halfwidths_(halfwidth, halfwidth)
+        , derivativeInvLength_(1.0 / derivative.length())
         , s_(0)
-        , segmentIndex_(-1)
-        , u_(-1)
-        , isCorner_(false) {
+        , segmentIndex_(segmentIndex)
+        , u_(u)
+        , isCornerStart_(false) {
     }
 
-    constexpr StrokeSample2d(
+    StrokeSample2d(
         const Vec2d& position,
-        const Vec2d& normal,
+        const Vec2d& derivative,
         const Vec2d& halfwidths,
-        double s = 0) noexcept
+        Int segmentIndex = -1,
+        double u = 0) noexcept
 
         : position_(position)
-        , normal_(normal)
+        , derivative_(derivative)
         , halfwidths_(halfwidths)
-        , s_(s)
-        , segmentIndex_(-1)
-        , u_(-1)
-        , isCorner_(false) {
+        , derivativeInvLength_(1.0 / derivative.length())
+        , s_(0)
+        , segmentIndex_(segmentIndex)
+        , u_(u)
+        , isCornerStart_(false) {
     }
 
     const Vec2d& position() const {
@@ -101,24 +107,25 @@ public:
         position_ = position;
     }
 
+    const Vec2d& derivative() const {
+        return derivative_;
+    }
+
+    void setDerivative(const Vec2d& derivative) {
+        derivative_ = derivative;
+        derivativeInvLength_ = 1.0 / derivative.length();
+    }
+
     Vec2d tangent() const {
-        return -(normal_.orthogonalized());
+        return derivative_ * derivativeInvLength_;
     }
 
     // ┌─── x
     // │ ─segment─→
     // y  ↓ normal
     //
-    const Vec2d& normal() const {
-        return normal_;
-    }
-
-    // ┌─── x
-    // │ ─segment─→
-    // y  ↓ normal
-    //
-    void setNormal(const Vec2d& normal) {
-        normal_ = normal;
+    Vec2d normal() const {
+        return tangent().orthogonalized();
     }
 
     // ┌─── x
@@ -177,7 +184,7 @@ public:
     // y
     //
     Vec2d rightPoint() const {
-        return position_ + normal_ * halfwidths_[0];
+        return position_ + normal() * halfwidths_[0];
     }
 
     // ┌─── x
@@ -186,7 +193,7 @@ public:
     // y
     //
     Vec2d leftPoint() const {
-        return position_ - normal_ * halfwidths_[1];
+        return position_ - normal() * halfwidths_[1];
     }
 
     // ┌─── x
@@ -198,6 +205,19 @@ public:
         return side ? leftPoint() : rightPoint();
     }
 
+    // ┌─── x
+    // │  ↑ side 1
+    // │ ─segment─→
+    // y  ↓ side 0
+    //
+    std::array<Vec2d, 2> sidePoints() const {
+        Vec2d normal = this->normal();
+        return {position_ + normal * halfwidths_[0], position_ - normal * halfwidths_[1]};
+    }
+
+    // TODO: remove `s` from stroke sample class
+    //       since it is computed after sampling it makes sense to externalize it.
+
     double s() const {
         return s_;
     }
@@ -206,27 +226,44 @@ public:
         s_ = s;
     }
 
+    Int segmentIndex() const {
+        return segmentIndex_;
+    }
+
+    void setSegmentIndex(Int segmentIndex) {
+        segmentIndex_ = segmentIndex;
+    }
+
+    double u() const {
+        return u_;
+    }
+
+    void setU(double u) {
+        u_ = u;
+    }
+
+    bool isCornerStart() const {
+        return isCornerStart_;
+    }
+
+    void setCornerStart(bool isCornerStart) {
+        isCornerStart_ = isCornerStart;
+    }
+
 private:
     Vec2d position_;
-    Vec2d normal_;
+    Vec2d derivative_;
     Vec2d halfwidths_;
+    double derivativeInvLength_;
     double s_; // arclength from stroke start point.
     Int segmentIndex_;
     double u_; // parameter in stroke segment.
 
-    // TODO: Let's add isCorner to the sample classes, and make it true only for the first
-    //        sample of the two that makes a corner (hard turn).
-    //
-    // Example:  knots     0------1/2/3-------4
-    //           segments      1   2 3   4
-    //   => segments 2 and 3 have zero-length.
-    //      sampling [1, 1] returns 2 non-corner samples.
-    //      sampling [1, 3] returns 3 samples, 2nd is corner.
-    //      sampling [2, 2] returns 2 samples, 1st is corner.
-    //      sampling [2, 3] returns 2 samples, 1st is corner.
-    //      sampling [3, 3] returns 1 non-corner sample.
-    //      sampling [3, 4] returns 2 non-corner samples.
-    bool isCorner_;
+    // isCornerStart_ is true only for the first sample of the two that makes
+    // a corner (hard turn).
+    bool isCornerStart_;
+
+    // TODO: add enum/flags for corner kind ? knot corner, centerline cusp, offsetline cusp..
 };
 
 namespace detail {
@@ -324,29 +361,15 @@ private:
 
 /// Returns a new sample with each attribute linearly interpolated.
 ///
-/// Please note that due to the linear interpolation the new normal may
-/// no longer be of length 1. Use `nlerp()` if you want it re-normalized.
-///
 inline geometry::StrokeSample2d
 lerp(const geometry::StrokeSample2d& a, const geometry::StrokeSample2d& b, double t) {
     const double ot = (1 - t);
-    return geometry::StrokeSample2d(
+    geometry::StrokeSample2d result(
         a.position() * ot + b.position() * t,
-        a.normal() * ot + b.normal() * t,
-        a.halfwidths() * ot + b.halfwidths() * t,
-        a.s() * ot + b.s() * t);
-}
-
-/// Returns a new sample with each attribute linearly interpolated and
-/// the normal also re-normalized.
-///
-/// Use `lerp()` if you don't need the re-normalization.
-///
-inline geometry::StrokeSample2d
-nlerp(const geometry::StrokeSample2d& a, const geometry::StrokeSample2d& b, double t) {
-    geometry::StrokeSample2d ret = lerp(a, b, t);
-    ret.setNormal(ret.normal().normalized());
-    return ret;
+        a.derivative() * ot + b.derivative() * t,
+        a.halfwidths() * ot + b.halfwidths() * t);
+    result.setS(a.s() * ot + b.s() * t);
+    return result;
 }
 
 /// Alias for `vgc::core::Array<vgc::geometry::StrokeSample2d>`.
@@ -459,6 +482,7 @@ public:
         Int maxIntraSegmentSamples)
 
         : maxAngle_(maxAngle)
+        , cosMaxAngle_(std::cos(maxAngle))
         , minIntraSegmentSamples_(minIntraSegmentSamples)
         , maxIntraSegmentSamples_(maxIntraSegmentSamples) {
     }
@@ -477,6 +501,11 @@ public:
 
     void setMaxAngle(double maxAngle) {
         maxAngle_ = maxAngle;
+        cosMaxAngle_ = std::cos(maxAngle);
+    }
+
+    double cosMaxAngle() const {
+        return cosMaxAngle_;
     }
 
     Int minIntraSegmentSamples() const {
@@ -510,9 +539,235 @@ public:
 private:
     double maxDs_ = core::DoubleInfinity;
     double maxAngle_ = 0.05; // 2PI / 0.05 ~= 125.66
+    double cosMaxAngle_;
     Int minIntraSegmentSamples_ = 0;
     Int maxIntraSegmentSamples_ = 63;
+    bool isScreenspace_ = false;
 };
+
+namespace detail {
+
+using AdaptiveSamplingParameters = CurveSamplingParameters;
+
+template<typename TSample>
+class AdaptiveSampler {
+private:
+    struct Node {
+    public:
+        Node() = default;
+
+        TSample sample;
+        double u;
+        Node* previous = nullptr;
+        Node* next = nullptr;
+    };
+
+public:
+    // Samples the segment [data.segmentIndex, data.segmentIndex + 1], and appends the
+    // result to outAppend.
+    //
+    // KeepPredicate signature must match:
+    //   `bool(const TSample& previousSample,
+    //         const TSample& sample,
+    //         const TSample& nextSample)`
+    //
+    // The first sample of the segment is appended only if the cache `data` is new.
+    // The last sample is always appended.
+    //
+    template<typename USample, typename Evaluator, typename KeepPredicate>
+    void sample(
+        Evaluator evaluator,
+        KeepPredicate keepPredicate,
+        const AdaptiveSamplingParameters& params,
+        core::Array<USample>& outAppend) {
+
+        const Int minISS = params.minIntraSegmentSamples(); // 0 -> 2 samples minimum
+        const Int maxISS = params.maxIntraSegmentSamples(); // 1 -> 3 samples maximum
+        const Int minSamples = std::max<Int>(0, minISS) + 2;
+        const Int maxSamples = std::max<Int>(minSamples, maxISS + 2);
+
+        resetSampleTree_(maxSamples);
+
+        // Setup first and last sample nodes of segment.
+        Node* s0 = &sampleTree_[0];
+        s0->sample = evaluator(0);
+        s0->u = 0;
+        Node* sN = &sampleTree_[1];
+        sN->sample = evaluator(1);
+        sN->u = 1;
+        s0->previous = nullptr;
+        s0->next = sN;
+        sN->previous = s0;
+        sN->next = nullptr;
+
+        Int nextNodeIndex = 2;
+
+        // Compute `minIntraSegmentSamples` uniform samples.
+        Node* previousNode = s0;
+        for (Int i = 1; i < minISS; ++i) {
+            Node* node = &sampleTree_[nextNodeIndex];
+            double u = static_cast<double>(i) / minISS;
+            node->sample = evaluator(u);
+            node->u = u;
+            ++nextNodeIndex;
+            linkNode_(node, previousNode);
+            previousNode = node;
+        }
+
+        const Int sampleTreeLength = sampleTree_.length();
+        Int previousLevelStartIndex = 2;
+        Int previousLevelEndIndex = nextNodeIndex;
+
+        // Fallback to using the last sample as previous level sample
+        // when we added no uniform samples.
+        if (previousLevelStartIndex == previousLevelEndIndex) {
+            previousLevelStartIndex = 1;
+        }
+
+        while (nextNodeIndex < sampleTreeLength) {
+            // Since we create a candidate on the left and right of each previous level node,
+            // each pass can add as much as twice the amount of nodes of the previous level.
+            for (Int i = previousLevelStartIndex; i < previousLevelEndIndex; ++i) {
+                Node* previousLevelNode = &sampleTree_[i];
+                // Try subdivide left.
+                if (trySubdivide_(
+                        evaluator,
+                        keepPredicate,
+                        nextNodeIndex,
+                        previousLevelNode->previous,
+                        previousLevelNode)
+                    && nextNodeIndex == sampleTreeLength) {
+                    break;
+                }
+                // We subdivide right only if it is not the last point.
+                if (!previousLevelNode->next) {
+                    continue;
+                }
+                // Try subdivide right.
+                if (trySubdivide_(
+                        evaluator,
+                        keepPredicate,
+                        nextNodeIndex,
+                        previousLevelNode,
+                        previousLevelNode->next)
+                    && nextNodeIndex == sampleTreeLength) {
+                    break;
+                }
+            }
+            if (nextNodeIndex == previousLevelEndIndex) {
+                // No new candidate, let's stop here.
+                break;
+            }
+            previousLevelStartIndex = previousLevelEndIndex;
+            previousLevelEndIndex = nextNodeIndex;
+        }
+
+        Node* node = &sampleTree_[0];
+        while (node) {
+            outAppend.emplaceLast(node->sample);
+            node = node->next;
+        }
+    }
+
+private:
+    core::Span<Node> sampleTree_;
+    std::unique_ptr<Node[]> sampleTreeStorage_;
+
+    void resetSampleTree_(Int newStorageLength) {
+        if (newStorageLength > sampleTree_.length()) {
+            sampleTreeStorage_ = std::make_unique<Node[]>(newStorageLength);
+            sampleTree_ = core::Span<Node>(sampleTreeStorage_.get(), newStorageLength);
+        }
+    }
+
+    template<typename Evaluator, typename KeepPredicate>
+    bool trySubdivide_(
+        Evaluator evaluator,
+        KeepPredicate keepPredicate,
+        Int& nodeIndex,
+        Node* n0,
+        Node* n1) {
+
+        Node* node = &sampleTree_[nodeIndex];
+        node->sample = evaluator(0.5 * (n0->u + n1->u));
+        if (keepPredicate(n0->sample, node->sample, n1->sample)) {
+            ++nodeIndex;
+            linkNode_(node, n0);
+            return true;
+        }
+        return false;
+    };
+
+    static void linkNode_(Node* node, Node* previous) {
+        Node* next = previous->next;
+        next->previous = node;
+        previous->next = node;
+        node->previous = previous;
+        node->next = next;
+    };
+};
+
+class StrokeSampleEx2d : public StrokeSample2d {
+public:
+    VGC_WARNING_PUSH
+    VGC_WARNING_MSVC_DISABLE(26495) // member variable uninitialized
+    StrokeSampleEx2d() noexcept
+        : StrokeSample2d(core::noInit) {
+    }
+    VGC_WARNING_POP
+
+    StrokeSampleEx2d(const StrokeSample2d& sample)
+        : StrokeSample2d(sample) {
+        sidePoints_ = sidePoints();
+    }
+
+    StrokeSampleEx2d& operator=(const StrokeSample2d& sample) {
+        StrokeSample2d::operator=(sample);
+        sidePoints_ = sidePoints();
+    }
+
+    std::array<Vec2d, 2> sidePoints_;
+};
+
+bool isCenterlineSegmentUnderTolerance(
+    const StrokeSampleEx2d& s0,
+    const StrokeSampleEx2d& s1,
+    double cosMaxAngle);
+
+bool areOffsetLinesAnglesUnderTolerance(
+    const StrokeSampleEx2d& s0,
+    const StrokeSampleEx2d& s1,
+    const StrokeSampleEx2d& s2,
+    double cosMaxAngle);
+
+bool shouldKeepNewSample(
+    const StrokeSampleEx2d& previousSample,
+    const StrokeSampleEx2d& sample,
+    const StrokeSampleEx2d& nextSample,
+    const CurveSamplingParameters& params);
+
+class AdaptiveStrokeSampler : public AdaptiveSampler<StrokeSampleEx2d> {
+public:
+    template<typename USample, typename Evaluator>
+    void sample(
+        Evaluator&& evaluator,
+        const AdaptiveSamplingParameters& params,
+        core::Array<USample>& out) {
+
+        AdaptiveSampler<StrokeSampleEx2d>::sample(
+            std::forward<Evaluator>(evaluator),
+            [&params](
+                const StrokeSampleEx2d& previousSample,
+                const StrokeSampleEx2d& sample,
+                const StrokeSampleEx2d& nextSample) {
+                return shouldKeepNewSample(previousSample, sample, nextSample, params);
+            },
+            params,
+            out);
+    }
+};
+
+} // namespace detail
 
 /// \class vgc::geometry::WidthProfile
 /// \brief A widths profile to apply on curves.
@@ -527,6 +782,12 @@ private:
     core::Array<Vec2d> values_;
 };
 
+namespace detail {
+
+// TODO: We may want to have a lean version of AbstractStroke2d dedicated to
+//       curves only (without thickness nor varying attributes). This class
+//       is a draft of such interface.
+//
 /// \class vgc::geometry::AbstractCurve2d
 /// \brief An abstract model of 2D curve (no thickness or other attributes).
 ///
@@ -557,67 +818,101 @@ public:
     evalWithDerivative(Int segmentIndex, double u, Vec2d& derivative) const = 0;
 };
 
+} // namespace detail
+
 /// \class vgc::geometry::AbstractStroke2d
 /// \brief An abstract model of 2D stroke.
 ///
-class AbstractStroke2d {
+class VGC_GEOMETRY_API AbstractStroke2d {
 public:
+    AbstractStroke2d(bool isClosed)
+        : isClosed_(isClosed) {
+    }
+
     virtual ~AbstractStroke2d() = default;
 
     /// Returns whether the stroke is closed.
     ///
-    virtual bool isClosed() const = 0;
+    bool isClosed() const {
+        return isClosed_;
+    }
+
+    /// Returns the number of knots of the stroke.
+    ///
+    Int numKnots() const {
+        return numKnots_();
+    }
 
     /// Returns the number of segments of the stroke.
     ///
     /// \sa `eval()`.
     ///
-    virtual Int numSegments() const = 0;
+    Int numSegments() const {
+        Int n = numKnots_();
+        return (isClosed_ || n == 0) ? n : n - 1;
+    }
 
-    /// Returns whether the stroke segment at `index` is a corner (has no length).
+    /// Returns whether the stroke segment at `segmentIndex` has a length of 0.
     ///
-    virtual bool isSegmentCorner(Int index) const = 0;
+    bool isZeroLengthSegment(Int segmentIndex) const {
+        return isZeroLengthSegment_(segmentIndex);
+    }
 
     /// Returns the position of the centerline point from segment `segmentIndex` at
     /// parameter `u`.
     ///
-    virtual Vec2d evalCenterline(Int segmentIndex, double u) const = 0;
+    Vec2d evalCenterline(Int segmentIndex, double u) const;
 
     /// Returns the position of the centerline point from segment `segmentIndex` at
     /// parameter `u`. It additionally sets the value of `derivative` as the
     /// position derivative at `u` with respect to the parameter u.
     ///
-    virtual Vec2d
-    evalCenterlineWithDerivative(Int segmentIndex, double u, Vec2d& derivative) const = 0;
+    Vec2d
+    evalCenterlineWithDerivative(Int segmentIndex, double u, Vec2d& derivative) const;
 
     /// Returns a `StrokeSample` from the segment `segmentIndex` at
     /// parameter `u`. The attribute `s` of the sample is left to 0.
     ///
-    virtual StrokeSample2d eval(Int segmentIndex, double u) const = 0;
+    StrokeSample2d eval(Int segmentIndex, double u) const;
 
-    /// Returns a `StrokeSample` from the segment `segmentIndex` at
-    /// parameter `u`. The attribute `s` of the sample is left to 0.
-    /// It additionally sets the value of `derivative` as the
-    /// position derivative at `u` with respect to the parameter u.
-    ///
-    virtual StrokeSample2d
-    evalWithDerivative(Int segmentIndex, double u, Vec2d& derivative) const = 0;
+    // TODO: add variants of sampleSegment() and sampleRange() for CurveSample2d ?
 
-    virtual void sampleSegment(
+    void sampleSegment(
         Int segmentIndex,
         const CurveSamplingParameters& params,
         StrokeSample2dArray& out) const;
 
-    virtual void sampleRange(
-        Int startKnot = 0,
-        Int numSegments = -1,
-        bool withArclengths = true,
+    void sampleRange(
+        StrokeSample2dArray& out,
         const CurveSamplingParameters& params,
-        StrokeSample2dArray& out) const;
+        Int startKnotIndex = 0,
+        Int numSegments = -1,
+        bool computeArcLengths = true) const;
 
 protected:
-    virtual StrokeSample2d computeUniqueSampleOfPonctualStroke() = 0;
-    // VIRTUAL computeUniqueSampleOfPonctualStroke_
+    virtual Int numKnots_() const = 0;
+
+    virtual bool isZeroLengthSegment_(Int segmentIndex) const = 0;
+
+    virtual Vec2d evalNonZeroCenterline(Int segmentIndex, double u) const = 0;
+
+    virtual Vec2d
+    evalNonZeroCenterlineWithDerivative(Int segmentIndex, double u, Vec2d& dp) const = 0;
+
+    virtual StrokeSample2d evalNonZero(Int segmentIndex, double u) const = 0;
+
+    virtual void sampleNonZeroSegment(
+        Int segmentIndex,
+        const CurveSamplingParameters& params,
+        StrokeSample2dArray& out) const = 0;
+
+    virtual StrokeSample2d zeroLengthStrokeSample() const = 0;
+
+private:
+    const bool isClosed_;
+
+    StrokeSample2d sampleKnot_(Int knotIndex) const;
+    bool fixEvalLocation_(Int& segmentIndex, double& u) const;
 };
 
 /// Specifies the type of the curve, that is, how the
