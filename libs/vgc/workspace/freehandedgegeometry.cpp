@@ -90,11 +90,12 @@ void FreehandEdgeGeometry::setWidths(core::DoubleArray widths) {
 }
 
 std::shared_ptr<vacomplex::KeyEdgeGeometry> FreehandEdgeGeometry::clone() const {
-    auto ret = std::make_shared<FreehandEdgeGeometry>();
+    auto ret =
+        std::make_shared<FreehandEdgeGeometry>(isClosed(), stroke_->isWidthConstant());
     // TODO
     ret->sharedConstPositions_ = sharedConstPositions_;
     ret->sharedConstWidths_ = sharedConstWidths_;
-    ret->stroke_ = std::make_unique<geometry::CatmullRomSplineStroke2d>(stroke_);
+    ret->stroke_ = std::make_unique<geometry::CatmullRomSplineStroke2d>(*stroke_);
     return ret;
 }
 
@@ -109,7 +110,6 @@ vacomplex::EdgeSampling FreehandEdgeGeometry::computeSampling(
     core::DoubleArray tmpWidths;
 
     const geometry::Vec2dArray& positions = this->positions();
-    const core::DoubleArray& widths = this->widths();
 
     StrokeType* stroke = nullptr;
     std::unique_ptr<StrokeType> strokeTmp;
@@ -128,12 +128,8 @@ vacomplex::EdgeSampling FreehandEdgeGeometry::computeSampling(
 
         core::DoubleArray tmpArclengths;
         computeSnappedLinearS_(
-            tmpPoints,
-            stroke->positions(),
-            tmpArclengths,
-            snapStartPosition,
-            snapEndPosition);
-        tmpWidths = stroke->widths();
+            tmpPoints, stroke_.get(), tmpArclengths, snapStartPosition, snapEndPosition);
+        tmpWidths = stroke_->widths();
         strokeTmp = createStroke_();
         stroke = strokeTmp.get();
         stroke->setPositions(std::move(tmpPoints));
@@ -158,14 +154,13 @@ vacomplex::EdgeSampling FreehandEdgeGeometry::computeSampling(
     VGC_ASSERT(samplesEx.length() > 0);
 
     geometry::StrokeSample2dArray samples(samplesEx);
-
     vacomplex::EdgeSampling res(std::move(samples));
     if (stroke->numSegments() >= 1) {
         std::array<geometry::Vec2d, 2> tangents =
-            stroke->getOffsetLineTangentsAtSegmentEndpoint(0, 0);
+            stroke->computeOffsetLineTangentsAtSegmentEndpoint(0, 0);
         res.setOffsetLineTangentsAtEndpoint(0, tangents);
-        tangents =
-            stroke->getOffsetLineTangentsAtSegmentEndpoint(stroke->numSegments() - 1, 1);
+        tangents = stroke->computeOffsetLineTangentsAtSegmentEndpoint(
+            stroke->numSegments() - 1, 1);
         res.setOffsetLineTangentsAtEndpoint(1, tangents);
     }
     return res;
@@ -179,7 +174,6 @@ vacomplex::EdgeSampling FreehandEdgeGeometry::computeSampling(
     core::DoubleArray tmpWidths;
 
     const geometry::Vec2dArray& positions = this->positions();
-    const core::DoubleArray& widths = this->widths();
 
     StrokeType* stroke = nullptr;
     std::unique_ptr<StrokeType> strokeTmp;
@@ -212,14 +206,13 @@ vacomplex::EdgeSampling FreehandEdgeGeometry::computeSampling(
     VGC_ASSERT(samplesEx.length() > 0);
 
     geometry::StrokeSample2dArray samples(samplesEx);
-
     vacomplex::EdgeSampling res(std::move(samples));
     if (stroke->numSegments() >= 1) {
         std::array<geometry::Vec2d, 2> tangents =
-            stroke->getOffsetLineTangentsAtSegmentEndpoint(0, 0);
+            stroke->computeOffsetLineTangentsAtSegmentEndpoint(0, 0);
         res.setOffsetLineTangentsAtEndpoint(0, tangents);
-        tangents =
-            stroke->getOffsetLineTangentsAtSegmentEndpoint(stroke->numSegments() - 1, 1);
+        tangents = stroke->computeOffsetLineTangentsAtSegmentEndpoint(
+            stroke->numSegments() - 1, 1);
         res.setOffsetLineTangentsAtEndpoint(1, tangents);
     }
     return res;
@@ -324,9 +317,12 @@ void FreehandEdgeGeometry::snap(
     }
 
     if (isBeingEdited_) {
+        auto stroke = createStroke_();
+        stroke->setPositions(editPositions_);
+        stroke->setConstantWidth(0);
         computeSnappedLinearS_(
             editPositions_,
-            editPositions_,
+            stroke.get(),
             originalKnotArclengths_,
             snapStartPosition,
             snapEndPosition);
@@ -334,7 +330,7 @@ void FreehandEdgeGeometry::snap(
     else {
         computeSnappedLinearS_(
             editPositions_,
-            positions,
+            stroke_.get(),
             originalKnotArclengths_,
             snapStartPosition,
             snapEndPosition);
@@ -1211,21 +1207,18 @@ geometry::Vec2d FreehandEdgeGeometry::sculptRadius(
     // Note: We sample with widths even though we only need widths for samples in radius.
     // We could benefit from a two step sampling (sample centerline points, then sample
     // cross sections on an sub-interval).
-    geometry::StrokeSample2dArray samples;
-    geometry::StrokeView2d curve(isClosed ? closedCurveType : openCurveType);
-    curve.setPositions(editPositions_);
-    curve.setWidths(editWidths_);
+    geometry::StrokeSampleEx2dArray samples;
     geometry::CurveSamplingParameters samplingParams(
         geometry::CurveSamplingQuality::AdaptiveLow);
 
     core::Array<Int> knotToSampleIndex(numPoints, core::noInit);
     knotToSampleIndex[0] = 0;
     for (Int i = 0; i < numPoints - 1; ++i) {
-        curve.sampleRange(samples, samplingParams, i, 1, true);
+        stroke_->sampleRange(samples, samplingParams, i, 1, true);
         knotToSampleIndex[i + 1] = samples.length() - 1;
         samples.pop();
     }
-    curve.sampleRange(
+    stroke_->sampleRange(
         samples, samplingParams, numPoints - 1, Int{isClosed ? 1 : 0}, true);
     const double curveLength = samples.last().s();
 
@@ -1249,7 +1242,7 @@ geometry::Vec2d FreehandEdgeGeometry::sculptRadius(
 
     // First pass: update widths of original knots.
     for (Int i = 0; i < numPoints; ++i) {
-        geometry::StrokeSample2d& sample = samples[knotToSampleIndex[i]];
+        geometry::StrokeSampleEx2d& sample = samples[knotToSampleIndex[i]];
         double s = sample.s();
         double d = std::abs(s - sMiddle);
         if (isClosed) {
@@ -1463,18 +1456,16 @@ public:
         const geometry::Vec2d& position,
         double strength,
         double radius,
-        const geometry::Vec2dArray& knotPositions,
-        const core::DoubleArray& knotWidths,
+        const FreehandEdgeGeometry::StrokeType* stroke,
         bool isClosed,
         geometry::CurveSamplingQuality samplingQuality,
         double maxDs,
         double simplifyTolerance) {
 
-        numKnots_ = knotPositions.length();
-        knotPositions_ = &knotPositions;
-        knotWidths_ = &knotWidths;
+        stroke_ = stroke;
+        numKnots_ = stroke->positions().length();
         isClosed_ = isClosed;
-        hasWidths_ = knotWidths_->length() == knotPositions_->length();
+        hasWidths_ = stroke->widths().length() == numKnots_;
 
         outSculptCursorPosition = position;
 
@@ -1694,9 +1685,6 @@ private:
         if (numKnots_ < 2) {
             return false;
         }
-        geometry::StrokeView2d stroke(isClosed_ ? closedCurveType : openCurveType);
-        stroke.setPositions(*knotPositions_);
-        stroke.setWidths(*knotWidths_);
         geometry::CurveSamplingParameters samplingParams(
             geometry::CurveSamplingQuality::AdaptiveLow);
         //samplingParams.setMaxDs(0.5 * maxDs);
@@ -1708,13 +1696,13 @@ private:
         bool computeArclength = true;
         for (Int i = 0; i < numKnots_ - 1; ++i) {
             Int numSegments = 1;
-            stroke.sampleRange(
+            stroke_->sampleRange(
                 samples_, samplingParams, i, numSegments, computeArclength);
             knotsS_[i + 1] = samples_.last().s();
             samples_.pop();
         }
         Int numExtraSegments = isClosed_ ? 1 : 0;
-        stroke.sampleRange(
+        stroke_->sampleRange(
             samples_, samplingParams, numKnots_ - 1, numExtraSegments, computeArclength);
         totalS_ = samples_.last().s();
         return true;
@@ -1979,13 +1967,15 @@ private:
 
         bool isOverlappingStart = sculptedKnotsEnd_ > numKnots_;
 
+        const auto& positions = stroke_->positions();
+        const auto& widths = stroke_->widths();
+
         if (!isOverlappingStart) {
             // Append knots from index 0 (included) to first sculpted knot (excluded).
             Int n = sculptedKnotsStart_;
-            newKnotPositions_.extend(
-                knotPositions_->begin(), knotPositions_->begin() + n);
+            newKnotPositions_.extend(positions.begin(), positions.begin() + n);
             if (hasWidths_) {
-                newKnotWidths_.extend(knotWidths_->begin(), knotWidths_->begin() + n);
+                newKnotWidths_.extend(widths.begin(), widths.begin() + n);
             }
         }
         else {
@@ -1994,9 +1984,9 @@ private:
             for (Int i = 0; i < n; ++i) {
                 Int j = sculptedKnotsEnd_ + i;
                 j = (numKnots_ + (j % numKnots_)) % numKnots_;
-                newKnotPositions_.emplaceLast((*knotPositions_)[j]);
+                newKnotPositions_.emplaceLast(positions[j]);
                 if (hasWidths_) {
-                    newKnotWidths_.emplaceLast((*knotWidths_)[j]);
+                    newKnotWidths_.emplaceLast(widths[j]);
                 }
             }
         }
@@ -2010,11 +2000,13 @@ private:
         bool isOverlappingStart = sculptedKnotsEnd_ > numKnots_;
 
         if (!isOverlappingStart) {
+            const auto& positions = stroke_->positions();
+            const auto& widths = stroke_->widths();
             // Append knots from last modified knot (excluded) to last knot (included).
             Int n = sculptedKnotsEnd_;
-            newKnotPositions_.extend(knotPositions_->begin() + n, knotPositions_->end());
+            newKnotPositions_.extend(positions.begin() + n, positions.end());
             if (hasWidths_) {
-                newKnotWidths_.extend(knotWidths_->begin() + n, knotWidths_->end());
+                newKnotWidths_.extend(widths.begin() + n, widths.end());
             }
         }
 
@@ -2027,16 +2019,17 @@ private:
         // of knots outputing sculpt points with widths bigger than the knots)
         // by capping the widths based on the input widths.
         //
+        const auto& widths = stroke_->widths();
         double minModifiedKnotWidth = core::DoubleInfinity;
         double maxModifiedKnotWidth = 0;
         Int extendedStart = sculptedKnotsStart_ - 1;
         Int extendedEnd = sculptedKnotsEnd_ + 1;
         if (!isClosed_) {
-            extendedStart = core::clamp(extendedStart, 0, knotWidths_->length());
-            extendedEnd = core::clamp(extendedEnd, 0, knotWidths_->length());
+            extendedStart = core::clamp(extendedStart, 0, widths.length());
+            extendedEnd = core::clamp(extendedEnd, 0, widths.length());
         }
         for (Int i = extendedStart; i < extendedEnd; ++i) {
-            double w = knotWidths_->getWrapped(i);
+            double w = widths.getWrapped(i);
             minModifiedKnotWidth = (std::min)(w, minModifiedKnotWidth);
             maxModifiedKnotWidth = (std::max)(w, maxModifiedKnotWidth);
         }
@@ -2205,13 +2198,12 @@ private:
 
     // Input
     Int numKnots_ = 0;
-    const geometry::Vec2dArray* knotPositions_ = nullptr;
-    const core::DoubleArray* knotWidths_ = nullptr;
+    const FreehandEdgeGeometry::StrokeType* stroke_ = nullptr;
     bool isClosed_ = false;
     bool hasWidths_ = false;
 
     // Computed sampling
-    geometry::StrokeSample2dArray samples_;
+    geometry::StrokeSampleEx2dArray samples_;
     core::Array<double> knotsS_;
     double totalS_ = 0;
 
@@ -2266,8 +2258,7 @@ geometry::Vec2d FreehandEdgeGeometry::sculptSmooth(
         position,
         strength,
         radius,
-        editPositions_,
-        editWidths_,
+        stroke_.get(),
         isClosed,
         geometry::CurveSamplingQuality::AdaptiveLow,
         maxDs,
@@ -2332,11 +2323,12 @@ void FreehandEdgeGeometry::removeFromDomEdge_(dom::Element* element) const {
 
 void FreehandEdgeGeometry::computeSnappedLinearS_(
     geometry::Vec2dArray& outPoints,
-    const geometry::Vec2dArray& srcPoints,
+    StrokeType* srcStroke,
     core::DoubleArray& srcArclengths,
     const geometry::Vec2d& snapStartPosition,
     const geometry::Vec2d& snapEndPosition) {
 
+    const auto& srcPoints = srcStroke->positions();
     outPoints.resize(srcPoints.length());
     Int numPoints = outPoints.length();
 
@@ -2365,7 +2357,7 @@ void FreehandEdgeGeometry::computeSnappedLinearS_(
         }
         else {
             if (srcArclengths.isEmpty()) {
-                computeArclengths_(srcArclengths, srcPoints);
+                computeKnotArclengths_(srcArclengths, srcStroke);
             }
             double curveLength = srcArclengths.last();
             if (curveLength > 0) {
@@ -2384,10 +2376,11 @@ void FreehandEdgeGeometry::computeSnappedLinearS_(
     }
 }
 
-void FreehandEdgeGeometry::computeArclengths_(
+void FreehandEdgeGeometry::computeKnotArclengths_(
     core::DoubleArray& outArclengths,
-    const geometry::Vec2dArray& srcPoints) {
+    StrokeType* srcStroke) {
 
+    const auto& srcPoints = srcStroke->positions();
     Int numPoints = srcPoints.length();
     outArclengths.resize(numPoints);
     if (numPoints == 0) {
@@ -2395,14 +2388,12 @@ void FreehandEdgeGeometry::computeArclengths_(
     }
 
     outArclengths[0] = 0;
-    geometry::StrokeView2d stroke(0.0);
-    geometry::StrokeSample2dArray sampling;
+    geometry::StrokeSampleEx2dArray sampling;
     geometry::CurveSamplingParameters sParams(
         geometry::CurveSamplingQuality::AdaptiveLow);
-    stroke.setPositions(srcPoints);
     double s = 0;
     for (Int i = 1; i < numPoints; ++i) {
-        stroke.sampleRange(sampling, sParams, i - 1, 1, true);
+        srcStroke->sampleRange(sampling, sParams, i - 1, 1, true);
         s += sampling.last().s();
         outArclengths[i] = s;
         sampling.clear();

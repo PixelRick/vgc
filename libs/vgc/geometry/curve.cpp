@@ -165,6 +165,8 @@ CurveSamplingParameters::CurveSamplingParameters(CurveSamplingQuality quality)
         maxIntraSegmentSamples_ = 63;
         break;
     }
+
+    cosMaxAngle_ = std::cos(maxAngle_);
 }
 
 namespace {
@@ -477,6 +479,13 @@ void AbstractStroke2d::sampleRange(
     }
 }
 
+std::array<Vec2d, 2> AbstractStroke2d::computeOffsetLineTangentsAtSegmentEndpoint(
+    Int segmentIndex,
+    Int endpointIndex) const {
+
+    return computeOffsetLineTangentsAtSegmentEndpoint_(segmentIndex, endpointIndex);
+}
+
 StrokeSampleEx2d AbstractStroke2d::sampleKnot_(Int index) const {
 
     // Use the first non-zero-length segment after the knot if it exists.
@@ -578,7 +587,7 @@ namespace {
 
 } // namespace
 
-//std::array<Vec2d, 2> StrokeView2d::getOffsetLineTangentsAtSegmentEndpoint(
+//std::array<Vec2d, 2> StrokeView2d::computeOffsetLineTangentsAtSegmentEndpoint(
 //    Int segmentIndex,
 //    Int endpointIndex) const {
 //

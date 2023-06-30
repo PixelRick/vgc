@@ -293,7 +293,7 @@ public:
     }
 
     template<typename TRange>
-    void setPositions(TRange&& positions) const {
+    void setPositions(TRange&& positions) {
         positions_ = std::forward<TRange>(positions);
         computeChordLengths_();
     }
@@ -307,8 +307,18 @@ public:
     }
 
     template<typename TRange>
-    void setWidths(TRange&& widths) const {
+    void setWidths(TRange&& widths) {
         widths_ = std::forward<TRange>(widths);
+    }
+
+    void setConstantWidth(double width) {
+        isWidthConstant_ = true;
+        widths_.resize(1);
+        widths_[0] = width;
+    }
+
+    bool isWidthConstant() const {
+        return isWidthConstant_;
     }
 
     const core::Array<double>& chordLengths() const {

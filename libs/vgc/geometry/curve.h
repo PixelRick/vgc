@@ -31,7 +31,7 @@
 
 namespace vgc::geometry {
 
-class StrokeSample2d {
+class VGC_GEOMETRY_API StrokeSample2d {
 public:
     constexpr StrokeSample2d() noexcept
         : tangent_(0, 1)
@@ -232,7 +232,7 @@ using StrokeSample2dArray = core::Array<StrokeSample2d>;
 ///
 using SharedConstStrokeSample2dArray = core::SharedConstArray<StrokeSample2d>;
 
-class StrokeSampleEx2d {
+class VGC_GEOMETRY_API StrokeSampleEx2d {
 public:
     constexpr StrokeSampleEx2d() noexcept
         : sample_()
@@ -267,6 +267,7 @@ public:
             // fallback to default tangent
             sample_.setTangent(Vec2d(0, 1));
         }
+        updateOffsetPoints_();
     }
 
     StrokeSampleEx2d(
@@ -294,6 +295,7 @@ public:
 
     void setPosition(const Vec2d& position) {
         sample_.setPosition(position);
+        updateOffsetPoints_();
     }
 
     const Vec2d& tangent() const {
@@ -302,6 +304,7 @@ public:
 
     void setTangent(const Vec2d& tangent) {
         sample_.setTangent(tangent);
+        updateOffsetPoints_();
     }
 
     Vec2d velocity() const {
@@ -363,6 +366,7 @@ public:
     //
     void setHalfwidths(const Vec2d& halfwidths) {
         sample_.setHalfwidths(halfwidths);
+        updateOffsetPoints_();
     }
 
     // ┌─── x
@@ -372,6 +376,7 @@ public:
     //
     void setHalfwidths(double halfwidth0, double halfwidth1) {
         sample_.setHalfwidths(halfwidth0, halfwidth1);
+        updateOffsetPoints_();
     }
 
     // ┌─── x
@@ -381,10 +386,12 @@ public:
     //
     void setHalfwidth(Int side, double halfwidth) {
         sample_.setHalfwidth(side, halfwidth);
+        updateOffsetPoints_();
     }
 
     void swapHalfwidths() {
         sample_.swapHalfwidths();
+        updateOffsetPoints_();
     }
 
     // ┌─── x
@@ -508,6 +515,7 @@ VGC_GEOMETRY_API
 DistanceToCurve
 distanceToCurve(const StrokeSample2dArray& samples, const Vec2d& position);
 
+VGC_GEOMETRY_API
 DistanceToCurve
 distanceToCurve(const StrokeSampleEx2dArray& samples, const Vec2d& position);
 
@@ -574,6 +582,8 @@ public:
         , cosMaxAngle_(std::cos(maxAngle))
         , minIntraSegmentSamples_(minIntraSegmentSamples)
         , maxIntraSegmentSamples_(maxIntraSegmentSamples) {
+
+        cosMaxAngle_ = std::cos(maxAngle);
     }
 
     double maxDs() const {
@@ -842,8 +852,8 @@ public:
     ///
     /// Note that the tangents just before and just after a knot are not
     /// necessarily equal in case of "corner" knots. Therefore,
-    /// `getOffsetLineTangentsAtSegmentEndpoint(i - 1, 1)` and
-    /// `getOffsetLineTangentsAtSegmentEndpoint(i, 0)` may not be equal.
+    /// `computeOffsetLineTangentsAtSegmentEndpoint(i - 1, 1)` and
+    /// `computeOffsetLineTangentsAtSegmentEndpoint(i, 0)` may not be equal.
     ///
     /// Throws `IndexError` if the given `segmentIndex` is not in the range
     /// `[0, numSegments() - 1]`.
@@ -851,7 +861,7 @@ public:
     /// Throws `IndexError` if the given `endpointIndex` is neither `0` or `1`.
     ///
     std::array<Vec2d, 2>
-    getOffsetLineTangentsAtSegmentEndpoint(Int segmentIndex, Int endpointIndex) const;
+    computeOffsetLineTangentsAtSegmentEndpoint(Int segmentIndex, Int endpointIndex) const;
 
 protected:
     virtual Int numKnots_() const = 0;
@@ -1043,9 +1053,9 @@ public:
 
         // Compute `minIntraSegmentSamples` uniform samples.
         Node* previousNode = s0;
-        for (Int i = 1; i < minISS; ++i) {
+        for (Int i = 0; i < minISS; ++i) {
             Node* node = &sampleTree_[nextNodeIndex];
-            double u = static_cast<double>(i) / minISS;
+            double u = static_cast<double>(i + 1) / (minISS + 1);
             node->sample = evaluator(u);
             node->u = u;
             ++nextNodeIndex;
@@ -1059,7 +1069,7 @@ public:
 
         // Fallback to using the last sample as previous level sample
         // when we added no uniform samples.
-        if (previousLevelStartIndex == previousLevelEndIndex) {
+        if (previousLevelEndIndex == 2) {
             previousLevelStartIndex = 1;
         }
 
@@ -1128,9 +1138,11 @@ private:
         Node* n1) {
 
         Node* node = &sampleTree_[nodeIndex];
-        node->sample = evaluator(0.5 * (n0->u + n1->u));
+        double u = 0.5 * (n0->u + n1->u);
+        node->sample = evaluator(u);
         if (keepPredicate(n0->sample, node->sample, n1->sample)) {
             ++nodeIndex;
+            node->u = u;
             linkNode_(node, n0);
             return true;
         }

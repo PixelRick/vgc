@@ -143,14 +143,13 @@ private:
 
     static void computeSnappedLinearS_(
         geometry::Vec2dArray& outPoints,
-        const geometry::Vec2dArray& srcPoints,
+        StrokeType* srcStroke,
         core::DoubleArray& srcArclengths,
         const geometry::Vec2d& snapStartPosition,
         const geometry::Vec2d& snapEndPosition);
 
-    static void computeArclengths_(
-        core::DoubleArray& outArclengths,
-        const geometry::Vec2dArray& srcPoints);
+    static void
+    computeKnotArclengths_(core::DoubleArray& outArclengths, StrokeType* srcStroke);
 
     std::unique_ptr<StrokeType> createStroke_() const;
 };

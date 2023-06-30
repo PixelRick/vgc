@@ -727,7 +727,8 @@ ElementStatus VacKeyEdge::updateFromDom_(Workspace* workspace) {
 
     // create/rebuild/update VAC node
     if (!ke) {
-        auto geometry = std::make_shared<workspace::FreehandEdgeGeometry>();
+        auto geometry =
+            std::make_shared<workspace::FreehandEdgeGeometry>(isClosed, false);
         geometry->updateFromDomEdge_(domElement);
         if (isClosed) {
             ke = vacomplex::ops::createKeyClosedEdge(std::move(geometry), parentGroup);
