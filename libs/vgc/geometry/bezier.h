@@ -19,6 +19,8 @@
 
 #include <vgc/core/span.h>
 #include <vgc/geometry/api.h>
+#include <vgc/geometry/curve.h>
+#include <vgc/geometry/vec2d.h>
 
 namespace vgc::geometry {
 
@@ -163,7 +165,7 @@ private:
 /// The coordinate \p u is typically between [0, 1], but this is not required.
 /// Values of u outside the range [0, 1] extrapolate the control points.
 ///
-/// \sa cubicBezierDer(), cubicBezierPosAndDer()
+/// \sa cubicBezierDer(), cubicBezierWithDerivative()
 ///
 template<typename Scalar, typename T>
 T cubicBezier(const T& p0, const T& p1, const T& p2, const T& p3, Scalar u) {
@@ -186,7 +188,7 @@ T cubicBezier(const T& p0, const T& p1, const T& p2, const T& p3, Scalar u) {
 /// Bézier curve defined by the four control points \p p0, \p p1, \p p2, and \p
 /// p3.
 ///
-/// \sa cubicBezier(), cubicBezierPosAndDer()
+/// \sa cubicBezier(), cubicBezierWithDerivative()
 ///
 template<typename Scalar, typename T>
 T cubicBezierDer(const T& p0, const T& p1, const T& p2, const T& p3, Scalar u) {
@@ -224,7 +226,7 @@ T cubicBezierDer(const T* fourPoints, Scalar u) {
 /// \sa cubicBezier(), cubicBezierDer()
 ///
 template<typename Scalar, typename T>
-void cubicBezierPosAndDer(
+void cubicBezierWithDerivative(
     const T& p0,
     const T& p1,
     const T& p2,
@@ -262,57 +264,101 @@ T bezierDerivativeBezier(
 }
 
 template<Int n, typename T, typename Scalar, VGC_REQUIRES(n >= 2)>
-T bezierPosCasteljau(core::Span<const T, n> controlPoints, Scalar u) {
+T bezierCasteljau(core::Span<const T, n> controlPoints, Scalar u) {
     DeCasteljauTree<T, Scalar, static_cast<size_t>(n - 1)> tree = {};
     tree.compute(controlPoints, u);
     return tree.value();
 }
 
 template<Int n, typename T, typename Scalar, VGC_REQUIRES(n >= 2)>
-void bezierPosAndDerCasteljau(
+T bezierWithDerivativeCasteljau(
     core::Span<const T, n> controlPoints,
     Scalar u,
-    core::TypeIdentity<T>& pos,
     core::TypeIdentity<T>& der) {
 
     DeCasteljauTree<T, Scalar, static_cast<size_t>(n - 1)> tree = {};
     tree.compute(controlPoints, u);
-    pos = tree.value();
     der = tree.derivative();
+    return tree.value();
 }
 
 template<typename T, typename Scalar>
-T cubicBezierPosCasteljau(core::Span<const T, 4> controlPoints, Scalar u) {
-    return bezierPosCasteljau(controlPoints, u);
+T cubicBezierCasteljau(core::Span<const T, 4> controlPoints, Scalar u) {
+    return bezierCasteljau(controlPoints, u);
 }
 
 template<typename T, typename Scalar>
-T quadraticBezierPosCasteljau(core::Span<const T, 3> controlPoints, Scalar u) {
-    return bezierPosCasteljau(controlPoints, u);
+T quadraticBezierCasteljau(core::Span<const T, 3> controlPoints, Scalar u) {
+    return bezierCasteljau(controlPoints, u);
 }
 
-/// Variant of `cubicBezierPosAndDer` expecting a pointer to a contiguous sequence
+/// Variant of `cubicBezierWithDerivative` expecting a pointer to a contiguous sequence
 /// of 4 control points and using Casteljau's algorithm.
 ///
 template<typename T, typename Scalar>
-void cubicBezierPosAndDerCasteljau(
+T cubicBezierWithDerivativeCasteljau(
     core::Span<const T, 4> controlPoints,
     Scalar u,
-    core::TypeIdentity<T>& pos,
     core::TypeIdentity<T>& der) {
 
-    bezierPosAndDerCasteljau(controlPoints, u, pos, der);
+    return bezierWithDerivativeCasteljau(controlPoints, u, der);
 }
 
 template<typename T, typename Scalar>
-void quadraticBezierPosAndDerCasteljau(
+T quadraticBezierWithDerivativeCasteljau(
     core::Span<const T, 3> controlPoints,
     Scalar u,
-    core::TypeIdentity<T>& pos,
     core::TypeIdentity<T>& der) {
 
-    bezierPosAndDerCasteljau(controlPoints, u, pos, der);
+    return bezierWithDerivativeCasteljau(controlPoints, u, der);
 }
+
+template<typename T, typename Scalar>
+class VGC_GEOMETRY_API CubicBezier {
+public:
+    // Initialized with null control points.
+    CubicBezier() noexcept = default;
+
+    VGC_WARNING_PUSH
+    VGC_WARNING_MSVC_DISABLE(26495) // member variable uninitialized
+    // Uninitialized
+    //
+    CubicBezier(core::NoInit) noexcept
+        : controlPoints_{core::noInit, core::noInit, core::noInit, core::noInit} {
+    }
+    VGC_WARNING_POP
+
+    CubicBezier(core::ConstSpan<T, 4> controlPoints) noexcept
+        : CubicBezier(
+            controlPoints[0],
+            controlPoints[1],
+            controlPoints[2],
+            controlPoints[3]) {
+    }
+
+    CubicBezier(const T& cp0, const T& cp1, const T& cp2, const T& cp3) noexcept
+        : controlPoints_{cp0, cp1, cp2, cp3} {
+    }
+
+    const std::array<T, 4>& controlPoints() const {
+        return controlPoints_;
+    }
+
+    T eval(Scalar u) const {
+        return cubicBezierCasteljau<T, Scalar>(controlPoints_, u);
+    }
+
+    T evalWithDerivative(Scalar u, T& derivative) const {
+        return cubicBezierWithDerivativeCasteljau<T, Scalar>(
+            controlPoints_, u, derivative);
+    }
+
+private:
+    std::array<Vec2d, 4> controlPoints_;
+};
+
+using CubicBezier2d = CubicBezier<Vec2d, double>;
+using CubicBezier1d = CubicBezier<double, double>;
 
 } // namespace vgc::geometry
 

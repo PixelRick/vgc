@@ -29,11 +29,13 @@ public:
     using SharedConstPositions = geometry::SharedConstVec2dArray;
     using SharedConstWidths = core::SharedConstDoubleArray;
 
+    using StrokeType = geometry::CatmullRomSplineStroke2d;
+
     FreehandEdgeGeometry(bool isClosed, double constantWidth)
         : EdgeGeometry(isClosed) {
 
         stroke_ = std::make_unique<geometry::CatmullRomSplineStroke2d>(
-            geometry::detail::CatmullRomSplineParameterization::Centripetal,
+            geometry::CatmullRomSplineParameterization::Centripetal,
             isClosed,
             constantWidth);
     }
@@ -47,7 +49,7 @@ public:
         : EdgeGeometry(isClosed) {
 
         stroke_ = std::make_unique<geometry::CatmullRomSplineStroke2d>(
-            geometry::detail::CatmullRomSplineParameterization::Centripetal,
+            geometry::CatmullRomSplineParameterization::Centripetal,
             isClosed,
             isWidthConstant,
             positions,
@@ -55,11 +57,11 @@ public:
     }
 
     const geometry::Vec2dArray& positions() const {
-        return isBeingEdited_ ? strokeTmp_->positions() : stroke_->positions();
+        return isBeingEdited_ ? editPositions_ : stroke_->positions();
     }
 
     const core::DoubleArray& widths() const {
-        return isBeingEdited_ ? strokeTmp_->widths() : stroke_->widths();
+        return isBeingEdited_ ? editWidths_ : stroke_->widths();
     }
 
     void setPositions(const SharedConstPositions& positions);
@@ -132,9 +134,10 @@ public:
 private:
     SharedConstPositions sharedConstPositions_;
     SharedConstWidths sharedConstWidths_;
-    std::unique_ptr<geometry::CatmullRomSplineStroke2d> stroke_;
-    std::unique_ptr<geometry::CatmullRomSplineStroke2d> strokeTmp_;
-    core::DoubleArray originalArclengths_;
+    std::unique_ptr<StrokeType> stroke_;
+    geometry::Vec2dArray editPositions_;
+    core::DoubleArray editWidths_;
+    core::DoubleArray originalKnotArclengths_;
     geometry::Vec2d editStartPosition_ = {};
     bool isBeingEdited_ = false;
 
@@ -148,6 +151,8 @@ private:
     static void computeArclengths_(
         core::DoubleArray& outArclengths,
         const geometry::Vec2dArray& srcPoints);
+
+    std::unique_ptr<StrokeType> createStroke_() const;
 };
 
 } // namespace vgc::workspace

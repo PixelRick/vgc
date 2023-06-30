@@ -1,4 +1,4 @@
-// Copyright 2021 The VGC Developers
+// Copyright 2023 The VGC Developers
 // See the COPYRIGHT file at the top-level directory of this distribution
 // and at https://github.com/vgc/vgc/blob/master/COPYRIGHT
 //
@@ -19,6 +19,7 @@
 
 #include <vgc/core/span.h>
 #include <vgc/geometry/api.h>
+#include <vgc/geometry/bezier.h>
 #include <vgc/geometry/curve.h>
 #include <vgc/geometry/vec2d.h>
 
@@ -86,10 +87,10 @@ namespace vgc::geometry {
 /// Which finishes the explanation why k = 1/6.
 ///
 template<typename T>
-std::array<T, 4> uniformCatmullRomToBezier(core::ConstSpan<T, 4> points) {
-    std::array<T, 4> res;
-    uniformCatmullRomToBezier(points.data(), res.data());
-    return res;
+CubicBezier<T, double> uniformCatmullRomToBezier(core::ConstSpan<T, 4> points) {
+    std::array<T, 4> controlPoints;
+    uniformCatmullRomToBezier(points.data(), controlPoints.data());
+    return CubicBezier<T, double>(controlPoints);
 }
 
 /// Overload of `uniformCatmullRomToBezier` with in/out parameter per point.
@@ -160,7 +161,7 @@ void uniformCatmullRomToBezierCapped(const T* inFourPoints, T* outFourPoints) {
 /// See http://www.cemyuksel.com/research/catmullrom_param/catmullrom.pdf
 ///
 template<typename T>
-std::array<T, 4> centripetalCatmullRomToBezier(core::ConstSpan<T, 4> points) {
+CubicBezier<T, double> centripetalCatmullRomToBezier(core::ConstSpan<T, 4> points) {
 
     const T* points_ = points.data();
     std::array<double, 3> lengths = {
@@ -174,7 +175,7 @@ std::array<T, 4> centripetalCatmullRomToBezier(core::ConstSpan<T, 4> points) {
 /// Overload of `centripetalCatmullRomToBezier()` that accepts pre-computed lengths.
 ///
 template<typename T>
-std::array<T, 4> centripetalCatmullRomToBezier(
+CubicBezier<T, double> centripetalCatmullRomToBezier(
     core::ConstSpan<T, 4> points,
     core::ConstSpan<double, 3> lengths) {
 
@@ -189,15 +190,15 @@ std::array<T, 4> centripetalCatmullRomToBezier(
 /// and square roots of lengths.
 ///
 template<typename T>
-std::array<T, 4> centripetalCatmullRomToBezier(
+CubicBezier<T, double> centripetalCatmullRomToBezier(
     core::ConstSpan<T, 4> points,
     core::ConstSpan<double, 3> lengths,
     core::ConstSpan<double, 3> sqrtLengths) {
 
-    std::array<T, 4> res;
+    std::array<T, 4> controlPoints;
     centripetalCatmullRomToBezier(
-        points.data(), lengths.data(), sqrtLengths.data(), res.data());
-    return res;
+        points.data(), lengths.data(), sqrtLengths.data(), controlPoints.data());
+    return CubicBezier<T, double>(controlPoints);
 }
 
 /// Overload of `centripetalCatmullRomToBezier()` that accepts pre-computed
@@ -238,12 +239,17 @@ void centripetalCatmullRomToBezier(
     outPoints[2] = p2;
 }
 
+enum CatmullRomSplineParameterization {
+    Uniform,
+    Centripetal
+};
+
 // TODO: immutable version with ConstShared storage
 //       & move these classes in a new set of .h/.cpp
 class VGC_GEOMETRY_API CatmullRomSplineStroke2d : public AbstractStroke2d {
 public:
     CatmullRomSplineStroke2d(
-        detail::CatmullRomSplineParameterization parametrization,
+        CatmullRomSplineParameterization parametrization,
         bool isClosed)
 
         : AbstractStroke2d(isClosed)
@@ -251,7 +257,7 @@ public:
     }
 
     CatmullRomSplineStroke2d(
-        detail::CatmullRomSplineParameterization parametrization,
+        CatmullRomSplineParameterization parametrization,
         bool isClosed,
         double constantWidth)
 
@@ -263,7 +269,7 @@ public:
 
     template<typename TRangePositions, typename TRangeWidths>
     CatmullRomSplineStroke2d(
-        detail::CatmullRomSplineParameterization parametrization,
+        CatmullRomSplineParameterization parametrization,
         bool isClosed,
         bool isWidthConstant,
         TRangePositions&& positions,
@@ -282,6 +288,10 @@ public:
         return positions_;
     }
 
+    core::Array<Vec2d>&& movePositions() {
+        return std::move(positions_);
+    }
+
     template<typename TRange>
     void setPositions(TRange&& positions) const {
         positions_ = std::forward<TRange>(positions);
@@ -290,6 +300,10 @@ public:
 
     const core::Array<double>& widths() const {
         return widths_;
+    }
+
+    core::Array<double>&& moveWidths() {
+        return std::move(widths_);
     }
 
     template<typename TRange>
@@ -311,23 +325,32 @@ protected:
     Vec2d evalNonZeroCenterlineWithDerivative(Int segmentIndex, double u, Vec2d& dp)
         const override;
 
-    StrokeSample2d evalNonZero(Int segmentIndex, double u) const override;
+    StrokeSampleEx2d evalNonZero(Int segmentIndex, double u) const override;
 
     void sampleNonZeroSegment(
+        StrokeSampleEx2dArray& out,
         Int segmentIndex,
-        const CurveSamplingParameters& params,
-        StrokeSample2dArray& out) const override;
+        const CurveSamplingParameters& params) const override;
 
-    StrokeSample2d zeroLengthStrokeSample() const override;
+    StrokeSampleEx2d zeroLengthStrokeSample() const override;
 
-    detail::CubicBezierStroke segmentToBezier(Int segmentIndex) const;
+    std::array<Vec2d, 2> computeOffsetLineTangentsAtSegmentEndpoint_(
+        Int segmentIndex,
+        Int endpointIndex) const override;
+
+    CubicBezier2d segmentToBezier(Int segmentIndex) const;
+    CubicBezier2d segmentToBezier(Int segmentIndex, CubicBezier2d& halfwidths) const;
+
+    double constantWidth() const {
+        return widths_[0];
+    }
 
 private:
     core::Array<Vec2d> positions_;
     core::Array<double> widths_;
     core::Array<double> chordLengths_;
     bool isWidthConstant_ = false;
-    detail::CatmullRomSplineParameterization parametrization_;
+    CatmullRomSplineParameterization parametrization_;
 
     void computeChordLengths_();
 };
