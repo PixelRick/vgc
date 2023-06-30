@@ -302,6 +302,7 @@ public:
         return widths_;
     }
 
+    // TODO: make data class and startEdit() endEdit()
     core::Array<double>&& moveWidths() {
         return std::move(widths_);
     }

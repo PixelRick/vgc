@@ -123,14 +123,22 @@ vacomplex::EdgeSampling FreehandEdgeGeometry::computeSampling(
         stroke->setPositions(tmpPoints);
         stroke->setWidths(tmpWidths);
     }
-    else if (
-        positions.first() != snapStartPosition || positions.last() != snapEndPosition) {
-
+    else if (positions.first() != snapStartPosition || positions.last() != snapEndPosition) {
+        strokeTmp = createStroke_();
+        if (isBeingEdited_) {
+            // TODO: add warning, edit tool should keep geometry snapped.
+            stroke = strokeTmp.get();
+            stroke->setPositions(editPositions_);
+            stroke->setWidths(editWidths_);
+            tmpWidths = editWidths_;
+        }
+        else {
+            stroke = stroke_.get();
+            tmpWidths = stroke_->widths();
+        }
         core::DoubleArray tmpArclengths;
         computeSnappedLinearS_(
-            tmpPoints, stroke_.get(), tmpArclengths, snapStartPosition, snapEndPosition);
-        tmpWidths = stroke_->widths();
-        strokeTmp = createStroke_();
+            tmpPoints, stroke, tmpArclengths, snapStartPosition, snapEndPosition);
         stroke = strokeTmp.get();
         stroke->setPositions(std::move(tmpPoints));
         stroke->setWidths(std::move(tmpWidths));
@@ -240,8 +248,11 @@ void FreehandEdgeGeometry::finishEdit() {
     // VGC_WARNING("NaN point detected after editing edge geometry: edit aborted.");
 
     if (isBeingEdited_) {
-        sharedConstPositions_ = SharedConstPositions(std::move(editPositions_));
-        sharedConstWidths_ = SharedConstWidths(std::move(editWidths_));
+
+        sharedConstPositions_ = SharedConstPositions(editPositions_);
+        sharedConstWidths_ = SharedConstWidths(editWidths_);
+        stroke_->setPositions(std::move(editPositions_));
+        stroke_->setWidths(std::move(editWidths_));
         originalKnotArclengths_.clear();
         originalKnotArclengths_.shrinkToFit();
         isBeingEdited_ = false;
@@ -2251,6 +2262,13 @@ geometry::Vec2d FreehandEdgeGeometry::sculptSmooth(
     geometry::Vec2d sculptCursorPosition = position;
 
     SculptSmoothAlgorithm alg;
+
+    // TODO: optimize that, smooth is too slow.
+    // TODO: fix that, smooth breaks dirtying when endpoints move.. (snapping involved??)
+    auto stroke = createStroke_();
+    stroke->setPositions(editPositions_);
+    stroke->setWidths(editWidths_);
+
     bool success = alg.execute(
         newPoints,
         newWidths,
@@ -2258,7 +2276,7 @@ geometry::Vec2d FreehandEdgeGeometry::sculptSmooth(
         position,
         strength,
         radius,
-        stroke_.get(),
+        stroke.get(),
         isClosed,
         geometry::CurveSamplingQuality::AdaptiveLow,
         maxDs,

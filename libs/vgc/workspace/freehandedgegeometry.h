@@ -31,6 +31,14 @@ public:
 
     using StrokeType = geometry::CatmullRomSplineStroke2d;
 
+    FreehandEdgeGeometry(bool isClosed)
+        : EdgeGeometry(isClosed) {
+
+        stroke_ = std::make_unique<geometry::CatmullRomSplineStroke2d>(
+            geometry::CatmullRomSplineParameterization::Centripetal,
+            isClosed);
+    }
+
     FreehandEdgeGeometry(bool isClosed, double constantWidth)
         : EdgeGeometry(isClosed) {
 
