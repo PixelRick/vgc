@@ -541,52 +541,6 @@ bool AbstractStroke2d::fixEvalLocation_(Int& segmentIndex, double& u) const {
     }
 }
 
-namespace {
-
-//class YukselSplineStroke2d : public AbstractStroke2d {
-//public:
-//    template<typename PositionsRange, typename WidthsRange>
-//    YukselSplineStroke2d(bool isClosed, PositionsRange&& positions, WidthsRange&& widths)
-//        : AbstractStroke2d(isClosed)
-//        , positions_(std::forward<PositionsRange>(positions))
-//        , widths_(std::forward<WidthsRange>(widths)) {
-//    }
-//
-//protected:
-//    virtual Int numKnots_() const override {
-//    }
-//
-//    virtual bool isZeroLengthSegment_(Int segmentIndex) const override {
-//    }
-//
-//    virtual Vec2d evalNonZeroCenterline(Int segmentIndex, double u) const override {
-//    }
-//
-//    virtual Vec2d evalNonZeroCenterlineWithDerivative(
-//        Int segmentIndex,
-//        double u,
-//        Vec2d& dp) const override {
-//    }
-//
-//    virtual StrokeSample2d evalNonZero(Int segmentIndex, double u) const override {
-//    }
-//
-//    virtual void sampleNonZeroSegment(
-//        Int segmentIndex,
-//        const CurveSamplingParameters& params,
-//        StrokeSample2dArray& out) const override {
-//    }
-//
-//    virtual StrokeSample2d zeroLengthStrokeSample() const override {
-//    }
-//
-//private:
-//    core::Array<Vec2d> positions_ = {};
-//    core::Array<double> widths_ = {};
-//};
-
-} // namespace
-
 //std::array<Vec2d, 2> StrokeView2d::computeOffsetLineTangentsAtSegmentEndpoint(
 //    Int segmentIndex,
 //    Int endpointIndex) const {
