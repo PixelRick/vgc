@@ -67,23 +67,36 @@ public:
 
     T eval(Scalar u, T& derivative) const {
         constexpr Scalar pi_2 = core::pi / 2;
-        Scalar du0 = 1 - parameterBounds_[0];
-        Scalar u0 = u * du0 + parameterBounds_[0];
-        Scalar du1 = parameterBounds_[1];
-        Scalar u1 = u * du1;
-        T d0 = core::noInit;
-        T p0 = quadratics_[0].eval(u0, d0);
-        d0 *= pi_2 / du0;
-        T d1 = core::noInit;
-        T p1 = quadratics_[1].eval(u1, d1);
-        d1 *= pi_2 / du1;
+        Scalar ti = parameterBounds_[0];
+        Scalar tj = parameterBounds_[1];
+
+        // u [0, 1] -> v [ti, 1]
+        Scalar dv_du = 1 - ti;
+        Scalar v = u * dv_du + ti;
+        // u [0, 1] -> w [0, tj]
+        Scalar dw_du = tj;
+        Scalar w = u * dw_du;
+
+        T dp0_dv = core::noInit;
+        T p0 = quadratics_[0].eval(v, dp0_dv);
+        T dp0_du = dp0_dv * dv_du;
+        T dp1_dw = core::noInit;
+        T p1 = quadratics_[1].eval(w, dp1_dw);
+        T dp1_du = dp1_dw * dw_du;
+
         Scalar a = u * pi_2;
         Scalar cosa = std::cos(a);
         Scalar sina = std::sin(a);
         Scalar cosa2 = cosa * cosa;
         Scalar sina2 = sina * sina;
-        derivative = 2.0 * cosa * sina * (p1 - p0) + cosa2 * d0 + sina2 * d1;
-        return cosa2 * p0 + sina2 * p1;
+
+        T p = cosa2 * p0 + sina2 * p1;
+        T dp_dtheta_term1 = 2.0 * cosa * sina * (p1 - p0);
+        T dp_du_term1 = dp_dtheta_term1 * pi_2;
+        T dp_du = dp_du_term1 + cosa2 * dp0_du + sina2 * dp1_du;
+
+        derivative = dp_du;
+        return p;
     }
 
     const std::array<QuadraticBezier<T, Scalar>, 2>& quadratics() const {

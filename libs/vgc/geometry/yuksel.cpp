@@ -103,6 +103,44 @@ std::array<Vec2d, 2> YukselSplineStroke2d::computeOffsetLineTangentsAtSegmentEnd
     Int /*endpointIndex*/) const {
 
     return {Vec2d(1, 0), Vec2d(1, 0)};
+
+    /* Vec2d p = {};
+    Vec2d dp = {};
+    Vec2d ddp = {};
+    Vec2d w = {};
+    Vec2d dw = {};
+
+    CubicBezier2d halfwidthsSegment(core::noInit);
+    auto centerlineSegment = segmentEvaluator(segmentIndex, halfwidthsSegment);
+
+    CubicBezier2d halfwidthBezier(core::noInit);
+    CubicBezier2d positionsBezier = segmentToBezier(segmentIndex, halfwidthBezier);
+
+    const std::array<Vec2d, 4>& positions = positionsBezier.controlPoints();
+    const std::array<Vec2d, 4>& halfwidths = halfwidthBezier.controlPoints();
+
+    if (endpointIndex) {
+        p = positions[3];
+        dp = 3 * (positions[3] - positions[2]);
+        ddp = 6 * (positions[3] - 2 * positions[2] + positions[1]);
+        w = halfwidths[3];
+        dw = 3 * (halfwidths[3] - halfwidths[2]);
+    }
+    else {
+        p = positions[0];
+        dp = 3 * (positions[1] - positions[0]);
+        ddp = 6 * (positions[2] - 2 * positions[1] + positions[0]);
+        w = halfwidths[0];
+        dw = 3 * (halfwidths[1] - halfwidths[0]);
+    }
+
+    double dpl = dp.length();
+    Vec2d n = dp.orthogonalized() / dpl;
+    Vec2d dn = dp * (ddp.det(dp)) / (dpl * dpl * dpl);
+
+    Vec2d offset0 = dn * w[0] + n * dw[0];
+    Vec2d offset1 = -(dn * w[1] + n * dw[1]);
+    return {(dp + offset0).normalized(), (dp + offset1).normalized()};*/
 }
 
 namespace {
