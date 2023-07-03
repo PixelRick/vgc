@@ -272,13 +272,11 @@ Vec2d AbstractStroke2d::evalCenterline(Int segmentIndex, double u) const {
     }
 }
 
-Vec2d AbstractStroke2d::evalCenterlineWithDerivative(
-    Int segmentIndex,
-    double u,
-    Vec2d& derivative) const {
+Vec2d AbstractStroke2d::evalCenterline(Int segmentIndex, double u, Vec2d& derivative)
+    const {
 
     if (fixEvalLocation_(segmentIndex, u)) {
-        return evalNonZeroCenterlineWithDerivative(segmentIndex, u, derivative);
+        return evalNonZeroCenterline(segmentIndex, u, derivative);
     }
     else {
         StrokeSampleEx2d sample = zeroLengthStrokeSample();
@@ -579,9 +577,11 @@ bool isCenterlineSegmentUnderTolerance(
     double nl = n.length();
     double maxDot = cosMaxAngle * nl;
     if (n.dot(s0.normal()) < maxDot) {
+        VGC_DEBUG_TMP("failed centerline test #0 (n: {}, n.normalized:{}, s0.normal: {})", n, n.normalized(), s0.normal());
         return false;
     }
     if (n.dot(s1.normal()) < maxDot) {
+        VGC_DEBUG_TMP("failed centerline test #1 (n: {}, n.normalized:{}, s1.normal: {})", n, n.normalized(), s1.normal());
         return false;
     }
     return true;
@@ -598,12 +598,16 @@ bool areOffsetLinesAnglesUnderTolerance(
     Vec2d l12 = s2.offsetPoint(1) - s1.offsetPoint(1);
     double ll = l01.length() * l12.length();
     if (l01.dot(l12) < cosMaxAngle * ll) {
+        VGC_DEBUG_TMP(
+            "failed offsetline test #0 (l01: {}, l12: {}, ll: {})", l01, l12, ll);
         return false;
     }
     Vec2d r01 = s1.offsetPoint(0) - s0.offsetPoint(0);
     Vec2d r12 = s2.offsetPoint(0) - s1.offsetPoint(0);
     double rl = r01.length() * r12.length();
     if (r01.dot(r12) < cosMaxAngle * rl) {
+        VGC_DEBUG_TMP(
+            "failed offsetline test #1 (r01: {}, r12: {}, rl: {})", r01, r12, rl);
         return false;
     }
     return true;

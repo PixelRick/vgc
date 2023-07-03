@@ -18,6 +18,7 @@
 #define VGC_WORKSPACE_FREEHANDEDGEGEOMETRY_H
 
 #include <vgc/geometry/catmullrom.h>
+#include <vgc/geometry/yuksel.h>
 #include <vgc/vacomplex/keyedge.h>
 #include <vgc/workspace/api.h>
 #include <vgc/workspace/edgegeometry.h>
@@ -29,23 +30,20 @@ public:
     using SharedConstPositions = geometry::SharedConstVec2dArray;
     using SharedConstWidths = core::SharedConstDoubleArray;
 
-    using StrokeType = geometry::CatmullRomSplineStroke2d;
+    //using StrokeType = geometry::CatmullRomSplineStroke2d;
+    using StrokeType = geometry::YukselSplineStroke2d;
 
     FreehandEdgeGeometry(bool isClosed)
         : EdgeGeometry(isClosed) {
 
-        stroke_ = std::make_unique<geometry::CatmullRomSplineStroke2d>(
-            geometry::CatmullRomSplineParameterization::Centripetal,
-            isClosed);
+        stroke_ = createStroke_();
     }
 
     FreehandEdgeGeometry(bool isClosed, double constantWidth)
         : EdgeGeometry(isClosed) {
 
-        stroke_ = std::make_unique<geometry::CatmullRomSplineStroke2d>(
-            geometry::CatmullRomSplineParameterization::Centripetal,
-            isClosed,
-            constantWidth);
+        stroke_ = createStroke_();
+        stroke_->setConstantWidth(constantWidth);
     }
 
     FreehandEdgeGeometry(
@@ -56,12 +54,14 @@ public:
 
         : EdgeGeometry(isClosed) {
 
-        stroke_ = std::make_unique<geometry::CatmullRomSplineStroke2d>(
-            geometry::CatmullRomSplineParameterization::Centripetal,
-            isClosed,
-            isWidthConstant,
-            positions,
-            widths);
+        stroke_ = createStroke_();
+        if (isWidthConstant) {
+            stroke_->setConstantWidth(widths.get()[0]);
+        }
+        else {
+            stroke_->setWidths(widths);
+        }
+        stroke_->setPositions(positions);
     }
 
     const geometry::Vec2dArray& positions() const {

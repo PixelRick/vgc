@@ -689,8 +689,7 @@ public:
     /// parameter `u`. It additionally sets the value of `derivative` as the
     /// position derivative at `u` with respect to the parameter u.
     ///
-    virtual Vec2d
-    evalWithDerivative(Int segmentIndex, double u, Vec2d& derivative) const = 0;
+    virtual Vec2d eval(Int segmentIndex, double u, Vec2d& derivative) const = 0;
 };
 
 } // namespace detail
@@ -751,8 +750,7 @@ public:
     /// Throws `IndexError` if `segmentIndex` is not in the range
     /// `[0, numSegments() - 1]`.
     ///
-    Vec2d
-    evalCenterlineWithDerivative(Int segmentIndex, double u, Vec2d& derivative) const;
+    Vec2d evalCenterline(Int segmentIndex, double u, Vec2d& derivative) const;
 
     /// Returns a `StrokeSample` from the segment `segmentIndex` at
     /// parameter `u`. The attribute `s` of the sample is left to 0.
@@ -870,8 +868,7 @@ protected:
 
     virtual Vec2d evalNonZeroCenterline(Int segmentIndex, double u) const = 0;
 
-    virtual Vec2d
-    evalNonZeroCenterlineWithDerivative(Int segmentIndex, double u, Vec2d& dp) const = 0;
+    virtual Vec2d evalNonZeroCenterline(Int segmentIndex, double u, Vec2d& dp) const = 0;
 
     virtual StrokeSampleEx2d evalNonZero(Int segmentIndex, double u) const = 0;
 

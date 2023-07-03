@@ -25,7 +25,103 @@
 
 namespace vgc::geometry {
 
-class YukselSplineStroke2d : public AbstractStroke2d {
+template<typename T, typename Scalar>
+class YukselBezierSegment {
+private:
+    using Quadratic = QuadraticBezier<T, Scalar>;
+
+public:
+    // Initialized with null control points.
+    YukselBezierSegment() noexcept = default;
+
+    VGC_WARNING_PUSH
+    VGC_WARNING_MSVC_DISABLE(26495) // member variable uninitialized
+                                    /// Uninitialized construction.
+                                    ///
+    YukselBezierSegment(core::NoInit) noexcept
+        : quadratics_{core::noInit, core::noInit} {
+    }
+    VGC_WARNING_POP
+
+    YukselBezierSegment(
+        core::ConstSpan<T, 4> knots,
+        const T& b0,
+        Scalar u0,
+        const T& b1,
+        Scalar u1) noexcept
+        : quadratics_{Quadratic(knots[0], b0, knots[2]), Quadratic(knots[1], b1, knots[3])}
+        , parameterBounds_{core::clamp(u0, 0, 1), core::clamp(u1, 0, 1)} {
+    }
+
+    T eval(Scalar u) const {
+        Scalar u0 = (1 - u) * parameterBounds_[0] + u;
+        Scalar u1 = u * parameterBounds_[1];
+        T p0 = quadratics_[0].eval(u0);
+        T p1 = quadratics_[1].eval(u1);
+        constexpr Scalar pi_2 = core::pi / 2;
+        Scalar a = u * pi_2;
+        Scalar cosa = std::cos(a);
+        Scalar sina = std::sin(a);
+        return (cosa * cosa) * p0 + (sina * sina) * p1;
+    }
+
+    T eval(Scalar u, T& derivative) const {
+        constexpr Scalar pi_2 = core::pi / 2;
+        Scalar du0 = 1 - parameterBounds_[0];
+        Scalar u0 = u * du0 + parameterBounds_[0];
+        Scalar du1 = parameterBounds_[1];
+        Scalar u1 = u * du1;
+        T d0 = core::noInit;
+        T p0 = quadratics_[0].eval(u0, d0);
+        d0 *= pi_2 / du0;
+        T d1 = core::noInit;
+        T p1 = quadratics_[1].eval(u1, d1);
+        d1 *= pi_2 / du1;
+        Scalar a = u * pi_2;
+        Scalar cosa = std::cos(a);
+        Scalar sina = std::sin(a);
+        Scalar cosa2 = cosa * cosa;
+        Scalar sina2 = sina * sina;
+        derivative = 2.0 * cosa * sina * (p1 - p0) + cosa2 * d0 + sina2 * d1;
+        return cosa2 * p0 + sina2 * p1;
+    }
+
+    const std::array<QuadraticBezier<T, Scalar>, 2>& quadratics() const {
+        return quadratics_;
+    }
+
+    const std::array<Scalar, 2>& parameterBounds() const {
+        return parameterBounds_;
+    }
+
+    T startDerivative() const {
+        return quadratics_[0].evalDerivative(parameterBounds_[0]);
+    }
+
+    T endDerivative() const {
+        return quadratics_[1].evalDerivative(parameterBounds_[1]);
+    }
+
+private:
+    std::array<QuadraticBezier<T, Scalar>, 2> quadratics_;
+    std::array<Scalar, 2> parameterBounds_;
+};
+
+using YukselBezierSegment2d = YukselBezierSegment<Vec2d, double>;
+using YukselBezierSegment1d = YukselBezierSegment<double, double>;
+
+namespace detail {
+
+struct YukselKnotData {
+    double chordLength;
+    // Parameter of the quadratic used in spline formula.
+    double ti;
+    Vec2d bi;
+};
+
+} // namespace detail
+
+class VGC_GEOMETRY_API YukselSplineStroke2d : public AbstractStroke2d {
 public:
     YukselSplineStroke2d(bool isClosed)
         : AbstractStroke2d(isClosed) {
@@ -49,7 +145,7 @@ public:
         , widths_(std::forward<TRangeWidths>(widths))
         , isWidthConstant_(isWidthConstant) {
 
-        computeChordLengths_();
+        computeCache_();
     }
 
     const core::Array<Vec2d>& positions() const {
@@ -63,7 +159,7 @@ public:
     template<typename TRange>
     void setPositions(TRange&& positions) {
         positions_ = std::forward<TRange>(positions);
-        computeChordLengths_();
+        computeCache_();
     }
 
     const core::Array<double>& widths() const {
@@ -90,10 +186,6 @@ public:
         return isWidthConstant_;
     }
 
-    const core::Array<double>& chordLengths() const {
-        return chordLengths_;
-    }
-
 protected:
     Int numKnots_() const override;
 
@@ -101,8 +193,7 @@ protected:
 
     Vec2d evalNonZeroCenterline(Int segmentIndex, double u) const override;
 
-    Vec2d evalNonZeroCenterlineWithDerivative(Int segmentIndex, double u, Vec2d& dp)
-        const override;
+    Vec2d evalNonZeroCenterline(Int segmentIndex, double u, Vec2d& dp) const override;
 
     StrokeSampleEx2d evalNonZero(Int segmentIndex, double u) const override;
 
@@ -117,8 +208,9 @@ protected:
         Int segmentIndex,
         Int endpointIndex) const override;
 
-    //CubicBezier2d segmentToBezier(Int segmentIndex) const;
-    //CubicBezier2d segmentToBezier(Int segmentIndex, CubicBezier2d& halfwidths) const;
+    YukselBezierSegment2d segmentEvaluator(Int segmentIndex) const;
+    YukselBezierSegment2d
+    segmentEvaluator(Int segmentIndex, CubicBezier2d& halfwidths) const;
 
     double constantWidth() const {
         return widths_[0];
@@ -127,10 +219,12 @@ protected:
 private:
     core::Array<Vec2d> positions_;
     core::Array<double> widths_;
-    core::Array<double> chordLengths_;
+
+    core::Array<detail::YukselKnotData> knotsData_;
+
     bool isWidthConstant_ = false;
 
-    void computeChordLengths_(); // TODO: rename computeCache_() ?
+    void computeCache_();
 };
 
 } // namespace vgc::geometry

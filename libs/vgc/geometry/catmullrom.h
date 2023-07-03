@@ -333,8 +333,7 @@ protected:
 
     Vec2d evalNonZeroCenterline(Int segmentIndex, double u) const override;
 
-    Vec2d evalNonZeroCenterlineWithDerivative(Int segmentIndex, double u, Vec2d& dp)
-        const override;
+    Vec2d evalNonZeroCenterline(Int segmentIndex, double u, Vec2d& dp) const override;
 
     StrokeSampleEx2d evalNonZero(Int segmentIndex, double u) const override;
 

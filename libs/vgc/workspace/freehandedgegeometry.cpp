@@ -95,7 +95,7 @@ std::shared_ptr<vacomplex::KeyEdgeGeometry> FreehandEdgeGeometry::clone() const 
     // TODO
     ret->sharedConstPositions_ = sharedConstPositions_;
     ret->sharedConstWidths_ = sharedConstWidths_;
-    ret->stroke_ = std::make_unique<geometry::CatmullRomSplineStroke2d>(*stroke_);
+    ret->stroke_ = std::make_unique<StrokeType>(*stroke_);
     return ret;
 }
 
@@ -123,7 +123,8 @@ vacomplex::EdgeSampling FreehandEdgeGeometry::computeSampling(
         stroke->setPositions(tmpPoints);
         stroke->setWidths(tmpWidths);
     }
-    else if (positions.first() != snapStartPosition || positions.last() != snapEndPosition) {
+    else if (
+        positions.first() != snapStartPosition || positions.last() != snapEndPosition) {
         strokeTmp = createStroke_();
         if (isBeingEdited_) {
             // TODO: add warning, edit tool should keep geometry snapped.
@@ -2420,8 +2421,9 @@ void FreehandEdgeGeometry::computeKnotArclengths_(
 
 std::unique_ptr<FreehandEdgeGeometry::StrokeType>
 FreehandEdgeGeometry::createStroke_() const {
-    return std::make_unique<geometry::CatmullRomSplineStroke2d>(
-        geometry::CatmullRomSplineParameterization::Centripetal, isClosed());
+    //return std::make_unique<geometry::CatmullRomSplineStroke2d>(
+    //    geometry::CatmullRomSplineParameterization::Centripetal, isClosed());
+    return std::make_unique<geometry::YukselSplineStroke2d>(isClosed());
 }
 
 } // namespace vgc::workspace

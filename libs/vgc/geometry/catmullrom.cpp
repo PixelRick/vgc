@@ -71,13 +71,13 @@ Vec2d CatmullRomSplineStroke2d::evalNonZeroCenterline(Int segmentIndex, double u
     return bezier.eval(u);
 }
 
-Vec2d CatmullRomSplineStroke2d::evalNonZeroCenterlineWithDerivative(
+Vec2d CatmullRomSplineStroke2d::evalNonZeroCenterline(
     Int segmentIndex,
     double u,
     Vec2d& dp) const {
 
     auto bezier = segmentToBezier(segmentIndex);
-    return bezier.evalWithDerivative(u, dp);
+    return bezier.eval(u, dp);
 }
 
 StrokeSampleEx2d CatmullRomSplineStroke2d::evalNonZero(Int segmentIndex, double u) const {
@@ -85,14 +85,14 @@ StrokeSampleEx2d CatmullRomSplineStroke2d::evalNonZero(Int segmentIndex, double 
         CubicBezier2d centerlineBezier = segmentToBezier(segmentIndex);
         double hw = 0.5 * widths_[0];
         Vec2d dp(core::noInit);
-        Vec2d p = centerlineBezier.evalWithDerivative(u, dp);
+        Vec2d p = centerlineBezier.eval(u, dp);
         return StrokeSampleEx2d(p, dp, hw, segmentIndex, u);
     }
     else {
         CubicBezier2d halfwidthsBezier(core::noInit);
         CubicBezier2d centerlineBezier = segmentToBezier(segmentIndex, halfwidthsBezier);
         Vec2d dp(core::noInit);
-        Vec2d p = centerlineBezier.evalWithDerivative(u, dp);
+        Vec2d p = centerlineBezier.eval(u, dp);
         Vec2d hw = halfwidthsBezier.eval(u);
         return StrokeSampleEx2d(p, dp, hw, segmentIndex, u);
     }
@@ -111,7 +111,7 @@ void CatmullRomSplineStroke2d::sampleNonZeroSegment(
         sampler.sample(
             [&, hw](double u) -> StrokeSampleEx2d {
                 Vec2d dp(core::noInit);
-                Vec2d p = centerlineBezier.evalWithDerivative(u, dp);
+                Vec2d p = centerlineBezier.eval(u, dp);
                 return StrokeSampleEx2d(p, dp, hw, segmentIndex, u);
             },
             params,
@@ -123,7 +123,7 @@ void CatmullRomSplineStroke2d::sampleNonZeroSegment(
         sampler.sample(
             [&](double u) -> StrokeSampleEx2d {
                 Vec2d dp(core::noInit);
-                Vec2d p = centerlineBezier.evalWithDerivative(u, dp);
+                Vec2d p = centerlineBezier.eval(u, dp);
                 Vec2d hw = halfwidthsBezier.eval(u);
                 return StrokeSampleEx2d(p, dp, hw, segmentIndex, u);
             },
@@ -228,7 +228,7 @@ enum class CornerCase {
     BetweenCorners = 4,
 };
 
-CornerCase computeCenterlineCubicBezierSegment_(
+CornerCase computeSegmentCenterlineCubicBezier_(
     CubicBezier2d& bezier,
     CatmullRomSplineParameterization parameterization,
     core::ConstSpan<Vec2d> knotPositions,
@@ -329,7 +329,7 @@ CornerCase computeCenterlineCubicBezierSegment_(
     return result;
 }
 
-void computeHalfwidthsCubicBezierSegmentControlPoints_(
+void computeSegmentHalfwidthsCubicBezier_(
     CubicBezier2d& bezier,
     core::ConstSpan<double> knotWidths,
     const std::array<Int, 4>& knotIndices,
@@ -354,7 +354,7 @@ void computeHalfwidthsCubicBezierSegmentControlPoints_(
     const double d12 = fixedChordLengths[1];
     const double d23 = fixedChordLengths[2];
 
-    std::array<Vec2d, 4> controlPoints;
+    std::array<Vec2d, 2> fixedNeighborKnots;
 
     // Handle "corner knots", defined as:
     // 1. Two consecutive equal points, or
@@ -362,34 +362,32 @@ void computeHalfwidthsCubicBezierSegmentControlPoints_(
     //
     switch (cornerCase) {
     case CornerCase::None: {
-        controlPoints = knots;
+        fixedNeighborKnots[0] = knots[0];
+        fixedNeighborKnots[1] = knots[3];
         break;
     }
     case CornerCase::BetweenCorners:
     case CornerCase::Corner: {
         double u = 1.0 / 3;
         double v = (1 - u);
-        controlPoints[0] = knots[1];
-        controlPoints[1] = v * knots[1] + u * knots[2];
-        controlPoints[2] = u * knots[1] + v * knots[2];
-        controlPoints[3] = knots[2];
+        bezier = CubicBezier2d(
+            knots[1], //
+            v * knots[1] + u * knots[2],
+            u * knots[1] + v * knots[2],
+            knots[2]);
         // Fast return.
         return;
     }
     case CornerCase::AfterCorner: {
         // Imaginary control point, see `initPositions_()`.
-        controlPoints[0] = 2 * knots[1] - knots[2];
-        controlPoints[1] = knots[1];
-        controlPoints[2] = knots[2];
-        controlPoints[3] = knots[3];
+        fixedNeighborKnots[0] = 2 * knots[1] - knots[2];
+        fixedNeighborKnots[1] = knots[3];
         break;
     }
     case CornerCase::BeforeCorner: {
         // Imaginary control point, see `initPositions_()`.
-        controlPoints[0] = knots[0];
-        controlPoints[1] = knots[1];
-        controlPoints[2] = knots[2];
-        controlPoints[3] = 2 * knots[2] - knots[1];
+        fixedNeighborKnots[0] = knots[0];
+        fixedNeighborKnots[1] = 2 * knots[2] - knots[1];
         break;
     }
     }
@@ -397,19 +395,19 @@ void computeHalfwidthsCubicBezierSegmentControlPoints_(
     // Compute Bézier control points for halfwidths such that on both sides of
     // each knot we have the same desired dw/ds.
     //
-    double d02 = d01 + d12;
-    double d13 = d12 + d23;
+    double d012 = d01 + d12;
+    double d123 = d12 + d23;
     // desired dw/ds at start/end
-    Vec2d dhw_ds_1 = (controlPoints[2] - controlPoints[0]) / d02;
-    Vec2d dhw_ds_2 = (controlPoints[3] - controlPoints[1]) / d13;
+    Vec2d dhw_ds_1 = (knots[2] - fixedNeighborKnots[0]) / d012;
+    Vec2d dhw_ds_2 = (fixedNeighborKnots[1] - knots[1]) / d123;
     // 1/3 of ds/du at start/end
     double ds_du_1 = (centerlineControlPoints[1] - centerlineControlPoints[0]).length();
     double ds_du_2 = (centerlineControlPoints[3] - centerlineControlPoints[2]).length();
     // w1 - w0 = 1/3 of dw/du at start; w3 - w2 = 1/3 of dw/du at end
-    Vec2d hw1 = controlPoints[1] + dhw_ds_1 * ds_du_1;
-    Vec2d hw2 = controlPoints[2] - dhw_ds_2 * ds_du_2;
+    Vec2d hw1 = knots[1] + dhw_ds_1 * ds_du_1;
+    Vec2d hw2 = knots[2] - dhw_ds_2 * ds_du_2;
 
-    bezier = CubicBezier2d(controlPoints[1], hw1, hw2, controlPoints[2]);
+    bezier = CubicBezier2d(knots[1], hw1, hw2, knots[2]);
 }
 
 } // namespace
@@ -419,8 +417,9 @@ CubicBezier2d CatmullRomSplineStroke2d::segmentToBezier(Int segmentIndex) const 
 
     std::array<Int, 4> knotIndices =
         computeKnotIndices_(isClosed(), positions().length(), segmentIndex);
+
     std::array<double, 3> fixedChordLengths;
-    computeCenterlineCubicBezierSegment_(
+    computeSegmentCenterlineCubicBezier_(
         centerlineBezier,
         parametrization_,
         positions(),
@@ -436,10 +435,12 @@ CubicBezier2d CatmullRomSplineStroke2d::segmentToBezier(
     CubicBezier2d& halfwidths) const {
 
     CubicBezier2d centerlineBezier(core::noInit);
+
     std::array<Int, 4> knotIndices =
         computeKnotIndices_(isClosed(), positions().length(), segmentIndex);
+
     std::array<double, 3> fixedChordLengths;
-    CornerCase cornerCase = computeCenterlineCubicBezierSegment_(
+    CornerCase cornerCase = computeSegmentCenterlineCubicBezier_(
         centerlineBezier,
         parametrization_,
         positions(),
@@ -453,7 +454,7 @@ CubicBezier2d CatmullRomSplineStroke2d::segmentToBezier(
         halfwidths = CubicBezier2d(cp, cp, cp, cp);
     }
     else {
-        computeHalfwidthsCubicBezierSegmentControlPoints_(
+        computeSegmentHalfwidthsCubicBezier_(
             halfwidths,
             widths(),
             knotIndices,
