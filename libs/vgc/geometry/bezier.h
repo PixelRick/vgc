@@ -219,13 +219,14 @@ T quadraticBezier(const T& p0, const T& p1, const T& p2, Scalar u) {
     Scalar v2 = v * v;
 
     return    v2      * p0
-        + 3 * v  * u  * p1
+        + 2 * v  * u  * p1
         +          u2 * p2;
     // clang-format on
 }
 
-/// Returns the (non-normalized) derivative at coordinate `u` of the quadratic
-/// Bézier curve defined by the three control points `p0`, `p1`, and `p2`.
+/// Returns the (non-normalized) first derivative at coordinate `u` of the
+/// quadratic Bézier curve defined by the three control points `p0`, `p1`, and
+/// `p2`.
 ///
 /// \sa quadraticBezier()
 ///
@@ -233,6 +234,17 @@ template<typename Scalar, typename T>
 T quadraticBezierDerivative(const T& p0, const T& p1, const T& p2, Scalar u) {
     Scalar v = 1 - u;
     return 2 * (v * (p1 - p0) + u * (p2 - p1));
+}
+
+/// Returns the (non-normalized) second derivative at coordinate `u` of the
+/// quadratic Bézier curve defined by the three control points `p0`, `p1`, and
+/// `p2`.
+///
+/// \sa quadraticBezier()
+///
+template<typename T>
+T quadraticBezierSecondDerivative(const T& p0, const T& p1, const T& p2) {
+    return 2 * (p0 - 2 * p1 + p2);
 }
 
 template<typename T, typename Scalar>
@@ -289,6 +301,11 @@ public:
             controlPoints_[0], controlPoints_[1], controlPoints_[2], u);
     }
 
+    T evalSecondDerivative(Scalar /*u*/) const {
+        return quadraticBezierSecondDerivative(
+            controlPoints_[0], controlPoints_[1], controlPoints_[2]);
+    }
+
 private:
     std::array<Vec2d, 3> controlPoints_;
 };
@@ -325,9 +342,9 @@ T cubicBezier(const T& p0, const T& p1, const T& p2, const T& p3, Scalar u) {
     // clang-format on
 }
 
-/// Returns the (non-normalized) derivative at coordinate \p u of the cubic
-/// Bézier curve defined by the four control points \p p0, \p p1, \p p2, and \p
-/// p3.
+/// Returns the (non-normalized) first derivative at coordinate `u` of the
+/// cubic Bézier curve defined by the three control points `p0`, `p1`, `p2`,
+/// and `p3`.
 ///
 /// \sa cubicBezier()
 ///
@@ -355,6 +372,24 @@ T cubicBezierDerivative(const T* fourPoints, Scalar u) {
     // expected to be inlined
     return cubicBezierDerivative<Scalar, T>(
         fourPoints[0], fourPoints[1], fourPoints[2], fourPoints[3], u);
+}
+
+/// Returns the (non-normalized) second derivative at coordinate `u` of the
+/// cubic Bézier curve defined by the three control points `p0`, `p1`, `p2`,
+/// and `p3`.
+///
+/// \sa cubicBezier()
+///
+template<typename Scalar, typename T>
+T cubicBezierSecondDerivative(
+    const T& p0,
+    const T& p1,
+    const T& p2,
+    const T& p3,
+    Scalar u) {
+
+    Scalar v = 1 - u;
+    return 6 * (v * (p2 - 2 * p1 + p0) + u * (p3 - 2 * p2 + p1));
 }
 
 template<typename T, typename Scalar>
@@ -415,6 +450,15 @@ public:
 
     T evalDerivative(Scalar u) const {
         return cubicBezierDerivative(
+            controlPoints_[0],
+            controlPoints_[1],
+            controlPoints_[2],
+            controlPoints_[3],
+            u);
+    }
+
+    T evalSecondDerivative(Scalar u) const {
+        return cubicBezierSecondDerivative(
             controlPoints_[0],
             controlPoints_[1],
             controlPoints_[2],

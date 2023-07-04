@@ -30,8 +30,8 @@ public:
     using SharedConstPositions = geometry::SharedConstVec2dArray;
     using SharedConstWidths = core::SharedConstDoubleArray;
 
-    //using StrokeType = geometry::CatmullRomSplineStroke2d;
-    using StrokeType = geometry::YukselSplineStroke2d;
+    using StrokeType = geometry::CatmullRomSplineStroke2d;
+    //using StrokeType = geometry::YukselSplineStroke2d;
 
     FreehandEdgeGeometry(bool isClosed)
         : EdgeGeometry(isClosed) {

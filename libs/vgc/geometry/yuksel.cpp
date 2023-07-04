@@ -30,32 +30,35 @@ bool YukselSplineStroke2d::isZeroLengthSegment_(Int segmentIndex) const {
 }
 
 Vec2d YukselSplineStroke2d::evalNonZeroCenterline(Int segmentIndex, double u) const {
-    auto centerlineSegment = segmentEvaluator(segmentIndex);
+    YukselBezierSegment2d centerlineSegment = segmentEvaluator(segmentIndex);
     return centerlineSegment.eval(u);
 }
 
 Vec2d YukselSplineStroke2d::evalNonZeroCenterline(Int segmentIndex, double u, Vec2d& dp)
     const {
 
-    auto centerlineSegment = segmentEvaluator(segmentIndex);
+    YukselBezierSegment2d centerlineSegment = segmentEvaluator(segmentIndex);
     return centerlineSegment.eval(u, dp);
 }
 
 StrokeSampleEx2d YukselSplineStroke2d::evalNonZero(Int segmentIndex, double u) const {
     if (isWidthConstant_) {
-        auto centerlineSegment = segmentEvaluator(segmentIndex);
+        YukselBezierSegment2d centerlineSegment = segmentEvaluator(segmentIndex);
         double hw = 0.5 * widths_[0];
-        Vec2d dp(core::noInit);
-        Vec2d p = centerlineSegment.eval(u, dp);
-        return StrokeSampleEx2d(p, dp, hw, segmentIndex, u);
+        Vec2d tangent = core::noInit;
+        double speed;
+        Vec2d p = centerlineSegment.eval(u, tangent, speed);
+        return StrokeSampleEx2d(p, tangent, hw, speed, segmentIndex, u);
     }
     else {
         CubicBezier2d halfwidthsSegment(core::noInit);
-        auto centerlineSegment = segmentEvaluator(segmentIndex, halfwidthsSegment);
-        Vec2d dp(core::noInit);
-        Vec2d p = centerlineSegment.eval(u, dp);
+        YukselBezierSegment2d centerlineSegment =
+            segmentEvaluator(segmentIndex, halfwidthsSegment);
+        Vec2d tangent = core::noInit;
+        double speed;
+        Vec2d p = centerlineSegment.eval(u, tangent, speed);
         Vec2d hw = halfwidthsSegment.eval(u);
-        return StrokeSampleEx2d(p, dp, hw, segmentIndex, u);
+        return StrokeSampleEx2d(p, tangent, hw, speed, segmentIndex, u);
     }
 }
 
@@ -67,26 +70,29 @@ void YukselSplineStroke2d::sampleNonZeroSegment(
     detail::AdaptiveStrokeSampler sampler = {};
 
     if (isWidthConstant_) {
-        auto centerlineSegment = segmentEvaluator(segmentIndex);
+        YukselBezierSegment2d centerlineSegment = segmentEvaluator(segmentIndex);
         double hw = 0.5 * widths_[0];
         sampler.sample(
             [&, hw](double u) -> StrokeSampleEx2d {
-                Vec2d dp(core::noInit);
-                Vec2d p = centerlineSegment.eval(u, dp);
-                return StrokeSampleEx2d(p, dp, hw, segmentIndex, u);
+                Vec2d tangent = core::noInit;
+                double speed;
+                Vec2d p = centerlineSegment.eval(u, tangent, speed);
+                return StrokeSampleEx2d(p, tangent, hw, speed, segmentIndex, u);
             },
             params,
             out);
     }
     else {
         CubicBezier2d halfwidthsSegment(core::noInit);
-        auto centerlineSegment = segmentEvaluator(segmentIndex, halfwidthsSegment);
+        YukselBezierSegment2d centerlineSegment =
+            segmentEvaluator(segmentIndex, halfwidthsSegment);
         sampler.sample(
             [&](double u) -> StrokeSampleEx2d {
-                Vec2d dp(core::noInit);
-                Vec2d p = centerlineSegment.eval(u, dp);
+                Vec2d tangent = core::noInit;
+                double speed;
+                Vec2d p = centerlineSegment.eval(u, tangent, speed);
                 Vec2d hw = halfwidthsSegment.eval(u);
-                return StrokeSampleEx2d(p, dp, hw, segmentIndex, u);
+                return StrokeSampleEx2d(p, tangent, hw, speed, segmentIndex, u);
             },
             params,
             out);
@@ -95,55 +101,84 @@ void YukselSplineStroke2d::sampleNonZeroSegment(
 
 StrokeSampleEx2d YukselSplineStroke2d::zeroLengthStrokeSample() const {
     return StrokeSampleEx2d(
-        positions().first(), Vec2d(0, 1), 0.5 /*constantHalfwidth_*/, 0, 0);
-}
-
-std::array<Vec2d, 2> YukselSplineStroke2d::computeOffsetLineTangentsAtSegmentEndpoint_(
-    Int /*segmentIndex*/,
-    Int /*endpointIndex*/) const {
-
-    return {Vec2d(1, 0), Vec2d(1, 0)};
-
-    /* Vec2d p = {};
-    Vec2d dp = {};
-    Vec2d ddp = {};
-    Vec2d w = {};
-    Vec2d dw = {};
-
-    CubicBezier2d halfwidthsSegment(core::noInit);
-    auto centerlineSegment = segmentEvaluator(segmentIndex, halfwidthsSegment);
-
-    CubicBezier2d halfwidthBezier(core::noInit);
-    CubicBezier2d positionsBezier = segmentToBezier(segmentIndex, halfwidthBezier);
-
-    const std::array<Vec2d, 4>& positions = positionsBezier.controlPoints();
-    const std::array<Vec2d, 4>& halfwidths = halfwidthBezier.controlPoints();
-
-    if (endpointIndex) {
-        p = positions[3];
-        dp = 3 * (positions[3] - positions[2]);
-        ddp = 6 * (positions[3] - 2 * positions[2] + positions[1]);
-        w = halfwidths[3];
-        dw = 3 * (halfwidths[3] - halfwidths[2]);
-    }
-    else {
-        p = positions[0];
-        dp = 3 * (positions[1] - positions[0]);
-        ddp = 6 * (positions[2] - 2 * positions[1] + positions[0]);
-        w = halfwidths[0];
-        dw = 3 * (halfwidths[1] - halfwidths[0]);
-    }
-
-    double dpl = dp.length();
-    Vec2d n = dp.orthogonalized() / dpl;
-    Vec2d dn = dp * (ddp.det(dp)) / (dpl * dpl * dpl);
-
-    Vec2d offset0 = dn * w[0] + n * dw[0];
-    Vec2d offset1 = -(dn * w[1] + n * dw[1]);
-    return {(dp + offset0).normalized(), (dp + offset1).normalized()};*/
+        positions().first(), Vec2d(0, 1), 0.5 /*constantHalfwidth_*/, 0 /*speed*/, 0, 0);
 }
 
 namespace {
+
+struct QuadraticParameters {
+    Vec2d bi;
+    double ti;
+};
+
+double computeTi_(const Vec2d& knot0, const Vec2d& knot1, const Vec2d& knot2) {
+    // With the corner mechanism we can assume either [knot0, knot1] or [knot1, knot2]
+    // is non zero-lengh.
+
+    //--------------------------------
+    // chord-length ratio (not great)
+    //--------------------------------
+    //double l01 = (knot1 - knot0).length();
+    //double l02 = l01 + (knot2 - knot1).length();
+    //if (l02 == 0) {
+    //    return 0.5;
+    //}
+    //return l01 / l02;
+
+    //----------------------------
+    // max curvature on endpoints
+    //----------------------------
+    // For now we use the exact formula but a numeric method may be as precise and faster.
+    // See "High-Performance Polynomial Root Finding for Graphics" by Cem Yuksel.
+    Vec2d v02 = knot2 - knot0;
+    Vec2d v10 = knot0 - knot1;
+    double a = v02.dot(v02);
+    double b = 3 * v02.dot(v10);
+    double c = (3 * knot0 - 2 * knot1 - knot2).dot(v10);
+    double d = -v10.dot(v10);
+    // Solving `ax³ + bx² + cx + d = 0` in [0, 1]
+    // https://en.wikipedia.org/wiki/Cubic_equation
+    if (a == 0) {
+        // knot0 == knot2
+        return 0.5;
+    }
+    double p = (3 * a * c - b * b) / 3 / a / a;
+    double q = (2 * b * b * b - 9 * a * b * c + 27 * a * a * d) / 27 / a / a / a;
+    double discriminant = 4 * p * p * p + 27 * q * q;
+    double t = 0;
+    if (discriminant >= 0) {
+        // Single real root
+        return std::cbrt(-q / 2 + std::sqrt(q * q / 4 + p * p * p / 27))
+               + std::cbrt(-q / 2 - std::sqrt(q * q / 4 + p * p * p / 27)) - b / 3 / a;
+    }
+    else {
+        // Three real roots
+        for (int k = 0; k < 3; ++k) {
+            t = 2 * std::sqrt(-p / 3)
+                    * std::cos(
+                        1.0 / 3 * std::acos(3.0 * q / 2 / p * std::sqrt(-3.0 / p))
+                        - 2.0 * core::pi * k / 3)
+                - b / 3 / a;
+            if (0 <= t && t <= 1) {
+                return t;
+            }
+        }
+    }
+    // error
+    return 0.5;
+}
+
+Vec2d computeBi_(const Vec2d& knot0, const Vec2d& knot1, const Vec2d& knot2, double ti) {
+    if (ti <= 0) {
+        return knot0;
+    }
+    if (ti >= 1) {
+        return knot1;
+    }
+    double qi = 1 - ti;
+    double c = 1 / (2.0 * qi * ti);
+    return c * (knot1 - qi * qi * knot0 - ti * ti * knot2);
+}
 
 std::array<Int, 4> computeKnotIndices_(bool isClosed, Int numKnots, Int segmentIndex) {
     // Ensure we have a valid segment between two control points
@@ -182,12 +217,81 @@ std::array<Int, 4> computeKnotIndices_(bool isClosed, Int numKnots, Int segmentI
     return indices;
 }
 
-void computeSegmentCenterlineYukselSegment_(
+} // namespace
+
+std::array<Vec2d, 2> YukselSplineStroke2d::computeOffsetLineTangentsAtSegmentEndpoint_(
+    Int segmentIndex,
+    Int endpointIndex) const {
+
+    //return {Vec2d(1, 0), Vec2d(1, 0)};
+
+    CubicBezier2d halfwidthsSegment(core::noInit);
+    YukselBezierSegment2d centerlineSegment =
+        segmentEvaluator(segmentIndex, halfwidthsSegment);
+
+    Vec2d dp = core::noInit;
+    Vec2d ddp = core::noInit;
+    Vec2d p = centerlineSegment.computeEndPointDerivatives(endpointIndex, dp, ddp);
+    Vec2d dw = core::noInit;
+    // TODO: can be optimized if necessary.
+    Vec2d w = halfwidthsSegment.eval(endpointIndex == 0 ? 0 : 1, dw);
+
+    if (dp == Vec2d()) {
+        if (dw == Vec2d()) {
+            // TODO: second derivative of offset point function ?
+            Vec2d tangent = core::noInit;
+            if (endpointIndex == 0) {
+                tangent = ddp.normalized();
+            }
+            else {
+                tangent = -ddp.normalized();
+            }
+            return {tangent, tangent};
+        }
+        else {
+            Vec2d tangent = core::noInit;
+            if (ddp == Vec2d()) {
+                const QuadraticBezier2d q = centerlineSegment.quadratics()[endpointIndex];
+                tangent = (q.controlPoints()[2] - q.controlPoints()[0]).normalized();
+            }
+            else if (endpointIndex == 0) {
+                tangent = ddp.normalized();
+            }
+            else {
+                tangent = -ddp.normalized();
+            }
+            Vec2d normal = tangent.orthogonalized();
+            return {normal, -normal};
+        }
+    }
+    else {
+        double dpl = dp.length();
+        Vec2d n = dp.orthogonalized() / dpl;
+        Vec2d dn = dp * (ddp.det(dp)) / (dpl * dpl * dpl);
+
+        Vec2d offset0 = dn * w[0] + n * dw[0];
+        Vec2d offset1 = -(dn * w[1] + n * dw[1]);
+
+        return {(dp + offset0).normalized(), (dp + offset1).normalized()};
+    }
+}
+
+namespace {
+
+enum class SegmentType {
+    None = 0,
+    Corner = 1,
+    AfterCorner = 2,
+    BeforeCorner = 3,
+    BetweenCorners = 4,
+};
+
+SegmentType computeSegmentCenterlineYukselSegment_(
     YukselBezierSegment2d& segment,
     core::ConstSpan<Vec2d> knotPositions,
     core::ConstSpan<detail::YukselKnotData> knotsData,
     const std::array<Int, 4>& knotIndices,
-    std::array<double, 3>& chordLengths) {
+    std::array<double, 3>& fixedChordLengths) {
 
     std::array<Vec2d, 4> knots = {
         knotPositions.getUnchecked(knotIndices[0]),
@@ -199,9 +303,84 @@ void computeSegmentCenterlineYukselSegment_(
     const detail::YukselKnotData& kd1 = knotsData.getUnchecked(knotIndices[1]);
     const detail::YukselKnotData& kd2 = knotsData.getUnchecked(knotIndices[2]);
 
-    chordLengths = {kd0.chordLength, kd1.chordLength, kd2.chordLength};
+    fixedChordLengths = {
+        knotIndices[0] != knotIndices[1] ? kd0.chordLength : 0,
+        kd1.chordLength,
+        knotIndices[2] != knotIndices[3] ? kd2.chordLength : 0};
 
-    segment = YukselBezierSegment2d(knots, kd1.bi, kd1.ti, kd2.bi, kd2.ti);
+    // Aliases
+    const Vec2d p1p2 = knots[2] - knots[1];
+    const double d01 = fixedChordLengths[0];
+    const double d12 = fixedChordLengths[1];
+    const double d23 = fixedChordLengths[2];
+
+    // Handle "corner knots", defined as:
+    // 1. Two consecutive equal points, or
+    // 2. The first/last knot of an open curve
+    //
+    SegmentType result = SegmentType::None;
+    bool isAfterCorner = (d01 == 0);
+    bool isCorner = (d12 == 0);
+    bool isBeforeCorner = (d23 == 0);
+    if (isCorner) {
+        segment = YukselBezierSegment2d(knots, knots[1], 1, knots[2], 0);
+        return SegmentType::Corner;
+    }
+    else if (isAfterCorner) {
+        if (isBeforeCorner) {
+            // (d01 == 0) && (d12 > 0) && (d23 == 0)
+            //
+            // Linear parametrization
+            Vec2d mid = 0.5 * (knots[1] + knots[2]);
+            segment = YukselBezierSegment2d(knots, mid, 0.5, mid, 0.5);
+            return SegmentType::BetweenCorners;
+        }
+        else {
+            // (d01 == 0) && (d12 > 0) && (d23 > 0)
+            //
+            // Creates an imaginary control point p0 that would extrapolate the
+            // curve, defined as:
+            //
+            //        p1    p2
+            //         o----o         distance(p0, p1)  == distance(p1, p2)
+            //        '      `        angle(p0, p1, p2) == angle(p1, p2, p3)
+            //       o        `       w1 - w0           == w2 - w1
+            //    p0           `
+            //                  o p3
+            //
+            // Similarly to using "mirror tangents", this prevents ugly
+            // inflexion points that would happen by keeping p0 = p1, as
+            // illustrated here: https://github.com/vgc/vgc/pull/1341
+            //
+            Vec2d p2p3 = knots[3] - knots[2];
+            Vec2d d = p2p3 / d23;                    // unit vector to reflect
+            Vec2d n = (p1p2 / d12).orthogonalized(); // unit axis of reflexion
+            Vec2d q = 2 * d.dot(n) * n - d;          // refection of d along n
+            knots[0] = knots[1] + d12 * q;
+            fixedChordLengths[0] = d12;
+            result = SegmentType::AfterCorner;
+        }
+    }
+    else if (isBeforeCorner) {
+        // (d01 > 0) && (d12 > 0) && (d23 == 0)
+        //
+        // Similar as AfterCorner case above.
+        Vec2d p0p1 = knots[1] - knots[0];
+        Vec2d d = -p0p1 / d01;
+        Vec2d n = (p1p2 / d12).orthogonalized();
+        Vec2d q = 2 * d.dot(n) * n - d;
+        knots[3] = knots[2] + d12 * q;
+        fixedChordLengths[2] = d12;
+        result = SegmentType::BeforeCorner;
+    }
+
+    double ti0 = computeTi_(knots[0], knots[1], knots[2]);
+    Vec2d bi0 = computeBi_(knots[0], knots[1], knots[2], ti0);
+    double ti1 = computeTi_(knots[1], knots[2], knots[3]);
+    Vec2d bi1 = computeBi_(knots[1], knots[2], knots[3], ti1);
+
+    segment = YukselBezierSegment2d(knots, bi0, ti0, bi1, ti1);
+    return result;
 }
 
 void computeSegmentHalfwidthsCubicBezier_(
@@ -209,7 +388,8 @@ void computeSegmentHalfwidthsCubicBezier_(
     core::ConstSpan<double> knotWidths,
     const std::array<Int, 4>& knotIndices,
     const YukselBezierSegment2d& centerlineSegment,
-    const std::array<double, 3>& chordLengths) {
+    const std::array<double, 3>& chordLengths,
+    SegmentType segmentType) {
 
     std::array<double, 4> hws = {
         0.5 * knotWidths.getUnchecked(knotIndices[0]),
@@ -222,6 +402,38 @@ void computeSegmentHalfwidthsCubicBezier_(
         Vec2d(hws[1], hws[1]),
         Vec2d(hws[2], hws[2]),
         Vec2d(hws[3], hws[3])};
+
+    // Handle "corner knots", defined as:
+    // 1. Two consecutive equal points, or
+    // 2. The first/last knot of an open curve
+    //
+    switch (segmentType) {
+    case SegmentType::None: {
+        break;
+    }
+    case SegmentType::BetweenCorners:
+    case SegmentType::Corner: {
+        double u = 1.0 / 3;
+        double v = (1 - u);
+        bezier = CubicBezier2d(
+            knots[1], //
+            v * knots[1] + u * knots[2],
+            u * knots[1] + v * knots[2],
+            knots[2]);
+        // Fast return.
+        return;
+    }
+    case SegmentType::AfterCorner: {
+        // Imaginary control point, see `initPositions_()`.
+        knots[0] = 2 * knots[1] - knots[2];
+        break;
+    }
+    case SegmentType::BeforeCorner: {
+        // Imaginary control point, see `initPositions_()`.
+        knots[3] = 2 * knots[2] - knots[1];
+        break;
+    }
+    }
 
     // Compute Bézier control points for halfwidths such that on both sides of
     // each knot we have the same desired dw/ds.
@@ -264,7 +476,7 @@ YukselBezierSegment2d YukselSplineStroke2d::segmentEvaluator(
         computeKnotIndices_(isClosed(), positions().length(), segmentIndex);
 
     std::array<double, 3> chordLengths;
-    computeSegmentCenterlineYukselSegment_(
+    SegmentType segmentType = computeSegmentCenterlineYukselSegment_(
         centerlineSegment, positions(), knotsData_, knotIndices, chordLengths);
 
     if (isWidthConstant_) {
@@ -274,69 +486,16 @@ YukselBezierSegment2d YukselSplineStroke2d::segmentEvaluator(
     }
     else {
         computeSegmentHalfwidthsCubicBezier_(
-            halfwidths, widths(), knotIndices, centerlineSegment, chordLengths);
+            halfwidths,
+            widths(),
+            knotIndices,
+            centerlineSegment,
+            chordLengths,
+            segmentType);
     }
 
     return centerlineSegment;
 }
-
-namespace {
-
-double
-computeTiMaxCurvature_(const Vec2d& knot0, const Vec2d& knot1, const Vec2d& knot2) {
-    // For now we use the exact formula but a numeric method may be as precise and faster.
-    // See "High-Performance Polynomial Root Finding for Graphics" by Cem Yuksel.
-
-    Vec2d v02 = knot2 - knot0;
-    Vec2d v10 = knot0 - knot1;
-    double a = v02.dot(v02);
-    double b = 3 * v02.dot(v10);
-    double c = (3 * knot0 - 2 * knot1 - knot2).dot(v10);
-    double d = -v10.dot(v10);
-    // Solving `ax³ + bx² + cx + d = 0` in [0, 1]
-    // https://en.wikipedia.org/wiki/Cubic_equation
-    // TODO: If a==0, solve a quadratic or linear equation.
-
-    double p = (3 * a * c - b * b) / 3 / a / a;
-    double q = (2 * b * b * b - 9 * a * b * c + 27 * a * a * d) / 27 / a / a / a;
-    double discriminant = 4 * p * p * p + 27 * q * q;
-    double t = 0;
-    if (discriminant >= 0) {
-        // Single real root
-        return std::cbrt(-q / 2 + std::sqrt(q * q / 4 + p * p * p / 27))
-               + std::cbrt(-q / 2 - std::sqrt(q * q / 4 + p * p * p / 27)) - b / 3 / a;
-    }
-    else {
-        // Three real roots
-        for (int k = 0; k < 3; ++k) {
-            t = 2 * std::sqrt(-p / 3)
-                    * std::cos(
-                        1.0 / 3 * std::acos(3.0 * q / 2 / p * std::sqrt(-3.0 / p))
-                        - 2.0 * core::pi * k / 3)
-                - b / 3 / a;
-            if (0 <= t && t <= 1) {
-                return t;
-            }
-        }
-    }
-    // error
-    //throw core::RuntimeError("fkjf");
-    return 0.5;
-}
-
-Vec2d computeBi_(const Vec2d& knot0, const Vec2d& knot1, const Vec2d& knot2, double ti) {
-    if (ti <= 0) {
-        return knot0;
-    }
-    if (ti >= 1) {
-        return knot1;
-    }
-    double qi = 1 - ti;
-    double c = 1 / (2.0 * qi * ti);
-    return c * (knot1 - qi * qi * knot0 - ti * ti * knot2);
-}
-
-} // namespace
 
 void YukselSplineStroke2d::computeCache_() {
     const auto& positions = this->positions();
@@ -350,37 +509,6 @@ void YukselSplineStroke2d::computeCache_() {
         }
         // We compute the closure even if the spline is not closed.
         knotsData[n - 1].chordLength = (p[n - 1] - p[0]).length();
-
-        // compute bi and ti
-        if (n > 1) {
-            if (isClosed()) {
-                knotsData[0].ti = computeTiMaxCurvature_(p[n - 1], p[0], p[1]);
-                knotsData[0].bi = computeBi_(p[n - 1], p[0], p[1], knotsData[0].ti);
-            }
-            else {
-                knotsData[0].ti = computeTiMaxCurvature_(p[0], p[0], p[1]);
-                knotsData[0].bi = computeBi_(p[0], p[0], p[1], knotsData[0].ti);
-            }
-            for (Int i = 1; i < n - 1; ++i) {
-                knotsData[i].ti = computeTiMaxCurvature_(p[i - 1], p[i], p[i + 1]);
-                knotsData[i].bi = computeBi_(p[i - 1], p[i], p[i + 1], knotsData[i].ti);
-            }
-            if (isClosed()) {
-                knotsData[n - 1].ti = computeTiMaxCurvature_(p[n - 2], p[n - 1], p[0]);
-                knotsData[n - 1].bi =
-                    computeBi_(p[n - 2], p[n - 1], p[0], knotsData[n - 1].ti);
-            }
-            else {
-                knotsData[n - 1].ti =
-                    computeTiMaxCurvature_(p[n - 2], p[n - 1], p[n - 1]);
-                knotsData[n - 1].bi =
-                    computeBi_(p[n - 2], p[n - 1], p[n - 1], knotsData[n - 1].ti);
-            }
-        }
-        else {
-            knotsData[0].ti = 0.5;
-            knotsData[0].bi = p[0];
-        }
     }
 }
 

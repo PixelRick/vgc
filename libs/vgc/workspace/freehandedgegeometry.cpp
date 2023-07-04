@@ -2421,9 +2421,9 @@ void FreehandEdgeGeometry::computeKnotArclengths_(
 
 std::unique_ptr<FreehandEdgeGeometry::StrokeType>
 FreehandEdgeGeometry::createStroke_() const {
-    //return std::make_unique<geometry::CatmullRomSplineStroke2d>(
-    //    geometry::CatmullRomSplineParameterization::Centripetal, isClosed());
-    return std::make_unique<geometry::YukselSplineStroke2d>(isClosed());
+    return std::make_unique<geometry::CatmullRomSplineStroke2d>(
+        geometry::CatmullRomSplineParameterization::Centripetal, isClosed());
+    //return std::make_unique<geometry::YukselSplineStroke2d>(isClosed());
 }
 
 } // namespace vgc::workspace

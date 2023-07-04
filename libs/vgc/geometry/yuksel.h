@@ -65,7 +65,7 @@ public:
         return (cosa * cosa) * p0 + (sina * sina) * p1;
     }
 
-    T eval(Scalar u, T& derivative) const {
+    T eval(Scalar u, T& velocity) const {
         constexpr Scalar pi_2 = core::pi / 2;
         Scalar ti = parameterBounds_[0];
         Scalar tj = parameterBounds_[1];
@@ -95,8 +95,48 @@ public:
         T dp_du_term1 = dp_dtheta_term1 * pi_2;
         T dp_du = dp_du_term1 + cosa2 * dp0_du + sina2 * dp1_du;
 
-        derivative = dp_du;
+        velocity = dp_du;
         return p;
+    }
+
+    T eval(Scalar u, T& tangent, double& speed) const {
+        T position = core::noInit;
+        T velocity = core::noInit;
+
+        if (u == 0) {
+            T acceleration = core::noInit;
+            position = computeEndPointDerivatives(0, velocity, acceleration);
+            if (velocity == T()) {
+                if (acceleration == T()) {
+                    quadratics_[0].controlPoints()[2] - quadratics_[0].controlPoints()[0];
+                    return position;
+                }
+                tangent = acceleration.normalized();
+                speed = 0;
+                return position;
+            }
+        }
+        else if (u == 1) {
+            T acceleration = core::noInit;
+            position = computeEndPointDerivatives(1, velocity, acceleration);
+            if (velocity == T()) {
+                if (acceleration == T()) {
+                    quadratics_[1].controlPoints()[2] - quadratics_[1].controlPoints()[0];
+                    return position;
+                }
+                tangent = -1.0 * acceleration.normalized();
+                speed = 0;
+                return position;
+            }
+        }
+        else {
+            position = eval(u, velocity);
+        }
+
+        double l = velocity.length();
+        tangent = velocity / l;
+        speed = l;
+        return position;
     }
 
     const std::array<QuadraticBezier<T, Scalar>, 2>& quadratics() const {
@@ -107,12 +147,37 @@ public:
         return parameterBounds_;
     }
 
+    Vec2d computeEndPointDerivatives(
+        Int endpointIndex,
+        Vec2d& velocity,
+        Vec2d& acceleration) const {
+
+        if (endpointIndex == 0) {
+            Scalar v = parameterBounds_[0];
+            Scalar dv_du = (1 - v);
+            Vec2d position = quadratics_[0].eval(v, velocity);
+            velocity *= dv_du;
+            acceleration = quadratics_[0].evalSecondDerivative(v) * dv_du;
+            return position;
+        }
+        else {
+            Scalar v = parameterBounds_[1];
+            Scalar dv_du = v;
+            Vec2d position = quadratics_[1].eval(v, velocity);
+            velocity *= dv_du;
+            acceleration = quadratics_[1].evalSecondDerivative(v) * dv_du;
+            return position;
+        }
+    }
+
     T startDerivative() const {
-        return quadratics_[0].evalDerivative(parameterBounds_[0]);
+        Scalar ti = parameterBounds_[0];
+        return quadratics_[0].evalDerivative(ti) * (1 - ti);
     }
 
     T endDerivative() const {
-        return quadratics_[1].evalDerivative(parameterBounds_[1]);
+        Scalar ti = parameterBounds_[1];
+        return quadratics_[1].evalDerivative(ti) * ti;
     }
 
 private:
@@ -127,9 +192,6 @@ namespace detail {
 
 struct YukselKnotData {
     double chordLength;
-    // Parameter of the quadratic used in spline formula.
-    double ti;
-    Vec2d bi;
 };
 
 } // namespace detail

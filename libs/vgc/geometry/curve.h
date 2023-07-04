@@ -236,7 +236,7 @@ class VGC_GEOMETRY_API StrokeSampleEx2d {
 public:
     constexpr StrokeSampleEx2d() noexcept
         : sample_()
-        , velocityMagnitude_(0)
+        , speed_(0)
         , segmentIndex_(-1)
         , u_(-1) {
     }
@@ -250,37 +250,33 @@ public:
 
     StrokeSampleEx2d(
         const Vec2d& position,
-        const Vec2d& velocity,
+        const Vec2d& tangent,
         const Vec2d& halfwidths,
+        double speed,
         Int segmentIndex = -1,
         double u = 0) noexcept
 
-        : sample_(position, velocity, halfwidths)
-        , velocityMagnitude_(velocity.length())
+        : sample_(position, tangent, halfwidths)
+        , speed_(speed)
         , segmentIndex_(segmentIndex)
         , u_(u) {
 
-        if (velocityMagnitude_ > 0) {
-            sample_.setTangent(velocity / velocityMagnitude_);
-        }
-        else {
-            // fallback to default tangent
-            sample_.setTangent(Vec2d(0, 1));
-        }
         updateOffsetPoints_();
     }
 
     StrokeSampleEx2d(
         const Vec2d& position,
-        const Vec2d& velocity,
+        const Vec2d& tangent,
         double halfwidth,
+        double speed,
         Int segmentIndex = -1,
         double u = 0) noexcept
 
         : StrokeSampleEx2d(
             position,
-            velocity,
+            tangent,
             Vec2d(halfwidth, halfwidth),
+            speed,
             segmentIndex,
             u) {
     }
@@ -307,14 +303,18 @@ public:
         updateOffsetPoints_();
     }
 
+    double speed() const {
+        return speed_;
+    }
+
     Vec2d velocity() const {
-        return sample_.tangent() * velocityMagnitude_;
+        return sample_.tangent() * speed_;
     }
 
     void setVelocity(const Vec2d& velocity) {
-        velocityMagnitude_ = velocity.length();
-        if (velocityMagnitude_ > 0) {
-            sample_.setTangent(velocity / velocityMagnitude_);
+        speed_ = velocity.length();
+        if (speed_ > 0) {
+            sample_.setTangent(velocity / speed_);
         }
         else {
             sample_.setTangent(Vec2d(0, 1));
@@ -322,9 +322,9 @@ public:
         updateOffsetPoints_();
     }
 
-    void setVelocity(const Vec2d& direction, double magnitude) {
+    void setVelocity(const Vec2d& direction, double speed) {
         sample_.setTangent(direction);
-        velocityMagnitude_ = magnitude;
+        speed_ = speed;
         updateOffsetPoints_();
     }
 
@@ -447,7 +447,7 @@ public:
 private:
     StrokeSample2d sample_;
     std::array<Vec2d, 2> offsetPoints_;
-    double velocityMagnitude_;
+    double speed_;
     Int segmentIndex_;
     double u_; // parameter in stroke segment.
 
@@ -686,10 +686,10 @@ public:
     virtual Vec2d eval(Int segmentIndex, double u) const = 0;
 
     /// Returns the position of the curve point from segment `segmentIndex` at
-    /// parameter `u`. It additionally sets the value of `derivative` as the
+    /// parameter `u`. It additionally sets the value of `velocity` as the
     /// position derivative at `u` with respect to the parameter u.
     ///
-    virtual Vec2d eval(Int segmentIndex, double u, Vec2d& derivative) const = 0;
+    virtual Vec2d eval(Int segmentIndex, double u, Vec2d& velocity) const = 0;
 };
 
 } // namespace detail
@@ -744,13 +744,13 @@ public:
     Vec2d evalCenterline(Int segmentIndex, double u) const;
 
     /// Returns the position of the centerline point from segment `segmentIndex` at
-    /// parameter `u`. It additionally sets the value of `derivative` as the
+    /// parameter `u`. It additionally sets the value of `velocity` as the
     /// position derivative at `u` with respect to the parameter u.
     ///
     /// Throws `IndexError` if `segmentIndex` is not in the range
     /// `[0, numSegments() - 1]`.
     ///
-    Vec2d evalCenterline(Int segmentIndex, double u, Vec2d& derivative) const;
+    Vec2d evalCenterline(Int segmentIndex, double u, Vec2d& velocity) const;
 
     /// Returns a `StrokeSample` from the segment `segmentIndex` at
     /// parameter `u`. The attribute `s` of the sample is left to 0.
