@@ -1498,6 +1498,35 @@ void Sketch::finishCurve_(ui::MouseEvent* /*event*/) {
         }
     }
 
+    VGC_DEBUG_TMP("---- sketch input dump ----");
+    VGC_DEBUG_TMP("{");
+    VGC_DEBUG_TMP("  \"viewMatrix\": [");
+    geometry::Mat4d viewMatrix = canvas()->camera().viewMatrix();
+    // per row
+    for (Int i = 0; i < 4; ++i) {
+        VGC_DEBUG_TMP(
+            "{}, {}, {}, {}{} ",
+            viewMatrix(0, i),
+            viewMatrix(1, i),
+            viewMatrix(2, i),
+            viewMatrix(3, i),
+            ((i < 3) ? "," : ""));
+    }
+    VGC_DEBUG_TMP("  ],");
+    VGC_DEBUG_TMP("  \"curve\": [");
+    for (Int i = 0, n = inputPoints_.length(); i < n; ++i) {
+        VGC_DEBUG_TMP(
+            "    [{}, {}, {}, {}]{} ",
+            inputPoints_[i][0],
+            inputPoints_[i][1],
+            inputWidths_[i],
+            inputTimestamps_[i],
+            ((i < n - 1) ? "," : ""));
+    }
+    VGC_DEBUG_TMP("  ]");
+    VGC_DEBUG_TMP("}");
+    VGC_DEBUG_TMP("---------------------------");
+
     resetData_();
     requestRepaint();
 }
