@@ -107,6 +107,74 @@ StrokeSampleEx2d CatmullRomSplineStroke2d::zeroLengthStrokeSample() const {
 // Currently assumes first derivative at endpoint is non null.
 // TODO: Support null derivatives (using limit analysis).
 // TODO: Support different halfwidth on both sides.
+namespace {
+
+std::array<Vec2d, 2> computeOffsetLineTangents(
+    const Vec2d& p,
+    const Vec2d& dp,
+    const Vec2d& ddp,
+    const Vec2d& w,
+    const Vec2d& dw,
+    Int endpointIndex) {
+
+    double dpl = dp.length();
+    Vec2d n = dp.orthogonalized() / dpl;
+    Vec2d dn = dp * (ddp.det(dp)) / (dpl * dpl * dpl);
+
+    Vec2d offset0 = dn * w[0] + n * dw[0];
+    Vec2d offset1 = -(dn * w[1] + n * dw[1]);
+    return {(dp + offset0).normalized(), (dp + offset1).normalized()};
+}
+
+// For varying width strokes, cusps are were the derivative
+// of offset line would become null if W'(u) were 0.
+// O'(u) = P'(u) + N'(u) * W(u) + N(u) * W'(u)
+// (offset line tangent becomes colinear with the normal).
+//
+void hasOffsetLineCusp(
+    const std::array<Vec2d, 4>& positions,
+    const std::array<Vec2d, 4>& halfwidths) {
+
+    // We want to solve for u:
+    // P'(u) + N'(u) * W(u) = (0, 0)
+    //
+    // P'(u) + N'(u) * W(u) = (0, 0)
+    //
+    // with
+    //  Nx' = X' * (X"Y' - X'Y") / (X'² + Y'²)^(3/2)
+    //  Ny' = Y' * (Y"X' - Y'X") / (Y'² + X'²)^(3/2)
+    //
+    // eq becomes
+    //  K = (X"Y' - X'Y") / (X'² + Y'²)^(3/2)
+    //  X' * (1 + [ K * W]) == 0
+    //  Y' * (1 + [-K * W]) == 0
+    //
+    // since we want to check cusp on both sides,
+    // we want K*W to equal 1 or -1
+    //
+    // W =     (1 - u)³      * w0
+    //   + 3 * (1 - u)² * u  * w1
+    //   + 3 * (1 - u)  * u² * w2
+    //   +                u³ * w3;
+    //
+    // X' = 3 * (1 - u)²      * (x1 - x0)
+    //    + 6 * (1 - u)  * u  * (x2 - x1)
+    //    + 3            * u² * (x3 - x2);
+    //
+    // X" = 6 * (1 - u)     * (x2 - 2 * x1 + x0)
+    //    + 6           * u * (x3 - 2 * x2 + x1);
+    //
+
+    //
+
+    //return v3 * p0 + 3 * v2 * u * p1 + 3 * v * u2 * p2 + u3 * p3;
+    //return //
+    //    3 * v2 * (p1 - p0) + 6 * v * u * (p2 - p1) + 3 * u2 * (p3 - p2);
+    //return 6 * (v * (p2 - 2 * p1 + p0) + u * (p3 - 2 * p2 + p1));
+}
+
+} // namespace
+
 std::array<Vec2d, 2>
 CatmullRomSplineStroke2d::computeOffsetLineTangentsAtSegmentEndpoint_(
     Int segmentIndex,
@@ -138,13 +206,7 @@ CatmullRomSplineStroke2d::computeOffsetLineTangentsAtSegmentEndpoint_(
         dw = 3 * (halfwidths[1] - halfwidths[0]);
     }
 
-    double dpl = dp.length();
-    Vec2d n = dp.orthogonalized() / dpl;
-    Vec2d dn = dp * (ddp.det(dp)) / (dpl * dpl * dpl);
-
-    Vec2d offset0 = dn * w[0] + n * dw[0];
-    Vec2d offset1 = -(dn * w[1] + n * dw[1]);
-    return {(dp + offset0).normalized(), (dp + offset1).normalized()};
+    return computeOffsetLineTangents(p, dp, ddp, w, dw, endpointIndex);
 }
 
 namespace {
@@ -297,6 +359,27 @@ SegmentType computeSegmentCenterlineCubicBezier_(
         break;
     }
     }
+
+    // Test: fix tangent lengths using OGH
+    // (Optimized Geometric Hermite)
+    //
+    const std::array<Vec2d, 4>& cps = bezier.controlPoints();
+    Vec2d ab = cps[3] - cps[0];
+    Vec2d v0 = (cps[1] - cps[0]).normalized();
+    Vec2d v1 = (cps[3] - cps[2]).normalized();
+
+    double abDotV0 = ab.dot(v0);
+    double abDotV1 = ab.dot(v1);
+    double v0v1 = v0.dot(v1);
+
+    double den = 4 - v0v1 * v0v1;
+    double a0 = std::abs((6 * abDotV0 - 3 * abDotV1 * v0v1) / den);
+    double a1 = std::abs((6 * abDotV1 - 3 * abDotV0 * v0v1) / den);
+
+    std::array<Vec2d, 4> newCps = {
+        cps[0], cps[0] + v0 * a0 / 3, cps[3] - v1 * a1 / 3, cps[3]};
+
+    bezier = CubicBezier2d(newCps);
 
     return result;
 }

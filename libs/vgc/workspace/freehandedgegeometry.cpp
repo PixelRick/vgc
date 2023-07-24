@@ -1286,20 +1286,78 @@ geometry::Vec2d FreehandEdgeGeometry::sculptWidth(
     double sMiddle = closestSample.s();
 
     // First pass: update widths of original knots.
+    core::Array<double> knotToD(numPoints, core::noInit);
     for (Int i = 0; i < numPoints; ++i) {
         geometry::StrokeSampleEx2d& sample = samples[knotToSampleIndex[i]];
         double s = sample.s();
-        double d = std::abs(s - sMiddle);
+        double d = s - sMiddle;
+        double absD = std::abs(d);
         if (isClosed) {
-            d = std::min(d, std::abs(s + curveLength - sMiddle));
+            double d2 = (s + curveLength - sMiddle);
+            double absD2 = std::abs(d2);
+            if (absD2 < absD) {
+                d = d2;
+                absD = absD2;
+            }
         }
-        if (d < radius) {
+        knotToD[i] = d;
+        if (absD < radius) {
             double w = editWidths_[i];
-            double t = 1.0 - cubicEaseInOut(d / radius);
+            double t = 1.0 - cubicEaseInOut(absD / radius);
             w = std::max<double>(0, w + delta * t);
             editWidths_[i] = w;
         }
     }
+
+    // Second pass: add knots if there isn't enough already.
+    // 5 points: -r, -0.7746r, 0, +0.7746r, +r
+    // add each only if there is no knot in a range 0.25r around it.
+    //double previousD = knotToD[0];
+    //Int previousSampleIndex = 0;
+    //Int numAdded = 0;
+    //for (Int i = 1; i < numPoints; ++i) {
+    //    double d1 = knotToD[i];
+    //    double d0 = previousD;
+    //    if (d0 > d1) {
+    //        // isClosed == true
+    //        d0 -= curveLength;
+    //        if (radius > 0.5 * curveLength) {
+    //            // looped
+    //        }
+    //    }
+
+    //    geometry::StrokeSampleEx2d& sample = samples[knotToSampleIndex[i]];
+    //    double s = sample.s();
+
+    //    if (isClosed) {
+    //        d = std::min(d, std::abs(s + curveLength - sMiddle));
+    //    }
+    //    if (d < radius) {
+    //        double w = editWidths_[i];
+    //        double t = 1.0 - cubicEaseInOut(d / radius);
+    //        w = std::max<double>(0, w + delta * t);
+    //        editWidths_[i] = w;
+    //    }
+    //}
+
+    //if (isClosed) {
+    //    double curveHalfLength = 0.5 * curveLength;
+    //    std::array<double, 5> targets = {
+    //        std::max(-curveHalfLength, -radius),
+    //        std::max(-curveHalfLength, -0.7746 * radius),
+    //        0,
+    //        std::min(curveHalfLength, 0.7746 * radius),
+    //        std::min(curveHalfLength, radius)};
+    //    bool isLooped = radius > curveHalfLength;
+    //}
+    //else {
+    //    std::array<double, 5> targets = {
+    //        std::max<Int>(0, -radius),
+    //        std::max<Int>(0, -0.7746 * radius),
+    //        0,
+    //        std::min(curveLength, 0.7746 * radius),
+    //        std::min(curveLength, radius)};
+    //}
 
     //samplingParams.setMaxDs(0.5 * maxDs);
     //samplingParams.setMaxIntraSegmentSamples(2047);

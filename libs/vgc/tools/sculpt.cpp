@@ -688,8 +688,8 @@ Sculpt::Sculpt(CreateKey key)
 
     auto grabAction = createAction<SculptGrabAction>();
     grabAction->tool_ = this;
-    //auto widthAction = createAction<SculptWidthAction>();
-    //widthAction->tool_ = this;
+    auto widthAction = createAction<SculptWidthAction>();
+    widthAction->tool_ = this;
     auto smoothAction = createAction<SculptSmoothAction>();
     smoothAction->tool_ = this;
     auto editRadiusAction = createAction<SculptEditRadiusAction>();
