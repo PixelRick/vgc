@@ -1246,6 +1246,10 @@ geometry::Vec2d FreehandEdgeGeometry::sculptWidth(
         }
     }
 
+    // It seems `curvature * width` is what we want to not
+    // let increase too much.
+    //
+
     // Let's consider tolerance is ~= pixelSize for now.
     //const double maxDs = (tolerance * 2.0);
 
