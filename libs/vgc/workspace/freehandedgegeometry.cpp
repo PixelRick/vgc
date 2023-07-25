@@ -1230,19 +1230,19 @@ geometry::Vec2d FreehandEdgeGeometry::sculptWidth(
 
     VGC_ASSERT(isBeingEdited_);
 
-    Int numPoints = editPositions_.length();
-    if (numPoints == 0) {
+    Int numKnots = editPositions_.length();
+    if (numKnots == 0) {
         return position;
     }
 
     // Sanitize editWidths_.
-    if (editWidths_.length() != numPoints) {
+    if (editWidths_.length() != numKnots) {
         if (editWidths_.isEmpty()) {
-            editWidths_.resize(numPoints, 1.0);
+            editWidths_.resize(numKnots, 1.0);
         }
         else {
             editWidths_.resize(1);
-            editWidths_.resize(numPoints, editWidths_[0]);
+            editWidths_.resize(numKnots, editWidths_[0]);
         }
     }
 
@@ -1260,15 +1260,15 @@ geometry::Vec2d FreehandEdgeGeometry::sculptWidth(
     geometry::CurveSamplingParameters samplingParams(
         geometry::CurveSamplingQuality::AdaptiveLow);
 
-    core::Array<Int> knotToSampleIndex(numPoints, core::noInit);
+    core::Array<Int> knotToSampleIndex(numKnots, core::noInit);
     knotToSampleIndex[0] = 0;
-    for (Int i = 0; i < numPoints - 1; ++i) {
+    for (Int i = 0; i < numKnots - 1; ++i) {
         stroke_->sampleRange(samples, samplingParams, i, 1, true);
         knotToSampleIndex[i + 1] = samples.length() - 1;
         samples.pop();
     }
     stroke_->sampleRange(
-        samples, samplingParams, numPoints - 1, Int{isClosed ? 1 : 0}, true);
+        samples, samplingParams, numKnots - 1, Int{isClosed ? 1 : 0}, true);
     const double curveLength = samples.last().s();
 
     // Note: we could have a distanceToCurve specialized for our geometry.
@@ -1290,78 +1290,129 @@ geometry::Vec2d FreehandEdgeGeometry::sculptWidth(
     double sMiddle = closestSample.s();
 
     // First pass: update widths of original knots.
-    core::Array<double> knotToD(numPoints, core::noInit);
-    for (Int i = 0; i < numPoints; ++i) {
+    for (Int i = 0; i < numKnots; ++i) {
         geometry::StrokeSampleEx2d& sample = samples[knotToSampleIndex[i]];
         double s = sample.s();
-        double d = s - sMiddle;
-        double absD = std::abs(d);
+        double d = std::abs(s - sMiddle);
         if (isClosed) {
-            double d2 = (s + curveLength - sMiddle);
-            double absD2 = std::abs(d2);
-            if (absD2 < absD) {
+            double d2 = std::abs(s + curveLength - sMiddle);
+            if (d2 < d) {
                 d = d2;
-                absD = absD2;
             }
         }
-        knotToD[i] = d;
-        if (absD < radius) {
+        if (d < radius) {
             double w = editWidths_[i];
-            double t = 1.0 - cubicEaseInOut(absD / radius);
-            w = std::max<double>(0, w + delta * t);
+            double wt = 1.0 - cubicEaseInOut(d / radius);
+            w = std::max<double>(0, w + delta * wt);
             editWidths_[i] = w;
         }
     }
 
     // Second pass: add knots if there isn't enough already.
-    // 5 points: -r, -0.7746r, 0, +0.7746r, +r
-    // add each only if there is no knot in a range 0.25r around it.
-    //double previousD = knotToD[0];
-    //Int previousSampleIndex = 0;
-    //Int numAdded = 0;
-    //for (Int i = 1; i < numPoints; ++i) {
-    //    double d1 = knotToD[i];
-    //    double d0 = previousD;
-    //    if (d0 > d1) {
-    //        // isClosed == true
-    //        d0 -= curveLength;
-    //        if (radius > 0.5 * curveLength) {
-    //            // looped
-    //        }
-    //    }
-
-    //    geometry::StrokeSampleEx2d& sample = samples[knotToSampleIndex[i]];
-    //    double s = sample.s();
-
-    //    if (isClosed) {
-    //        d = std::min(d, std::abs(s + curveLength - sMiddle));
-    //    }
-    //    if (d < radius) {
-    //        double w = editWidths_[i];
-    //        double t = 1.0 - cubicEaseInOut(d / radius);
-    //        w = std::max<double>(0, w + delta * t);
-    //        editWidths_[i] = w;
-    //    }
-    //}
-
-    //if (isClosed) {
-    //    double curveHalfLength = 0.5 * curveLength;
-    //    std::array<double, 5> targets = {
-    //        std::max(-curveHalfLength, -radius),
-    //        std::max(-curveHalfLength, -0.7746 * radius),
-    //        0,
-    //        std::min(curveHalfLength, 0.7746 * radius),
-    //        std::min(curveHalfLength, radius)};
-    //    bool isLooped = radius > curveHalfLength;
-    //}
-    //else {
-    //    std::array<double, 5> targets = {
-    //        std::max<Int>(0, -radius),
-    //        std::max<Int>(0, -0.7746 * radius),
-    //        0,
-    //        std::min(curveLength, 0.7746 * radius),
-    //        std::min(curveLength, radius)};
-    //}
+    // Add each only if there is no knot in a range a*r around it.
+    double minD = 0.2 * radius;
+    std::array<double, 3> targetsD = {0.25 * radius, 0.75 * radius, radius};
+    core::Array<double> targetsS;
+    if (!isClosed) {
+        double dLeft = sMiddle;
+        double dRight = curveLength - dLeft;
+        for (double targetD : targetsD) {
+            if (dLeft > targetD + minD) {
+                targetsS.append(sMiddle - targetD);
+            }
+        }
+        if (dLeft > minD && dRight > minD) {
+            targetsS.append(sMiddle);
+        }
+        for (double targetD : targetsD) {
+            if (dRight > targetD + minD) {
+                targetsS.append(sMiddle + targetD);
+            }
+        }
+    }
+    else {
+        double dMax = 0.5 * curveLength;
+        bool isLooped = false;
+        for (double targetD : targetsD) {
+            if (targetD <= dMax) {
+                if (targetD + minD < dMax) {
+                    double s0 = sMiddle - targetD;
+                    if (s0 < 0) {
+                        s0 += curveLength;
+                    }
+                    targetsS.append(s0);
+                    double s1 = sMiddle + targetD;
+                    if (s1 >= curveLength) {
+                        s1 -= curveLength;
+                    }
+                    targetsS.append(s1);
+                }
+                else {
+                    double s = sMiddle - dMax;
+                    if (s < 0) {
+                        s += curveLength;
+                    }
+                    targetsS.append(s);
+                    isLooped = true;
+                }
+            }
+        }
+        if (dMax > minD) {
+            targetsS.append(0);
+        }
+        std::sort(targetsS.begin(), targetsS.end());
+    }
+    // Loop is reversed to simplify the closed case.
+    double s1 = curveLength;
+    Int j1 = samples.length() - 1;
+    Int iKnot = numKnots - 2;
+    Int iTarget = targetsS.length() - 1;
+    if (isClosed) {
+        iKnot = numKnots - 1;
+    }
+    for (; iKnot >= 0 && iTarget >= 0; --iKnot) {
+        Int j0 = knotToSampleIndex[iKnot];
+        const geometry::StrokeSampleEx2d& sample = samples[j0];
+        double s0 = sample.s();
+        while (iTarget >= 0) {
+            double targetS = targetsS[iTarget];
+            if (targetS < s0) {
+                break;
+            }
+            if (targetS < s0 + minD) {
+                --iTarget;
+                continue;
+            }
+            if (targetS > s1 - minD) {
+                --iTarget;
+                continue;
+            }
+            // new knot -> find the sampled segment it belongs too.
+            for (Int j = j0 + 1; j <= j1; ++j) {
+                const geometry::StrokeSampleEx2d& sample1 = samples[j];
+                if (targetS < sample1.s()) {
+                    // compute and add new knot
+                    const geometry::StrokeSampleEx2d& sample0 = samples[j - 1];
+                    // (targetS >= s0 + minD) => sample1.s() != sample0.s()
+                    double t = (targetS - sample0.s()) / (sample1.s() - sample0.s());
+                    geometry::Vec2d p =
+                        (1 - t) * sample0.position() + t * sample1.position();
+                    geometry::Vec2d hws =
+                        (1 - t) * sample0.halfwidths() + t * sample1.halfwidths();
+                    double w = hws[0] * 2;
+                    double d = std::min(
+                        std::abs(targetS - sMiddle),
+                        std::abs(targetS + curveLength - sMiddle));
+                    double wt = 1.0 - cubicEaseInOut(d / radius);
+                    w = std::max<double>(0, w + delta * wt);
+                    editPositions_.insert(iKnot, p);
+                    editWidths_.insert(iKnot, w);
+                }
+            }
+        }
+        s1 = s0;
+        j1 = j0;
+    }
 
     //samplingParams.setMaxDs(0.5 * maxDs);
     //samplingParams.setMaxIntraSegmentSamples(2047);
