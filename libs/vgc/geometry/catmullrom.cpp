@@ -291,9 +291,9 @@ SegmentType computeSegmentCenterlineCubicBezier_(
     // 2. The first/last knot of an open curve
     //
     SegmentType result = SegmentType::None;
-    bool isAfterCorner = (d01 == 0);
+    bool isAfterCorner = (d01 == 0) || (knotIndices[0] == knotIndices[1]);
     bool isCorner = (d12 == 0);
-    bool isBeforeCorner = (d23 == 0);
+    bool isBeforeCorner = (d23 == 0) || (knotIndices[2] == knotIndices[3]);
     if (isCorner) {
         bezier = CubicBezier2d(knots);
         return SegmentType::Corner;
