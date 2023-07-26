@@ -25,6 +25,44 @@
 
 namespace vgc::geometry {
 
+namespace detail {
+
+template<typename T>
+void catmullRomToBezier(
+    const T* points,
+    const double* dValues,
+    const double* daValues,
+    T* outPoints) {
+
+    double d1 = dValues[0];
+    double d2 = dValues[1];
+    double d3 = dValues[2];
+    double d1a = daValues[0];
+    double d2a = daValues[1];
+    double d3a = daValues[2];
+
+    T p1 = points[1];
+    if (d1a > 0) {
+        double c1 = 2 * d1 + 3 * d1a * d2a + d2;
+        double c2 = 3 * d1a * (d1a + d2a);
+        p1 = (d1 * points[2] - d2 * points[0] + c1 * points[1]) / c2;
+    }
+
+    T p2 = points[2];
+    if (d3a > 0) {
+        double c1 = 2 * d3 + 3 * d2a * d3a + d2;
+        double c2 = 3 * d3a * (d2a + d3a);
+        p2 = (d3 * points[1] - d2 * points[3] + c1 * points[2]) / c2;
+    }
+
+    outPoints[0] = points[1];
+    outPoints[3] = points[2];
+    outPoints[1] = p1;
+    outPoints[2] = p2;
+}
+
+} // namespace detail
+
 /// Convert four uniform Catmull-Rom control points into the four cubic Bézier
 /// control points corresponding to the same cubic curve. The formula is the
 /// following:
@@ -160,6 +198,8 @@ void uniformCatmullRomToBezierCapped(const T* inFourPoints, T* outFourPoints) {
 ///
 /// See http://www.cemyuksel.com/research/catmullrom_param/catmullrom.pdf
 ///
+/// Using chordal parameterization prevents cusps and loops.
+///
 template<typename T>
 CubicBezier<T, double> centripetalCatmullRomToBezier(core::ConstSpan<T, 4> points) {
 
@@ -179,9 +219,9 @@ CubicBezier<T, double> centripetalCatmullRomToBezier(
     core::ConstSpan<T, 4> points,
     core::ConstSpan<double, 3> lengths) {
 
-    const double* lengths_ = lengths.data();
+    const double* l = lengths.data();
     std::array<double, 3> sqrtLengths = {
-        std::sqrt(lengths_[0]), std::sqrt(lengths_[1]), std::sqrt(lengths_[2])};
+        std::sqrt(l[0]), std::sqrt(l[1]), std::sqrt(l[2])};
 
     return centripetalCatmullRomToBezier<T>(points, lengths, sqrtLengths);
 }
@@ -201,9 +241,8 @@ CubicBezier<T, double> centripetalCatmullRomToBezier(
     return CubicBezier<T, double>(controlPoints);
 }
 
-/// Overload of `centripetalCatmullRomToBezier()` that accepts pre-computed
-/// lengths, square roots of lengths, and returns the results via an output
-/// parameter.
+/// Overload of `centripetalCatmullRomToBezier()` that accepts pre-computed lengths
+/// and square roots of lengths, and returns the results via an output parameter.
 ///
 template<typename T>
 void centripetalCatmullRomToBezier(
@@ -212,36 +251,75 @@ void centripetalCatmullRomToBezier(
     const double* sqrtLengths,
     T* outPoints) {
 
-    double d1 = lengths[0];
-    double d2 = lengths[1];
-    double d3 = lengths[2];
-    double d1a = sqrtLengths[0];
-    double d2a = sqrtLengths[1];
-    double d3a = sqrtLengths[2];
+    return detail::catmullRomToBezier(points, lengths, sqrtLengths, outPoints);
+}
 
-    T p1 = points[1];
-    if (d1a > 0) {
-        double c1 = 2 * d1 + 3 * d1a * d2a + d2;
-        double c2 = 3 * d1a * (d1a + d2a);
-        p1 = (d1 * points[2] - d2 * points[0] + c1 * points[1]) / c2;
-    }
+/// Convert four control points of a Catmull-Rom with chordal paremetrization
+/// into the four cubic Bézier control points corresponding to the segment of the
+/// curve interpolating between the second and third points.
+///
+/// See http://www.cemyuksel.com/research/catmullrom_param/catmullrom.pdf
+///
+/// Using chordal parameterization prevents sharp turns when two
+/// consecutive points are close together relative to their neighbors.
+///
+template<typename T>
+CubicBezier<T, double> chordalCatmullRomToBezier(core::ConstSpan<T, 4> points) {
 
-    T p2 = points[2];
-    if (d3a > 0) {
-        double c1 = 2 * d3 + 3 * d2a * d3a + d2;
-        double c2 = 3 * d3a * (d2a + d3a);
-        p2 = (d3 * points[1] - d2 * points[3] + c1 * points[2]) / c2;
-    }
+    const T* points_ = points.data();
+    std::array<double, 3> lengths = {
+        (points_[1] - points_[0]).length(),
+        (points_[2] - points_[1]).length(),
+        (points_[3] - points_[2]).length()};
 
-    outPoints[0] = points[1];
-    outPoints[3] = points[2];
-    outPoints[1] = p1;
-    outPoints[2] = p2;
+    return chordalCatmullRomToBezier<T>(points, lengths);
+}
+
+/// Overload of `chordalCatmullRomToBezier()` that accepts pre-computed lengths.
+///
+template<typename T>
+CubicBezier<T, double> chordalCatmullRomToBezier(
+    core::ConstSpan<T, 4> points,
+    core::ConstSpan<double, 3> lengths) {
+
+    const double* l = lengths.data();
+    std::array<double, 3> sqLengths = {l[0] * l[0], l[1] * l[1], l[2] * l[2]};
+
+    return chordalCatmullRomToBezier<T>(points, lengths, sqLengths);
+}
+
+/// Overload of `chordalCatmullRomToBezier()` that accepts pre-computed lengths
+/// and squared lengths.
+///
+template<typename T>
+CubicBezier<T, double> chordalCatmullRomToBezier(
+    core::ConstSpan<T, 4> points,
+    core::ConstSpan<double, 3> lengths,
+    core::ConstSpan<double, 3> sqLengths) {
+
+    std::array<T, 4> controlPoints;
+    chordalCatmullRomToBezier(
+        points.data(), lengths.data(), sqLengths.data(), controlPoints.data());
+    return CubicBezier<T, double>(controlPoints);
+}
+
+/// Overload of `chordalCatmullRomToBezier()` that accepts pre-computed lengths
+/// and squared lengths, and returns the results via an output parameter.
+///
+template<typename T>
+void chordalCatmullRomToBezier(
+    const T* points,
+    const double* lengths,
+    const double* sqLengths,
+    T* outPoints) {
+
+    return detail::catmullRomToBezier(points, sqLengths, lengths, outPoints);
 }
 
 enum CatmullRomSplineParameterization {
     Uniform,
-    Centripetal
+    Centripetal,
+    Chordal
 };
 
 // TODO: immutable version with ConstShared storage

@@ -358,6 +358,10 @@ SegmentType computeSegmentCenterlineCubicBezier_(
         bezier = centripetalCatmullRomToBezier<Vec2d>(knots, fixedChordLengths);
         break;
     }
+    case CatmullRomSplineParameterization::Chordal: {
+        bezier = chordalCatmullRomToBezier<Vec2d>(knots, fixedChordLengths);
+        break;
+    }
     }
 
     // Test: fix tangent lengths using OGH
