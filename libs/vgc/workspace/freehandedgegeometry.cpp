@@ -1379,36 +1379,31 @@ geometry::Vec2d FreehandEdgeGeometry::sculptWidth(
             if (targetS < s0) {
                 break;
             }
-            if (targetS < s0 + minD) {
-                --iTarget;
-                continue;
-            }
-            if (targetS > s1 - minD) {
-                --iTarget;
-                continue;
-            }
-            // new knot -> find the sampled segment it belongs too.
-            for (Int j = j0 + 1; j <= j1; ++j) {
-                const geometry::StrokeSampleEx2d& sample1 = samples[j];
-                if (targetS < sample1.s()) {
-                    // compute and add new knot
-                    const geometry::StrokeSampleEx2d& sample0 = samples[j - 1];
-                    // (targetS >= s0 + minD) => sample1.s() != sample0.s()
-                    double t = (targetS - sample0.s()) / (sample1.s() - sample0.s());
-                    geometry::Vec2d p =
-                        (1 - t) * sample0.position() + t * sample1.position();
-                    geometry::Vec2d hws =
-                        (1 - t) * sample0.halfwidths() + t * sample1.halfwidths();
-                    double w = hws[0] * 2;
-                    double d = std::min(
-                        std::abs(targetS - sMiddle),
-                        std::abs(targetS + curveLength - sMiddle));
-                    double wt = 1.0 - cubicEaseInOut(d / radius);
-                    w = std::max<double>(0, w + delta * wt);
-                    editPositions_.insert(iKnot, p);
-                    editWidths_.insert(iKnot, w);
+            if ((targetS >= s0 + minD) && (targetS <= s1 - minD)) {
+                // new knot -> find the sampled segment it belongs too.
+                for (Int j = j0 + 1; j <= j1; ++j) {
+                    const geometry::StrokeSampleEx2d& sample1 = samples[j];
+                    if (targetS < sample1.s()) {
+                        // compute and add new knot
+                        const geometry::StrokeSampleEx2d& sample0 = samples[j - 1];
+                        // (targetS >= s0 + minD) => sample1.s() != sample0.s()
+                        double t = (targetS - sample0.s()) / (sample1.s() - sample0.s());
+                        geometry::Vec2d p =
+                            (1 - t) * sample0.position() + t * sample1.position();
+                        geometry::Vec2d hws =
+                            (1 - t) * sample0.halfwidths() + t * sample1.halfwidths();
+                        double w = hws[0] * 2;
+                        double d = std::min(
+                            std::abs(targetS - sMiddle),
+                            std::abs(targetS + curveLength - sMiddle));
+                        double wt = 1.0 - cubicEaseInOut(d / radius);
+                        w = std::max<double>(0, w + delta * wt);
+                        editPositions_.insert(iKnot, p);
+                        editWidths_.insert(iKnot, w);
+                    }
                 }
             }
+            --iTarget;
         }
         s1 = s0;
         j1 = j0;
