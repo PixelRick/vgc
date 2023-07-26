@@ -162,8 +162,7 @@ public:
         if (undoGroup) {
             bool amend = canAmendUndoGroup_ && undoGroup->parent()
                          && undoGroup->parent()->name() == actionName();
-            undoGroup->close(amend);
-            canAmendUndoGroup_ = true;
+            canAmendUndoGroup_ |= undoGroup->close(amend);
         }
     }
 
@@ -200,8 +199,7 @@ public:
         if (undoGroup) {
             bool amend = canAmendUndoGroup_ && undoGroup->parent()
                          && undoGroup->parent()->name() == actionName();
-            undoGroup->close(amend);
-            canAmendUndoGroup_ = true;
+            canAmendUndoGroup_ |= undoGroup->close(amend);
         }
 
         tool_->setActionCircleEnabled(false);
@@ -349,8 +347,7 @@ public:
         if (undoGroup) {
             bool amend = canAmendUndoGroup_ && undoGroup->parent()
                          && undoGroup->parent()->name() == actionName();
-            undoGroup->close(amend);
-            canAmendUndoGroup_ = true;
+            canAmendUndoGroup_ |= undoGroup->close(amend);
         }
     }
 
@@ -387,8 +384,7 @@ public:
         if (undoGroup) {
             bool amend = canAmendUndoGroup_ && undoGroup->parent()
                          && undoGroup->parent()->name() == actionName();
-            undoGroup->close(amend);
-            canAmendUndoGroup_ = true;
+            canAmendUndoGroup_ |= undoGroup->close(amend);
         }
 
         tool_->setActionCircleEnabled(false);
@@ -533,8 +529,7 @@ public:
         if (undoGroup) {
             bool amend = canAmendUndoGroup_ && undoGroup->parent()
                          && undoGroup->parent()->name() == actionName();
-            undoGroup->close(amend);
-            canAmendUndoGroup_ = true;
+            canAmendUndoGroup_ |= undoGroup->close(amend);
         }
     }
 
@@ -571,8 +566,7 @@ public:
         if (undoGroup) {
             bool amend = canAmendUndoGroup_ && undoGroup->parent()
                          && undoGroup->parent()->name() == actionName();
-            undoGroup->close(amend);
-            canAmendUndoGroup_ = true;
+            canAmendUndoGroup_ |= undoGroup->close(amend);
         }
 
         tool_->setActionCircleEnabled(false);

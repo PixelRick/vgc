@@ -750,7 +750,7 @@ void computeSculptSampling(
 
 template<typename TPoint, typename PositionGetter, typename WidthGetter>
 [[maybe_unused]] Int filterSculptPointsWidthStep(
-    core::Array<TPoint>& points,
+    core::Span<TPoint> points,
     core::IntArray& indices,
     Int intervalStart,
     bool /*isClosed*/,
@@ -805,17 +805,16 @@ template<typename TPoint, typename PositionGetter, typename WidthGetter>
         Int maxOffsetDiffPointIndex = -1;
         if (abLen > 0) {
             geometry::Vec2d dir = ab / abLen;
-
             // Catmull-Rom is not a linear interpolation, since we don't
             // compute the ground truth here we thus need a bigger threshold.
-            // For now we use X% of the max width from linear interp. value.
-            double maxOffsetDiff = /*std::max(wA, wB)*/ abLen * 0.05;
+            // For now we use X% of the width from linear interp. value.
             for (Int j = iA + 1; j < iB; ++j) {
                 geometry::Vec2d p = positionGetter(points[j], j);
                 geometry::Vec2d ap = p - a;
                 double t = ap.dot(dir) / abLen;
                 double w = (1 - t) * wA + t * wB;
                 double dist = (std::abs)(w - widthGetter(points[j], j));
+                double maxOffsetDiff = w * 0.05;
                 if (dist > maxOffsetDiff) {
                     maxOffsetDiff = dist;
                     maxOffsetDiffPointIndex = j;
@@ -840,10 +839,10 @@ Int filterPointsStep(
     core::Span<TPoint> points,
     core::IntArray& indices,
     Int intervalStart,
-    bool /*isClosed*/,
+    bool isClosed,
     double tolerance,
     PositionGetter positionGetter,
-    WidthGetter /*widthGetter*/) {
+    WidthGetter widthGetter) {
 
     Int i = intervalStart;
     Int endIndex = indices[i + 1];
@@ -894,9 +893,9 @@ Int filterPointsStep(
             indices.insert(i + 1, maxDistPointIndex);
         }
         else {
-            //i = filterSculptPointsWidthStep(
-            //    points, indices, i, isClosed, tolerance, positionGetter, widthGetter);
-            ++i;
+            i = filterSculptPointsWidthStep(
+                points, indices, i, isClosed, tolerance, positionGetter, widthGetter);
+            //++i;
         }
     }
     return i;
@@ -1404,6 +1403,7 @@ geometry::Vec2d FreehandEdgeGeometry::sculptWidth(
                         w = std::max<double>(0, w + delta * wt);
                         tmpPositions.prepend(p);
                         tmpWidths.prepend(w);
+                        break;
                     }
                 }
             }
