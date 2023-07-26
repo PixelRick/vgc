@@ -438,7 +438,7 @@ public:
     geometry::Vec2d grabbedPoint_;
 
     core::StringId actionName() const {
-        static core::StringId actionName_("Sculpt Grab");
+        static core::StringId actionName_("Sculpt Width");
         return actionName_;
     }
 };

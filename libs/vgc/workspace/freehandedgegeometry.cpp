@@ -1318,7 +1318,7 @@ geometry::Vec2d FreehandEdgeGeometry::sculptWidth(
         double dRight = curveLength - dLeft;
         for (double targetD : targetsD) {
             if (dLeft > targetD + minD) {
-                targetsS.append(sMiddle - targetD);
+                targetsS.prepend(sMiddle - targetD);
             }
         }
         if (dLeft > minD && dRight > minD) {
@@ -1370,10 +1370,14 @@ geometry::Vec2d FreehandEdgeGeometry::sculptWidth(
     if (isClosed) {
         iKnot = numKnots - 1;
     }
+    geometry::Vec2dArray tmpPositions;
+    core::Array<double> tmpWidths;
     for (; iKnot >= 0 && iTarget >= 0; --iKnot) {
         Int j0 = knotToSampleIndex[iKnot];
         const geometry::StrokeSampleEx2d& sample = samples[j0];
         double s0 = sample.s();
+        tmpPositions.clear();
+        tmpWidths.clear();
         while (iTarget >= 0) {
             double targetS = targetsS[iTarget];
             if (targetS < s0) {
@@ -1398,12 +1402,16 @@ geometry::Vec2d FreehandEdgeGeometry::sculptWidth(
                             std::abs(targetS + curveLength - sMiddle));
                         double wt = 1.0 - cubicEaseInOut(d / radius);
                         w = std::max<double>(0, w + delta * wt);
-                        editPositions_.insert(iKnot, p);
-                        editWidths_.insert(iKnot, w);
+                        tmpPositions.prepend(p);
+                        tmpWidths.prepend(w);
                     }
                 }
             }
             --iTarget;
+        }
+        if (!tmpPositions.isEmpty()) {
+            editPositions_.insert(iKnot + 1, tmpPositions);
+            editWidths_.insert(iKnot + 1, tmpWidths);
         }
         s1 = s0;
         j1 = j0;
