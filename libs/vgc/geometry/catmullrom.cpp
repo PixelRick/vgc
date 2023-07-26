@@ -275,6 +275,13 @@ SegmentType computeSegmentCenterlineCubicBezier_(
         chordLengths.getUnchecked(knotIndices[1]),
         chordLengths.getUnchecked(knotIndices[2])};
 
+    if (knotIndices[0] == knotIndices[1]) {
+        fixedChordLengths[0] = 0;
+    }
+    if (knotIndices[2] == knotIndices[3]) {
+        fixedChordLengths[2] = 0;
+    }
+
     std::array<Vec2d, 3> chords = {
         knots[1] - knots[0], knots[2] - knots[1], knots[3] - knots[2]};
 
@@ -291,9 +298,9 @@ SegmentType computeSegmentCenterlineCubicBezier_(
     // 2. The first/last knot of an open curve
     //
     SegmentType result = SegmentType::None;
-    bool isAfterCorner = (d01 == 0) || (knotIndices[0] == knotIndices[1]);
+    bool isAfterCorner = (d01 == 0);
     bool isCorner = (d12 == 0);
-    bool isBeforeCorner = (d23 == 0) || (knotIndices[2] == knotIndices[3]);
+    bool isBeforeCorner = (d23 == 0);
     if (isCorner) {
         bezier = CubicBezier2d(knots);
         return SegmentType::Corner;
