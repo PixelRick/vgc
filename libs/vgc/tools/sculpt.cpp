@@ -516,7 +516,7 @@ public:
                     geometry::Vec2d smoothedPoint = geometry->sculptSmooth(
                         positionInWorkspace,
                         radius,
-                        std::min(1.0, disp / radius) * strength,
+                        (std::min)(1.0, disp / radius) * strength,
                         pixelSize,
                         ke->isClosed());
                     tool_->setActionCircleCenter(smoothedPoint);

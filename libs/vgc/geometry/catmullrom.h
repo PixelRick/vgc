@@ -322,6 +322,14 @@ enum CatmullRomSplineParameterization {
     Chordal
 };
 
+enum class CurveSegmentType {
+    Simple = 0,
+    Corner = 1,
+    AfterCorner = 2,
+    BeforeCorner = 3,
+    BetweenCorners = 4,
+};
+
 // TODO: immutable version with ConstShared storage
 //       & move these classes in a new set of .h/.cpp
 class VGC_GEOMETRY_API CatmullRomSplineStroke2d : public AbstractStroke2d {
@@ -358,8 +366,6 @@ public:
         , widths_(std::forward<TRangeWidths>(widths))
         , isWidthConstant_(isWidthConstant)
         , parameterization_(parameterization) {
-
-        computeChordLengths_();
     }
 
     const core::Array<Vec2d>& positions() const {
@@ -373,7 +379,11 @@ public:
     template<typename TRange>
     void setPositions(TRange&& positions) {
         positions_ = std::forward<TRange>(positions);
-        computeChordLengths_();
+        chordLengths_.clear();
+        segmentTypes_.clear();
+        centerlineControlPoints_.clear();
+        halfwidthsControlPoints_.clear();
+        isCacheDirty_ = true;
     }
 
     const core::Array<double>& widths() const {
@@ -388,12 +398,18 @@ public:
     template<typename TRange>
     void setWidths(TRange&& widths) {
         widths_ = std::forward<TRange>(widths);
+        isWidthConstant_ = false;
+        centerlineControlPoints_.clear();
+        halfwidthsControlPoints_.clear();
+        isCacheDirty_ = true;
     }
 
     void setConstantWidth(double width) {
         isWidthConstant_ = true;
         widths_.resize(1);
         widths_[0] = width;
+        centerlineControlPoints_.clear();
+        halfwidthsControlPoints_.clear();
     }
 
     bool isWidthConstant() const {
@@ -401,6 +417,7 @@ public:
     }
 
     const core::Array<double>& chordLengths() const {
+        computeCache_();
         return chordLengths_;
     }
 
@@ -434,13 +451,21 @@ protected:
     }
 
 private:
-    core::Array<Vec2d> positions_;
-    core::Array<double> widths_;
-    core::Array<double> chordLengths_;
+    Vec2dArray positions_;
+    core::DoubleArray widths_;
+    // It has the length of positions_.
+    // Last chord is the closure if closed, zero otherwise.
+    mutable core::DoubleArray chordLengths_;
+    mutable core::Array<CurveSegmentType> segmentTypes_;
+    // these two cannot be computed separately at the moment.
+    mutable Vec2dArray centerlineControlPoints_;
+    mutable Vec2dArray halfwidthsControlPoints_;
+
+    mutable bool isCacheDirty_ = true;
     bool isWidthConstant_ = false;
     CatmullRomSplineParameterization parameterization_;
 
-    void computeChordLengths_();
+    void computeCache_() const;
 };
 
 } // namespace vgc::geometry

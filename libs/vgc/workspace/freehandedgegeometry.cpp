@@ -1396,7 +1396,7 @@ geometry::Vec2d FreehandEdgeGeometry::sculptWidth(
                         geometry::Vec2d hws =
                             (1 - t) * sample0.halfwidths() + t * sample1.halfwidths();
                         double w = hws[0] * 2;
-                        double d = std::min(
+                        double d = (std::min)(
                             std::abs(targetS - sMiddle),
                             std::abs(targetS + curveLength - sMiddle));
                         double wt = 1.0 - cubicEaseInOut(d / radius);
@@ -1502,7 +1502,8 @@ public:
         // no more than, say, 10x the edge length?
         //
         numInfluencingPointsPerSide_ = core::round_cast<Int>(
-            sculptSampling_.radius / std::min(sculptSampling_.ds0, sculptSampling_.ds1));
+            sculptSampling_.radius
+            / (std::min)(sculptSampling_.ds0, sculptSampling_.ds1));
 
         if (!sculptSampling_.isClosed) {
 
