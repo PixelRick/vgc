@@ -309,6 +309,7 @@ public:
         double sinAngle = deltaCursor.normalized().det(geometry::Vec2f(1, 0));
         double delta = (cursorPosition_ - cursorPositionAtPress_).x();
         delta *= (1 + sinAngle);
+        delta *= pixelSize;
 
         // Open history group
         core::UndoGroup* undoGroup = nullptr;

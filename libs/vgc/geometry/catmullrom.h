@@ -416,11 +416,6 @@ public:
         return isWidthConstant_;
     }
 
-    const core::Array<double>& chordLengths() const {
-        computeCache_();
-        return chordLengths_;
-    }
-
 protected:
     Int numKnots_() const override;
 
@@ -453,11 +448,11 @@ protected:
 private:
     Vec2dArray positions_;
     core::DoubleArray widths_;
-    // It has the length of positions_.
+    // It has the same number of elements as of positions_.
     // Last chord is the closure if closed, zero otherwise.
     mutable core::DoubleArray chordLengths_;
     mutable core::Array<CurveSegmentType> segmentTypes_;
-    // these two cannot be computed separately at the moment.
+    // These two cannot be computed separately at the moment.
     mutable Vec2dArray centerlineControlPoints_;
     mutable Vec2dArray halfwidthsControlPoints_;
 

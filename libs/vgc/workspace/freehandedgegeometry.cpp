@@ -642,16 +642,6 @@ void computeSculptSampling(
                 if (d > 0) {
                     double invD = 1.0 / d;
 
-                    //CubicBezierStroke
-                    //auto stroke =
-                    //    geometry::detail::CubicBezierStroke::fromCatmullRomSpline(
-                    //        geometry::detail::CatmullRomSplineParameterization::
-                    //            Centripetal,
-                    //        positions,
-                    //        widths,
-                    //        isClosed,
-                    //        iSample2 - 1);
-
                     while (nextSculptPointS <= sa2->s()) {
                         // Sample a sculpt point at t in segment [sa1:0, sa2:1].
                         double t = (nextSculptPointS - sa1->s()) * invD;
@@ -772,30 +762,6 @@ template<typename TPoint, typename PositionGetter, typename WidthGetter>
         geometry::Vec2d b = positionGetter(points[iB], iB);
         double wA = widthGetter(points[iA], iA);
         double wB = widthGetter(points[iB], iB);
-
-        //core::Array<geometry::Vec2d> knotPs;
-        //core::Array<double> knotWs;
-        //if (i - 1 >= 0) {
-        //    Int j = indices[i - 1];
-        //    knotPs.append(positionGetter(points[j], j));
-        //    knotWs.append(widthGetter(points[j], j));
-        //}
-        //Int i0 = knotPs.length();
-        //knotPs.append(a);
-        //knotWs.append(wA);
-        //knotPs.append(b);
-        //knotWs.append(wB);
-        //if (i + 2 < indices.length()) {
-        //    Int j = indices[i + 1];
-        //    knotPs.append(positionGetter(points[j], j));
-        //    knotWs.append(widthGetter(points[j], j));
-        //}
-        //auto stroke = geometry::detail::CubicBezierStroke::fromCatmullRomSpline(
-        //    geometry::detail::CatmullRomSplineParameterization::Centripetal,
-        //    knotPs,
-        //    knotWs,
-        //    isClosed,
-        //    i0);
 
         geometry::Vec2d ab = b - a;
         double abLen = ab.length();
@@ -1302,7 +1268,7 @@ geometry::Vec2d FreehandEdgeGeometry::sculptWidth(
         if (d < radius) {
             double w = editWidths_[i];
             double wt = 1.0 - cubicEaseInOut(d / radius);
-            w = std::max<double>(0, w + delta * wt);
+            w = std::max<double>(0, w + 2. * delta * wt);
             editWidths_[i] = w;
         }
     }
@@ -1400,7 +1366,7 @@ geometry::Vec2d FreehandEdgeGeometry::sculptWidth(
                             std::abs(targetS - sMiddle),
                             std::abs(targetS + curveLength - sMiddle));
                         double wt = 1.0 - cubicEaseInOut(d / radius);
-                        w = std::max<double>(0, w + delta * wt);
+                        w = std::max<double>(0, w + 2. * delta * wt);
                         tmpPositions.prepend(p);
                         tmpWidths.prepend(w);
                         break;
