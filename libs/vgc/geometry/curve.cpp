@@ -299,6 +299,16 @@ void AbstractStroke2d::sampleSegment(
     Int segmentIndex,
     const CurveSamplingParameters& params) const {
 
+    detail::AdaptiveStrokeSampler sampler = {};
+    sampleSegment(out, segmentIndex, params, sampler);
+}
+
+void AbstractStroke2d::sampleSegment(
+    StrokeSampleEx2dArray& out,
+    Int segmentIndex,
+    const CurveSamplingParameters& params,
+    detail::AdaptiveStrokeSampler& sampler) const {
+
     if (isZeroLengthSegment(segmentIndex)) {
         Int numSegments = this->numSegments();
         Int startKnot = segmentIndex;
@@ -371,7 +381,7 @@ void AbstractStroke2d::sampleSegment(
         }
     }
     else {
-        return sampleNonZeroSegment(out, segmentIndex, params);
+        return sampleNonZeroSegment(out, segmentIndex, params, sampler);
     }
 }
 
