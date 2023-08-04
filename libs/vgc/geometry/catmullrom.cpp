@@ -715,7 +715,7 @@ void CatmullRomSplineStroke2d::computeCache_() const {
         halfwidthsControlPoints_.getUnchecked(j + 1) = halfwidthsBezier.controlPoint2();
     }
 
-    // Here we relax tangents to make them continuous.
+    // Here we relax tangents to make their derivative continuous.
     constexpr bool enableRelaxedNormals = true;
     for (Int i = 0; i < numSegments; ++i) {
         SegmentComputeData& computeData = computeDataArray[i];
@@ -750,7 +750,7 @@ void CatmullRomSplineStroke2d::computeCache_() const {
                 // Thus we force both sides to have a fake curvature of 0
                 // (fake C1 inflexion point).
                 normalReparametrizationControlValues_[i0][1] = 1;
-                normalReparametrizationControlValues_[i0][0] = 0;
+                normalReparametrizationControlValues_[i1][0] = 0;
             }
             else if (np0 < np1) {
                 double dt = np0 / np1;
