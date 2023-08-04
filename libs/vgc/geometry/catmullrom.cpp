@@ -609,10 +609,10 @@ CatmullRomSplineStroke2d::segmentToNormalReparametrization(Int segmentIndex) con
     Int numSegments = this->numSegments();
     checkSegmentIndexIsValid(segmentIndex, numSegments);
 
-    Int i0 = segmentIndex;
+    Int i = segmentIndex;
 
     const Vec2d* cp = normalReparametrizationControlValues_.data();
-    return CubicBezier1d(0, cp[i0][0], cp[i0][1], 1);
+    return CubicBezier1d(0, cp[i][0], cp[i][1], 1);
 }
 
 void CatmullRomSplineStroke2d::computeCache_() const {
@@ -705,30 +705,6 @@ void CatmullRomSplineStroke2d::computeCache_() const {
             computeData.imaginaryChordLengths,
             segmentType);
 
-        {
-            /*
-            cp: (array([2, 0]), array([2.66, 0.  ]), array([3.  , 0.34]), array([3, 1]))
-            s: (1.9800000000000004, 1.98)
-            k: (-0.5203550658096111, -0.5203550658096111)
-            cp: (array([3, 1]), array([3.  , 1.66]), array([4.  , 2.34]), array([4, 3]))
-            s: (1.9800000000000004, 1.9800000000000004)
-            k: (1.5304560759106207, -1.5304560759106207)
-            */
-            /*
-            CubicBezier2d clb0(Vec2d(2, 0), Vec2d(2.66, 0), Vec2d(3, 0.34), Vec2d(3, 1));
-            CubicBezier2d clb1(Vec2d(3, 1), Vec2d(3, 1.66), Vec2d(4, 2.34), Vec2d(4, 3));
-            CubicBezier2d hwsb(Vec2d(1, 1), Vec2d(1, 1), Vec2d(1, 1), Vec2d(1, 1));
-            auto pd00 = computeSegmentEndpointData(clb0, hwsb, 0);
-            auto pd01 = computeSegmentEndpointData(clb0, hwsb, 1);
-            auto pd10 = computeSegmentEndpointData(clb1, hwsb, 0);
-            auto pd11 = computeSegmentEndpointData(clb1, hwsb, 1);
-            VGC_DEBUG_TMP("pd00 s:{} k:{}", pd00.speed, pd00.curvature);
-            VGC_DEBUG_TMP("pd01 s:{} k:{}", pd01.speed, pd01.curvature);
-            VGC_DEBUG_TMP("pd10 s:{} k:{}", pd10.speed, pd10.curvature);
-            VGC_DEBUG_TMP("pd11 s:{} k:{}", pd11.speed, pd11.curvature);
-            */
-        }
-
         computeData.endpointDataPair[0] =
             computeSegmentEndpointData(centerlineBezier, halfwidthsBezier, 0);
         computeData.endpointDataPair[1] =
@@ -739,15 +715,16 @@ void CatmullRomSplineStroke2d::computeCache_() const {
         halfwidthsControlPoints_.getUnchecked(j + 1) = halfwidthsBezier.controlPoint2();
     }
 
-    // Here we try to make offset line tangent continuous at start knot.
+    // Here we relax tangents to make them continuous.
+    constexpr bool enableRelaxedNormals = true;
     for (Int i = 0; i < numSegments; ++i) {
         SegmentComputeData& computeData = computeDataArray[i];
 
         CurveSegmentType segmentType = segmentTypes_[i];
 
-        normalReparametrizationControlValues_[i] = Vec2d(1 / 3, 2 / 3);
+        normalReparametrizationControlValues_[i] = Vec2d(1. / 3, 2. / 3);
 
-        if ((isClosed || i > 1)
+        if (enableRelaxedNormals && (isClosed || i > 1)
             && (segmentType == CurveSegmentType::Simple
                 || segmentType == CurveSegmentType::BeforeCorner)) {
 
@@ -758,22 +735,30 @@ void CatmullRomSplineStroke2d::computeCache_() const {
             SegmentComputeData& previousSegmentComputeData =
                 computeDataArray[previousSegmentIndex];
 
-            // basically we want to change a single width control point.
-
             PointData& ed0 = previousSegmentComputeData.endpointDataPair[1];
             PointData& ed1 = computeData.endpointDataPair[0];
 
-            double np0 = std::abs(ed0.curvature * ed0.speed);
-            double np1 = std::abs(ed1.curvature * ed1.speed);
+            double np0 = std::abs(ed0.curvature /* * ed0.speed*/);
+            double np1 = std::abs(ed1.curvature /* * ed1.speed*/);
 
-            if (np0 < np1) {
+            Int i0 = previousSegmentIndex;
+            Int i1 = i;
+
+            if (ed0.curvature * ed1.curvature < 0) {
+                // Signs of curvature are different, it is impossible to make
+                // k1 match k2 with a positive coefficient.
+                // Thus we force both sides to have a fake curvature of 0
+                // (fake C1 inflexion point).
+                normalReparametrizationControlValues_[i0][1] = 1;
+                normalReparametrizationControlValues_[i0][0] = 0;
+            }
+            else if (np0 < np1) {
                 double dt = np0 / np1;
-                normalReparametrizationControlValues_[i][0] = dt / 3;
+                normalReparametrizationControlValues_[i1][0] = dt / 3;
             }
             else if (np1 < np0) {
                 double dt = np1 / np0;
-                normalReparametrizationControlValues_[previousSegmentIndex][1] =
-                    1 - dt / 3;
+                normalReparametrizationControlValues_[i0][1] = 1.0 - dt / 3;
             }
         }
     }
