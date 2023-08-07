@@ -180,79 +180,11 @@ void Node::replace(Node* oldNode) {
 }
 
 Element* Node::getElementFromPath(const Path& path, core::StringId tagNameFilter) const {
-    Element* element = nullptr;
-    bool firstAttributeEncountered = false;
-    for (const PathSegment& seg : path.segments()) {
-        switch (seg.type()) {
-        case PathSegmentType::Root:
-            element = document()->rootElement();
-            break;
-        case PathSegmentType::Id:
-            // nullptr if not found, handled out of switch
-            element = document()->elementById(seg.name());
-            break;
-        case PathSegmentType::Element:
-            if (!element) {
-                element = Element::cast(const_cast<Node*>(this));
-            }
-            if (element) {
-                Element* childElement = element->firstChildElement();
-                while (childElement) {
-                    if (childElement->name() == seg.name()) {
-                        break;
-                    }
-                    childElement = childElement->nextSiblingElement();
-                }
-                element = childElement; // nullptr if not found, handled out of switch
-            }
-            break;
-        case PathSegmentType::Attribute:
-            if (!element) {
-                element = Element::cast(const_cast<Node*>(this));
-            }
-            firstAttributeEncountered = true;
-        }
-        // Break out of loop if there is an error or we reached the end of
-        // the "element part" of the path.
-        if (!element /* <- error */ || firstAttributeEncountered) {
-            break;
-        }
-    }
-    if (element && !tagNameFilter.isEmpty() && element->tagName() != tagNameFilter) {
-        VGC_WARNING(
-            LogVgcDom,
-            "Path `{}` resolved to an element `{}` but `{}` was expected.",
-            path,
-            element->tagName(),
-            tagNameFilter);
-        return nullptr;
-    }
-
-    return element;
+    return detail::getElementFromPath(path, this, tagNameFilter);
 }
 
 Value Node::getValueFromPath(const Path& path, core::StringId tagNameFilter) const {
-    if (path.isAttributePath()) {
-        Element* element = getElementFromPath(path);
-        if (element) {
-            if (!tagNameFilter.isEmpty() && element->tagName() != tagNameFilter) {
-                VGC_WARNING(
-                    LogVgcDom,
-                    "Path `{}` resolved to an element `{}` but `{}` was expected.",
-                    path,
-                    element->tagName(),
-                    tagNameFilter);
-                return Value();
-            }
-            const PathSegment& seg = path.segments().last();
-            Value value = element->getAttribute(seg.name());
-            if (value.isValid() && seg.isIndexed()) {
-                value = value.getItemWrapped(seg.arrayIndex());
-            }
-            return value;
-        }
-    }
-    return Value();
+    return detail::getValueFromPath(path, this, tagNameFilter);
 }
 
 } // namespace vgc::dom

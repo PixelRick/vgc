@@ -31,13 +31,13 @@
 #include <vgc/core/object.h>
 #include <vgc/core/stringid.h>
 #include <vgc/dom/api.h>
-#include <vgc/dom/element.h>
 #include <vgc/dom/node.h>
 #include <vgc/dom/value.h>
 
 namespace vgc::dom {
 
 VGC_DECLARE_OBJECT(Document);
+VGC_DECLARE_OBJECT(Element);
 
 class Diff;
 

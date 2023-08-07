@@ -28,6 +28,7 @@
 #include <vgc/core/color.h>
 #include <vgc/core/enum.h>
 #include <vgc/core/format.h>
+#include <vgc/core/parse.h>
 #include <vgc/core/sharedconst.h>
 #include <vgc/core/stringid.h>
 #include <vgc/dom/api.h>
@@ -36,6 +37,7 @@
 
 namespace vgc::dom {
 
+VGC_DECLARE_OBJECT(Element);
 class Value;
 
 /// \enum vgc::dom::ValueType
@@ -112,10 +114,14 @@ enum class ValueType {
     Path,
     NoneOrPath,
     PathArray,
+    Custom,
     VGC_ENUM_ENDMAX
 };
 VGC_DOM_API
 VGC_DECLARE_ENUM(ValueType)
+
+using StreamReader = core::StringReader;
+using StreamWriter = core::StringWriter;
 
 struct NoneValue : std::monostate {};
 struct InvalidValue : std::monostate {};
@@ -166,6 +172,132 @@ public:
     }
 };
 
+class CustomValuePtr;
+
+using FormatterBufferCtx = fmt::buffer_context<char>;
+using FormatterBufferIterator = decltype(std::declval<FormatterBufferCtx>().out());
+
+class PathUpdateData {
+public:
+    PathUpdateData() = default;
+
+    const std::unordered_map<core::Id, core::Id>& replacedElements() const {
+        return replacedElements_;
+    }
+
+    void addReplacedElement(core::Id oldInternalId, core::Id newInternalId) {
+        replacedElements_[oldInternalId] = newInternalId;
+    }
+
+private:
+    std::unordered_map<core::Id, core::Id> replacedElements_;
+};
+
+class VGC_DOM_API CustomValue {
+public:
+    virtual ~CustomValue() = default;
+
+    std::unique_ptr<CustomValue> clone() const {
+        return clone_();
+    }
+
+    bool compareEqual(CustomValue* rhs) const {
+        return compareEqual_(rhs);
+    }
+    bool compareLess(CustomValue* rhs) const {
+        return compareLess_(rhs);
+    }
+
+    bool read(StreamReader& in) {
+        return read_(in);
+    }
+    bool write(StreamWriter& out) const {
+        return write_(out);
+    }
+
+    FormatterBufferIterator
+    format(FormatterBufferCtx& ctx, std::string_view fmtString) const {
+        return format_(ctx, fmtString);
+    }
+
+protected:
+    explicit CustomValue(bool hasPaths)
+        : hasPaths_(hasPaths) {
+    }
+
+    friend CustomValuePtr;
+
+    // must be called before doing any rename or hierarchical moves in the dom.
+    virtual void preparePathsForUpdate_(Element* owner) const = 0;
+    virtual void updatePaths_(Element* owner, const PathUpdateData& data) = 0;
+
+    virtual std::unique_ptr<CustomValue> clone_() const = 0;
+
+    virtual bool compareEqual_(CustomValue* rhs) const = 0;
+    virtual bool compareLess_(CustomValue* rhs) const = 0;
+
+    virtual bool read_(StreamReader& in) = 0;
+    virtual bool write_(StreamWriter& out) const = 0;
+
+    virtual FormatterBufferIterator
+    format_(FormatterBufferCtx& ctx, std::string_view fmtString) const = 0;
+
+private:
+    const bool hasPaths_;
+};
+
+class VGC_DOM_API CustomValuePtr {
+public:
+    explicit CustomValuePtr(std::unique_ptr<CustomValue>&& uptr)
+        : uptr_(std::move(uptr)) {
+    }
+
+    explicit CustomValuePtr(const CustomValuePtr& other)
+        : uptr_(other.uptr_->clone()) {
+    }
+
+    explicit CustomValuePtr(CustomValuePtr&& other)
+        : uptr_(std::move(other.uptr_)) {
+    }
+
+    CustomValue& operator*() const noexcept {
+        return *uptr_;
+    }
+
+    CustomValue* operator->() const noexcept {
+        return uptr_.get();
+    }
+
+    CustomValue* get() const {
+        return uptr_.get();
+    }
+
+    CustomValuePtr& operator=(const CustomValuePtr& other) {
+        uptr_ = other.uptr_->clone();
+        return *this;
+    }
+
+    CustomValuePtr& operator=(CustomValuePtr&& other) {
+        uptr_ = std::move(other.uptr_);
+        return *this;
+    }
+
+    friend bool operator==(const CustomValuePtr& lhs, const CustomValuePtr& rhs) {
+        return lhs->compareEqual(rhs.get());
+    }
+
+    friend bool operator!=(const CustomValuePtr& lhs, const CustomValuePtr& rhs) {
+        return !lhs->compareEqual(rhs.get());
+    }
+
+    friend bool operator<(const CustomValuePtr& lhs, const CustomValuePtr& rhs) {
+        return lhs->compareLess(rhs.get());
+    }
+
+private:
+    std::unique_ptr<CustomValue> uptr_;
+};
+
 namespace detail {
 
 template<ValueType valueType>
@@ -201,6 +333,7 @@ VGC_DOM_VALUETYPE_TYPE_(Vec2dArray,    geometry::SharedConstVec2dArray)
 VGC_DOM_VALUETYPE_TYPE_(Path,          Path)
 VGC_DOM_VALUETYPE_TYPE_(NoneOrPath,    NoneOr<Path>)
 VGC_DOM_VALUETYPE_TYPE_(PathArray,     SharedConstPathArray)
+VGC_DOM_VALUETYPE_TYPE_(Custom,        CustomValuePtr)
 // clang-format on
 #undef VGC_DOM_VALUETYPE_TYPE_
 
@@ -698,6 +831,11 @@ private:
         var_.emplace<Type>(std::forward<T>(value));
     }
 
+    friend Element;
+
+    void preparePathsForUpdate_(Element* owner) const;
+    void updatePaths_(Element* owner, const PathUpdateData& data);
+
     detail::ValueVariant var_;
 };
 
@@ -723,11 +861,10 @@ void write(OStream& out, const Value& v) {
 /// the given string does not represent a `Value` of the given ValueType.
 ///
 VGC_DOM_API
-Value parseValue(const std::string& s, ValueType t);
+void parseValue(Value& value, const std::string& s);
 
 template<typename OStream, typename T>
 void write(OStream& out, const NoneOr<T>& v) {
-    fmt::memory_buffer b;
     if (v.has_value()) {
         write(out, v.value());
     }
@@ -772,6 +909,21 @@ void readTo(NoneOr<T>& v, IStream& in) {
     readTo(v.emplace(), in);
 }
 
+template<typename OStream>
+void write(OStream& out, const CustomValuePtr& v) {
+    if constexpr (std::is_same_v<OStream, StreamWriter>) {
+        v->write(out);
+    }
+    else {
+        std::string tmp;
+        v->write(StreamWriter(tmp));
+        write(out, tmp);
+    }
+}
+
+VGC_DOM_API
+void readTo(CustomValuePtr& v, StreamReader& in);
+
 } // namespace vgc::dom
 
 template<typename T>
@@ -784,6 +936,34 @@ struct fmt::formatter<vgc::dom::NoneOr<T>> : fmt::formatter<T> {
         else {
             return fmt::format_to(ctx.out(), "none");
         }
+    }
+};
+
+class DispatchFormatter {
+public:
+    auto parse(fmt::format_parse_context& ctx) {
+        auto beg = ctx.begin(), end = ctx.end();
+        auto it = beg;
+        while (it != end && *it != '}') {
+            ++it;
+        }
+        fmtString_.clear();
+        fmtString_.reserve(std::distance(beg, it) + 2);
+        fmtString_.push_back('{');
+        fmtString_.append(beg, it);
+        fmtString_.push_back('}');
+        return it;
+    }
+
+protected:
+    std::string fmtString_;
+};
+
+template<>
+struct fmt::formatter<vgc::dom::CustomValuePtr> : DispatchFormatter {
+    auto format(const vgc::dom::CustomValuePtr& v, fmt::buffer_context<char>& ctx)
+        -> decltype(ctx.out()) {
+        return v->format(ctx, fmtString_);
     }
 };
 
@@ -804,18 +984,12 @@ struct fmt::formatter<vgc::dom::InvalidValue> : fmt::formatter<std::string_view>
 };
 
 template<>
-struct fmt::formatter<vgc::dom::Value> {
-    constexpr auto parse(format_parse_context& ctx) {
-        auto it = ctx.begin(), end = ctx.end();
-        if (it != end && *it != '}') {
-            throw format_error("invalid format");
-        }
-        return it;
-    }
+struct fmt::formatter<vgc::dom::Value> : DispatchFormatter {
     template<typename FormatContext>
     auto format(const vgc::dom::Value& v, FormatContext& ctx) -> decltype(ctx.out()) {
         return v.visit([&](auto&& arg) {
-            return fmt::format_to(ctx.out(), "{}", std::forward<decltype(arg)>(arg));
+            return fmt::format_to(
+                ctx.out(), fmtString_, std::forward<decltype(arg)>(arg));
         });
     }
 };

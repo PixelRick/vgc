@@ -23,6 +23,7 @@
 #include <vgc/core/algorithm.h>
 #include <vgc/core/flags.h>
 #include <vgc/core/format.h>
+#include <vgc/core/id.h>
 #include <vgc/core/object.h>
 #include <vgc/core/parse.h>
 #include <vgc/core/stringid.h>
@@ -222,6 +223,10 @@ public:
 
 private:
     core::Array<PathSegment> segments_;
+    // Used as cache for path resolver
+    // and for copy operations.
+    mutable core::Id baseInternalId_ = {};
+    mutable core::Id targetInternalId_ = {};
 
     void writeTo_(fmt::memory_buffer& out) const;
 };

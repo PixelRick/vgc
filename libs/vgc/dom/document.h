@@ -27,6 +27,8 @@
 #include <vgc/dom/api.h>
 #include <vgc/dom/node.h>
 #include <vgc/dom/operation.h>
+#include <vgc/dom/path.h>
+#include <vgc/dom/value.h>
 #include <vgc/dom/xmlformattingstyle.h>
 
 namespace vgc::dom {
@@ -445,6 +447,24 @@ private:
     void onMoveNode_(Node* node, const NodeRelatives& savedRelatives);
     void onChangeAttribute_(Element* element, core::StringId name);
 };
+
+namespace detail {
+
+void preparePathsForUpdate(const Node* workingNode);
+
+void updatePaths(const Node* workingNode, const PathUpdateData& data);
+
+Element* getElementFromPath(
+    const Path& path,
+    const Node* workingNode,
+    core::StringId tagNameFilter = {});
+
+Value getValueFromPath(
+    const Path& path,
+    const Node* workingNode,
+    core::StringId tagNameFilter = {});
+
+} // namespace detail
 
 } // namespace vgc::dom
 

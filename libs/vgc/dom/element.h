@@ -21,6 +21,7 @@
 #include <vgc/core/stringid.h>
 #include <vgc/dom/api.h>
 #include <vgc/dom/attribute.h>
+#include <vgc/dom/document.h>
 #include <vgc/dom/node.h>
 #include <vgc/dom/path.h>
 #include <vgc/dom/strings.h>
@@ -464,6 +465,12 @@ private:
         core::StringId name,
         const Value& oldValue,
         const Value& newValue);
+
+    friend void detail::preparePathsForUpdate(const Node* workingNode);
+    void preparePathsForUpdate_() const;
+
+    friend void detail::updatePaths(const Node* workingNode, const PathUpdateData& data);
+    void updatePaths_(const PathUpdateData& data);
 };
 
 inline NamedElementIterator& NamedElementIterator::operator++() {

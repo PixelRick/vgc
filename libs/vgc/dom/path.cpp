@@ -18,6 +18,7 @@
 
 #include <array>
 
+#include <vgc/dom/document.h>
 #include <vgc/dom/element.h>
 #include <vgc/dom/logcategories.h>
 #include <vgc/dom/strings.h>

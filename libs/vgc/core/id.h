@@ -24,6 +24,9 @@ namespace vgc::core {
 
 using Id = Int64;
 
+/// Returns a new unique id.
+/// This function never returns 0, thus it can be used as invalid id.
+///
 VGC_CORE_API Id genId();
 
 } // namespace vgc::core

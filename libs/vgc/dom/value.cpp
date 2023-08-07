@@ -114,4 +114,8 @@ Value parseValue(const std::string& s, ValueType t) {
     return Value::invalid(); // Silence "not all control paths return a value" in MSVC
 }
 
+void readTo(CustomValuePtr& v, StreamReader& in) {
+    v->read(in);
+}
+
 } // namespace vgc::dom

@@ -24,6 +24,7 @@
 #include <vgc/core/xml.h>
 #include <vgc/dom/element.h>
 #include <vgc/dom/io.h>
+#include <vgc/dom/logcategories.h>
 #include <vgc/dom/operation.h>
 #include <vgc/dom/schema.h>
 #include <vgc/dom/strings.h>
@@ -475,5 +476,99 @@ void Document::onMoveNode_(Node* node, const NodeRelatives& savedRelatives) {
 void Document::onChangeAttribute_(Element* element, core::StringId name) {
     pendingDiff_.modifiedElements_[element].insert(name);
 }
+
+namespace detail {
+
+void preparePathsForUpdate(const Node* workingNode) {
+}
+
+void updatePaths(const Node* workingNode, const PathUpdateData& data) {
+}
+
+Element* getElementFromPath(
+    const Path& path,
+    const Node* workingNode,
+    core::StringId tagNameFilter) {
+
+    Element* element = nullptr;
+    bool firstAttributeEncountered = false;
+    for (const PathSegment& seg : path.segments()) {
+        switch (seg.type()) {
+        case PathSegmentType::Root:
+            element = workingNode->document()->rootElement();
+            break;
+        case PathSegmentType::Id:
+            // nullptr if not found, handled out of switch
+            element = workingNode->document()->elementById(seg.name());
+            break;
+        case PathSegmentType::Element:
+            if (!element) {
+                element = Element::cast(const_cast<Node*>(workingNode));
+            }
+            if (element) {
+                Element* childElement = element->firstChildElement();
+                while (childElement) {
+                    if (childElement->name() == seg.name()) {
+                        break;
+                    }
+                    childElement = childElement->nextSiblingElement();
+                }
+                element = childElement; // nullptr if not found, handled out of switch
+            }
+            break;
+        case PathSegmentType::Attribute:
+            if (!element) {
+                element = Element::cast(const_cast<Node*>(workingNode));
+            }
+            firstAttributeEncountered = true;
+        }
+        // Break out of loop if there is an error or we reached the end of
+        // the "element part" of the path.
+        if (!element /* <- error */ || firstAttributeEncountered) {
+            break;
+        }
+    }
+    if (element && !tagNameFilter.isEmpty() && element->tagName() != tagNameFilter) {
+        VGC_WARNING(
+            LogVgcDom,
+            "Path `{}` resolved to an element `{}` but `{}` was expected.",
+            path,
+            element->tagName(),
+            tagNameFilter);
+        return nullptr;
+    }
+
+    return element;
+}
+
+Value getValueFromPath(
+    const Path& path,
+    const Node* workingNode,
+    core::StringId tagNameFilter) {
+
+    if (path.isAttributePath()) {
+        Element* element = getElementFromPath(path, workingNode);
+        if (element) {
+            if (!tagNameFilter.isEmpty() && element->tagName() != tagNameFilter) {
+                VGC_WARNING(
+                    LogVgcDom,
+                    "Path `{}` resolved to an element `{}` but `{}` was expected.",
+                    path,
+                    element->tagName(),
+                    tagNameFilter);
+                return Value();
+            }
+            const PathSegment& seg = path.segments().last();
+            Value value = element->getAttribute(seg.name());
+            if (value.isValid() && seg.isIndexed()) {
+                value = value.getItemWrapped(seg.arrayIndex());
+            }
+            return value;
+        }
+    }
+    return Value();
+}
+
+} // namespace detail
 
 } // namespace vgc::dom
