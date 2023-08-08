@@ -171,12 +171,12 @@ private:
     void onAttribute_() {
         core::StringId name(attributeName_);
 
-        ValueType valueType = {};
+        Value value = {};
         if (name == strings::name) {
-            valueType = ValueType::StringId;
+            value = core::StringId();
         }
         else if (name == strings::id) {
-            valueType = ValueType::StringId;
+            value = core::StringId();
         }
         else {
             const AttributeSpec* spec = elementSpec_->findAttributeSpec(name);
@@ -185,11 +185,11 @@ private:
                     "Unknown attribute '" + attributeName_ + "' for element '" + tagName_
                     + "'. Expected an attribute name defined in the VGC schema.");
             }
-            valueType = spec->valueType();
+            value = spec->defaultValue();
         }
 
-        Value value = parseValue(attributeValue_, valueType);
-        Element::cast(currentNode_)->setAttribute(name, value);
+        parseValue(value, attributeValue_);
+        Element::cast(currentNode_)->setAttribute(name, std::move(value));
     }
 };
 
@@ -321,7 +321,7 @@ void Document::save(const std::string& filePath, const XmlFormattingStyle& style
     writeChildren(out, style, 0, this);
 }
 
-Element* Document::elementById(core::StringId id) const {
+Element* Document::elementFromId(core::StringId id) const {
     auto it = elementByIdMap_.find(id);
     if (it != elementByIdMap_.end()) {
         return it->second;
@@ -329,12 +329,44 @@ Element* Document::elementById(core::StringId id) const {
     return nullptr;
 }
 
-Element* Document::elementByInternalId(core::Id id) const {
+Element* Document::elementFromInternalId(core::Id id) const {
     auto it = elementByInternalIdMap_.find(id);
     if (it != elementByInternalIdMap_.end()) {
         return it->second;
     }
     return nullptr;
+}
+
+// static
+Element* Document::elementFromPath(
+    const Path& path,
+    const Node* workingNode,
+    core::StringId tagNameFilter) {
+
+    const core::Array<PathSegment>& segments = path.segments();
+    auto segIt = segments.begin();
+    auto segEnd = segments.end();
+
+    return resolveElementPartOfPath_(path, segIt, segEnd, workingNode, tagNameFilter);
+}
+
+// static
+Value Document::valueFromPath(
+    const Path& path,
+    const Node* workingNode,
+    core::StringId tagNameFilter) {
+
+    const core::Array<PathSegment>& segments = path.segments();
+    auto segIt = segments.begin();
+    auto segEnd = segments.end();
+
+    Element* element =
+        resolveElementPartOfPath_(path, segIt, segEnd, workingNode, tagNameFilter);
+    if (!element) {
+        return Value();
+    }
+
+    return resolveAttributePartOfPath_(path, segIt, segEnd, element);
 }
 
 core::History* Document::enableHistory(core::StringId entrypointName) {
@@ -477,43 +509,51 @@ void Document::onChangeAttribute_(Element* element, core::StringId name) {
     pendingDiff_.modifiedElements_[element].insert(name);
 }
 
-namespace detail {
+namespace {
 
-void preparePathsForUpdate(const Node* workingNode) {
+Element* firstChildElementWithName(Element* element, core::StringId name) {
+    Element* childElement = element->firstChildElement();
+    while (childElement) {
+        if (childElement->name() == name) {
+            break;
+        }
+        childElement = childElement->nextSiblingElement();
+    }
+    return childElement; // nullptr if not found
 }
 
-void updatePaths(const Node* workingNode, const PathUpdateData& data) {
-}
+} // namespace
 
-Element* getElementFromPath(
+// static
+Element* Document::resolveElementPartOfPath_(
     const Path& path,
+    Path::ConstSegmentIterator& segIt,
+    Path::ConstSegmentIterator segEnd,
     const Node* workingNode,
     core::StringId tagNameFilter) {
 
+    Document* document = workingNode->document();
+
     Element* element = nullptr;
+    bool hasError = false;
     bool firstAttributeEncountered = false;
-    for (const PathSegment& seg : path.segments()) {
-        switch (seg.type()) {
+    for (; segIt != segEnd; ++segIt) {
+        switch (segIt->type()) {
         case PathSegmentType::Root:
-            element = workingNode->document()->rootElement();
-            break;
+            // only first segment can be root
+            element = document->rootElement();
         case PathSegmentType::Id:
+            // only first segment can be root
             // nullptr if not found, handled out of switch
-            element = workingNode->document()->elementById(seg.name());
+            element = document->elementFromId(segIt->nameOrId());
             break;
         case PathSegmentType::Element:
             if (!element) {
                 element = Element::cast(const_cast<Node*>(workingNode));
             }
             if (element) {
-                Element* childElement = element->firstChildElement();
-                while (childElement) {
-                    if (childElement->name() == seg.name()) {
-                        break;
-                    }
-                    childElement = childElement->nextSiblingElement();
-                }
-                element = childElement; // nullptr if not found, handled out of switch
+                // nullptr if not found, handled out of switch
+                element = firstChildElementWithName(element, segIt->nameOrId());
             }
             break;
         case PathSegmentType::Attribute:
@@ -521,13 +561,27 @@ Element* getElementFromPath(
                 element = Element::cast(const_cast<Node*>(workingNode));
             }
             firstAttributeEncountered = true;
+            break;
         }
         // Break out of loop if there is an error or we reached the end of
         // the "element part" of the path.
-        if (!element /* <- error */ || firstAttributeEncountered) {
+        if (!element /* <- error */) {
+            hasError = true;
+            break;
+        }
+        else if (firstAttributeEncountered) {
             break;
         }
     }
+    if (hasError) {
+        for (; segIt != segEnd; ++segIt) {
+            if (segIt->type() == PathSegmentType::Attribute) {
+                break;
+            }
+        }
+        return nullptr;
+    }
+
     if (element && !tagNameFilter.isEmpty() && element->tagName() != tagNameFilter) {
         VGC_WARNING(
             LogVgcDom,
@@ -535,40 +589,38 @@ Element* getElementFromPath(
             path,
             element->tagName(),
             tagNameFilter);
-        return nullptr;
+        element = nullptr;
     }
 
     return element;
 }
 
-Value getValueFromPath(
-    const Path& path,
-    const Node* workingNode,
-    core::StringId tagNameFilter) {
+// static
+Value Document::resolveAttributePartOfPath_(
+    const Path& /*path*/,
+    Path::ConstSegmentIterator& segIt,
+    Path::ConstSegmentIterator segEnd,
+    Element* element) {
 
-    if (path.isAttributePath()) {
-        Element* element = getElementFromPath(path, workingNode);
-        if (element) {
-            if (!tagNameFilter.isEmpty() && element->tagName() != tagNameFilter) {
-                VGC_WARNING(
-                    LogVgcDom,
-                    "Path `{}` resolved to an element `{}` but `{}` was expected.",
-                    path,
-                    element->tagName(),
-                    tagNameFilter);
-                return Value();
+    Value result = {};
+    for (; segIt != segEnd; ++segIt) {
+        switch (segIt->type()) {
+        case PathSegmentType::Root:
+        case PathSegmentType::Id:
+        case PathSegmentType::Element: {
+            // error, no elements should be in the attribute part
+            return Value();
+        }
+        case PathSegmentType::Attribute: {
+            result = element->getAttribute(segIt->nameOrId());
+            if (result.isValid() && segIt->isIndexed()) {
+                result = result.getItemWrapped(segIt->arrayIndex());
             }
-            const PathSegment& seg = path.segments().last();
-            Value value = element->getAttribute(seg.name());
-            if (value.isValid() && seg.isIndexed()) {
-                value = value.getItemWrapped(seg.arrayIndex());
-            }
-            return value;
+            break;
+        }
         }
     }
-    return Value();
+    return result;
 }
-
-} // namespace detail
 
 } // namespace vgc::dom

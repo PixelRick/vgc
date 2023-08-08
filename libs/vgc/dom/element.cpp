@@ -207,4 +207,16 @@ void Element::onAttributeChanged_(
     attributeChanged().emit(name, oldValue, newValue);
 }
 
+void Element::prepareInternalPathsForUpdate_() const {
+    for (const AuthoredAttribute& attr : authoredAttributes_) {
+        attr.value().preparePathsForUpdate_(this);
+    }
+}
+
+void Element::updateInternalPaths_(const PathUpdateData& data) {
+    for (AuthoredAttribute& attr : authoredAttributes_) {
+        const_cast<Value&>(attr.value()).updatePaths_(this, data);
+    }
+}
+
 } // namespace vgc::dom

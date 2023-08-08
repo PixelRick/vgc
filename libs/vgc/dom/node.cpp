@@ -180,11 +180,29 @@ void Node::replace(Node* oldNode) {
 }
 
 Element* Node::getElementFromPath(const Path& path, core::StringId tagNameFilter) const {
-    return detail::getElementFromPath(path, this, tagNameFilter);
+    return Document::elementFromPath(path, this, tagNameFilter);
 }
 
 Value Node::getValueFromPath(const Path& path, core::StringId tagNameFilter) const {
-    return detail::getValueFromPath(path, this, tagNameFilter);
+    return Document::valueFromPath(path, this, tagNameFilter);
 }
+
+namespace detail {
+
+void prepareInternalPathsForUpdate(const Node* workingNode) {
+    Element* element = Element::cast(const_cast<Node*>(workingNode));
+    if (element) {
+        element->prepareInternalPathsForUpdate_();
+    }
+}
+
+void updateInternalPaths(const Node* workingNode, const PathUpdateData& data) {
+    Element* element = Element::cast(const_cast<Node*>(workingNode));
+    if (element) {
+        element->updateInternalPaths_(data);
+    }
+}
+
+} // namespace detail
 
 } // namespace vgc::dom

@@ -466,11 +466,12 @@ private:
         const Value& oldValue,
         const Value& newValue);
 
-    friend void detail::preparePathsForUpdate(const Node* workingNode);
-    void preparePathsForUpdate_() const;
+    friend void detail::prepareInternalPathsForUpdate(const Node* workingNode);
+    void prepareInternalPathsForUpdate_() const;
 
-    friend void detail::updatePaths(const Node* workingNode, const PathUpdateData& data);
-    void updatePaths_(const PathUpdateData& data);
+    friend void
+    detail::updateInternalPaths(const Node* workingNode, const PathUpdateData& data);
+    void updateInternalPaths_(const PathUpdateData& data);
 };
 
 inline NamedElementIterator& NamedElementIterator::operator++() {

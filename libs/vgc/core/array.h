@@ -3065,10 +3065,18 @@ using SharedConstDoubleArray = SharedConstArray<double>;
 //   data()
 //
 
+// todo: Implement more specific format specification to support aligning
+//       the array vs aligning the element, etc...
+//       Possible syntax: {:array-spec[element-spec]}
+//       Example: {:>50[>6]} would align-fill the array to be of width 50 and each element
+//                to be of width 6.
+//
 template<typename T>
 struct fmt::formatter<vgc::core::Array<T>> : fmt::formatter<vgc::core::RemoveCVRef<T>> {
     template<typename FormatContext>
     auto format(const vgc::core::Array<T>& x, FormatContext& ctx) -> decltype(ctx.out()) {
+
+        using ElementFormatter = fmt::formatter<vgc::core::RemoveCVRef<T>>;
 
         auto out = ctx.out();
         if (x.isEmpty()) {
@@ -3078,11 +3086,11 @@ struct fmt::formatter<vgc::core::Array<T>> : fmt::formatter<vgc::core::RemoveCVR
             *out++ = '[';
             auto it = x.cbegin();
             auto last = x.cend() - 1;
-            out = vgc::core::formatTo(out, "{}", *it);
+            out = ElementFormatter::format(*it, ctx);
             while (it != last) {
                 out = vgc::core::copyStringTo(out, ", ");
                 ctx.advance_to(out);
-                out = fmt::formatter<vgc::core::RemoveCVRef<T>>::format(*++it, ctx);
+                out = ElementFormatter::format(*++it, ctx);
             }
             *out++ = ']';
         }

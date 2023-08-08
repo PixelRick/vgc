@@ -37,6 +37,67 @@ VGC_DECLARE_OBJECT(Node);
 VGC_DECLARE_OBJECT(Document);
 VGC_DECLARE_OBJECT(Element);
 
+class VGC_DOM_API Diff {
+public:
+    const core::Array<Node*>& createdNodes() const {
+        return createdNodes_;
+    }
+
+    const core::Array<Node*>& removedNodes() const {
+        return removedNodes_;
+    }
+
+    const std::set<Node*>& reparentedNodes() const {
+        return reparentedNodes_;
+    }
+
+    const std::set<Node*>& childrenReorderedNodes() const {
+        return childrenReorderedNodes_;
+    }
+
+    const std::unordered_map<Element*, std::set<core::StringId>>&
+    modifiedElements() const {
+        return modifiedElements_;
+    }
+
+    bool isUndoOrRedo() const {
+        return isUndoOrRedo_;
+    }
+
+private:
+    friend Document;
+
+    // TODO: Use NodePtr to prevent dangling pointers when a reader
+    //       edits the DOM while processing the lists.
+    core::Array<Node*> createdNodes_;
+    core::Array<Node*> removedNodes_;
+    std::set<Node*> reparentedNodes_;
+    std::set<Node*> childrenReorderedNodes_;
+
+    std::unordered_map<Element*, std::set<core::StringId>> modifiedElements_;
+
+    bool isUndoOrRedo_ = false;
+
+    Diff() = default;
+
+    // it does not change isUndoOrRedo_ value.
+    void reset() {
+        createdNodes_.clear();
+        removedNodes_.clear();
+        reparentedNodes_.clear();
+        childrenReorderedNodes_.clear();
+        modifiedElements_.clear();
+    }
+
+    bool isEmpty() const {
+        return createdNodes_.empty()              //
+               && removedNodes_.empty()           //
+               && reparentedNodes_.empty()        //
+               && childrenReorderedNodes_.empty() //
+               && modifiedElements_.empty();
+    }
+};
+
 /// \class vgc::dom::Document
 /// \brief Represents a VGC document.
 ///
@@ -345,9 +406,19 @@ public:
         const std::string& filePath,
         const XmlFormattingStyle& style = XmlFormattingStyle()) const;
 
-    Element* elementById(core::StringId id) const;
+    Element* elementFromId(core::StringId id) const;
 
-    Element* elementByInternalId(core::Id id) const;
+    Element* elementFromInternalId(core::Id id) const;
+
+    static Element* elementFromPath(
+        const Path& path,
+        const Node* workingNode,
+        core::StringId tagNameFilter = {});
+
+    static Value valueFromPath(
+        const Path& path,
+        const Node* workingNode,
+        core::StringId tagNameFilter = {});
 
     core::History* enableHistory(core::StringId entrypointName);
     void disableHistory();
@@ -446,25 +517,20 @@ private:
     void onRemoveNode_(Node* node);
     void onMoveNode_(Node* node, const NodeRelatives& savedRelatives);
     void onChangeAttribute_(Element* element, core::StringId name);
+
+    static Element* resolveElementPartOfPath_(
+        const Path& path,
+        Path::ConstSegmentIterator& segIt,
+        Path::ConstSegmentIterator segEnd,
+        const Node* workingNode,
+        core::StringId tagNameFilter = {});
+
+    static Value resolveAttributePartOfPath_(
+        const Path& path,
+        Path::ConstSegmentIterator& segIt,
+        Path::ConstSegmentIterator segEnd,
+        Element* element);
 };
-
-namespace detail {
-
-void preparePathsForUpdate(const Node* workingNode);
-
-void updatePaths(const Node* workingNode, const PathUpdateData& data);
-
-Element* getElementFromPath(
-    const Path& path,
-    const Node* workingNode,
-    core::StringId tagNameFilter = {});
-
-Value getValueFromPath(
-    const Path& path,
-    const Node* workingNode,
-    core::StringId tagNameFilter = {});
-
-} // namespace detail
 
 } // namespace vgc::dom
 

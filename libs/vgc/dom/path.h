@@ -31,9 +31,22 @@
 
 namespace vgc::dom {
 
+VGC_DECLARE_OBJECT(Node);
 VGC_DECLARE_OBJECT(Document);
 VGC_DECLARE_OBJECT(Element);
+
 class Path;
+class PathUpdateData;
+
+using StreamReader = core::StringReader;
+using StreamWriter = core::StringWriter;
+
+namespace detail {
+
+void preparePathForUpdate(const Path& path, const Node* workingNode);
+void updatePath(Path& path, const Node* workingNode, const PathUpdateData& data);
+
+} // namespace detail
 
 /*
 path examples:
@@ -87,13 +100,13 @@ public:
     constexpr PathSegment() noexcept = default;
 
     explicit PathSegment(
-        core::StringId name,
+        core::StringId id,
         PathSegmentType type = PathSegmentType::Element,
         PathSegmentFlags flags = PathSegmentFlag::None,
         Int arrayIndex = 0) noexcept;
 
-    core::StringId name() const noexcept {
-        return name_;
+    core::StringId nameOrId() const noexcept {
+        return nameOrId_;
     }
 
     PathSegmentType type() const noexcept {
@@ -114,7 +127,7 @@ public:
 
     size_t hash() const noexcept {
         size_t res = 1347634503; // 'PSEG'
-        core::hashCombine(res, name_, flags_);
+        core::hashCombine(res, nameOrId_, flags_);
         if (flags_.has(PathSegmentFlag::Indexed)) {
             core::hashCombine(res, arrayIndex_);
         }
@@ -130,26 +143,31 @@ public:
     bool operator<(const PathSegment& other) const noexcept;
 
 private:
-    core::StringId name_;
+    core::StringId nameOrId_;
     PathSegmentType type_ = PathSegmentType::Root;
     PathSegmentFlags flags_ = PathSegmentFlag::None;
     Int arrayIndex_ = 0;
 };
+
+using PathSegmentArray = core::Array<PathSegment>;
 
 /// \class vgc::dom::Path
 /// \brief Represents a path to a node or attribute.
 ///
 class VGC_DOM_API Path {
 public:
+    using SegmentIterator = PathSegmentArray::iterator;
+    using ConstSegmentIterator = PathSegmentArray::const_iterator;
+
     /// Constructs a null path.
     Path() noexcept = default;
 
     Path(std::string_view path);
     //Path(Element* element, std::string_view relativePath);
 
-    static Path fromId(core::StringId Id) {
+    static Path fromId(core::StringId id) {
         Path p;
-        p.segments_.emplaceLast(Id, PathSegmentType::Id);
+        p.segments_.emplaceLast(id, PathSegmentType::Id);
         return p;
     }
 
@@ -163,7 +181,7 @@ public:
 
     std::string toString() const {
         fmt::memory_buffer b;
-        writeTo_(b);
+        write_(b);
         return std::string(b.begin(), b.size());
     }
 
@@ -183,6 +201,16 @@ public:
         return !segments_.isEmpty() && segments_.begin()->type() == PathSegmentType::Id;
     }
 
+    core::StringId baseId() const noexcept {
+        if (!segments_.isEmpty()) {
+            const PathSegment& seg0 = segments_[0];
+            if (seg0.type() == PathSegmentType::Id) {
+                return seg0.nameOrId();
+            }
+        }
+        return core::StringId();
+    }
+
     bool isElementPath() const noexcept {
         return !isAttributePath();
     }
@@ -198,6 +226,8 @@ public:
 
     Path getElementPath() const;
     Path getElementRelativeAttributePath() const;
+
+    void appendAttributePath(const Path& other);
 
     bool operator==(const Path& other) const noexcept {
         return segments_.size() == other.segments().size()
@@ -216,19 +246,33 @@ public:
 
     template<typename OStream>
     friend void write(OStream& out, const Path& path) {
-        fmt::memory_buffer b;
-        path.writeTo_(b);
-        write(out, std::string_view(b.begin(), static_cast<std::streamsize>(b.size())));
+        if constexpr (std::is_same_v<OStream, fmt::memory_buffer>) {
+            path->write_(out);
+        }
+        else {
+            fmt::memory_buffer b;
+            path.write_(b);
+            std::string_view strv(b.begin(), static_cast<std::streamsize>(b.size()));
+            write(out, strv);
+        }
     }
 
 private:
     core::Array<PathSegment> segments_;
-    // Used as cache for path resolver
-    // and for copy operations.
+
+    friend void detail::preparePathForUpdate(const Path&, const Node*);
+    friend void detail::updatePath(Path&, const Node*, const PathUpdateData&);
+    // Used for path updates.
+    // Could use a wrapper InternalPath in Value/Schema
+    // if the size of Path becomes an issue.
     mutable core::Id baseInternalId_ = {};
     mutable core::Id targetInternalId_ = {};
 
-    void writeTo_(fmt::memory_buffer& out) const;
+    Path(core::Array<PathSegment>&& segments)
+        : segments_(std::move(segments)) {
+    }
+
+    void write_(fmt::memory_buffer& out) const;
 };
 
 static_assert(std::is_copy_constructible_v<Path>);

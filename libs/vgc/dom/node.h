@@ -25,8 +25,11 @@
 
 namespace vgc::dom {
 
-VGC_DECLARE_OBJECT(Element);
+VGC_DECLARE_OBJECT(Node);
+VGC_DECLARE_OBJECT(Document);
+
 class Path;
+class PathUpdateData;
 
 /// \enum vgc::dom::NodeType
 /// \brief Specifies the type of a Node.
@@ -73,11 +76,10 @@ void write(OStream& out, NodeType type) {
     }
 }
 
-VGC_DECLARE_OBJECT(Node);
-VGC_DECLARE_OBJECT(Document);
-
 namespace detail {
+
 void destroyNode(Node* node);
+
 } // namespace detail
 
 /// \class vgc::dom::Node
@@ -336,6 +338,47 @@ private:
 
     friend void detail::destroyNode(Node* node);
 };
+
+class VGC_DOM_API NodeRelatives {
+public:
+    NodeRelatives() = default;
+
+    NodeRelatives(Node* node)
+        : NodeRelatives(node->parent(), node->previousSibling(), node->nextSibling()) {
+    }
+
+    NodeRelatives(Node* parent, Node* previousSibling, Node* nextSibling)
+        : parent_(parent)
+        , previousSibling_(previousSibling)
+        , nextSibling_(nextSibling) {
+    }
+
+    Node* parent() const {
+        return parent_;
+    }
+
+    Node* previousSibling() const {
+        return previousSibling_;
+    }
+
+    Node* nextSibling() const {
+        return nextSibling_;
+    }
+
+private:
+    friend Document;
+
+    Node* parent_ = nullptr;
+    Node* previousSibling_ = nullptr;
+    Node* nextSibling_ = nullptr;
+};
+
+namespace detail {
+
+void prepareInternalPathsForUpdate(const Node* workingNode);
+void updateInternalPaths(const Node* workingNode, const PathUpdateData& data);
+
+} // namespace detail
 
 } // namespace vgc::dom
 

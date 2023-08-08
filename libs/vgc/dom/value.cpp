@@ -16,7 +16,10 @@
 
 #include <vgc/dom/value.h>
 
+#include <vgc/dom/document.h>
+#include <vgc/dom/element.h>
 #include <vgc/dom/exceptions.h>
+#include <vgc/dom/path.h>
 
 namespace vgc::dom {
 
@@ -36,7 +39,8 @@ VGC_DEFINE_ENUM(
     (Vec2dArray, "Vec2dArray"),
     (Path, "Path"),
     (NoneOrPath, "Path"),
-    (PathArray, "PathArray"))
+    (PathArray, "PathArray"),
+    (Custom, "Custom"))
 
 const Value& Value::none() {
     // trusty leaky singleton
@@ -54,6 +58,98 @@ void Value::clear() {
     var_ = NoneValue{};
 }
 
+void Value::preparePathsForUpdate_(const Element* owner) const {
+    switch (type()) {
+    case ValueType::None:
+    case ValueType::Invalid:
+    case ValueType::String:
+    case ValueType::StringId:
+    case ValueType::Int:
+    case ValueType::IntArray:
+    case ValueType::Double:
+    case ValueType::DoubleArray:
+    case ValueType::Color:
+    case ValueType::ColorArray:
+    case ValueType::Vec2d:
+    case ValueType::Vec2dArray:
+        break;
+    case ValueType::Path: {
+        const Path& p = getPath();
+        detail::preparePathForUpdate(p, owner);
+        break;
+    }
+    case ValueType::NoneOrPath: {
+        const NoneOr<Path>& np = getNoneOrPath();
+        if (np.has_value()) {
+            detail::preparePathForUpdate(np.value(), owner);
+        }
+        break;
+    }
+    case ValueType::PathArray: {
+        const PathArray& pa = getPathArray();
+        for (const Path& p : pa) {
+            detail::preparePathForUpdate(p, owner);
+        }
+        break;
+    }
+    case ValueType::Custom: {
+        const CustomValue* v = getCustomValue();
+        if (v->hasPaths_) {
+            v->preparePathsForUpdate_(owner);
+        }
+        break;
+    }
+    case ValueType::End_:
+        break;
+    }
+}
+
+void Value::updatePaths_(const Element* owner, const PathUpdateData& data) {
+    switch (type()) {
+    case ValueType::None:
+    case ValueType::Invalid:
+    case ValueType::String:
+    case ValueType::StringId:
+    case ValueType::Int:
+    case ValueType::IntArray:
+    case ValueType::Double:
+    case ValueType::DoubleArray:
+    case ValueType::Color:
+    case ValueType::ColorArray:
+    case ValueType::Vec2d:
+    case ValueType::Vec2dArray:
+        break;
+    case ValueType::Path: {
+        Path& p = const_cast<Path&>(getPath());
+        detail::updatePath(p, owner, data);
+        break;
+    }
+    case ValueType::NoneOrPath: {
+        NoneOr<Path>& np = const_cast<NoneOr<Path>&>(getNoneOrPath());
+        if (np.has_value()) {
+            detail::updatePath(np.value(), owner, data);
+        }
+        break;
+    }
+    case ValueType::PathArray: {
+        PathArray& pa = const_cast<PathArray&>(getPathArray());
+        for (Path& p : pa) {
+            detail::updatePath(p, owner, data);
+        }
+        break;
+    }
+    case ValueType::Custom: {
+        CustomValue* v = const_cast<CustomValue*>(getCustomValue());
+        if (v->hasPaths_) {
+            v->updatePaths_(owner, data);
+        }
+        break;
+    }
+    case ValueType::End_:
+        break;
+    }
+}
+
 namespace {
 
 void checkExpectedString_(const std::string& s, const char* expected) {
@@ -65,43 +161,62 @@ void checkExpectedString_(const std::string& s, const char* expected) {
 
 } // namespace
 
-Value parseValue(const std::string& s, ValueType t) {
+void parseValue(Value& value, const std::string& s) {
+    ValueType t = value.type();
     try {
         switch (t) {
         case ValueType::None:
             checkExpectedString_(s, "None");
-            return Value();
+            break;
         case ValueType::Invalid:
             checkExpectedString_(s, "Invalid");
-            return Value::invalid();
+            break;
         case ValueType::String:
-            return Value(s);
+            value.set(s);
+            break;
         case ValueType::StringId:
-            return Value(core::StringId(s));
+            value.set(core::StringId(s));
+            break;
         case ValueType::Int:
-            return Value(core::parse<Int>(s));
+            value.set(core::parse<Int>(s));
+            break;
         case ValueType::IntArray:
-            return Value(core::parse<core::IntArray>(s));
+            value.set(core::parse<core::IntArray>(s));
+            break;
         case ValueType::Double:
-            return Value(core::parse<double>(s));
+            value.set(core::parse<double>(s));
+            break;
         case ValueType::DoubleArray:
-            return Value(core::parse<core::DoubleArray>(s));
+            value.set(core::parse<core::DoubleArray>(s));
+            break;
         case ValueType::Color:
-            return Value(core::parse<core::Color>(s));
+            value.set(core::parse<core::Color>(s));
+            break;
         case ValueType::ColorArray:
-            return Value(core::parse<core::ColorArray>(s));
+            value.set(core::parse<core::ColorArray>(s));
+            break;
         case ValueType::Vec2d:
-            return Value(core::parse<geometry::Vec2d>(s));
+            value.set(core::parse<geometry::Vec2d>(s));
+            break;
         case ValueType::Vec2dArray:
-            return Value(core::parse<geometry::Vec2dArray>(s));
+            value.set(core::parse<geometry::Vec2dArray>(s));
+            break;
         case ValueType::Path:
-            return Value(core::parse<Path>(s));
+            value.set(core::parse<Path>(s));
+            break;
         case ValueType::NoneOrPath:
-            return Value(core::parse<NoneOr<Path>>(s));
+            value.set(core::parse<NoneOr<Path>>(s));
+            break;
         case ValueType::PathArray:
-            return Value(core::parse<PathArray>(s));
+            value.set(core::parse<PathArray>(s));
+            break;
+        case ValueType::Custom: {
+            StreamReader sr(s);
+            const_cast<CustomValue*>(value.getCustomValue())->read(sr);
+            break;
+        }
         case ValueType::End_:
-            return Value::invalid();
+            break;
         }
     }
     catch (const core::ParseError& e) {
@@ -111,10 +226,10 @@ Value parseValue(const std::string& s, ValueType t) {
             t,
             e.what()));
     }
-    return Value::invalid(); // Silence "not all control paths return a value" in MSVC
+    return;
 }
 
-void readTo(CustomValuePtr& v, StreamReader& in) {
+void readTo(detail::CustomValueHolder& v, StreamReader& in) {
     v->read(in);
 }
 

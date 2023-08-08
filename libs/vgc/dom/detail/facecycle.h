@@ -17,6 +17,7 @@
 #ifndef VGC_DOM_DETAIL_FACECYCLE_H
 #define VGC_DOM_DETAIL_FACECYCLE_H
 
+#include <vgc/core/format.h>
 #include <vgc/dom/document.h>
 #include <vgc/dom/path.h>
 #include <vgc/dom/value.h>
@@ -34,7 +35,7 @@ format(FormatterBufferCtx& ctx, std::string_view fmtString) const = 0;
 
 class CycleComponent {
 public:
-    CycleComponent() = default;
+    CycleComponent() noexcept = default;
 
     CycleComponent(Path path, bool direction)
         : path_(std::move(path))
@@ -78,11 +79,11 @@ public:
     void write(StreamWriter& out) const;
     void read(StreamReader& in);
 
-    friend void write(StreamWriter& out, const CycleComponent& cycle) {
+    friend void write(StreamWriter& out, const Cycle& cycle) {
         cycle.write(out);
     }
 
-    friend void readTo(CycleComponent& cycle, StreamReader& in) {
+    friend void readTo(Cycle& cycle, StreamReader& in) {
         cycle.read(in);
     }
 
@@ -92,9 +93,9 @@ private:
 
 // todo: CustomValueArray<TCustomValue>
 
-class FaceCycles : public CustomValue {
+class FaceCycles final : public CustomValue {
 public:
-    FaceCycles()
+    FaceCycles() noexcept
         : CustomValue(true) {
     }
 
@@ -103,24 +104,36 @@ public:
     }
 
 protected:
-    void preparePathsForUpdate_(Element* owner) const override;
-    void updatePaths_(Element* owner, const PathUpdateData& data) override;
+    void preparePathsForUpdate_(const Element* owner) const override;
+    void updatePaths_(const Element* owner, const PathUpdateData& data) override;
 
     std::unique_ptr<CustomValue> clone_() const override;
 
     bool compareEqual_(CustomValue* rhs) const override;
     bool compareLess_(CustomValue* rhs) const override;
 
-    bool read_(StreamReader& in) override;
-    bool write_(StreamWriter& out) const override;
+    void read_(StreamReader& in) override;
+    void write_(StreamWriter& out) const override;
 
-    FormatterBufferIterator
-    format_(FormatterBufferCtx& ctx, std::string_view fmtString) const override;
+    FormatterBufferIterator format_(FormatterBufferCtx& ctx) const override;
 
 private:
     core::Array<Cycle> cycles_;
+
+    // todo: keep original string from parse
 };
 
 } // namespace vgc::dom::detail
+
+template<>
+struct fmt::formatter<vgc::dom::detail::Cycle> : fmt::formatter<double> {
+    auto format(const vgc::dom::detail::Cycle& v, fmt::buffer_context<char>& ctx)
+        -> decltype(ctx.out()) {
+        std::string s;
+        vgc::core::StringWriter sr(s);
+        v.write(sr);
+        return vgc::core::formatTo(ctx.out(), "{}", s);
+    }
+};
 
 #endif // VGC_DOM_DETAIL_FACECYCLE_H

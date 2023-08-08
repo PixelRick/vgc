@@ -121,7 +121,7 @@ const Schema& schema() {
         }},
         { "face", "f", {
             {"color", core::colors::black},
-            {"cycles", detail::FaceCycles},
+            {"cycles", detail::FaceCycles()},
         }},
         { "user", {
             // No attributes

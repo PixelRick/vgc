@@ -79,29 +79,34 @@ void Cycle::read(StreamReader& in) {
     }
 }
 
-void FaceCycles::preparePathsForUpdate_(Element* owner) const {
+void FaceCycles::preparePathsForUpdate_(const Element* owner) const {
 }
 
-void FaceCycles::updatePaths_(Element* owner, const PathUpdateData& data) {
+void FaceCycles::updatePaths_(const Element* owner, const PathUpdateData& data) {
 }
 
 std::unique_ptr<CustomValue> FaceCycles::clone_() const {
+    auto result = std::make_unique<FaceCycles>();
+    result->cycles_ = cycles_;
+    return result;
 }
 
 bool FaceCycles::compareEqual_(CustomValue* rhs) const {
+    return false;
 }
 
 bool FaceCycles::compareLess_(CustomValue* rhs) const {
+    return false;
 }
 
-bool FaceCycles::read_(StreamReader& in) {
+void FaceCycles::read_(StreamReader& in) {
 }
 
-bool FaceCycles::write_(StreamWriter& out) const {
+void FaceCycles::write_(StreamWriter& out) const {
 }
 
-FormatterBufferIterator
-FaceCycles::format_(FormatterBufferCtx& ctx, std::string_view fmtString) const {
+FormatterBufferIterator FaceCycles::format_(FormatterBufferCtx& ctx) const {
+    return core::formatTo(ctx.out(), "{}", cycles_);
 }
 
 } // namespace vgc::dom::detail
