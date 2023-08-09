@@ -20,7 +20,7 @@ vgc_add_library(dom
         value.h
         xmlformattingstyle.h
 
-        detail/facecycle.h
+        detail/facecycles.h
 
     CPP_SOURCE_FILES
         attribute.cpp
@@ -37,7 +37,7 @@ vgc_add_library(dom
         value.cpp
         xmlformattingstyle.cpp
 
-        detail/facecycle.cpp
+        detail/facecycles.cpp
 
     COMPILE_DEFINITIONS
 )

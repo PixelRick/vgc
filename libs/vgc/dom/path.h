@@ -229,19 +229,19 @@ public:
 
     void appendAttributePath(const Path& other);
 
-    bool operator==(const Path& other) const noexcept {
-        return segments_.size() == other.segments().size()
+    friend bool operator==(const Path& lhs, const Path& rhs) noexcept {
+        return lhs.segments_.size() == rhs.segments_.size()
                && std::equal(
-                   segments_.begin(), segments_.end(), other.segments().begin());
+                   lhs.segments_.begin(), lhs.segments_.end(), rhs.segments_.begin());
     }
 
-    bool operator!=(const Path& other) const noexcept {
-        return !operator==(other);
+    friend bool operator!=(const Path& lhs, const Path& rhs) noexcept {
+        return !(lhs == rhs);
     }
 
-    bool operator<(const Path& other) const noexcept {
+    friend bool operator<(const Path& lhs, const Path& rhs) noexcept {
         // XXX slow
-        return toString() < other.toString();
+        return lhs.toString() < rhs.toString();
     }
 
     template<typename OStream>

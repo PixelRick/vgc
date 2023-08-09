@@ -2898,9 +2898,23 @@ void write(OStream& out, const Array<T>& a) {
         write(out, '[');
         auto it = a.cbegin();
         auto last = a.cend() - 1;
-        write(out, *it);
-        while (it != last) {
-            write(out, ", ", *++it);
+        if constexpr (std::is_pointer_v<T>) {
+            // TODO: avoid copy
+            using fmt::ptr;
+            fmt::memory_buffer b;
+            core::formatTo(std::back_inserter(b), "{}", ptr(*it));
+            while (it != last) {
+                core::formatTo(std::back_inserter(b), ", {}", ptr(*it));
+                ++it;
+            }
+            std::string_view strv(b.begin(), static_cast<std::streamsize>(b.size()));
+            write(out, strv);
+        }
+        else {
+            write(out, *it);
+            while (it != last) {
+                write(out, ", ", *++it);
+            }
         }
         write(out, ']');
     }

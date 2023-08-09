@@ -50,15 +50,6 @@ public:
         valueType_ = defaultValue_.type();
     }
 
-    /// Creates a built-in custom value attribute.
-    ///
-    template<typename T, VGC_REQUIRES(std::is_convertible_v<T*, CustomValue*>)>
-    AttributeSpec(std::string_view name, const T& defaultValue)
-        : name_(core::StringId(name))
-        , defaultValue_(&defaultValue)
-        , valueType_(ValueType::Custom) {
-    }
-
     /// Returns the name of this built-in attribute.
     ///
     core::StringId name() const {

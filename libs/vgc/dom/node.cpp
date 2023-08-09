@@ -16,6 +16,8 @@
 
 #include <vgc/dom/node.h>
 
+#include <algorithm>
+
 #include <vgc/core/assert.h>
 #include <vgc/core/logging.h>
 #include <vgc/core/object.h>
@@ -185,6 +187,92 @@ Element* Node::getElementFromPath(const Path& path, core::StringId tagNameFilter
 
 Value Node::getValueFromPath(const Path& path, core::StringId tagNameFilter) const {
     return Document::valueFromPath(path, this, tagNameFilter);
+}
+
+namespace {
+
+void computeNodeAncestors(const Node* node, core::Array<Node*>& out) {
+    out.clear();
+    Node* p = node->parent();
+    while (p) {
+        out.append(p);
+        p = p->parent();
+    }
+    std::reverse(out.begin(), out.end());
+}
+
+} // namespace
+
+core::Array<Node*> Node::ancestors() const {
+    core::Array<Node*> result;
+    // Note: we hypothesize that a dom will generally have a depth that is less than 8.
+    // TODO: use small array.
+    result.reserve(8);
+    computeNodeAncestors(this, result);
+    return result;
+}
+
+namespace {
+
+/// Returns the number of consecutive matching pairs of elements from
+/// the start of both arrays.
+///
+template<typename T>
+Int countStartMatches(core::Array<T>& a, const core::Array<T>& b) {
+    Int i = 0;
+    Int n = (std::min)(a.length(), b.length());
+    for (; i < n; ++i) {
+        if (a.getUnchecked(i) != b.getUnchecked(i)) {
+            break;
+        }
+    }
+    return i;
+}
+
+} // namespace
+
+Node* Node::lowestCommonAncestorWith(Node* other) const {
+    core::Array<Node*> ancestors0 = this->ancestors();
+    ancestors0.append(const_cast<Node*>(this));
+    core::Array<Node*> ancestors1 = other->ancestors();
+    ancestors1.append(other);
+    Int n = countStartMatches(ancestors0, ancestors1);
+    if (n == 0) {
+        return nullptr;
+    }
+    return ancestors0.getUnchecked(n - 1);
+}
+
+// TODO: implement test
+Node* lowestCommonAncestor(core::ConstSpan<Node*> nodes) {
+    if (nodes.length() == 0) {
+        return nullptr;
+    }
+    if (nodes.length() == 1) {
+        return nodes.getUnchecked(0)->parent();
+    }
+
+    const Node* node = nodes.getUnchecked(0);
+    core::Array<Node*> ancestors0 = nodes.getUnchecked(0)->ancestors();
+    ancestors0.append(const_cast<Node*>(node));
+
+    core::Array<Node*> ancestors1;
+    ancestors1.reserve(ancestors0.reservedLength());
+
+    for (Int i = 1; i < nodes.length(); ++i) {
+        node = nodes.getUnchecked(i);
+        computeNodeAncestors(node, ancestors1);
+        ancestors1.append(const_cast<Node*>(node));
+        Int numCommon = countStartMatches(ancestors0, ancestors1);
+        if (numCommon == 0) {
+            // node has different root
+            return nullptr;
+        }
+        ancestors0.resize(numCommon);
+    }
+
+    // at this point, there is at least 1 common ancestor
+    return ancestors0.last();
 }
 
 namespace detail {

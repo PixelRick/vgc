@@ -27,11 +27,13 @@ from vgc.dom import (
     Path,
     Value,
     Node,
+    NodeArray,
     NodeType,
     ReplaceDocumentError,
     SecondRootElementError,
     WrongChildTypeError,
-    WrongDocumentError
+    WrongDocumentError,
+    lowestCommonAncestor
 )
 
 from vgc.geometry import (
@@ -443,6 +445,63 @@ class TestNode(unittest.TestCase):
         for n in [n212]:
             self.assertFalse(n.isDescendant(n211))
             self.assertFalse(n211.isDescendant(n))
+
+    def testAncestors(self):
+        doc = Document()
+        root = Element(doc, "root")
+        n1 = Element(root, "n1")
+        n2 = Element(root, "n2")
+        n21 = Element(n2, "n21")
+        n22 = Element(n2, "n22")
+        n211 = Element(n21, "n211")
+        res = n211.ancestors()
+        self.assertEqual(res[0], doc)
+        self.assertEqual(len(res), 4)
+        self.assertEqual(res, (doc, root, n2, n21))
+
+    def testLowestCommonAncestorWith(self):
+        doc = Document()
+        root = Element(doc, "root")
+        n1 = Element(root, "n1")
+        n2 = Element(root, "n2")
+        n3 = Element(root, "n3")
+        n4 = Element(root, "n4")
+        n21 = Element(n2, "n21")
+        n22 = Element(n2, "n22")
+        n23 = Element(n2, "n23")
+        n31 = Element(n3, "n31")
+        n211 = Element(n21, "n211")
+        n212 = Element(n21, "n212")
+        docB = Document()
+        rootB = Element(docB, "rootB")
+        def test(a, b, lca):
+            self.assertEqual(a.lowestCommonAncestorWith(b), lca)
+            self.assertEqual(b.lowestCommonAncestorWith(a), lca)
+        test(n211, n212, n21)
+        test(n211, n22, n2)
+        test(n212, n31, root)
+        test(n212, rootB, None)
+
+    def testLowestCommonAncestor(self):
+        doc = Document()
+        root = Element(doc, "root")
+        n1 = Element(root, "n1")
+        n2 = Element(root, "n2")
+        n3 = Element(root, "n3")
+        n4 = Element(root, "n4")
+        n21 = Element(n2, "n21")
+        n22 = Element(n2, "n22")
+        n23 = Element(n2, "n23")
+        n31 = Element(n3, "n31")
+        n211 = Element(n21, "n211")
+        n212 = Element(n21, "n212")
+        docB = Document()
+        rootB = Element(docB, "rootB")
+        self.assertEqual(lowestCommonAncestor((n211, n212)), n21)
+        self.assertEqual(lowestCommonAncestor([n211, n212, n22]), n2)
+        self.assertEqual(lowestCommonAncestor((n211, n22, n212)), n2)
+        self.assertEqual(lowestCommonAncestor((n211, n22, n31)), root)
+        self.assertEqual(lowestCommonAncestor((n211, n22, n31, rootB)), None)
 
     def testPathAccess(self):
         doc = Document()

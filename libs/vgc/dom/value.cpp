@@ -93,9 +93,9 @@ void Value::preparePathsForUpdate_(const Element* owner) const {
         break;
     }
     case ValueType::Custom: {
-        const CustomValue* v = getCustomValue();
-        if (v->hasPaths_) {
-            v->preparePathsForUpdate_(owner);
+        const CustomValue* cv = getCustomValuePtr();
+        if (cv->hasPaths_) {
+            cv->preparePathsForUpdate_(owner);
         }
         break;
     }
@@ -139,7 +139,7 @@ void Value::updatePaths_(const Element* owner, const PathUpdateData& data) {
         break;
     }
     case ValueType::Custom: {
-        CustomValue* v = const_cast<CustomValue*>(getCustomValue());
+        CustomValue* v = const_cast<CustomValue*>(getCustomValuePtr());
         if (v->hasPaths_) {
             v->updatePaths_(owner, data);
         }
@@ -212,7 +212,7 @@ void parseValue(Value& value, const std::string& s) {
             break;
         case ValueType::Custom: {
             StreamReader sr(s);
-            const_cast<CustomValue*>(value.getCustomValue())->read(sr);
+            const_cast<CustomValue*>(value.getCustomValuePtr())->read(sr);
             break;
         }
         case ValueType::End_:

@@ -209,14 +209,14 @@ class VGC_DOM_API CustomValue {
 public:
     virtual ~CustomValue() = default;
 
-    std::unique_ptr<CustomValue> clone() const {
-        return clone_();
+    std::unique_ptr<CustomValue> clone(bool move = false) const {
+        return clone_(move);
     }
 
-    bool compareEqual(CustomValue* rhs) const {
+    bool compareEqual(const CustomValue* rhs) const {
         return compareEqual_(rhs);
     }
-    bool compareLess(CustomValue* rhs) const {
+    bool compareLess(const CustomValue* rhs) const {
         return compareLess_(rhs);
     }
 
@@ -243,10 +243,10 @@ protected:
     virtual void preparePathsForUpdate_(const Element* owner) const = 0;
     virtual void updatePaths_(const Element* owner, const PathUpdateData& data) = 0;
 
-    virtual std::unique_ptr<CustomValue> clone_() const = 0;
+    virtual std::unique_ptr<CustomValue> clone_(bool move) const = 0;
 
-    virtual bool compareEqual_(CustomValue* rhs) const = 0;
-    virtual bool compareLess_(CustomValue* rhs) const = 0;
+    virtual bool compareEqual_(const CustomValue* rhs) const = 0;
+    virtual bool compareLess_(const CustomValue* rhs) const = 0;
 
     virtual void read_(StreamReader& in) = 0;
     virtual void write_(StreamWriter& out) const = 0;
@@ -256,9 +256,6 @@ protected:
 private:
     const bool hasPaths_;
 };
-
-template<typename T>
-inline constexpr bool isCustomValuePointer = std::is_convertible_v<T, CustomValue*>;
 
 namespace detail {
 
@@ -385,7 +382,7 @@ template<typename T>
 inline constexpr bool isValueConstructibleFrom =
     (detail::isValueVariantAlternative<T>                       //
      || detail::isValueVariantAlternative<core::SharedConst<T>> //
-     || isCustomValuePointer<T>);
+     || std::is_base_of_v<CustomValue, T>);
 
 /// \class vgc::dom::Value
 /// \brief Holds the value of an attribute
@@ -524,14 +521,16 @@ public:
         : var_(std::move(pathArray)) {
     }
 
-    /// Constructs a `Value` holding a pointer to the given polymorphic `customValue`.
+    /// Constructs a `Value` holding a clone of the given `customValue`.
     ///
-    Value(const CustomValue* customValue) {
-        if (customValue == nullptr) {
-            throw core::NullError(
-                /*"Value::set(CustomValue*): customValue cannot be null"*/);
-        }
-        var_ = detail::CustomValueHolder(customValue->clone());
+    Value(const CustomValue& customValue) {
+        var_ = detail::CustomValueHolder(customValue.clone());
+    }
+
+    /// Constructs a `Value` holding a moved clone of the given `customValue`.
+    ///
+    Value(const CustomValue&& customValue) {
+        var_ = detail::CustomValueHolder(customValue.clone(true));
     }
 
     /// Returns the ValueType of this Value.
@@ -790,18 +789,20 @@ public:
     /// Returns the `CustomValue*` held by this `Value`.
     /// The behavior is undefined if `type() != ValueType::Custom`.
     ///
-    const CustomValue* getCustomValue() const {
+    const CustomValue* getCustomValuePtr() const {
         return std::get<detail::CustomValueHolder>(var_).get();
     }
 
-    /// Sets this `Value` to hold a pointer to a clone of the given `customValue`.
+    /// Sets this `Value` to a clone of the given `customValue`.
     ///
-    void set(const CustomValue* customValue) {
-        if (customValue == nullptr) {
-            throw core::NullError(
-                /*"Value::set(CustomValue*): customValue cannot be null"*/);
-        }
-        emplace_(detail::CustomValueHolder(customValue->clone()));
+    void set(const CustomValue& customValue) {
+        emplace_(detail::CustomValueHolder(customValue.clone()));
+    }
+
+    /// Sets this `Value` to a moved clone of the given `customValue`.
+    ///
+    void set(const CustomValue&& customValue) {
+        emplace_(detail::CustomValueHolder(customValue.clone(true)));
     }
 
     template<typename Visitor>
@@ -818,7 +819,7 @@ public:
     template<typename T>
     constexpr bool has() const {
         using U = std::decay_t<T>;
-        if constexpr (isCustomValuePointer<U>) {
+        if constexpr (std::is_base_of_v<CustomValue, U>) {
             if (type() == ValueType::Custom) {
                 return dynamic_cast<T>(std::get<CustomValueHolder>(var_)) != nullptr;
             }
@@ -843,15 +844,15 @@ public:
         if constexpr (detail::isValueVariantAlternative<core::SharedConst<U>>) {
             return std::get<core::SharedConst<U>>(var_);
         }
-        else if constexpr (isCustomValuePointer<U>) {
+        else if constexpr (std::is_base_of_v<CustomValue, U>) {
             if (type() == ValueType::Custom) {
                 // assumes p is never null
                 CustomValue* p = std::get<CustomValueHolder>(var_).get();
-                T result = dynamic_cast<T>(p);
-                if (result == nullptr) {
+                T* casted = dynamic_cast<T*>(p);
+                if (casted == nullptr) {
                     throw std::bad_variant_access();
                 }
-                return result;
+                return *casted;
             }
             throw std::bad_variant_access();
         }
@@ -898,11 +899,12 @@ public:
                 return a.get<core::SharedConst<U>>() == b;
             }
         }
-        else if constexpr (isCustomValuePointer<U>) {
+        else if constexpr (std::is_base_of_v<CustomValue, U>) {
             if (type() == ValueType::Custom) {
                 // assumes p is never null
-                CustomValue* p = a.get<CustomValue*>();
-                return p->compareEqual(b);
+                CustomValue* p = a.getCustomValuePtr();
+                // TODO: what about b == p ?
+                return p->compareEqual(&b);
             }
         }
         return false;

@@ -21,6 +21,7 @@
 #include <vgc/dom/element.h>
 #include <vgc/dom/strings.h>
 
+#include <vgc/core/wraps/array.h>
 #include <vgc/core/wraps/common.h>
 #include <vgc/core/wraps/object.h>
 
@@ -119,6 +120,10 @@ OutputIt writeAttributesRepr(OutputIt out, const This& self) {
 } // namespace
 
 void wrap_element(py::module& m) {
+
+    vgc::core::wraps::wrapObjectCommon<This>(m, "Element");
+    vgc::core::wraps::wrap_array<This*, false>(m, "Element");
+
     vgc::core::wraps::ObjClass<This>(m, "Element")
         .def_create<This*, Document*, std::string_view, Element*>(
             "parent"_a, "tagName"_a, "nextSibling"_a = static_cast<Element*>(nullptr))

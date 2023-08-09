@@ -19,6 +19,7 @@
 
 #include <vgc/core/format.h>
 #include <vgc/core/object.h>
+#include <vgc/core/span.h>
 #include <vgc/dom/api.h>
 #include <vgc/dom/exceptions.h>
 #include <vgc/dom/value.h>
@@ -328,6 +329,18 @@ public:
     // XXX Later, consider returning a ValuePtr or ValueRef.
     Value getValueFromPath(const Path& path, core::StringId tagNameFilter = {}) const;
 
+    /// Returns the list of ancestors from root to parent node.
+    ///
+    core::Array<Node*> ancestors() const;
+
+    /// Returns the lowest common ancestor of this node and an `other` node.
+    ///
+    /// This function considers each node to be an ancestor of itself.
+    ///
+    /// Returns nullptr if the nodes are in different documents.
+    ///
+    Node* lowestCommonAncestorWith(Node* other) const;
+
 private:
     // Operations
     friend class RemoveNodeOperation;
@@ -338,6 +351,15 @@ private:
 
     friend void detail::destroyNode(Node* node);
 };
+
+/// Returns the lowest common ancestor of the given `nodes`.
+///
+/// This function considers each node to be an ancestor of itself.
+///
+/// Returns nullptr if any two nodes are in different documents.
+///
+VGC_DOM_API
+Node* lowestCommonAncestor(core::ConstSpan<Node*> nodes);
 
 class VGC_DOM_API NodeRelatives {
 public:

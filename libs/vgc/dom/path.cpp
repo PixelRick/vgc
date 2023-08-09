@@ -308,7 +308,7 @@ void Path::write_(fmt::memory_buffer& out) const {
 
 namespace detail {
 
-// todo: With a dependency system all internal paths should always be in sync
+// TODO: With a dependency system all internal paths should always be in sync
 //       outside of dom operations. This would remove the need for this function.
 void preparePathForUpdate(const Path& path, const Node* workingNode) {
     Document* document = workingNode->document();
@@ -357,7 +357,7 @@ void updatePath(Path& path, const Node* workingNode, const PathUpdateData& data)
     }
     if (update) {
         // always id based for now
-        // todo: support relative and absolute paths
+        // TODO: support relative and absolute paths
         Element* element = document->elementFromInternalId(targetIid);
         if (element) {
             Path newPath = Path::fromId(element->id());
