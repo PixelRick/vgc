@@ -273,12 +273,30 @@ void prepareInternalPathsForUpdate(const Node* workingNode) {
     if (element) {
         element->prepareInternalPathsForUpdate_();
     }
+    else {
+        Document* doc = Document::cast(const_cast<Node*>(workingNode));
+        if (doc) {
+            element = doc->rootElement();
+            if (element) {
+                element->prepareInternalPathsForUpdate_();
+            }
+        }
+    }
 }
 
 void updateInternalPaths(const Node* workingNode, const PathUpdateData& data) {
     Element* element = Element::cast(const_cast<Node*>(workingNode));
     if (element) {
         element->updateInternalPaths_(data);
+    }
+    else {
+        Document* doc = Document::cast(const_cast<Node*>(workingNode));
+        if (doc) {
+            element = doc->rootElement();
+            if (element) {
+                element->updateInternalPaths_(data);
+            }
+        }
     }
 }
 

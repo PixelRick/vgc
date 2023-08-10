@@ -29,6 +29,8 @@ Element::Element(CreateKey key, PrivateKey, Document* document, core::StringId t
     : Node(key, ProtectedKey{}, document, NodeType::Element)
     , tagName_(tagName)
     , internalId_(core::genId()) {
+
+    document->elementByInternalIdMap_[internalId_] = this;
 }
 
 void Element::onDestroyed() {

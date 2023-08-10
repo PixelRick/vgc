@@ -242,7 +242,7 @@ Path Path::getElementRelativeAttributePath() const {
 void Path::appendAttributePath(const Path& other) {
     for (auto it = other.segments_.rbegin(); it != other.segments_.rend(); ++it) {
         if (it->type() != PathSegmentType::Attribute) {
-            segments_.extend(it.base(), segments_.cend());
+            segments_.extend(it.base(), other.segments_.cend());
             break;
         }
     }
@@ -329,6 +329,9 @@ void preparePathForUpdate(const Path& path, const Node* workingNode) {
     else {
         path.targetInternalId_ = {};
     }
+
+    VGC_DEBUG_TMP(
+        "preparePathForUpdate: {} {}", path.baseInternalId_, path.targetInternalId_);
 }
 
 void updatePath(Path& path, const Node* workingNode, const PathUpdateData& data) {
@@ -349,6 +352,7 @@ void updatePath(Path& path, const Node* workingNode, const PathUpdateData& data)
     }
     auto it = copiedElements.find(targetIid);
     if (it != copiedElements.end()) {
+        VGC_DEBUG_TMP("updatePath[{}]: {}->{}", Element::cast(const_cast<Node*>(workingNode))->internalId(), targetIid, it->second);
         targetIid = it->second;
         update = true;
     }
@@ -360,10 +364,13 @@ void updatePath(Path& path, const Node* workingNode, const PathUpdateData& data)
         // TODO: support relative and absolute paths
         Element* element = document->elementFromInternalId(targetIid);
         if (element) {
-            Path newPath = Path::fromId(element->id());
+            Path newPath = element->getPathFromId();
             newPath.appendAttributePath(path);
             path = std::move(newPath);
         }
+    }
+    else {
+        VGC_DEBUG_TMP("updatePath[{}]: no need", Element::cast(const_cast<Node*>(workingNode))->internalId());
     }
 }
 

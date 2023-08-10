@@ -74,19 +74,19 @@ void Value::preparePathsForUpdate_(const Element* owner) const {
     case ValueType::Vec2dArray:
         break;
     case ValueType::Path: {
-        const Path& p = getPath();
+        const Path& p = std::get<Path>(var_);
         detail::preparePathForUpdate(p, owner);
         break;
     }
     case ValueType::NoneOrPath: {
-        const NoneOr<Path>& np = getNoneOrPath();
+        const NoneOr<Path>& np = std::get<NoneOr<Path>>(var_);
         if (np.has_value()) {
             detail::preparePathForUpdate(np.value(), owner);
         }
         break;
     }
     case ValueType::PathArray: {
-        const PathArray& pa = getPathArray();
+        const PathArray& pa = std::get<PathArray>(var_);
         for (const Path& p : pa) {
             detail::preparePathForUpdate(p, owner);
         }
@@ -120,19 +120,20 @@ void Value::updatePaths_(const Element* owner, const PathUpdateData& data) {
     case ValueType::Vec2dArray:
         break;
     case ValueType::Path: {
-        Path& p = const_cast<Path&>(getPath());
+        Path& p = std::get<Path>(var_);
         detail::updatePath(p, owner, data);
         break;
     }
     case ValueType::NoneOrPath: {
-        NoneOr<Path>& np = const_cast<NoneOr<Path>&>(getNoneOrPath());
+        NoneOr<Path>& np = std::get<NoneOr<Path>>(var_);
+        ;
         if (np.has_value()) {
             detail::updatePath(np.value(), owner, data);
         }
         break;
     }
     case ValueType::PathArray: {
-        PathArray& pa = const_cast<PathArray&>(getPathArray());
+        PathArray& pa = std::get<PathArray>(var_);
         for (Path& p : pa) {
             detail::updatePath(p, owner, data);
         }

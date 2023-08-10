@@ -416,7 +416,7 @@ void Document::paste(DocumentPtr document, Node* parent) {
 
     Node* rootElement = tgtDoc->rootElement();
 
-    srcDoc->preparePathsUpdateRec_(srcDoc);
+    srcDoc->preparePathsUpdateRec_(copyContainer);
 
     DocumentPtr result = Document::create();
     for (Node* n1 : copyContainer->children()) {
@@ -782,10 +782,16 @@ Value Document::resolveAttributePartOfPath_(
 
 void Document::preparePathsUpdateRec_(const Node* node) {
     detail::prepareInternalPathsForUpdate(node);
+    for (Node* c : node->children()) {
+        preparePathsUpdateRec_(c);
+    }
 }
 
 void Document::updatePathsRec_(const Node* node, const PathUpdateData& pud) {
     detail::updateInternalPaths(node, pud);
+    for (Node* c : node->children()) {
+        updatePathsRec_(c, pud);
+    }
 }
 
 } // namespace vgc::dom
