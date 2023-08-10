@@ -173,7 +173,11 @@ public:
     }
 };
 
+namespace detail {
+
 class CustomValueHolder;
+
+}
 
 using FormatterBufferCtx = fmt::buffer_context<char>;
 using FormatterBufferIterator = decltype(std::declval<FormatterBufferCtx>().out());
@@ -182,12 +186,12 @@ class PathUpdateData {
 public:
     PathUpdateData() = default;
 
-    const std::unordered_map<core::Id, core::Id>& replacedElements() const {
-        return replacedElements_;
+    const std::unordered_map<core::Id, core::Id>& copiedElements() const {
+        return copiedElements_;
     }
 
-    void addReplacedElement(core::Id oldInternalId, core::Id newInternalId) {
-        replacedElements_[oldInternalId] = newInternalId;
+    void addCopiedElement(core::Id oldInternalId, core::Id newInternalId) {
+        copiedElements_[oldInternalId] = newInternalId;
     }
 
     const core::Array<core::Id>& absolutePathChangedElements() const {
@@ -201,7 +205,7 @@ public:
     }
 
 private:
-    std::unordered_map<core::Id, core::Id> replacedElements_;
+    std::unordered_map<core::Id, core::Id> copiedElements_;
     core::Array<core::Id> absolutePathChangedElements_;
 };
 
@@ -236,7 +240,7 @@ protected:
         : hasPaths_(hasPaths) {
     }
 
-    friend CustomValueHolder;
+    friend detail::CustomValueHolder;
     friend Value;
 
     // must be called before doing any rename or hierarchical moves in the dom.
@@ -821,7 +825,8 @@ public:
         using U = std::decay_t<T>;
         if constexpr (std::is_base_of_v<CustomValue, U>) {
             if (type() == ValueType::Custom) {
-                return dynamic_cast<T>(std::get<CustomValueHolder>(var_)) != nullptr;
+                return dynamic_cast<T>(std::get<detail::CustomValueHolder>(var_))
+                       != nullptr;
             }
             return false;
         }
@@ -847,7 +852,7 @@ public:
         else if constexpr (std::is_base_of_v<CustomValue, U>) {
             if (type() == ValueType::Custom) {
                 // assumes p is never null
-                CustomValue* p = std::get<CustomValueHolder>(var_).get();
+                CustomValue* p = std::get<detail::CustomValueHolder>(var_).get();
                 T* casted = dynamic_cast<T*>(p);
                 if (casted == nullptr) {
                     throw std::bad_variant_access();

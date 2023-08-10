@@ -484,7 +484,7 @@ void VacKeyFace::updateFromVac_(vacomplex::NodeModificationFlags flags) {
         std::string cyclesDescription;
         core::StringWriter cyclesDescriptionWriter(cyclesDescription);
         write(cyclesDescriptionWriter, domCycles);
-        domElement->setAttribute(ds::cycles, std::move(cyclesDescription));
+        domElement->setAttribute(ds::cycles, DomFaceCycles(std::move(domCycles)));
 
         // Update dependencies_
         core::Array<Element*> newDependencies;

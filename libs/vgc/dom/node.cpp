@@ -90,7 +90,7 @@ bool checkCanReparent_(
         }
     }
 
-    if (parent->isDescendantObject(child)) {
+    if (parent->isDescendantObjectOf(child)) {
         if (simulate) {
             return false;
         }
@@ -189,7 +189,7 @@ Value Node::getValueFromPath(const Path& path, core::StringId tagNameFilter) con
     return Document::valueFromPath(path, this, tagNameFilter);
 }
 
-namespace {
+namespace detail {
 
 void computeNodeAncestors(const Node* node, core::Array<Node*>& out) {
     out.clear();
@@ -201,42 +201,33 @@ void computeNodeAncestors(const Node* node, core::Array<Node*>& out) {
     std::reverse(out.begin(), out.end());
 }
 
-} // namespace
+} // namespace detail
+
+Int Node::depth() const {
+    Int result = 0;
+    Node* p = parent();
+    while (p) {
+        ++result;
+        p = p->parent();
+    }
+    return result;
+}
 
 core::Array<Node*> Node::ancestors() const {
     core::Array<Node*> result;
     // Note: we hypothesize that a dom will generally have a depth that is less than 8.
     // TODO: use small array.
     result.reserve(8);
-    computeNodeAncestors(this, result);
+    detail::computeNodeAncestors(this, result);
     return result;
 }
-
-namespace {
-
-/// Returns the number of consecutive matching pairs of elements from
-/// the start of both arrays.
-///
-template<typename T>
-Int countStartMatches(core::Array<T>& a, const core::Array<T>& b) {
-    Int i = 0;
-    Int n = (std::min)(a.length(), b.length());
-    for (; i < n; ++i) {
-        if (a.getUnchecked(i) != b.getUnchecked(i)) {
-            break;
-        }
-    }
-    return i;
-}
-
-} // namespace
 
 Node* Node::lowestCommonAncestorWith(Node* other) const {
     core::Array<Node*> ancestors0 = this->ancestors();
     ancestors0.append(const_cast<Node*>(this));
     core::Array<Node*> ancestors1 = other->ancestors();
     ancestors1.append(other);
-    Int n = countStartMatches(ancestors0, ancestors1);
+    Int n = detail::countStartMatches(ancestors0, ancestors1);
     if (n == 0) {
         return nullptr;
     }
@@ -261,9 +252,9 @@ Node* lowestCommonAncestor(core::ConstSpan<Node*> nodes) {
 
     for (Int i = 1; i < nodes.length(); ++i) {
         node = nodes.getUnchecked(i);
-        computeNodeAncestors(node, ancestors1);
+        detail::computeNodeAncestors(node, ancestors1);
         ancestors1.append(const_cast<Node*>(node));
-        Int numCommon = countStartMatches(ancestors0, ancestors1);
+        Int numCommon = detail::countStartMatches(ancestors0, ancestors1);
         if (numCommon == 0) {
             // node has different root
             return nullptr;

@@ -300,8 +300,8 @@ public:
     /// Returns whether this node is a descendant of the given \p other node.
     /// Returns true if this node is equal to the \p other node.
     ///
-    bool isDescendant(const Node* other) const {
-        return isDescendantObject(other);
+    bool isDescendantOf(const Node* other) const {
+        return isDescendantObjectOf(other);
     }
 
     /// Returns the `Element` that the given `path` refers to.
@@ -329,6 +329,12 @@ public:
     // XXX Later, consider returning a ValuePtr or ValueRef.
     Value getValueFromPath(const Path& path, core::StringId tagNameFilter = {}) const;
 
+    /// Returns the depth of this node in its tree.
+    ///
+    /// The document is at a depth of 0.
+    ///
+    Int depth() const;
+
     /// Returns the list of ancestors from root to parent node.
     ///
     core::Array<Node*> ancestors() const;
@@ -345,12 +351,35 @@ private:
     // Operations
     friend class RemoveNodeOperation;
     friend class MoveNodeOperation;
+    friend Document;
 
     Document* document_;
     NodeType nodeType_;
+    Int temporaryIndex_;
 
     friend void detail::destroyNode(Node* node);
 };
+
+namespace detail {
+
+void computeNodeAncestors(const Node* node, core::Array<Node*>& out);
+
+/// Returns the number of consecutive matching pairs of elements from
+/// the start of both arrays.
+///
+template<typename T>
+Int countStartMatches(core::Array<T>& a, const core::Array<T>& b) {
+    Int i = 0;
+    Int n = (std::min)(a.length(), b.length());
+    for (; i < n; ++i) {
+        if (a.getUnchecked(i) != b.getUnchecked(i)) {
+            break;
+        }
+    }
+    return i;
+}
+
+} // namespace detail
 
 /// Returns the lowest common ancestor of the given `nodes`.
 ///

@@ -483,6 +483,26 @@ public:
         return *this;
     }
 
+    /// Replaces the content of this `Array` by an array initialized from the
+    /// elements in `range`.
+    ///
+    /// The behavior is undefined if [`range.begin()`, `range.end()`) isn't a
+    /// valid range.
+    ///
+    /// Throws `LengthError` if the length of `range` is greater than
+    /// `maxLength()`.
+    ///
+    /// ```
+    /// std::list<double> l = {1, 2, 3};
+    /// vgc::core::Array<double> a = l; // Copy the list as an Array
+    /// ```
+    ///
+    template<typename Range, VGC_REQUIRES(isRange<Range>)>
+    Array& operator=(const Range& range) {
+        assign(range.begin(), range.end());
+        return *this;
+    }
+
     /// Replaces the contents of this `Array` by the values given in the
     /// initializer list `ilist`.
     ///

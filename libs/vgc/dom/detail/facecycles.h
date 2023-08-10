@@ -33,7 +33,7 @@ format(FormatterBufferCtx& ctx, std::string_view fmtString) const = 0;
 
 */
 
-class DomCycleComponent {
+class VGC_DOM_API DomCycleComponent {
 public:
     DomCycleComponent() noexcept = default;
 
@@ -89,7 +89,7 @@ private:
     bool direction_ = true;
 };
 
-class DomCycle {
+class VGC_DOM_API DomCycle {
 public:
     DomCycle() noexcept = default;
 
@@ -157,10 +157,15 @@ private:
 
 // TODO: CustomValueArray<TCustomValue>
 
-class DomFaceCycles final : public CustomValue {
+class VGC_DOM_API DomFaceCycles final : public CustomValue {
 public:
     DomFaceCycles() noexcept
         : CustomValue(true) {
+    }
+
+    explicit DomFaceCycles(core::Array<DomCycle>&& cycles)
+        : CustomValue(true)
+        , cycles_(std::move(cycles)) {
     }
 
     const core::Array<DomCycle>& cycles() const {

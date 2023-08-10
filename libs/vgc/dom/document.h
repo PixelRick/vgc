@@ -406,6 +406,21 @@ public:
         const std::string& filePath,
         const XmlFormattingStyle& style = XmlFormattingStyle()) const;
 
+    /// Copies the given `nodes` from this document in the form
+    /// of a new document with similar hierarchy.
+    /// The resulting document can be used as argument to paste().
+    ///
+    /// Dependencies are not auto-included.
+    ///
+    /// Document is not complete and writeable.
+    ///
+    static DocumentPtr copy(core::ConstSpan<Node*> nodes);
+
+    /// Pastes the node tree of the given `document` in this
+    /// document under the given `parent`.
+    ///
+    static void paste(DocumentPtr document, Node* parent);
+
     Element* elementFromId(core::StringId id) const;
 
     Element* elementFromInternalId(core::Id id) const;
@@ -486,6 +501,12 @@ private:
     std::unordered_map<core::StringId, Element*> elementByIdMap_;
     std::unordered_map<core::Id, Element*> elementByInternalIdMap_;
 
+    void onElementIdChanged_(Element* element, core::StringId oldId);
+    void onElementNameChanged_(Element* element);
+    void onElementAboutToBeDestroyed_(Element* element);
+
+    void numberNodesDepthFirstRec_(Node* node, Int& i);
+
     // Operations
     friend class CreateElementOperation;
     friend class RemoveNodeOperation;
@@ -529,7 +550,10 @@ private:
         const Path& path,
         Path::ConstSegmentIterator& segIt,
         Path::ConstSegmentIterator segEnd,
-        Element* element);
+        const Element* element);
+
+    void preparePathsUpdateRec_(const Node* node);
+    void updatePathsRec_(const Node* node, const PathUpdateData& pud);
 };
 
 } // namespace vgc::dom

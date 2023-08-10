@@ -50,7 +50,7 @@ void wrap_node(py::module& m) {
         .def("reparent", &This::reparent)
         .def("canReplace", &This::canReplace)
         .def("replace", &This::replace)
-        .def("isDescendant", &This::isDescendant)
+        .def("isDescendantOf", &This::isDescendantOf)
         .def("ancestors", &This::ancestors)
         .def("lowestCommonAncestorWith", &This::lowestCommonAncestorWith, "other"_a)
         .def(

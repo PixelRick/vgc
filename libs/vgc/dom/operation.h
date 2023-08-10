@@ -199,6 +199,10 @@ private:
     Int index_ = -1; // XXX would be difficult to keep this
                      // optimization when coalescing in finalize()..
     bool isNew_ = false;
+
+    // TODO: oldValue_ could be shared with previous setAttribute newValue_
+    //       of the same attribute.
+    //       Or should we store values as string here ?
     Value oldValue_;
     Value newValue_;
 };

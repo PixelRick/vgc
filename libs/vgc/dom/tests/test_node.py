@@ -402,49 +402,49 @@ class TestNode(unittest.TestCase):
         n212 = Element(n21, "n212")
         # Test all pairs: 12*12=144 tests
         for n in [doc, root, n1, n2, n3, n4, n21, n22, n23, n31, n211, n212]:
-            self.assertTrue(n.isDescendant(n))
+            self.assertTrue(n.isDescendantOf(n))
         for n in [root, n1, n2, n3, n4, n21, n22, n23, n31, n211, n212]:
-            self.assertTrue(n.isDescendant(doc))
-            self.assertFalse(doc.isDescendant(n))
+            self.assertTrue(n.isDescendantOf(doc))
+            self.assertFalse(doc.isDescendantOf(n))
         for n in [n1, n2, n3, n4, n21, n22, n23, n31, n211, n212]:
-            self.assertTrue(n.isDescendant(root))
-            self.assertFalse(root.isDescendant(n))
+            self.assertTrue(n.isDescendantOf(root))
+            self.assertFalse(root.isDescendantOf(n))
         for n in [n21, n22, n23, n211, n212]:
-            self.assertTrue(n.isDescendant(n2))
-            self.assertFalse(n2.isDescendant(n))
+            self.assertTrue(n.isDescendantOf(n2))
+            self.assertFalse(n2.isDescendantOf(n))
         for n in [n31]:
-            self.assertTrue(n.isDescendant(n3))
-            self.assertFalse(n3.isDescendant(n))
+            self.assertTrue(n.isDescendantOf(n3))
+            self.assertFalse(n3.isDescendantOf(n))
         for n in [n211, n212]:
-            self.assertTrue(n.isDescendant(n21))
-            self.assertFalse(n21.isDescendant(n))
+            self.assertTrue(n.isDescendantOf(n21))
+            self.assertFalse(n21.isDescendantOf(n))
         for n in [n2, n3, n4, n21, n22, n23, n31, n211, n212]:
-            self.assertFalse(n.isDescendant(n1))
-            self.assertFalse(n1.isDescendant(n))
+            self.assertFalse(n.isDescendantOf(n1))
+            self.assertFalse(n1.isDescendantOf(n))
         for n in [n3, n4, n31]:
-            self.assertFalse(n.isDescendant(n2))
-            self.assertFalse(n2.isDescendant(n))
+            self.assertFalse(n.isDescendantOf(n2))
+            self.assertFalse(n2.isDescendantOf(n))
         for n in [n4, n21, n22, n23, n211, n212]:
-            self.assertFalse(n.isDescendant(n3))
-            self.assertFalse(n3.isDescendant(n))
+            self.assertFalse(n.isDescendantOf(n3))
+            self.assertFalse(n3.isDescendantOf(n))
         for n in [n21, n22, n23, n31, n211, n212]:
-            self.assertFalse(n.isDescendant(n4))
-            self.assertFalse(n4.isDescendant(n))
+            self.assertFalse(n.isDescendantOf(n4))
+            self.assertFalse(n4.isDescendantOf(n))
         for n in [n22, n23, n31]:
-            self.assertFalse(n.isDescendant(n21))
-            self.assertFalse(n21.isDescendant(n))
+            self.assertFalse(n.isDescendantOf(n21))
+            self.assertFalse(n21.isDescendantOf(n))
         for n in [n23, n31, n211, n212]:
-            self.assertFalse(n.isDescendant(n22))
-            self.assertFalse(n22.isDescendant(n))
+            self.assertFalse(n.isDescendantOf(n22))
+            self.assertFalse(n22.isDescendantOf(n))
         for n in [n31, n211, n212]:
-            self.assertFalse(n.isDescendant(n23))
-            self.assertFalse(n23.isDescendant(n))
+            self.assertFalse(n.isDescendantOf(n23))
+            self.assertFalse(n23.isDescendantOf(n))
         for n in [n211, n212]:
-            self.assertFalse(n.isDescendant(n31))
-            self.assertFalse(n31.isDescendant(n))
+            self.assertFalse(n.isDescendantOf(n31))
+            self.assertFalse(n31.isDescendantOf(n))
         for n in [n212]:
-            self.assertFalse(n.isDescendant(n211))
-            self.assertFalse(n211.isDescendant(n))
+            self.assertFalse(n.isDescendantOf(n211))
+            self.assertFalse(n211.isDescendantOf(n))
 
     def testAncestors(self):
         doc = Document()

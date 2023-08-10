@@ -335,11 +335,11 @@ void updatePath(Path& path, const Node* workingNode, const PathUpdateData& data)
     Document* document = workingNode->document();
     core::Id baseIid = path.baseInternalId_;
     core::Id targetIid = path.targetInternalId_;
-    const auto& replacedElements = data.replacedElements();
+    const auto& copiedElements = data.copiedElements();
     bool update = false;
     if (baseIid) {
-        auto it = replacedElements.find(baseIid);
-        if (it != replacedElements.end()) {
+        auto it = copiedElements.find(baseIid);
+        if (it != copiedElements.end()) {
             baseIid = it->second;
             update = true;
         }
@@ -347,8 +347,8 @@ void updatePath(Path& path, const Node* workingNode, const PathUpdateData& data)
             update = true;
         }
     }
-    auto it = replacedElements.find(targetIid);
-    if (it != replacedElements.end()) {
+    auto it = copiedElements.find(targetIid);
+    if (it != copiedElements.end()) {
         targetIid = it->second;
         update = true;
     }

@@ -62,10 +62,10 @@ public:
     }
 
 private:
-    Document* document_;
-    Node* currentNode_;
+    Document* document_ = nullptr;
+    Node* currentNode_ = nullptr;
+    const ElementSpec* elementSpec_ = nullptr;
     std::string tagName_;
-    const ElementSpec* elementSpec_;
     std::string attributeName_;
     std::string attributeValue_;
     std::string referenceName_;
@@ -73,8 +73,7 @@ private:
     // Create the parser object
     Parser(std::string_view filePath, Document* document)
         : document_(document)
-        , currentNode_(document)
-        , elementSpec_(nullptr) {
+        , currentNode_(document) {
 
         auto xml_ = core::XmlStreamReader::fromFile(filePath);
         while (xml_.readNext()) {
@@ -321,6 +320,116 @@ void Document::save(const std::string& filePath, const XmlFormattingStyle& style
     writeChildren(out, style, 0, this);
 }
 
+/* static */
+DocumentPtr Document::copy(core::ConstSpan<Node*> nodes) {
+
+    static_assert(core::isRange<core::Span<Node*>>);
+
+    struct NodeAndDepth {
+        NodeAndDepth(Node* node)
+            : node(node)
+            , depth(node->depth()) {
+        }
+        Node* node;
+        Int depth;
+    };
+
+    core::Array<NodeAndDepth> copyNodes(nodes);
+
+    // Sort by depth from low (root) to high (leaf).
+    std::sort(
+        copyNodes.begin(),
+        copyNodes.end(),
+        [](const NodeAndDepth& a, const NodeAndDepth& b) { return a.depth < b.depth; });
+
+    // Keep only topmost nodes.
+    // Thanks to the ordering, a node can never be visited before its parent.
+
+    for (auto it1 = copyNodes.begin(); it1 != copyNodes.end(); ++it1) {
+        NodeAndDepth& n1 = *it1;
+        for (auto it2 = copyNodes.begin(); it2 != it1; ++it2) {
+            NodeAndDepth& n2 = *it2;
+            if (n1.node->isDescendantOf(n2.node)) {
+                // n2 will be copied with n1 copy
+                it1 = copyNodes.erase(it1);
+                break;
+            }
+        }
+    }
+
+    if (copyNodes.isEmpty()) {
+        return nullptr;
+    }
+
+    Node* n0 = copyNodes.first().node;
+
+    // Fix order to match original document order
+    Int i = 0;
+    n0->document()->numberNodesDepthFirstRec_(n0->document(), i);
+    std::sort(
+        copyNodes.begin(),
+        copyNodes.end(),
+        [](const NodeAndDepth& a, const NodeAndDepth& b) {
+            return a.node->temporaryIndex_ < b.node->temporaryIndex_;
+        });
+
+    DocumentPtr result = Document::create();
+
+    // Copy in order
+    Document* srcDoc = n0->document();
+    Document* tgtDoc = result.get();
+    PathUpdateData pud = {};
+
+    Node* copyContainer = Element::create(tgtDoc, "copyContainer");
+
+    srcDoc->preparePathsUpdateRec_(srcDoc);
+
+    for (const NodeAndDepth& n1 : copyNodes) {
+        // TODO: copy other node types than Element.
+        Element* element = Element::cast(n1.node);
+        if (element) {
+            Element::createCopy_(copyContainer, element, nullptr, pud);
+        }
+    }
+
+    tgtDoc->updatePathsRec_(copyContainer, pud);
+
+    return result;
+}
+
+/* static */
+void Document::paste(DocumentPtr document, Node* parent) {
+
+    // Copy in order
+    Document* srcDoc = document.get();
+    Document* tgtDoc = parent->document();
+    PathUpdateData pud = {};
+
+    if (!srcDoc || srcDoc == tgtDoc) {
+        return;
+    }
+
+    Node* copyContainer = srcDoc->rootElement();
+    if (!copyContainer) {
+        return;
+    }
+
+    Node* rootElement = tgtDoc->rootElement();
+
+    srcDoc->preparePathsUpdateRec_(srcDoc);
+
+    DocumentPtr result = Document::create();
+    for (Node* n1 : copyContainer->children()) {
+        // TODO: copy other node types than Element.
+        Element* element = Element::cast(n1);
+        if (element) {
+            Element::createCopy_(rootElement, element, nullptr, pud);
+        }
+    }
+
+    tgtDoc->updatePathsRec_(rootElement, pud);
+}
+
 Element* Document::elementFromId(core::StringId id) const {
     auto it = elementByIdMap_.find(id);
     if (it != elementByIdMap_.end()) {
@@ -419,6 +528,48 @@ bool Document::emitPendingDiff() {
     return true;
 }
 
+void Document::onElementIdChanged_(Element* element, core::StringId oldId) {
+    if (!oldId.isEmpty()) {
+        elementByIdMap_.erase(oldId);
+    }
+    core::StringId id = element->id();
+    if (!id.isEmpty()) {
+        // in case of conflict, the current element becomes the one searchable.
+        elementByIdMap_[id] = element;
+    }
+    // TODO: use dependents list to do the path update instead of
+    // iterating on all elements.
+    if (!oldId.isEmpty()) {
+        for (const auto& [eId, e] : elementByInternalIdMap_) {
+            detail::prepareInternalPathsForUpdate(e);
+        }
+        PathUpdateData pud;
+        pud.addAbsolutePathChangedElement(element->internalId());
+        for (const auto& [eId, e] : elementByInternalIdMap_) {
+            detail::updateInternalPaths(e, pud);
+        }
+    }
+}
+
+void Document::onElementNameChanged_(Element* /*element*/) {
+    // TODO: path update when paths use names
+}
+
+void Document::onElementAboutToBeDestroyed_(Element* element) {
+    core::StringId id = element->id();
+    if (!id.isEmpty()) {
+        elementByIdMap_.erase(id);
+    }
+    elementByInternalIdMap_.erase(element->internalId());
+}
+
+void Document::numberNodesDepthFirstRec_(Node* node, Int& i) {
+    node->temporaryIndex_ = i++;
+    for (Node* c : node->children()) {
+        numberNodesDepthFirstRec_(c, i);
+    }
+}
+
 void Document::compressPendingDiff_() {
 
     for (const auto& [node, oldRelatives] : previousRelativesMap_) {
@@ -486,9 +637,15 @@ void Document::onHistoryRedone_() {
 
 void Document::onCreateNode_(Node* node) {
     pendingDiff_.createdNodes_.emplaceLast(node);
+    for (Node* child : node->children()) {
+        onCreateNode_(child);
+    }
 }
 
 void Document::onRemoveNode_(Node* node) {
+    for (Node* child : node->children()) {
+        onRemoveNode_(child);
+    }
     if (!pendingDiff_.createdNodes_.removeOne(node)) {
         pendingDiff_.removedNodes_.emplaceLast(node);
         pendingDiffKeepAllocPointers_.emplaceLast(node);
@@ -511,7 +668,7 @@ void Document::onChangeAttribute_(Element* element, core::StringId name) {
 
 namespace {
 
-Element* firstChildElementWithName(Element* element, core::StringId name) {
+Element* firstChildElementWithName(const Element* element, core::StringId name) {
     Element* childElement = element->firstChildElement();
     while (childElement) {
         if (childElement->name() == name) {
@@ -600,7 +757,7 @@ Value Document::resolveAttributePartOfPath_(
     const Path& /*path*/,
     Path::ConstSegmentIterator& segIt,
     Path::ConstSegmentIterator segEnd,
-    Element* element) {
+    const Element* element) {
 
     Value result = {};
     for (; segIt != segEnd; ++segIt) {
@@ -621,6 +778,14 @@ Value Document::resolveAttributePartOfPath_(
         }
     }
     return result;
+}
+
+void Document::preparePathsUpdateRec_(const Node* node) {
+    detail::prepareInternalPathsForUpdate(node);
+}
+
+void Document::updatePathsRec_(const Node* node, const PathUpdateData& pud) {
+    detail::updateInternalPaths(node, pud);
 }
 
 } // namespace vgc::dom
