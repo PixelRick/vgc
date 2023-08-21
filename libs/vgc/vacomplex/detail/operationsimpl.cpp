@@ -661,6 +661,26 @@ core::Array<KeyVertex*> Operations::unglueKeyVertices(
     return result;
 }
 
+bool Operations::uncutAtKeyVertex(KeyVertex* kv) {
+
+    UncutAtKeyVertexInfo_ info = prepareUncutAtKeyVertex_(kv);
+    if (!info.isValid) {
+        return false;
+    }
+
+    //
+}
+
+bool Operations::uncutAtKeyEdge(KeyEdge* ke) {
+
+    UncutAtKeyEdgeInfo_ info = prepareUncutAtKeyEdge_(ke);
+    if (!info.isValid) {
+        return false;
+    }
+
+    //
+}
+
 void Operations::moveToGroup(Node* node, Group* parentGroup, Node* nextSibling) {
     if (nextSibling) {
         insertNodeBeforeSibling_(node, nextSibling);
@@ -980,6 +1000,226 @@ void Operations::collectDependentNodes_(
             }
         }
     }
+}
+
+// Note: Uncut does not yet support incident inbetween cells. As a
+// workaround, we do nothing, as if uncutting here isn't possible, even
+// though maybe in theory it is. In the future, we should handle the cases
+// where uncutting is actually possible despite the presence of incident
+// inbetween cells.
+Operations::UncutAtKeyVertexInfo_ Operations::prepareUncutAtKeyVertex_(KeyVertex* kv) {
+    UncutAtKeyVertexInfo_ result = {};
+
+    for (Cell* starCell : kv->star()) {
+        switch (starCell->cellType()) {
+        case CellType::KeyEdge: {
+            KeyEdge* ke = starCell->toKeyEdgeUnchecked();
+            if (ke->isStartVertex(kv)) {
+                if (!result.khe1.edge()) {
+                    result.khe1 = KeyHalfedge(ke, false);
+                }
+                else if (!result.khe2.edge()) {
+                    result.khe2 = KeyHalfedge(ke, true);
+                }
+                else {
+                    // Cannot uncut if kv is used more than twice as edge vertex.
+                    return result;
+                }
+            }
+            if (ke->isEndVertex(kv)) {
+                if (!result.khe1.edge()) {
+                    result.khe1 = KeyHalfedge(ke, true);
+                }
+                else if (!result.khe2.edge()) {
+                    result.khe2 = KeyHalfedge(ke, false);
+                }
+                else {
+                    // Cannot uncut if kv is used more than twice as edge vertex.
+                    return result;
+                }
+            }
+            break;
+        }
+        case CellType::KeyFace: {
+            KeyFace* kf = starCell->toKeyFaceUnchecked();
+            for (const KeyCycle& cycle : kf->cycles()) {
+                if (cycle.steinerVertex()) {
+                    if (cycle.steinerVertex() == kv) {
+                        if (result.kf) {
+                            // Cannot uncut if kv is used more than once as steiner vertex.
+                            return result;
+                        }
+                        result.kf = kf;
+                    }
+                }
+            }
+            break;
+        }
+        case CellType::InbetweenVertex: {
+            InbetweenVertex* iv = starCell->toInbetweenVertexUnchecked();
+            // Currently not supported.
+            return result;
+            break;
+        }
+        default:
+            break;
+        }
+    }
+
+    if (result.khe1.edge()) {
+        if (!result.kf && result.khe2.edge()) {
+            if (result.khe1.edge() != result.khe2.edge()) {
+                // If edges are different:
+                // (inverse op: cut open edge)
+                //
+                //                     ┌─←─┐
+                //                     │   C
+                // o ───A──→ X ───B──→ o ──┘
+                //
+                // Uncutting at X means replacing the chain AB by D.
+                // Thus the cycle B*A*ABC would become D*DC but
+                // the cycle B*BC would not be representable anymore.
+                //
+                // In other words, we want the edges to always be used
+                // consecutively in the cycles they are part of.
+                //
+                for (Cell* starCell : kv->star()) {
+                    switch (starCell->cellType()) {
+                    case CellType::KeyFace: {
+                        KeyFace* kf = starCell->toKeyFaceUnchecked();
+                        for (const KeyCycle& cycle : kf->cycles()) {
+                            if (cycle.steinerVertex()) {
+                                continue;
+                            }
+                            KeyEdge* previousKe = cycle.halfedges().last().edge();
+                            for (const KeyHalfedge& khe : cycle.halfedges()) {
+                                if (khe.startVertex() == kv) {
+                                    if (khe.edge() == previousKe) {
+                                        // Cannot uncut if kv is used as a u-turn in cycle.
+                                        return result;
+                                    }
+                                }
+                                previousKe = khe.edge();
+                            }
+                        }
+                        break;
+                    }
+                    default:
+                        break;
+                    }
+                }
+                result.isValid = true;
+            }
+            else {
+                // (inverse op: cut closed edge)
+                // the only incident edge is a loop, and we don't
+                // kv to be used as a u-turn in any cycle.
+                for (Cell* starCell : kv->star()) {
+                    switch (starCell->cellType()) {
+                    case CellType::KeyFace: {
+                        KeyFace* kf = starCell->toKeyFaceUnchecked();
+                        for (const KeyCycle& cycle : kf->cycles()) {
+                            if (cycle.steinerVertex()) {
+                                continue;
+                            }
+                            if (cycle.halfedges().first().edge() != result.khe1.edge()) {
+                                continue;
+                            }
+                            // All edges in this cycle are equal to result.khe1.edge().
+                            // We require them to be in the same direction (no u-turn).
+                            bool direction = cycle.halfedges().first().edge();
+                            for (const KeyHalfedge& khe : cycle.halfedges()) {
+                                if (khe.direction() != direction) {
+                                    // Cannot uncut if kv is used as a u-turn in cycle.
+                                    return result;
+                                }
+                            }
+                        }
+                        break;
+                    }
+                    default:
+                        break;
+                    }
+                }
+                result.isValid = true;
+            }
+        }
+    }
+    else if (result.kf) {
+        // (inverse op: cut face at vertex)
+        result.isValid = true;
+    }
+
+    return result;
+}
+
+Operations::UncutAtKeyEdgeInfo_ Operations::prepareUncutAtKeyEdge_(KeyEdge* ke) {
+    UncutAtKeyEdgeInfo_ result = {};
+
+    for (Cell* starCell : ke->star()) {
+        switch (starCell->cellType()) {
+        case CellType::KeyFace: {
+            KeyFace* kf = starCell->toKeyFaceUnchecked();
+            Int cycleIndex = -1;
+            for (const KeyCycle& cycle : kf->cycles()) {
+                ++cycleIndex;
+                if (cycle.steinerVertex()) {
+                    continue;
+                }
+                Int componentIndex = -1;
+                for (const KeyHalfedge& khe : cycle.halfedges()) {
+                    ++componentIndex;
+                    if (!result.kf1) {
+                        result.kf1 = kf;
+                        result.cycleIndex1 = cycleIndex;
+                        result.componentIndex1 = componentIndex;
+                    }
+                    else if (!result.kf2) {
+                        result.kf2 = kf;
+                        result.cycleIndex2 = cycleIndex;
+                        result.componentIndex2 = componentIndex;
+                    }
+                    else {
+                        // Cannot uncut if used more than twice as face cycle component.
+                        return result;
+                    }
+                }
+            }
+            break;
+        }
+        default:
+            break;
+        }
+    }
+
+    if (result.kf1 && result.kf2) {
+        result.isValid = true;
+    }
+
+    return result;
+}
+
+Int Operations::countSteinerUses_(KeyVertex* kv) {
+    Int count = 0;
+    for (Cell* starCell : kv->star()) {
+        switch (starCell->cellType()) {
+        case CellType::KeyFace: {
+            KeyFace* kf = starCell->toKeyFaceUnchecked();
+            for (const KeyCycle& cycle : kf->cycles()) {
+                if (cycle.steinerVertex()) {
+                    if (cycle.steinerVertex() == kv) {
+                        ++count;
+                    }
+                    continue;
+                }
+            }
+            break;
+        }
+        default:
+            break;
+        }
+    }
+    return count;
 }
 
 Int Operations::countUses_(KeyVertex* kv) {
