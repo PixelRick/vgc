@@ -724,6 +724,7 @@ void KeyFace::substituteKeyVertex_(KeyVertex* oldVertex, KeyVertex* newVertex) {
 void KeyFace::substituteKeyHalfedge_(
     const class KeyHalfedge& oldHalfedge,
     const class KeyHalfedge& newHalfedge) {
+
     for (KeyCycle& cycle : cycles_) {
         if (cycle.steinerVertex_) {
             continue;

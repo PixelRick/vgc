@@ -48,10 +48,11 @@ enum class NodeModificationFlag {
     GeometryChanged         = 0x08,
     // edge sampling, ...
     MeshChanged             = 0x10,
-    BoundaryMeshChanged     = 0x20,
-    BoundaryChanged         = 0x40,
-    StarChanged             = 0x80,
-    All                     = 0xFF,
+    StyleChanged            = 0x20,
+    BoundaryMeshChanged     = 0x40,
+    BoundaryChanged         = 0x80,
+    StarChanged             = 0x100,
+    All                     = 0x1FF,
     // clang-format on
 };
 VGC_DEFINE_FLAGS(NodeModificationFlags, NodeModificationFlag)

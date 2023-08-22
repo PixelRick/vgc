@@ -167,6 +167,12 @@ public:
         return isClosed_;
     }
 
+
+    std::shared_ptr<KeyEdgeGeometry> merge(bool direction, KeyEdgeGeometry* other, bool otherDirection) const;
+
+    // IDEA: do conversion to common best stroke geometry to merge
+    //       then match cell properties by pairs (use null if not present)
+
     virtual std::shared_ptr<KeyEdgeGeometry> clone() const = 0;
 
     /// Expects positions in object space.
@@ -247,10 +253,13 @@ public:
 protected:
     // todo: argument to tell when it is only an affine transformation ?
     void dirtyEdgeSampling() const;
+    void dirtyEdgeStyle() const;
 
 private:
     KeyEdge* edge_ = nullptr;
     const bool isClosed_;
+
+    virtual std::shared_ptr<KeyEdgeGeometry> merge_(bool direction, KeyEdgeGeometry* other, bool otherDirection) const = 0;
 };
 
 //std::shared_ptr<const EdgeSampling> snappedSampling_;

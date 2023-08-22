@@ -20,11 +20,29 @@
 
 namespace vgc::vacomplex {
 
+std::shared_ptr<KeyEdgeGeometry> KeyEdgeGeometry::merge(
+    bool direction,
+    KeyEdgeGeometry* other,
+    bool otherDirection) const {
+
+    // TODO: try both ways, if none works then convert both to a default geometry model for the merge
+    //       then rebuild with the best of the original models that supports being built from the default.
+    return merge_(direction, other, otherDirection);
+}
+
 void KeyEdgeGeometry::dirtyEdgeSampling() const {
     if (edge_) {
         Complex* complex = edge_->complex();
         detail::Operations ops(complex);
         ops.onGeometryChanged_(edge_);
+    }
+}
+
+void KeyEdgeGeometry::dirtyEdgeStyle() const {
+    if (edge_) {
+        Complex* complex = edge_->complex();
+        detail::Operations ops(complex);
+        ops.onStyleChanged_(edge_);
     }
 }
 

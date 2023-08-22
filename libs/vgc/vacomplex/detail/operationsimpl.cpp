@@ -479,7 +479,7 @@ core::Array<KeyEdge*> Operations::unglueKeyEdges(KeyEdge* targetKe) {
                 if (cycle.steinerVertex_) {
                     continue;
                 }
-                KeyHalfedge first = cycle.halfedges_.first();
+                KeyHalfedge first = cycle.halfedges().first();
                 if (!first.isClosed()) {
                     for (KeyHalfedge& kheRef : cycle.halfedges_) {
                         if (kheRef.edge() == targetKe) {
@@ -547,6 +547,7 @@ core::Array<KeyVertex*> Operations::unglueKeyVertices(
 
     // Helper
     auto duplicateTargetKv = [this, targetKv, &result]() {
+        // TODO: define source operation
         KeyVertex* newKv = createKeyVertex(
             targetKv->position(),
             targetKv->parentGroup(),
@@ -661,14 +662,129 @@ core::Array<KeyVertex*> Operations::unglueKeyVertices(
     return result;
 }
 
-bool Operations::uncutAtKeyVertex(KeyVertex* kv) {
+bool Operations::uncutAtKeyVertex(KeyVertex* targetKv) {
 
-    UncutAtKeyVertexInfo_ info = prepareUncutAtKeyVertex_(kv);
+    UncutAtKeyVertexInfo_ info = prepareUncutAtKeyVertex_(targetKv);
     if (!info.isValid) {
         return false;
     }
 
-    //
+    if (info.kf) {
+        info.kf->cycles_.removeAt(info.cycleIndex);
+        info.kf->boundary_.removeOne(targetKv);
+        onBoundaryChanged_(info.kf);
+        // Delete targetKv
+        targetKv->star_.clear();
+        hardDelete(targetKv, false);
+    }
+    else if (info.khe1.edge() == info.khe2.edge()) {
+        // Transform open edge into closed edge.
+        // TODO: define source operation
+        KeyEdge* oldKe = info.khe1.edge();
+        KeyEdge* newKe = createKeyClosedEdge(
+            std::move(oldKe->geometry_),
+            oldKe->parentGroup(),
+            oldKe->nextSibling(),
+            NodeSourceOperation{});
+
+        KeyHalfedge oldKhe(oldKe, true);
+        KeyHalfedge newKhe(newKe, true);
+        bool hasStar = false;
+        for (Cell* starCell : oldKe->star()) {
+            *starCell->boundary_.find(oldKe) = newKe;
+            newKe->star_.append(starCell);
+            starCell->substituteKeyHalfedge_(oldKhe, newKhe);
+            onBoundaryChanged_(starCell);
+            hasStar = true;
+        }
+        if (hasStar) {
+            onNodeModified_(newKe, NodeModificationFlag::StarChanged);
+        }
+
+        // Delete oldKe and targetKv
+        oldKe->star_.clear();
+        hardDelete(oldKe, false);
+        targetKv->star_.clear();
+        hardDelete(targetKv, false);
+    }
+    else {
+        KeyEdgeGeometry* keg1 = info.khe1.edge()->geometry();
+        KeyEdgeGeometry* keg2 = info.khe2.edge()->geometry();
+        KeyVertex* kv1 = nullptr;
+        KeyVertex* kv2 = nullptr;
+        bool dir1 = false;
+        bool dir2 = false;
+        if (info.khe1.endVertex() == targetKv) {
+            dir1 = true;
+            kv1 = info.khe1.startVertex();
+        }
+        else {
+            kv1 = info.khe1.endVertex();
+        }
+        if (info.khe2.startVertex() == targetKv) {
+            dir2 = true;
+            kv2 = info.khe2.endVertex();
+        }
+        else {
+            kv2 = info.khe2.startVertex();
+        }
+        std::shared_ptr<KeyEdgeGeometry> mergedGeometry = keg1->merge(dir1, keg2, dir2);
+
+        // TODO: really pick lower
+        KeyEdge* lowerKe = info.khe1.edge();
+
+        // TODO: define source operation
+        KeyEdge* newKe = createKeyOpenEdge(
+            kv1,
+            kv2,
+            std::move(mergedGeometry),
+            lowerKe->parentGroup(),
+            lowerKe->nextSibling(),
+            NodeSourceOperation{});
+
+        bool hasStar = false;
+        for (Cell* starCell : lowerKe->star()) {
+            KeyFace* kf = starCell->toKeyFace();
+            if (!kf) {
+                continue;
+            }
+            *kf->boundary_.find(info.khe1.edge()) = newKe;
+            kf->boundary_.removeOne(info.khe2.edge());
+            newKe->star_.append(kf);
+
+            for (KeyCycle& cycle : kf->cycles_) {
+                if (cycle.steinerVertex()) {
+                    continue;
+                }
+                auto it = cycle.halfedges_.begin();
+                while (it != cycle.halfedges_.end()) {
+                    KeyHalfedge& khe = *it;
+                    if (khe.endVertex() == targetKv) {
+                        bool dir = khe.direction() == info.khe1.direction();
+                        khe = KeyHalfedge(newKe, dir);
+                        ++it;
+                    }
+                    if (khe.startVertex() == targetKv) {
+                        it = cycle.halfedges_.erase(it);
+                    }
+                }
+            }
+            onBoundaryChanged_(kf);
+            hasStar = true;
+        }
+        if (hasStar) {
+            onNodeModified_(newKe, NodeModificationFlag::StarChanged);
+        }
+        // Delete khe1, khe2 and targetKv
+        info.khe1.edge()->star_.clear();
+        hardDelete(info.khe1.edge(), false);
+        info.khe2.edge()->star_.clear();
+        hardDelete(info.khe2.edge(), false);
+        targetKv->star_.clear();
+        hardDelete(targetKv, false);
+    }
+
+    return true;
 }
 
 bool Operations::uncutAtKeyEdge(KeyEdge* ke) {
@@ -679,6 +795,8 @@ bool Operations::uncutAtKeyEdge(KeyEdge* ke) {
     }
 
     //
+
+    return true;
 }
 
 void Operations::moveToGroup(Node* node, Group* parentGroup, Node* nextSibling) {
@@ -893,6 +1011,10 @@ void Operations::onGeometryChanged_(Cell* cell) {
     dirtyMesh_(cell);
 }
 
+void Operations::onStyleChanged_(Cell* cell) {
+    onNodeModified_(cell, NodeModificationFlag::StyleChanged);
+}
+
 void Operations::onBoundaryMeshChanged_(Cell* cell) {
     onNodeModified_(cell, NodeModificationFlag::BoundaryMeshChanged);
     dirtyMesh_(cell);
@@ -950,32 +1072,38 @@ void Operations::addToBoundary_(FaceCell* face, const KeyCycle& cycle) {
 }
 
 void Operations::substitute_(KeyVertex* oldVertex, KeyVertex* newVertex) {
+    bool hasStar = false;
     for (Cell* starCell : oldVertex->star()) {
         *starCell->boundary_.find(oldVertex) = newVertex;
         newVertex->star_.append(starCell);
         starCell->substituteKeyVertex_(oldVertex, newVertex);
         onBoundaryChanged_(starCell);
+        hasStar = true;
     }
-    oldVertex->star_.clear();
-    onNodeModified_(oldVertex, NodeModificationFlag::StarChanged);
-    onNodeModified_(newVertex, NodeModificationFlag::StarChanged);
+    if (hasStar) {
+        oldVertex->star_.clear();
+        onNodeModified_(oldVertex, NodeModificationFlag::StarChanged);
+        onNodeModified_(newVertex, NodeModificationFlag::StarChanged);
+    }
 }
 
-void Operations::substitute_(
-    const KeyHalfedge& oldHalfedge,
-    const KeyHalfedge& newHalfedge) {
+void Operations::substitute_(const KeyHalfedge& oldKhe, const KeyHalfedge& newKhe) {
 
-    KeyEdge* const oldEdge = oldHalfedge.edge();
-    KeyEdge* const newEdge = newHalfedge.edge();
-    for (Cell* starCell : oldEdge->star_) {
-        *starCell->boundary_.find(oldEdge) = newEdge;
-        newEdge->star_.append(starCell);
-        starCell->substituteKeyHalfedge_(oldHalfedge, newHalfedge);
+    KeyEdge* const oldKe = oldKhe.edge();
+    KeyEdge* const newKe = newKhe.edge();
+    bool hasStar = false;
+    for (Cell* starCell : oldKe->star()) {
+        *starCell->boundary_.find(oldKe) = newKe;
+        newKe->star_.append(starCell);
+        starCell->substituteKeyHalfedge_(oldKhe, newKhe);
         onBoundaryChanged_(starCell);
+        hasStar = true;
     }
-    oldEdge->star_.clear();
-    onNodeModified_(oldEdge, NodeModificationFlag::StarChanged);
-    onNodeModified_(newEdge, NodeModificationFlag::StarChanged);
+    if (hasStar) {
+        oldKe->star_.clear();
+        onNodeModified_(oldKe, NodeModificationFlag::StarChanged);
+        onNodeModified_(newKe, NodeModificationFlag::StarChanged);
+    }
 }
 
 void Operations::collectDependentNodes_(
@@ -994,10 +1122,10 @@ void Operations::collectDependentNodes_(
     else {
         // Delete all cells in the star of the cell
         Cell* cell = node->toCellUnchecked();
-        for (Node* starNode : cell->star()) {
-            if (dependentNodes.insert(starNode).second) {
-                collectDependentNodes_(starNode, dependentNodes);
-            }
+        for (Cell* starCell : cell->star()) {
+            // No need for recursion since starCell.star() is a subset
+            // of cell.star().
+            dependentNodes.insert(starCell);
         }
     }
 }
@@ -1042,21 +1170,22 @@ Operations::UncutAtKeyVertexInfo_ Operations::prepareUncutAtKeyVertex_(KeyVertex
         }
         case CellType::KeyFace: {
             KeyFace* kf = starCell->toKeyFaceUnchecked();
+            Int cycleIndex = -1;
             for (const KeyCycle& cycle : kf->cycles()) {
-                if (cycle.steinerVertex()) {
-                    if (cycle.steinerVertex() == kv) {
-                        if (result.kf) {
-                            // Cannot uncut if kv is used more than once as steiner vertex.
-                            return result;
-                        }
-                        result.kf = kf;
+                ++cycleIndex;
+                if (cycle.steinerVertex() == kv) {
+                    if (result.kf) {
+                        // Cannot uncut if kv is used more than once as steiner vertex.
+                        return result;
                     }
+                    result.kf = kf;
+                    result.cycleIndex = cycleIndex;
                 }
             }
             break;
         }
         case CellType::InbetweenVertex: {
-            InbetweenVertex* iv = starCell->toInbetweenVertexUnchecked();
+            //InbetweenVertex* iv = starCell->toInbetweenVertexUnchecked();
             // Currently not supported.
             return result;
             break;
@@ -1084,28 +1213,24 @@ Operations::UncutAtKeyVertexInfo_ Operations::prepareUncutAtKeyVertex_(KeyVertex
                 // consecutively in the cycles they are part of.
                 //
                 for (Cell* starCell : kv->star()) {
-                    switch (starCell->cellType()) {
-                    case CellType::KeyFace: {
-                        KeyFace* kf = starCell->toKeyFaceUnchecked();
-                        for (const KeyCycle& cycle : kf->cycles()) {
-                            if (cycle.steinerVertex()) {
-                                continue;
-                            }
-                            KeyEdge* previousKe = cycle.halfedges().last().edge();
-                            for (const KeyHalfedge& khe : cycle.halfedges()) {
-                                if (khe.startVertex() == kv) {
-                                    if (khe.edge() == previousKe) {
-                                        // Cannot uncut if kv is used as a u-turn in cycle.
-                                        return result;
-                                    }
-                                }
-                                previousKe = khe.edge();
-                            }
-                        }
-                        break;
+                    KeyFace* kf = starCell->toKeyFace();
+                    if (!kf) {
+                        continue;
                     }
-                    default:
-                        break;
+                    for (const KeyCycle& cycle : kf->cycles()) {
+                        if (cycle.steinerVertex()) {
+                            continue;
+                        }
+                        KeyEdge* previousKe = cycle.halfedges().last().edge();
+                        for (const KeyHalfedge& khe : cycle.halfedges()) {
+                            if (khe.startVertex() == kv) {
+                                if (khe.edge() == previousKe) {
+                                    // Cannot uncut if kv is used as a u-turn in cycle.
+                                    return result;
+                                }
+                            }
+                            previousKe = khe.edge();
+                        }
                     }
                 }
                 result.isValid = true;
@@ -1115,30 +1240,26 @@ Operations::UncutAtKeyVertexInfo_ Operations::prepareUncutAtKeyVertex_(KeyVertex
                 // the only incident edge is a loop, and we don't
                 // kv to be used as a u-turn in any cycle.
                 for (Cell* starCell : kv->star()) {
-                    switch (starCell->cellType()) {
-                    case CellType::KeyFace: {
-                        KeyFace* kf = starCell->toKeyFaceUnchecked();
-                        for (const KeyCycle& cycle : kf->cycles()) {
-                            if (cycle.steinerVertex()) {
-                                continue;
-                            }
-                            if (cycle.halfedges().first().edge() != result.khe1.edge()) {
-                                continue;
-                            }
-                            // All edges in this cycle are equal to result.khe1.edge().
-                            // We require them to be in the same direction (no u-turn).
-                            bool direction = cycle.halfedges().first().edge();
-                            for (const KeyHalfedge& khe : cycle.halfedges()) {
-                                if (khe.direction() != direction) {
-                                    // Cannot uncut if kv is used as a u-turn in cycle.
-                                    return result;
-                                }
+                    KeyFace* kf = starCell->toKeyFace();
+                    if (!kf) {
+                        continue;
+                    }
+                    for (const KeyCycle& cycle : kf->cycles()) {
+                        if (cycle.steinerVertex()) {
+                            continue;
+                        }
+                        if (cycle.halfedges().first().edge() != result.khe1.edge()) {
+                            continue;
+                        }
+                        // All edges in this cycle are equal to result.khe1.edge().
+                        // We require them to be in the same direction (no u-turn).
+                        bool direction = cycle.halfedges().first().edge();
+                        for (const KeyHalfedge& khe : cycle.halfedges()) {
+                            if (khe.direction() != direction) {
+                                // Cannot uncut if kv is used as a u-turn in cycle.
+                                return result;
                             }
                         }
-                        break;
-                    }
-                    default:
-                        break;
                     }
                 }
                 result.isValid = true;
@@ -1169,6 +1290,9 @@ Operations::UncutAtKeyEdgeInfo_ Operations::prepareUncutAtKeyEdge_(KeyEdge* ke) 
                 Int componentIndex = -1;
                 for (const KeyHalfedge& khe : cycle.halfedges()) {
                     ++componentIndex;
+                    if (khe.edge() != ke) {
+                        continue;
+                    }
                     if (!result.kf1) {
                         result.kf1 = kf;
                         result.cycleIndex1 = cycleIndex;
@@ -1202,21 +1326,14 @@ Operations::UncutAtKeyEdgeInfo_ Operations::prepareUncutAtKeyEdge_(KeyEdge* ke) 
 Int Operations::countSteinerUses_(KeyVertex* kv) {
     Int count = 0;
     for (Cell* starCell : kv->star()) {
-        switch (starCell->cellType()) {
-        case CellType::KeyFace: {
-            KeyFace* kf = starCell->toKeyFaceUnchecked();
-            for (const KeyCycle& cycle : kf->cycles()) {
-                if (cycle.steinerVertex()) {
-                    if (cycle.steinerVertex() == kv) {
-                        ++count;
-                    }
-                    continue;
-                }
-            }
-            break;
+        KeyFace* kf = starCell->toKeyFace();
+        if (!kf) {
+            continue;
         }
-        default:
-            break;
+        for (const KeyCycle& cycle : kf->cycles()) {
+            if (cycle.steinerVertex() == kv) {
+                ++count;
+            }
         }
     }
     return count;
@@ -1224,7 +1341,6 @@ Int Operations::countSteinerUses_(KeyVertex* kv) {
 
 Int Operations::countUses_(KeyVertex* kv) {
     Int count = 0;
-
     for (Cell* starCell : kv->star()) {
         switch (starCell->cellType()) {
         case CellType::KeyEdge: {
@@ -1267,34 +1383,27 @@ Int Operations::countUses_(KeyVertex* kv) {
             break;
         }
     }
-
     return count;
 }
 
 Int Operations::countUses_(KeyEdge* ke) {
     Int count = 0;
-
     for (Cell* starCell : ke->star()) {
-        switch (starCell->cellType()) {
-        case CellType::KeyFace: {
-            KeyFace* kf = starCell->toKeyFaceUnchecked();
-            for (const KeyCycle& cycle : kf->cycles()) {
-                if (cycle.steinerVertex()) {
-                    continue;
-                }
-                for (const KeyHalfedge& khe : cycle.halfedges()) {
-                    if (khe.edge() == ke) {
-                        ++count;
-                    }
+        KeyFace* kf = starCell->toKeyFace();
+        if (!kf) {
+            continue;
+        }
+        for (const KeyCycle& cycle : kf->cycles()) {
+            if (cycle.steinerVertex()) {
+                continue;
+            }
+            for (const KeyHalfedge& khe : cycle.halfedges()) {
+                if (khe.edge() == ke) {
+                    ++count;
                 }
             }
-            break;
-        }
-        default:
-            break;
         }
     }
-
     return count;
 }
 

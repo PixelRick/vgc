@@ -17,6 +17,7 @@
 #ifndef VGC_WORKSPACE_FREEHANDEDGEGEOMETRY_H
 #define VGC_WORKSPACE_FREEHANDEDGEGEOMETRY_H
 
+#include <vgc/core/id.h>
 #include <vgc/geometry/catmullrom.h>
 #include <vgc/geometry/yuksel.h>
 #include <vgc/vacomplex/keyedge.h>
@@ -24,6 +25,69 @@
 #include <vgc/workspace/edgegeometry.h>
 
 namespace vgc::workspace {
+
+class CellProperty {
+protected:
+    explicit CellProperty(core::StringId name) : name_(name) {}
+
+private:
+    virtual bool updateFromDomCell_(dom::Element* element) = 0;
+    virtual void writeToDomCell_(dom::Element* element) const = 0;
+    virtual void removeFromDomCell_(dom::Element* element) const = 0;
+
+    const core::StringId name_;
+};
+
+
+
+class EdgeStyle final : public CellProperty {
+public:
+    EdgeStyle() noexcept : CellProperty(core::StringId("style")) {};
+
+private:
+    core::Color color_ = {};
+
+    bool updateFromDomCell_(dom::Element* element) override;
+    void writeToDomCell_(dom::Element* element) const override;
+    void removeFromDomCell_(dom::Element* element) const override;
+};
+
+class CellProperties {
+private:
+    bool updateFromDomCell_(dom::Element* element);
+    void writeToDomCell_(dom::Element* element) const;
+    void removeFromDomCell_(dom::Element* element) const;
+
+    std::unique_ptr<EdgeStyle> styleProperty_;
+    //core::Array<std::unique_ptr<CellProperty>> customProperties_;
+};
+
+class KeyEdgeProperties : public CellProperties {
+private:
+
+    // proposals for concatenate/blend operation interface:
+
+    // do copy +
+    void concatenate(bool after, const KeyEdgeProperties& other, bool reversed);
+
+    // or assign from
+    void assignConcat(const KeyEdgeProperties& a, bool reversedA, const KeyEdgeProperties& b, bool reversedB);
+
+    // OTHER IDEA: convert to type before...
+};
+
+class KeyFaceProperties : public CellProperties {
+private:
+
+    // proposals for concatenate/blend operation interface:
+
+    // do copy +
+    void concatenate(const KeyEdgeProperties& other);
+
+    // or assign from
+    void assignConcat(const KeyEdgeProperties& a, const KeyEdgeProperties& b);
+};
+
 
 class FreehandEdgePoint {
 public:
@@ -197,7 +261,10 @@ private:
     core::DoubleArray editWidths_;
     core::DoubleArray originalKnotArclengths_;
     geometry::Vec2d editStartPosition_ = {};
+    
     bool isBeingEdited_ = false;
+
+    // properties, only color for now
 
     static void computeSnappedLinearS_(
         geometry::Vec2dArray& outPoints,
@@ -210,6 +277,9 @@ private:
     computeKnotArclengths_(core::DoubleArray& outArclengths, StrokeType* srcStroke);
 
     std::unique_ptr<StrokeType> createStroke_() const;
+
+    std::shared_ptr<KeyEdgeGeometry>
+    merge_(bool direction, KeyEdgeGeometry* other, bool otherDirection) const override;
 };
 
 } // namespace vgc::workspace

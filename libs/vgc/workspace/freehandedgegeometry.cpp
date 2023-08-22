@@ -2438,6 +2438,13 @@ bool FreehandEdgeGeometry::updateFromDomEdge_(dom::Element* element) {
         changed = true;
     }
 
+    core::Color color = element->getAttribute(ds::color).getColor();
+    if (color_ != color) {
+        color_ = color;
+        dirtyEdgeStyle();
+        changed = true;
+    }
+
     return changed;
 }
 
@@ -2452,6 +2459,11 @@ void FreehandEdgeGeometry::writeToDomEdge_(dom::Element* element) const {
     const auto& domWidths = element->getAttribute(ds::widths).getDoubleArray();
     if (sharedConstWidths_ != domWidths) {
         element->setAttribute(ds::widths, sharedConstWidths_);
+    }
+
+    core::Color color = element->getAttribute(ds::color).getColor();
+    if (color_ != color) {
+        element->setAttribute(ds::color, color_);
     }
 }
 
@@ -2545,6 +2557,47 @@ FreehandEdgeGeometry::createStroke_() const {
     return std::make_unique<geometry::CatmullRomSplineStroke2d>(
         geometry::CatmullRomSplineParameterization::Centripetal, isClosed());
     //return std::make_unique<geometry::YukselSplineStroke2d>(isClosed());
+}
+
+std::shared_ptr<vacomplex::KeyEdgeGeometry> FreehandEdgeGeometry::merge_(
+    bool direction,
+    KeyEdgeGeometry* other_,
+    bool otherDirection) const {
+    FreehandEdgeGeometry* other = dynamic_cast<FreehandEdgeGeometry*>(other_);
+    VGC_ASSERT(other != nullptr);
+
+    auto ret = std::make_shared<FreehandEdgeGeometry>(
+        isClosed(), stroke_->isWidthConstant() && other->stroke_->isWidthConstant());
+
+    geometry::Vec2dArray newPositions;
+    core::DoubleArray newWidths;
+    if (direction) {
+        newPositions = sharedConstPositions_;
+        newWidths = sharedConstWidths_;
+    }
+    else {
+        newPositions.assign(
+            sharedConstPositions_.get().crbegin(), sharedConstPositions_.get().crend());
+        newWidths.assign(
+            sharedConstWidths_.get().crbegin(), sharedConstWidths_.get().crend());
+    }
+    if (otherDirection) {
+        newPositions.extend(other->sharedConstPositions_.get());
+        newWidths.extend(other->sharedConstWidths_.get());
+    }
+    else {
+        newPositions.extend(
+            other->sharedConstPositions_.get().crbegin(), other->sharedConstPositions_.get().crend());
+        newWidths.extend(
+            other->sharedConstWidths_.get().crbegin(), other->sharedConstWidths_.get().crend());
+    }
+
+
+    ret->sharedConstPositions_ = std::move(newPositions);
+    ret->sharedConstWidths_ = std::move(newWidths);
+    ret->stroke_ = createStroke_();
+
+    return ret;
 }
 
 } // namespace vgc::workspace

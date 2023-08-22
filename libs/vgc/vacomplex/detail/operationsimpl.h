@@ -185,6 +185,7 @@ private:
 
     void onBoundaryChanged_(Cell* cell);
     void onGeometryChanged_(Cell* cell);
+    void onStyleChanged_(Cell* cell);
     void onBoundaryMeshChanged_(Cell* cell);
     void dirtyMesh_(Cell* cell);
 
@@ -202,6 +203,9 @@ private:
     void addToBoundary_(FaceCell* face, const KeyCycle& cycle);
 
     void substitute_(KeyVertex* oldVertex, KeyVertex* newVertex);
+
+    // Substitutes open with open or closed with closed.
+    //
     void substitute_(const KeyHalfedge& oldHalfedge, const KeyHalfedge& newHalfedge);
 
     // Other helper methods
@@ -209,6 +213,7 @@ private:
 
     struct UncutAtKeyVertexInfo_ {
         KeyFace* kf = nullptr;
+        Int cycleIndex = 0;
         KeyHalfedge khe1 = {};
         KeyHalfedge khe2 = {};
         bool isValid = false;
