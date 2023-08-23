@@ -17,17 +17,84 @@
 #include <vgc/geometry/catmullrom.h>
 
 #include <vgc/geometry/bezier.h>
-#include <vgc/geometry/curve.h>
 
 namespace vgc::geometry {
 
-Int CatmullRomSplineStroke2d::numKnots_() const {
-    return positions_.length();
+/* static */
+core::StringId CatmullRomSplineStroke2d::implName("CatmullRom");
+
+CubicBezier2d CatmullRomSplineStroke2d::segmentToBezier(Int segmentIndex) const {
+    CubicBezier2d centerlineBezier(core::noInit);
+
+    computeCache_();
+
+    Int numSegments = this->numSegments();
+    detail::checkSegmentIndexIsValid(segmentIndex, numSegments);
+
+    Int numKnots = this->numKnots();
+    bool isClosed = this->isClosed();
+
+    Int i0 = segmentIndex;
+    Int i3 = segmentIndex + 1;
+    if (i3 >= numKnots) {
+        i3 = isClosed ? 0 : segmentIndex;
+    }
+    Int j = i0 * 2;
+
+    const Vec2d* p = positions().data();
+    const Vec2d* cp = centerlineControlPoints_.data();
+    return CubicBezier2d(p[i0], cp[j], cp[j + 1], p[i3]);
 }
 
-bool CatmullRomSplineStroke2d::isZeroLengthSegment_(Int segmentIndex) const {
+CubicBezier2d CatmullRomSplineStroke2d::segmentToBezier(
+    Int segmentIndex,
+    CubicBezier2d& halfwidths) const {
+
     computeCache_();
-    return chordLengths_[segmentIndex] == 0;
+
+    Int numSegments = this->numSegments();
+    detail::checkSegmentIndexIsValid(segmentIndex, numSegments);
+
+    Int numKnots = this->numKnots();
+    bool isClosed = this->isClosed();
+
+    Int i0 = segmentIndex;
+    Int i3 = segmentIndex + 1;
+    if (i3 >= numKnots) {
+        i3 = isClosed ? 0 : segmentIndex;
+    }
+    Int j = i0 * 2;
+
+    if (isWidthConstant()) {
+        double chw = 0.5 * constantWidth();
+        Vec2d cp(chw, chw);
+        halfwidths = CubicBezier2d(cp, cp, cp, cp);
+    }
+    else {
+        const double* w = widths().data();
+        const Vec2d* chw = halfwidthsControlPoints_.data();
+        double hw0 = 0.5 * w[i0];
+        double hw3 = 0.5 * w[i3];
+        halfwidths = CubicBezier2d(Vec2d(hw0, hw0), chw[j], chw[j + 1], Vec2d(hw3, hw3));
+    }
+
+    const Vec2d* p = positions().data();
+    const Vec2d* cp = centerlineControlPoints_.data();
+    return CubicBezier2d(p[i0], cp[j], cp[j + 1], p[i3]);
+}
+
+CubicBezier1d
+CatmullRomSplineStroke2d::segmentToNormalReparametrization(Int segmentIndex) const {
+
+    computeCache_();
+
+    Int numSegments = this->numSegments();
+    detail::checkSegmentIndexIsValid(segmentIndex, numSegments);
+
+    Int i = segmentIndex;
+
+    const Vec2d* cp = normalReparametrizationControlValues_.data();
+    return CubicBezier1d(0, cp[i][0], cp[i][1], 1);
 }
 
 Vec2d CatmullRomSplineStroke2d::evalNonZeroCenterline(Int segmentIndex, double u) const {
@@ -45,10 +112,10 @@ Vec2d CatmullRomSplineStroke2d::evalNonZeroCenterline(
 }
 
 StrokeSampleEx2d CatmullRomSplineStroke2d::evalNonZero(Int segmentIndex, double u) const {
-    if (isWidthConstant_) {
+    if (isWidthConstant()) {
         CubicBezier2d centerlineBezier = segmentToBezier(segmentIndex);
         CubicBezier1d tu = segmentToNormalReparametrization(segmentIndex);
-        double hw = 0.5 * widths_[0];
+        double hw = 0.5 * constantWidth();
         Vec2d dp(core::noInit);
         Vec2d p = centerlineBezier.eval(u, dp);
         double t = tu.eval(u);
@@ -78,10 +145,10 @@ void CatmullRomSplineStroke2d::sampleNonZeroSegment(
     const CurveSamplingParameters& params,
     detail::AdaptiveStrokeSampler& sampler) const {
 
-    if (isWidthConstant_) {
+    if (isWidthConstant()) {
         CubicBezier2d centerlineBezier = segmentToBezier(segmentIndex);
         CubicBezier1d tu = segmentToNormalReparametrization(segmentIndex);
-        double hw = 0.5 * widths_[0];
+        double hw = 0.5 * constantWidth();
         sampler.sample(
             [&, hw](double u) -> StrokeSampleEx2d {
                 Vec2d dp(core::noInit);
@@ -203,142 +270,11 @@ std::array<Vec2d, 2> computeOffsetLineTangents(const PointData& data) {
     return {(dp + offset0).normalized(), (dp + offset1).normalized()};
 }
 
-} // namespace
-
-std::array<Vec2d, 2>
-CatmullRomSplineStroke2d::computeOffsetLineTangentsAtSegmentEndpoint_(
-    Int segmentIndex,
-    Int endpointIndex) const {
-
-    CubicBezier2d halfwidthBezier(core::noInit);
-    CubicBezier2d positionsBezier = segmentToBezier(segmentIndex, halfwidthBezier);
-
-    PointData data =
-        computeSegmentEndpointData(positionsBezier, halfwidthBezier, endpointIndex);
-
-    return computeOffsetLineTangents(data);
-}
-
-namespace {
-
-struct SegmentComputeData {
-    std::array<Int, 4> knotIndices;
+struct CatmullRomSegmentComputeData {
     std::array<double, 3> imaginaryChordLengths;
     CubicBezier2d centerlineBezier;
     std::array<PointData, 2> endpointDataPair;
 };
-
-Vec2dArray computeChords(core::ConstSpan<Vec2d> knotPositions) {
-    const Vec2d* p = knotPositions.data();
-    Int n = knotPositions.length();
-    Vec2dArray chords(n, core::noInit);
-    if (n > 0) {
-        for (Int i = 0; i < n - 1; ++i) {
-            chords[i] = p[i + 1] - p[i];
-        }
-        // Last chord is the closure.
-        chords[n - 1] = p[n - 1] - p[0];
-    }
-    return chords;
-}
-
-void computeLengths(const Vec2dArray& vectors, core::DoubleArray& outLengths) {
-    Int n = vectors.length();
-    outLengths.resizeNoInit(n);
-    for (Int i = 0; i < n; ++i) {
-        outLengths[i] = vectors[i].length();
-    }
-}
-
-void checkSegmentIndexIsValid(Int segmentIndex, Int numSegments) {
-    VGC_ASSERT(segmentIndex >= 0);
-    VGC_ASSERT(segmentIndex < numSegments);
-}
-
-// Assumes segmentIndex is valid.
-void computeSegmentKnotAndChordIndices(
-    Int numKnots,
-    bool isClosed,
-    Int segmentIndex,
-    std::array<Int, 4>& outKnotIndices,
-    std::array<Int, 3>& outChordIndices) {
-
-    // Get indices of points used by the Catmull-Rom interpolation, handle
-    // wrapping for closed curves and boundary for open curves.
-    outKnotIndices = {segmentIndex - 1, segmentIndex, segmentIndex + 1, segmentIndex + 2};
-    outChordIndices = {segmentIndex - 1, segmentIndex, segmentIndex + 1};
-
-    if (isClosed) {
-        if (outKnotIndices[0] < 0) {
-            outKnotIndices[0] = numKnots - 1;
-            outChordIndices[0] = numKnots - 1;
-        }
-        if (outKnotIndices[2] > numKnots - 1) {
-            outKnotIndices[2] = 0;
-            outChordIndices[2] = 0;
-            outKnotIndices[3] = 1;
-        }
-        if (outKnotIndices[3] > numKnots - 1) {
-            outKnotIndices[3] = 0;
-        }
-    }
-    else {
-        Int zeroLengthChordIndex = numKnots - 1;
-        if (outKnotIndices[0] < 0) {
-            outKnotIndices[0] = 0;
-            outChordIndices[0] = zeroLengthChordIndex;
-        }
-        if (outKnotIndices[2] > numKnots - 1) {
-            outKnotIndices[2] = numKnots - 1;
-            outChordIndices[2] = zeroLengthChordIndex;
-            outKnotIndices[3] = numKnots - 1;
-        }
-        else if (outKnotIndices[3] > numKnots - 1) {
-            outKnotIndices[3] = numKnots - 1;
-        }
-    }
-}
-
-template<std::size_t I, typename... T, std::size_t... Is>
-constexpr std::tuple<std::tuple_element_t<I + Is, std::tuple<T...>>...>
-SubPackAsTuple_(std::index_sequence<Is...>) {
-}
-
-template<typename T, size_t n, size_t... Is>
-std::array<T, n> getElementsUnchecked_(
-    const core::Array<T>& arr,
-    const std::array<Int, n>& indices,
-    std::index_sequence<Is...>) {
-
-    return std::array<T, n>{arr.getUnchecked(indices[Is])...};
-}
-
-template<typename T, size_t n>
-std::array<T, n>
-getElementsUnchecked(const core::Array<T>& arr, const std::array<Int, n>& indices) {
-    return getElementsUnchecked_(arr, indices, std::make_index_sequence<n>());
-}
-
-CurveSegmentType
-computeSegmentTypeFromChordLengths(const std::array<double, 3>& segmentChordLengths) {
-    if (segmentChordLengths[1] == 0) {
-        return CurveSegmentType::Corner;
-    }
-    bool isAfterCorner = (segmentChordLengths[0] == 0);
-    bool isBeforeCorner = (segmentChordLengths[2] == 0);
-    if (isAfterCorner) {
-        if (isBeforeCorner) {
-            return CurveSegmentType::BetweenCorners;
-        }
-        return CurveSegmentType::AfterCorner;
-    }
-    else if (isBeforeCorner) {
-        return CurveSegmentType::BeforeCorner;
-    }
-    else {
-        return CurveSegmentType::Simple;
-    }
-}
 
 CubicBezier2d computeSegmentCenterlineCubicBezier(
     CatmullRomSplineParameterization parameterization,
@@ -541,80 +477,6 @@ CubicBezier2d computeSegmentHalfwidthsCubicBezier(
 
 } // namespace
 
-CubicBezier2d CatmullRomSplineStroke2d::segmentToBezier(Int segmentIndex) const {
-    CubicBezier2d centerlineBezier(core::noInit);
-
-    computeCache_();
-
-    Int numSegments = this->numSegments();
-    checkSegmentIndexIsValid(segmentIndex, numSegments);
-
-    Int numKnots = this->numKnots();
-    bool isClosed = this->isClosed();
-
-    Int i0 = segmentIndex;
-    Int i3 = segmentIndex + 1;
-    if (i3 >= numKnots) {
-        i3 = isClosed ? 0 : segmentIndex;
-    }
-    Int j = i0 * 2;
-
-    const Vec2d* p = positions_.data();
-    const Vec2d* cp = centerlineControlPoints_.data();
-    return CubicBezier2d(p[i0], cp[j], cp[j + 1], p[i3]);
-}
-
-CubicBezier2d CatmullRomSplineStroke2d::segmentToBezier(
-    Int segmentIndex,
-    CubicBezier2d& halfwidths) const {
-
-    computeCache_();
-
-    Int numSegments = this->numSegments();
-    checkSegmentIndexIsValid(segmentIndex, numSegments);
-
-    Int numKnots = this->numKnots();
-    bool isClosed = this->isClosed();
-
-    Int i0 = segmentIndex;
-    Int i3 = segmentIndex + 1;
-    if (i3 >= numKnots) {
-        i3 = isClosed ? 0 : segmentIndex;
-    }
-    Int j = i0 * 2;
-
-    if (isWidthConstant_) {
-        double chw = 0.5 * constantWidth();
-        Vec2d cp(chw, chw);
-        halfwidths = CubicBezier2d(cp, cp, cp, cp);
-    }
-    else {
-        const double* w = widths_.data();
-        const Vec2d* chw = halfwidthsControlPoints_.data();
-        double hw0 = 0.5 * w[i0];
-        double hw3 = 0.5 * w[i3];
-        halfwidths = CubicBezier2d(Vec2d(hw0, hw0), chw[j], chw[j + 1], Vec2d(hw3, hw3));
-    }
-
-    const Vec2d* p = positions_.data();
-    const Vec2d* cp = centerlineControlPoints_.data();
-    return CubicBezier2d(p[i0], cp[j], cp[j + 1], p[i3]);
-}
-
-CubicBezier1d
-CatmullRomSplineStroke2d::segmentToNormalReparametrization(Int segmentIndex) const {
-
-    computeCache_();
-
-    Int numSegments = this->numSegments();
-    checkSegmentIndexIsValid(segmentIndex, numSegments);
-
-    Int i = segmentIndex;
-
-    const Vec2d* cp = normalReparametrizationControlValues_.data();
-    return CubicBezier1d(0, cp[i][0], cp[i][1], 1);
-}
-
 void CatmullRomSplineStroke2d::computeCache_() const {
 
     if (!isCacheDirty_) {
@@ -623,62 +485,35 @@ void CatmullRomSplineStroke2d::computeCache_() const {
 
     const auto& positions = this->positions();
     const auto& widths = this->widths();
-    Int numKnots = positions.length();
     Int numSegments = this->numSegments();
     bool isClosed = this->isClosed();
 
-    Vec2dArray chords = computeChords(positions);
-    if (!isClosed) {
-        chords.last() = Vec2d();
-    }
-
-    bool updateSegmentTypes = false;
-    if (chordLengths_.isEmpty()) {
-        computeLengths(chords, chordLengths_);
-        segmentTypes_.resizeNoInit(numSegments);
-        updateSegmentTypes = true;
-    }
+    core::Array<SegmentComputeData> baseComputeDataArray =
+        AbstractInterpolatingStroke2d::computeCache_();
+    core::Array<CatmullRomSegmentComputeData> computeDataArray(numSegments, core::noInit);
 
     centerlineControlPoints_.resizeNoInit(numSegments * 2);
     halfwidthsControlPoints_.resizeNoInit(numSegments * 2);
     normalReparametrizationControlValues_.resizeNoInit(numSegments);
-
-    core::Array<SegmentComputeData> computeDataArray(numSegments, core::noInit);
 
     // todo: Indices are special only for a few cases, we could make a special loop
     //       instead of doing special case logic on indices at each iteration.
     //       At least, computeData allows for not doing it twice.
 
     for (Int i = 0; i < numSegments; ++i) {
-        SegmentComputeData& computeData = computeDataArray[i];
+        SegmentComputeData& baseComputeData = baseComputeDataArray[i];
+        CatmullRomSegmentComputeData& computeData = computeDataArray[i];
 
-        std::array<Int, 4> segKnotIndices;
-        std::array<Int, 3> segChordIndices;
-        computeSegmentKnotAndChordIndices(
-            numKnots, isClosed, i, segKnotIndices, segChordIndices);
-        computeData.knotIndices = segKnotIndices;
+        std::array<Vec2d, 4> posKnots =
+            detail::getElementsUnchecked(positions, baseComputeData.knotIndices);
 
-        std::array<Vec2d, 4> segPosKnots =
-            getElementsUnchecked(positions, segKnotIndices);
-
-        std::array<Vec2d, 3> segChords = getElementsUnchecked(chords, segChordIndices);
-        std::array<double, 3> segChordLengths =
-            getElementsUnchecked(chordLengths_, segChordIndices);
-
-        CurveSegmentType segmentType;
-        if (updateSegmentTypes) {
-            segmentType = computeSegmentTypeFromChordLengths(segChordLengths);
-            segmentTypes_.getUnchecked(i) = segmentType;
-        }
-        else {
-            segmentType = segmentTypes_[i];
-        }
+        CurveSegmentType segmentType = segmentTypes()[i];
 
         CubicBezier2d centerlineBezier = computeSegmentCenterlineCubicBezier(
             parameterization_,
-            segPosKnots,
-            segChords,
-            segChordLengths,
+            posKnots,
+            baseComputeData.chords,
+            baseComputeData.chordLengths,
             segmentType,
             computeData.imaginaryChordLengths);
         computeData.centerlineBezier = centerlineBezier;
@@ -691,16 +526,17 @@ void CatmullRomSplineStroke2d::computeCache_() const {
     CubicBezier2d halfwidthsBezier(core::noInit);
 
     for (Int i = 0; i < numSegments; ++i) {
-        SegmentComputeData& computeData = computeDataArray[i];
+        SegmentComputeData& baseComputeData = baseComputeDataArray[i];
+        CatmullRomSegmentComputeData& computeData = computeDataArray[i];
 
-        std::array<double, 4> segWidthKnots =
-            getElementsUnchecked(widths, computeData.knotIndices);
+        std::array<double, 4> widthKnots =
+            detail::getElementsUnchecked(widths, baseComputeData.knotIndices);
 
-        CurveSegmentType segmentType = segmentTypes_[i];
+        CurveSegmentType segmentType = segmentTypes()[i];
 
         const CubicBezier2d& centerlineBezier = computeData.centerlineBezier;
         halfwidthsBezier = computeSegmentHalfwidthsCubicBezier(
-            segWidthKnots,
+            widthKnots,
             centerlineBezier.controlPoints(),
             computeData.imaginaryChordLengths,
             segmentType);
@@ -718,9 +554,9 @@ void CatmullRomSplineStroke2d::computeCache_() const {
     // Here we relax tangents to make their derivative continuous.
     constexpr bool enableRelaxedNormals = true;
     for (Int i = 0; i < numSegments; ++i) {
-        SegmentComputeData& computeData = computeDataArray[i];
+        CatmullRomSegmentComputeData& computeData = computeDataArray[i];
 
-        CurveSegmentType segmentType = segmentTypes_[i];
+        CurveSegmentType segmentType = segmentTypes()[i];
 
         normalReparametrizationControlValues_[i] = Vec2d(1. / 3, 2. / 3);
 
@@ -732,7 +568,7 @@ void CatmullRomSplineStroke2d::computeCache_() const {
             if (previousSegmentIndex < 0) {
                 previousSegmentIndex = numSegments - 1;
             }
-            SegmentComputeData& previousSegmentComputeData =
+            CatmullRomSegmentComputeData& previousSegmentComputeData =
                 computeDataArray[previousSegmentIndex];
 
             PointData& ed0 = previousSegmentComputeData.endpointDataPair[1];
@@ -767,9 +603,9 @@ void CatmullRomSplineStroke2d::computeCache_() const {
     if (enableOffsetLineTangentContinuity) {
         // Here we try to make offset line tangent continuous at start knot.
         for (Int i = 0; i < numSegments; ++i) {
-            SegmentComputeData& computeData = computeDataArray[i];
+            CatmullRomSegmentComputeData& computeData = computeDataArray[i];
 
-            CurveSegmentType segmentType = segmentTypes_[i];
+            CurveSegmentType segmentType = segmentTypes()[i];
 
             if ((isClosed || i > 1)
                 && (segmentType == CurveSegmentType::Simple
@@ -778,7 +614,7 @@ void CatmullRomSplineStroke2d::computeCache_() const {
                 if (previousSegmentIndex < 0) {
                     previousSegmentIndex = numSegments - 1;
                 }
-                SegmentComputeData& previousSegmentComputeData =
+                CatmullRomSegmentComputeData& previousSegmentComputeData =
                     computeDataArray[previousSegmentIndex];
 
                 // basically we want to change a single width control point.
@@ -859,6 +695,47 @@ void CatmullRomSplineStroke2d::computeCache_() const {
     }
 
     isCacheDirty_ = false;
+}
+
+void CatmullRomSplineStroke2d::onPositionsChanged_() {
+    centerlineControlPoints_.clear();
+    halfwidthsControlPoints_.clear();
+    isCacheDirty_ = true;
+}
+
+void CatmullRomSplineStroke2d::onWidthsChanged_() {
+    halfwidthsControlPoints_.clear();
+    if (!isWidthConstant()) {
+        isCacheDirty_ = true;
+    }
+}
+
+std::array<Vec2d, 2>
+CatmullRomSplineStroke2d::computeOffsetLineTangentsAtSegmentEndpoint_(
+    Int segmentIndex,
+    Int endpointIndex) const {
+
+    CubicBezier2d halfwidthBezier(core::noInit);
+    CubicBezier2d positionsBezier = segmentToBezier(segmentIndex, halfwidthBezier);
+
+    PointData data =
+        computeSegmentEndpointData(positionsBezier, halfwidthBezier, endpointIndex);
+
+    return computeOffsetLineTangents(data);
+}
+
+std::unique_ptr<AbstractStroke2d> CatmullRomSplineStroke2d::clone_() const {
+    return std::make_unique<CatmullRomSplineStroke2d>(*this);
+}
+
+bool CatmullRomSplineStroke2d::copyAssign_(const AbstractStroke2d* other_) {
+    auto other = dynamic_cast<const CatmullRomSplineStroke2d*>(other_);
+    *this = *other;
+}
+
+bool CatmullRomSplineStroke2d::moveAssign_(AbstractStroke2d* other_) {
+    auto other = dynamic_cast<CatmullRomSplineStroke2d*>(other_);
+    *this = std::move(*other);
 }
 
 } // namespace vgc::geometry

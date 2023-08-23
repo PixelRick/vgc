@@ -20,12 +20,13 @@
 #include <unordered_set>
 
 #include <vgc/vacomplex/complex.h>
-#include <vgc/vacomplex/edgegeometry.h>
+#include <vgc/vacomplex/cellgeometry.h>
+#include <vgc/vacomplex/keyedgegeometry.h>
 
 namespace vgc::vacomplex::detail {
 
 class VGC_VACOMPLEX_API Operations {
-    friend vacomplex::KeyEdgeGeometry;
+private:
     using GroupChildrenIterator = Group;
     //using GroupChildrenConstIterator = decltype(Group::children_)::const_iterator;
 
@@ -183,9 +184,12 @@ private:
     // Assumes that all descendants of all `nodes` are also in `nodes`.
     void destroyNodes_(const std::unordered_set<Node*>& nodes);
 
+    friend vacomplex::CellGeometry;
+    friend vacomplex::KeyEdgeGeometry;
+
     void onBoundaryChanged_(Cell* cell);
     void onGeometryChanged_(Cell* cell);
-    void onStyleChanged_(Cell* cell);
+    void onPropertyChanged_(Cell* cell, core::StringId name);
     void onBoundaryMeshChanged_(Cell* cell);
     void dirtyMesh_(Cell* cell);
 

@@ -14,16 +14,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <vgc/workspace/edgegeometry.h>
+#include <vgc/vacomplex/edgesampling.h>
 
-namespace vgc::workspace {
+namespace vgc::vacomplex {
 
-namespace detail {
+//
 
-
-void writeDomKeyEdgeGeometry_(dom::Element* domElement, vacomplex::KeyEdgeGeometry* keg) 
-
-void void clearDomKeyEdgeGeometry_(dom::Element* domElement) 
-} // namespace detail
-
-} // namespace vgc::workspace
+} // namespace vgc::vacomplex

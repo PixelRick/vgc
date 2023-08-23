@@ -21,6 +21,9 @@
 
 namespace vgc::geometry {
 
+/* static */
+core::StringId YukselSplineStroke2d::implName("YukselSpline");
+
 Int YukselSplineStroke2d::numKnots_() const {
     return positions_.length();
 }

@@ -25,9 +25,11 @@
 #include <vgc/core/enum.h>
 #include <vgc/core/object.h>
 #include <vgc/core/span.h>
+#include <vgc/core/stringid.h>
 #include <vgc/geometry/api.h>
 #include <vgc/geometry/mat3d.h>
 #include <vgc/geometry/vec2d.h>
+#include <vgc/geometry/rect2d.h>
 
 namespace vgc::geometry {
 
@@ -721,16 +723,89 @@ class AdaptiveStrokeSampler;
 
 } // namespace detail
 
+/// \class vgc::geometry::StrokeSampling2d
+/// \brief Sampling of a 2d stroke.
+///
+class VGC_GEOMETRY_API StrokeSampling2d {
+public:
+    StrokeSampling2d() noexcept = default;
+
+    explicit StrokeSampling2d(const StrokeSample2dArray& samples)
+        : samples_(samples) {
+
+        computeCenterlineBoundingBox();
+    }
+
+    explicit StrokeSampling2d(StrokeSample2dArray&& samples)
+        : samples_(std::move(samples)) {
+
+        computeCenterlineBoundingBox();
+    }
+
+    const StrokeSample2dArray& samples() const {
+        return samples_;
+    }
+
+    const Rect2d& centerlineBoundingBox() const {
+        return centerlineBoundingBox_;
+    }
+
+    const std::array<Vec2d, 2>& offsetLineTangentsAtEndpoint(Int endpoint) const {
+        return offsetLineTangents_[endpoint];
+    }
+
+    void
+    setOffsetLineTangentsAtEndpoint(Int endpoint, const std::array<Vec2d, 2>& tangents) {
+        //
+        offsetLineTangents_[endpoint] = tangents;
+        hasOffsetLineTangents_[endpoint] = true;
+    }
+
+    void clearOffsetLineTangentsAtEndpoint(Int endpoint) {
+        hasOffsetLineTangents_[endpoint] = false;
+    }
+
+    bool hasDefinedOffsetLineTangentsAtEndpoint(Int endpoint) const {
+        return hasOffsetLineTangents_[endpoint];
+    }
+
+private:
+    StrokeSample2dArray samples_ = {};
+    Rect2d centerlineBoundingBox_ = Rect2d::empty;
+    // offsetLineTangents_[i][j] is tangent at endpoint i and side j.
+    std::array<std::array<Vec2d, 2>, 2> offsetLineTangents_ = {};
+    std::array<bool, 2> hasOffsetLineTangents_ = {};
+
+    void computeCenterlineBoundingBox() {
+        centerlineBoundingBox_ = Rect2d::empty;
+        for (const StrokeSample2d& cs : samples_) {
+            centerlineBoundingBox_.uniteWith(cs.position());
+        }
+    }
+};
+
+enum class CurveSnapTransformationMode {
+    LinearInArclength,
+};
+
 /// \class vgc::geometry::AbstractStroke2d
 /// \brief An abstract model of 2D stroke.
 ///
 class VGC_GEOMETRY_API AbstractStroke2d {
-public:
-    AbstractStroke2d(bool isClosed)
-        : isClosed_(isClosed) {
+protected:
+    AbstractStroke2d(core::StringId implementationName, bool isClosed)
+        : implementationName_(implementationName)
+        , isClosed_(isClosed) {
     }
 
+public:
     virtual ~AbstractStroke2d() = default;
+
+    /// Returns the name of the concrete implementation.
+    ///
+    core::StringId implementationName() const {
+        return implementationName_;
+    }
 
     /// Returns whether the stroke is closed.
     ///
@@ -896,11 +971,111 @@ public:
     std::array<Vec2d, 2>
     computeOffsetLineTangentsAtSegmentEndpoint(Int segmentIndex, Int endpointIndex) const;
 
+    std::unique_ptr<AbstractStroke2d> clone() const {
+        return clone_();
+    }
+
+    bool copyAssign(const AbstractStroke2d* other) {
+        return copyAssign_(other);
+    }
+
+    bool moveAssign(AbstractStroke2d* other) {
+        return moveAssign_(other);
+    }
+
+    // TODO: We will later need a variant of computeSampling() that accepts a target
+    // view matrix.
+    // Ideally, for inbetweening we would like a sampling that is good in 2 spaces:
+    // - the common ancestor group space for best morphing.
+    // - the canvas space for best rendering.
+
+    /// Expects positions in object space.
+    ///
+    StrokeSampling2d computeSampling(
+        const CurveSamplingParameters& params,
+        const Vec2d& snapStartPosition,
+        const Vec2d& snapEndPosition,
+        CurveSnapTransformationMode mode =
+            CurveSnapTransformationMode::LinearInArclength) const {
+
+        return computeSampling_(params, snapStartPosition, snapEndPosition, mode);
+    }
+
+    StrokeSampling2d
+    computeSampling(const geometry::CurveSamplingParameters& params) const {
+        return computeSampling_(params);
+    }
+
+    /// Expects delta in object space.
+    ///
+    void translate(const geometry::Vec2d& delta) {
+        translate_(delta);
+    }
+
+    /// Expects transformation in object space.
+    ///
+    void transform(const geometry::Mat3d& transformation) {
+        transform_(transformation);
+    }
+
+    /// Expects positions in object space.
+    ///
+    void snap(
+        const geometry::Vec2d& snapStartPosition,
+        const geometry::Vec2d& snapEndPosition,
+        CurveSnapTransformationMode mode =
+            CurveSnapTransformationMode::LinearInArclength) {
+
+        snap_(snapStartPosition, snapEndPosition, mode);
+    }
+
+    /// Returns the new position of the grabbed point (center of deformation falloff).
+    ///
+    // TODO: choose properly between tolerance/samplingDelta/quality.
+    // TODO: later add falloff kind, arclength/spatial, keep vertices.
+    //
+    Vec2d sculptGrab(
+        const Vec2d& startPosition,
+        const Vec2d& endPosition,
+        double radius,
+        double strength,
+        double tolerance,
+        bool isClosed = false) {
+
+        return sculptGrab_(
+            startPosition, endPosition, radius, strength, tolerance, isClosed);
+    }
+
+    /// Returns the position of the grabbed point (center of deformation falloff).
+    ///
+    // TODO: choose properly between tolerance/samplingDelta/quality.
+    // TODO: later add falloff kind, arclength/spatial, keep vertices.
+    //
+    Vec2d sculptWidth(
+        const Vec2d& position,
+        double delta,
+        double radius,
+        double tolerance,
+        bool isClosed = false) {
+
+        return sculptWidth_(position, delta, radius, tolerance, isClosed);
+    }
+
+    /// Returns the new position of the smooth point.
+    ///
+    // TODO: later add falloff kind, arclength/spatial.
+    //
+    Vec2d sculptSmooth(
+        const Vec2d& position,
+        double radius,
+        double strength,
+        double tolerance,
+        bool isClosed = false) {
+
+        return sculptSmooth_(position, radius, strength, tolerance, isClosed);
+    }
+
 protected:
-    virtual Int numKnots_() const = 0;
-
-    virtual bool isZeroLengthSegment_(Int segmentIndex) const = 0;
-
     virtual Vec2d evalNonZeroCenterline(Int segmentIndex, double u) const = 0;
 
     virtual Vec2d evalNonZeroCenterline(Int segmentIndex, double u, Vec2d& dp) const = 0;
@@ -926,15 +1101,66 @@ protected:
     //
     virtual StrokeSampleEx2d zeroLengthStrokeSample() const = 0;
 
+private:
+    core::StringId implementationName_;
+    bool isClosed_;
+
+    StrokeSampleEx2d sampleKnot_(Int knotIndex) const;
+
+    bool fixEvalLocation_(Int& segmentIndex, double& u) const;
+
+    virtual Int numKnots_() const = 0;
+
+    virtual bool isZeroLengthSegment_(Int segmentIndex) const = 0;
+
     virtual std::array<Vec2d, 2> computeOffsetLineTangentsAtSegmentEndpoint_(
         Int segmentIndex,
         Int endpointIndex) const = 0;
 
-private:
-    const bool isClosed_;
+    virtual std::unique_ptr<AbstractStroke2d> clone_() const = 0;
+    virtual bool copyAssign_(const AbstractStroke2d* other) = 0;
+    virtual bool moveAssign_(AbstractStroke2d* other) = 0;
 
-    StrokeSampleEx2d sampleKnot_(Int knotIndex) const;
-    bool fixEvalLocation_(Int& segmentIndex, double& u) const;
+    virtual StrokeSampling2d computeSampling_(
+        const CurveSamplingParameters& params,
+        const Vec2d& snapStartPosition,
+        const Vec2d& snapEndPosition,
+        CurveSnapTransformationMode mode =
+            CurveSnapTransformationMode::LinearInArclength) const = 0;
+
+    virtual StrokeSampling2d
+    computeSampling_(const geometry::CurveSamplingParameters& params) const = 0;
+
+    virtual void translate_(const geometry::Vec2d& delta) = 0;
+
+    virtual void transform_(const geometry::Mat3d& transformation) = 0;
+
+    virtual void snap_(
+        const geometry::Vec2d& snapStartPosition,
+        const geometry::Vec2d& snapEndPosition,
+        CurveSnapTransformationMode mode) = 0;
+
+    virtual Vec2d sculptGrab_(
+        const Vec2d& startPosition,
+        const Vec2d& endPosition,
+        double radius,
+        double strength,
+        double tolerance,
+        bool isClosed = false) = 0;
+
+    virtual Vec2d sculptWidth_(
+        const Vec2d& position,
+        double delta,
+        double radius,
+        double tolerance,
+        bool isClosed = false) = 0;
+
+    virtual Vec2d sculptSmooth_(
+        const Vec2d& position,
+        double radius,
+        double strength,
+        double tolerance,
+        bool isClosed = false) = 0;
 };
 
 /// Specifies the type of the curve, that is, how the

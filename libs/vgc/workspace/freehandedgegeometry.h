@@ -254,15 +254,7 @@ public:
     void removeFromDomEdge_(dom::Element* element) const override;
 
 private:
-    SharedConstPositions sharedConstPositions_;
-    SharedConstWidths sharedConstWidths_;
-    std::unique_ptr<StrokeType> stroke_;
-    geometry::Vec2dArray editPositions_;
-    core::DoubleArray editWidths_;
-    core::DoubleArray originalKnotArclengths_;
-    geometry::Vec2d editStartPosition_ = {};
     
-    bool isBeingEdited_ = false;
 
     // properties, only color for now
 

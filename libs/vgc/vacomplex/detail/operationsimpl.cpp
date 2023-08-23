@@ -18,7 +18,7 @@
 
 #include <unordered_set>
 
-#include <vgc/vacomplex/edgegeometry.h>
+#include <vgc/vacomplex/keyedgegeometry.h>
 #include <vgc/vacomplex/exceptions.h>
 #include <vgc/vacomplex/logcategories.h>
 
@@ -1011,8 +1011,13 @@ void Operations::onGeometryChanged_(Cell* cell) {
     dirtyMesh_(cell);
 }
 
-void Operations::onStyleChanged_(Cell* cell) {
-    onNodeModified_(cell, NodeModificationFlag::StyleChanged);
+void Operations::onPropertyChanged_(Cell* cell, core::StringId name) {
+    if (name == strings::style) {
+        onNodeModified_(cell, NodeModificationFlag::StyleChanged);
+    }
+    else {
+        // todo
+    }
 }
 
 void Operations::onBoundaryMeshChanged_(Cell* cell) {

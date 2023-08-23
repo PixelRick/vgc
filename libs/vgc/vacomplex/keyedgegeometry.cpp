@@ -14,8 +14,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <vgc/vacomplex/keyedgegeometry.h>
+
 #include <vgc/vacomplex/detail/operationsimpl.h>
-#include <vgc/vacomplex/edgegeometry.h>
 #include <vgc/vacomplex/keyedge.h>
 
 namespace vgc::vacomplex {

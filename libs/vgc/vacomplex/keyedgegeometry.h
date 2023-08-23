@@ -30,7 +30,8 @@
 #include <vgc/geometry/rect2d.h>
 #include <vgc/geometry/vec2d.h>
 #include <vgc/vacomplex/api.h>
-#include <vgc/vacomplex/dataobject.h>
+#include <vgc/vacomplex/edgesampling.h>
+#include <vgc/vacomplex/cellgeometry.h>
 
 // how to share edge shape correctly ?
 // an inbetween edge that doesn't change should have the same shape for all times
@@ -40,95 +41,28 @@
 namespace vgc::vacomplex {
 
 class KeyEdge;
+class KeyEdgeGeometry;
 
-namespace detail {
-
-class Operations;
-
-// generic parameters for all models
-class VGC_VACOMPLEX_API SamplingParameters {
+class VGC_VACOMPLEX_API KeyHalfedgeGeometry {
 public:
-    SamplingParameters() noexcept = default;
+    KeyHalfedgeGeometry() noexcept = default;
 
-    //size_t hash() {
-    //    return ...;
-    //}
-
-private:
-    /*
-    UInt8 Lod_ = 0;
-    Int16 maxSamples_ = core::tmax<Int16>;
-    double maxAngularError_ = 7.0;
-    double pixelSize_ = 1.0;
-    geometry::Mat3d viewMatrix_ = geometry::Mat3d::identity;
-    */
-    // mode, uniform s, uniform u -> overload
-};
-
-} // namespace detail
-
-enum class EdgeSnapTransformationMode {
-    LinearInArclength,
-};
-
-class VGC_VACOMPLEX_API EdgeSampling {
-public:
-    EdgeSampling() noexcept = default;
-
-    explicit EdgeSampling(const geometry::StrokeSample2dArray& samples)
-        : samples_(samples) {
-
-        computeCenterlineBoundingBox();
+    KeyHalfedgeGeometry(KeyEdgeGeometry* edgeGeometry, bool direction) noexcept
+        : edgeGeometry_(edgeGeometry)
+        , direction_(direction) {
     }
 
-    explicit EdgeSampling(geometry::StrokeSample2dArray&& samples)
-        : samples_(std::move(samples)) {
-
-        computeCenterlineBoundingBox();
+    KeyEdgeGeometry* edgeGeometry() const {
+        return edgeGeometry_;
     }
 
-    const geometry::StrokeSample2dArray& samples() const {
-        return samples_;
-    }
-
-    const geometry::Rect2d& centerlineBoundingBox() const {
-        return centerlineBoundingBox_;
-    }
-
-    const std::array<geometry::Vec2d, 2>&
-    offsetLineTangentsAtEndpoint(Int endpoint) const {
-        return offsetLineTangents_[endpoint];
-    }
-
-    void setOffsetLineTangentsAtEndpoint(
-        Int endpoint,
-        const std::array<geometry::Vec2d, 2>& tangents) {
-        //
-        offsetLineTangents_[endpoint] = tangents;
-        hasOffsetLineTangents_[endpoint] = true;
-    }
-
-    void clearOffsetLineTangentsAtEndpoint(Int endpoint) {
-        hasOffsetLineTangents_[endpoint] = false;
-    }
-
-    bool hasDefinedOffsetLineTangentsAtEndpoint(Int endpoint) const {
-        return hasOffsetLineTangents_[endpoint];
+    bool direction() const {
+        return direction_;
     }
 
 private:
-    geometry::StrokeSample2dArray samples_ = {};
-    geometry::Rect2d centerlineBoundingBox_ = geometry::Rect2d::empty;
-    // offsetLineTangents_[i][j] is tangent at endpoint i and side j.
-    std::array<std::array<geometry::Vec2d, 2>, 2> offsetLineTangents_ = {};
-    std::array<bool, 2> hasOffsetLineTangents_ = {};
-
-    void computeCenterlineBoundingBox() {
-        centerlineBoundingBox_ = geometry::Rect2d::empty;
-        for (const geometry::StrokeSample2d& cs : samples_) {
-            centerlineBoundingBox_.uniteWith(cs.position());
-        }
-    }
+    KeyEdgeGeometry* edgeGeometry_ = nullptr;
+    bool direction_ = false;
 };
 
 /// \class vgc::vacomplex::KeyEdgeGeometry
@@ -148,7 +82,7 @@ private:
 // In which space do we sample ?
 // inbetweening -> common ancestor for best identification of interest points
 //
-class VGC_VACOMPLEX_API KeyEdgeGeometry {
+class VGC_VACOMPLEX_API KeyEdgeGeometry final : public CellGeometry {
 private:
     friend detail::Operations;
     friend KeyEdge;
@@ -158,39 +92,37 @@ public:
         : isClosed_(isClosed) {
     }
 
-    virtual ~KeyEdgeGeometry() = default;
+    ~KeyEdgeGeometry() override = default;
 
-    KeyEdgeGeometry(const KeyEdgeGeometry&) = delete;
-    KeyEdgeGeometry& operator=(const KeyEdgeGeometry&) = delete;
+    std::shared_ptr<KeyEdgeGeometry> clone() const {
+        return std::static_pointer_cast<KeyEdgeGeometry>(clone_());
+    }
+
+    std::shared_ptr<KeyEdgeGeometry> createDefault() const {
+        return std::static_pointer_cast<KeyEdgeGeometry>(createDefault_());
+    }
 
     bool isClosed() const {
         return isClosed_;
     }
 
-
-    std::shared_ptr<KeyEdgeGeometry> merge(bool direction, KeyEdgeGeometry* other, bool otherDirection) const;
+    //std::shared_ptr<KeyEdgeGeometry>
+    //concat(bool direction, KeyEdgeGeometry* other, bool otherDirection) const;
 
     // IDEA: do conversion to common best stroke geometry to merge
     //       then match cell properties by pairs (use null if not present)
 
-    virtual std::shared_ptr<KeyEdgeGeometry> clone() const = 0;
-
     /// Expects positions in object space.
     ///
-    virtual EdgeSampling computeSampling(
+    virtual geometry::StrokeSampling2d computeSampling(
         const geometry::CurveSamplingParameters& params,
         const geometry::Vec2d& snapStartPosition,
         const geometry::Vec2d& snapEndPosition,
-        EdgeSnapTransformationMode mode =
-            EdgeSnapTransformationMode::LinearInArclength) const = 0;
+        geometry::CurveSnapTransformationMode mode =
+        geometry::CurveSnapTransformationMode::LinearInArclength) const = 0;
 
-    virtual EdgeSampling
+    virtual geometry::StrokeSampling2d
     computeSampling(const geometry::CurveSamplingParameters& params) const = 0;
-
-    virtual void startEdit() = 0;
-    virtual void resetEdit() = 0;
-    virtual void finishEdit() = 0;
-    virtual void abortEdit() = 0;
 
     /// Expects delta in object space.
     ///
@@ -205,8 +137,8 @@ public:
     virtual void snap(
         const geometry::Vec2d& snapStartPosition,
         const geometry::Vec2d& snapEndPosition,
-        EdgeSnapTransformationMode mode =
-            EdgeSnapTransformationMode::LinearInArclength) = 0;
+        geometry::CurveSnapTransformationMode mode =
+        geometry::CurveSnapTransformationMode::LinearInArclength) = 0;
 
     // We will later need a variant of computeSampling() that accepts a target
     // view matrix.
@@ -250,16 +182,21 @@ public:
         double tolerance,
         bool isClosed = false) = 0;
 
-protected:
-    // todo: argument to tell when it is only an affine transformation ?
-    void dirtyEdgeSampling() const;
-    void dirtyEdgeStyle() const;
-
 private:
-    KeyEdge* edge_ = nullptr;
+    std::unique_ptr<geometry::AbstractStroke2d> stroke_;
+    std::unique_ptr<geometry::AbstractStroke2d> editStroke_;
+
+    bool isBeingEdited_() const {
+        return editStroke_ != nullptr;
+    }
+    
     const bool isClosed_;
 
-    virtual std::shared_ptr<KeyEdgeGeometry> merge_(bool direction, KeyEdgeGeometry* other, bool otherDirection) const = 0;
+    //virtual std::shared_ptr<KeyEdgeGeometry>
+    //concat_(const KeyHalfedgeGeometry& khg1, const KeyHalfedgeGeometry& khg2) const = 0;
+    //
+    //virtual void
+    //assignAverageProperties_(core::Array<KeyHalfedgeGeometry> khgs) const = 0;
 };
 
 //std::shared_ptr<const EdgeSampling> snappedSampling_;

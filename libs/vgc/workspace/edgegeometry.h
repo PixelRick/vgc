@@ -18,25 +18,23 @@
 #define VGC_WORKSPACE_EDGEGEOMETRY_H
 
 #include <vgc/dom/element.h>
-#include <vgc/vacomplex/edgegeometry.h>
+#include <vgc/vacomplex/keyedgegeometry.h>
 #include <vgc/workspace/api.h>
 
 namespace vgc::workspace {
 
-class VGC_WORKSPACE_API EdgeGeometry : public vacomplex::KeyEdgeGeometry {
-public:
-    EdgeGeometry(bool isClosed)
-        : vacomplex::KeyEdgeGeometry(isClosed) {
-    }
+namespace detail {
 
-    std::shared_ptr<EdgeGeometry> cloneWorkspaceEdgeGeometry() {
-        return std::static_pointer_cast<EdgeGeometry>(clone());
-    }
+// MOVE INTO EDGE ?
 
-    virtual bool updateFromDomEdge_(dom::Element* element) = 0;
-    virtual void writeToDomEdge_(dom::Element* element) const = 0;
-    virtual void removeFromDomEdge_(dom::Element* element) const = 0;
-};
+    
+
+    //virtual bool updateFromDomEdge_(dom::Element* element) = 0;
+    //virtual void writeToDomEdge_(dom::Element* element) const = 0;
+    //virtual void removeFromDomEdge_(dom::Element* element) const = 0;
+
+}
+
 
 } // namespace vgc::workspace
 

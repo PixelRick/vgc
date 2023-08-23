@@ -206,13 +206,16 @@ struct YukselKnotData {
 } // namespace detail
 
 class VGC_GEOMETRY_API YukselSplineStroke2d : public AbstractStroke2d {
+private:
+    static core::StringId implName;
+
 public:
     YukselSplineStroke2d(bool isClosed)
-        : AbstractStroke2d(isClosed) {
+        : AbstractStroke2d(implName, isClosed) {
     }
 
     YukselSplineStroke2d(bool isClosed, double constantWidth)
-        : AbstractStroke2d(isClosed)
+        : AbstractStroke2d(implName, isClosed)
         , widths_(1, constantWidth)
         , isWidthConstant_(true) {
     }
@@ -224,7 +227,7 @@ public:
         TRangePositions&& positions,
         TRangeWidths&& widths)
 
-        : AbstractStroke2d(isClosed)
+        : AbstractStroke2d(implName, isClosed)
         , positions_(std::forward<TRangePositions>(positions))
         , widths_(std::forward<TRangeWidths>(widths))
         , isWidthConstant_(isWidthConstant) {

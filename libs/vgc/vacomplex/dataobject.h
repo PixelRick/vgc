@@ -22,14 +22,26 @@
 
 namespace vgc::vacomplex {
 
+/// \class vgc::vacomplex::DataObject
+/// \brief Base class of non-copyable and identifiable data objects.
+///
 class VGC_VACOMPLEX_API DataObject {
 protected:
+    DataObject() noexcept
+        : id_(core::genId()) {
+    }
+
     virtual ~DataObject() = default;
 
-    DataObject() = delete;
+    // non-copyable
+    DataObject(const DataObject&) = delete;
+    DataObject& operator=(const DataObject&) = delete;
 
-    explicit DataObject(core::Id id) noexcept
-        : id_(id) {
+    // move-constructible
+    DataObject(DataObject&& other)
+        : id_(other.id_) {
+
+        other.id_ = -1;
     }
 
 public:

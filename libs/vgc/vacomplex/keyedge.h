@@ -25,7 +25,7 @@
 #include <vgc/geometry/vec2d.h>
 #include <vgc/vacomplex/api.h>
 #include <vgc/vacomplex/cell.h>
-#include <vgc/vacomplex/edgegeometry.h>
+#include <vgc/vacomplex/keyedgegeometry.h>
 #include <vgc/vacomplex/keyvertex.h>
 
 namespace vgc::vacomplex {

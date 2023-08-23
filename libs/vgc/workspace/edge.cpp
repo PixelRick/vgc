@@ -764,8 +764,8 @@ ElementStatus VacKeyEdge::updateFromDom_(Workspace* workspace) {
 
     // create/rebuild/update VAC node
     if (!ke) {
-        auto geometry = std::make_shared<workspace::FreehandEdgeGeometry>(isClosed);
-        geometry->updateFromDomEdge_(domElement);
+        auto geometry = std::make_shared<vacomplex::KeyEdgeGeometry>(isClosed);
+        detail::updateKeyEdgeGeometryFromDom_(geometry, domElement);
         if (isClosed) {
             ke = vacomplex::ops::createKeyClosedEdge(std::move(geometry), parentGroup);
         }
@@ -857,6 +857,70 @@ void VacKeyEdge::updateFromVac_(vacomplex::NodeModificationFlags flags) {
                 ds::endvertex, newVertices[1]->domElement()->getPathFromId());
         }
     }
+}
+
+/* static */
+bool VacKeyEdge::updateGeometryFromDom_(
+    vacomplex::KeyEdgeGeometry* keg,
+    dom::Element* domElement) {
+    namespace ds = dom::strings;
+
+    bool changed = false;
+
+    const auto& domPoints = element->getAttribute(ds::positions).getVec2dArray();
+    if (sharedConstPositions_ != domPoints) {
+        sharedConstPositions_ = domPoints;
+        stroke_->setPositions(domPoints);
+        originalKnotArclengths_.clear();
+        dirtyEdgeSampling();
+        changed = true;
+    }
+
+    const auto& domWidths = element->getAttribute(ds::widths).getDoubleArray();
+    if (sharedConstWidths_ != domWidths) {
+        sharedConstWidths_ = domWidths;
+        stroke_->setWidths(domWidths);
+        dirtyEdgeSampling();
+        changed = true;
+    }
+
+    core::Color color = element->getAttribute(ds::color).getColor();
+    if (color_ != color) {
+        color_ = color;
+        dirtyEdgeStyle();
+        changed = true;
+    }
+
+    return changed;
+}
+
+/* static */
+void VacKeyEdge::writeDomGeometry_(
+    dom::Element* domElement,
+    vacomplex::KeyEdgeGeometry* keg) {
+    namespace ds = dom::strings;
+
+    const auto& domPoints = domElement->getAttribute(ds::positions).getVec2dArray();
+    if (sharedConstPositions_ != domPoints) {
+        element->setAttribute(ds::positions, sharedConstPositions_);
+    }
+
+    const auto& domWidths = element->getAttribute(ds::widths).getDoubleArray();
+    if (sharedConstWidths_ != domWidths) {
+        element->setAttribute(ds::widths, sharedConstWidths_);
+    }
+
+    core::Color color = element->getAttribute(ds::color).getColor();
+    if (color_ != color) {
+        element->setAttribute(ds::color, color_);
+    }
+}
+
+/* static */
+void VacKeyEdge::clearDomGeometry_(dom::Element* domElement) {
+    namespace ds = dom::strings;
+    domElement->clearAttribute(ds::positions);
+    domElement->clearAttribute(ds::widths);
 }
 
 void VacKeyEdge::updateVertices_(const std::array<VacKeyVertex*, 2>& newVertices) {

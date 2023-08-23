@@ -168,7 +168,7 @@ vacomplex::EdgeSampling FreehandEdgeGeometry::computeSampling(
             stroke->numSegments() - 1, 1);
         res.setOffsetLineTangentsAtEndpoint(1, tangents);
     }
-    return res;
+    return std::move(res);
 }
 
 vacomplex::EdgeSampling FreehandEdgeGeometry::computeSampling(
@@ -2416,62 +2416,7 @@ geometry::Vec2d FreehandEdgeGeometry::sculptSmooth(
     return sculptCursorPosition;
 }
 
-bool FreehandEdgeGeometry::updateFromDomEdge_(dom::Element* element) {
-    namespace ds = dom::strings;
 
-    bool changed = false;
-
-    const auto& domPoints = element->getAttribute(ds::positions).getVec2dArray();
-    if (sharedConstPositions_ != domPoints) {
-        sharedConstPositions_ = domPoints;
-        stroke_->setPositions(domPoints);
-        originalKnotArclengths_.clear();
-        dirtyEdgeSampling();
-        changed = true;
-    }
-
-    const auto& domWidths = element->getAttribute(ds::widths).getDoubleArray();
-    if (sharedConstWidths_ != domWidths) {
-        sharedConstWidths_ = domWidths;
-        stroke_->setWidths(domWidths);
-        dirtyEdgeSampling();
-        changed = true;
-    }
-
-    core::Color color = element->getAttribute(ds::color).getColor();
-    if (color_ != color) {
-        color_ = color;
-        dirtyEdgeStyle();
-        changed = true;
-    }
-
-    return changed;
-}
-
-void FreehandEdgeGeometry::writeToDomEdge_(dom::Element* element) const {
-    namespace ds = dom::strings;
-
-    const auto& domPoints = element->getAttribute(ds::positions).getVec2dArray();
-    if (sharedConstPositions_ != domPoints) {
-        element->setAttribute(ds::positions, sharedConstPositions_);
-    }
-
-    const auto& domWidths = element->getAttribute(ds::widths).getDoubleArray();
-    if (sharedConstWidths_ != domWidths) {
-        element->setAttribute(ds::widths, sharedConstWidths_);
-    }
-
-    core::Color color = element->getAttribute(ds::color).getColor();
-    if (color_ != color) {
-        element->setAttribute(ds::color, color_);
-    }
-}
-
-void FreehandEdgeGeometry::removeFromDomEdge_(dom::Element* element) const {
-    namespace ds = dom::strings;
-    element->clearAttribute(ds::positions);
-    element->clearAttribute(ds::widths);
-}
 
 void FreehandEdgeGeometry::computeSnappedLinearS_(
     geometry::Vec2dArray& outPoints,

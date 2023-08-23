@@ -29,7 +29,7 @@
 #include <vgc/geometry/range1d.h>
 #include <vgc/geometry/vec2d.h>
 #include <vgc/vacomplex/api.h>
-#include <vgc/vacomplex/edgegeometry.h>
+#include <vgc/vacomplex/keyedgegeometry.h>
 #include <vgc/vacomplex/transform.h>
 
 namespace vgc::vacomplex {
