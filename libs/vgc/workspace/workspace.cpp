@@ -595,7 +595,7 @@ core::Id Workspace::glue(core::ConstSpan<core::Id> elementIds) {
 
             // tolerance = 5% of max width
             // TODO: what if maxWidth = 0? Better heuristic for tolerance?
-            std::shared_ptr<vacomplex::KeyEdgeGeometry> newGeometry =
+            std::shared_ptr<vacomplex::KeyEdgeData> newGeometry =
                 FreehandEdgeGeometry::createFromPoints(newPoints, false, maxWidth * 0.05);
 
             core::Array<vacomplex::KeyHalfedge> halfedges(
@@ -794,7 +794,7 @@ core::Id Workspace::glue(core::ConstSpan<core::Id> elementIds) {
                 }
 
                 // tolerance = 5% of max width
-                std::shared_ptr<vacomplex::KeyEdgeGeometry> newGeometry =
+                std::shared_ptr<vacomplex::KeyEdgeData> newGeometry =
                     FreehandEdgeGeometry::createFromPoints(
                         newPoints, true, maxWidth * 0.05);
 

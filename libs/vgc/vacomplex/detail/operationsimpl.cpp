@@ -18,8 +18,8 @@
 
 #include <unordered_set>
 
-#include <vgc/vacomplex/keyedgegeometry.h>
 #include <vgc/vacomplex/exceptions.h>
+#include <vgc/vacomplex/keyedgedata.h>
 #include <vgc/vacomplex/logcategories.h>
 
 namespace vgc::vacomplex::detail {
@@ -94,7 +94,7 @@ KeyVertex* Operations::createKeyVertex(
 KeyEdge* Operations::createKeyOpenEdge(
     KeyVertex* startVertex,
     KeyVertex* endVertex,
-    const std::shared_ptr<KeyEdgeGeometry>& geometry,
+    const std::shared_ptr<KeyEdgeData>& geometry,
     Group* parentGroup,
     Node* nextSibling,
     NodeSourceOperation sourceOperation) {
@@ -110,13 +110,13 @@ KeyEdge* Operations::createKeyOpenEdge(
 
     // Geometric attributes
     ke->geometry_ = geometry;
-    geometry->edge_ = ke;
+    geometry->cell_ = ke;
 
     return ke;
 }
 
 KeyEdge* Operations::createKeyClosedEdge(
-    const std::shared_ptr<KeyEdgeGeometry>& geometry,
+    const std::shared_ptr<KeyEdgeData>& geometry,
     Group* parentGroup,
     Node* nextSibling,
     NodeSourceOperation sourceOperation,
@@ -130,7 +130,7 @@ KeyEdge* Operations::createKeyClosedEdge(
 
     // Geometric attributes
     ke->geometry_ = geometry;
-    geometry->edge_ = ke;
+    geometry->cell_ = ke;
 
     return ke;
 }
@@ -337,7 +337,7 @@ Operations::glueKeyVertices(core::Span<KeyVertex*> kvs, const geometry::Vec2d& p
 
 KeyEdge* Operations::glueKeyOpenEdges(
     core::Span<KeyHalfedge> khes,
-    std::shared_ptr<KeyEdgeGeometry> geometry,
+    std::shared_ptr<KeyEdgeData> geometry,
     const geometry::Vec2d& startPosition,
     const geometry::Vec2d& endPosition) {
 
@@ -397,7 +397,7 @@ KeyEdge* Operations::glueKeyOpenEdges(
 
 KeyEdge* Operations::glueKeyClosedEdges( //
     core::Span<KeyHalfedge> khes,
-    std::shared_ptr<KeyEdgeGeometry> geometry) {
+    std::shared_ptr<KeyEdgeData> geometry) {
 
     if (khes.isEmpty()) {
         return nullptr;
@@ -440,7 +440,7 @@ core::Array<KeyEdge*> Operations::unglueKeyEdges(KeyEdge* targetKe) {
     // Helper
     auto duplicateTargetKe = [this, targetKe, &result]() {
         KeyEdge* newKe = nullptr;
-        std::shared_ptr<KeyEdgeGeometry> geomDuplicate = targetKe->geometry()->clone();
+        std::shared_ptr<KeyEdgeData> geomDuplicate = targetKe->geometry()->clone();
         if (targetKe->isClosed()) {
             // TODO: define source operation
             newKe = createKeyClosedEdge(
@@ -708,8 +708,8 @@ bool Operations::uncutAtKeyVertex(KeyVertex* targetKv) {
         hardDelete(targetKv, false);
     }
     else {
-        KeyEdgeGeometry* keg1 = info.khe1.edge()->geometry();
-        KeyEdgeGeometry* keg2 = info.khe2.edge()->geometry();
+        KeyEdgeData* keg1 = info.khe1.edge()->geometry();
+        KeyEdgeData* keg2 = info.khe2.edge()->geometry();
         KeyVertex* kv1 = nullptr;
         KeyVertex* kv2 = nullptr;
         bool dir1 = false;
@@ -728,7 +728,7 @@ bool Operations::uncutAtKeyVertex(KeyVertex* targetKv) {
         else {
             kv2 = info.khe2.startVertex();
         }
-        std::shared_ptr<KeyEdgeGeometry> mergedGeometry = keg1->merge(dir1, keg2, dir2);
+        std::shared_ptr<KeyEdgeData> mergedGeometry = keg1->merge(dir1, keg2, dir2);
 
         // TODO: really pick lower
         KeyEdge* lowerKe = info.khe1.edge();
@@ -866,9 +866,9 @@ void Operations::setKeyVertexPosition(KeyVertex* kv, const geometry::Vec2d& pos)
     onGeometryChanged_(kv);
 }
 
-void Operations::setKeyEdgeGeometry(
+void Operations::setKeyEdgeData(
     KeyEdge* ke,
-    const std::shared_ptr<KeyEdgeGeometry>& geometry) {
+    const std::shared_ptr<KeyEdgeData>& geometry) {
 
     KeyEdge* previousKe = geometry->edge_;
     ke->geometry_ = geometry;

@@ -14,24 +14,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <vgc/vacomplex/keyedgegeometry.h>
+#include <vgc/vacomplex/keyedgedata.h>
 
 #include <vgc/vacomplex/detail/operationsimpl.h>
 #include <vgc/vacomplex/keyedge.h>
 
 namespace vgc::vacomplex {
 
-std::shared_ptr<KeyEdgeGeometry> KeyEdgeGeometry::merge(
-    bool direction,
-    KeyEdgeGeometry* other,
-    bool otherDirection) const {
+std::shared_ptr<KeyEdgeData>
+KeyEdgeData::merge(bool direction, KeyEdgeData* other, bool otherDirection) const {
 
     // TODO: try both ways, if none works then convert both to a default geometry model for the merge
     //       then rebuild with the best of the original models that supports being built from the default.
     return merge_(direction, other, otherDirection);
 }
 
-void KeyEdgeGeometry::dirtyEdgeSampling() const {
+void KeyEdgeData::dirtyEdgeSampling() const {
     if (edge_) {
         Complex* complex = edge_->complex();
         detail::Operations ops(complex);
@@ -39,7 +37,7 @@ void KeyEdgeGeometry::dirtyEdgeSampling() const {
     }
 }
 
-void KeyEdgeGeometry::dirtyEdgeStyle() const {
+void KeyEdgeData::dirtyEdgeStyle() const {
     if (edge_) {
         Complex* complex = edge_->complex();
         detail::Operations ops(complex);

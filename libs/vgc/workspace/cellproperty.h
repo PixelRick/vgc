@@ -2,7 +2,7 @@
 //A0, A1 -> A2
 //A0, A1 -> A0
 //
-//struct A : KeyEdgeGeometry {
+//struct A : KeyEdgeData {
 //
 //    struct DelayMergeEntry {
 //        Color c;

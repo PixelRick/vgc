@@ -25,7 +25,7 @@
 #include <vgc/geometry/vec2d.h>
 #include <vgc/vacomplex/api.h>
 #include <vgc/vacomplex/cell.h>
-#include <vgc/vacomplex/keyedgegeometry.h>
+#include <vgc/vacomplex/keyedgedata.h>
 #include <vgc/vacomplex/keyvertex.h>
 
 namespace vgc::vacomplex {
@@ -35,7 +35,7 @@ class KeyHalfedge;
 class VGC_VACOMPLEX_API KeyEdge final : public SpatioTemporalCell<EdgeCell, KeyCell> {
 private:
     friend detail::Operations;
-    friend KeyEdgeGeometry;
+    friend KeyEdgeData;
 
     explicit KeyEdge(core::Id id, core::AnimTime t) noexcept
         : SpatioTemporalCell(id, t)
@@ -55,7 +55,7 @@ public:
         return endVertex_;
     }
 
-    KeyEdgeGeometry* geometry() const {
+    KeyEdgeData* geometry() const {
         return geometry_.get();
     }
 
@@ -105,7 +105,7 @@ private:
     // position and orientation when not bound to vertices ?
     //detail::Transform2d transform_;
 
-    std::shared_ptr<KeyEdgeGeometry> geometry_ = {};
+    std::shared_ptr<KeyEdgeData> geometry_ = {};
     //bool isClosed_ = false;
 
     geometry::CurveSamplingQuality samplingQuality_ = {};

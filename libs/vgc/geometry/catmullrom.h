@@ -398,7 +398,7 @@ private:
     void onPositionsChanged_() override;
     void onWidthsChanged_() override;
 
-    std::array<Vec2d, 2> computeOffsetLineTangentsAtSegmentEndpoint_(
+    std::array<std::optional<Vec2d>, 2> computeOffsetLineTangentsAtSegmentBoundary_(
         Int segmentIndex,
         Int endpointIndex) const override;
 

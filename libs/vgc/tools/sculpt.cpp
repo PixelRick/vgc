@@ -136,7 +136,7 @@ public:
         if (element && element->vacNode() && element->vacNode()->isCell()) {
             vacomplex::KeyEdge* ke = element->vacNode()->toCellUnchecked()->toKeyEdge();
             if (ke) {
-                vacomplex::KeyEdgeGeometry* geometry = ke->geometry();
+                vacomplex::KeyEdgeData* geometry = ke->geometry();
                 if (geometry) {
                     if (started_) {
                         geometry->resetEdit();
@@ -188,7 +188,7 @@ public:
         if (element && element->vacNode() && element->vacNode()->isCell()) {
             vacomplex::KeyEdge* ke = element->vacNode()->toCellUnchecked()->toKeyEdge();
             if (ke) {
-                vacomplex::KeyEdgeGeometry* geometry = ke->geometry();
+                vacomplex::KeyEdgeData* geometry = ke->geometry();
                 if (geometry) {
                     geometry->finishEdit();
                 }
@@ -221,7 +221,7 @@ public:
         if (element && element->vacNode() && element->vacNode()->isCell()) {
             vacomplex::KeyEdge* ke = element->vacNode()->toCellUnchecked()->toKeyEdge();
             if (ke) {
-                vacomplex::KeyEdgeGeometry* geometry = ke->geometry();
+                vacomplex::KeyEdgeData* geometry = ke->geometry();
                 if (geometry) {
                     geometry->resetEdit();
                     geometry->finishEdit();
@@ -323,7 +323,7 @@ public:
         if (element && element->vacNode() && element->vacNode()->isCell()) {
             vacomplex::KeyEdge* ke = element->vacNode()->toCellUnchecked()->toKeyEdge();
             if (ke) {
-                vacomplex::KeyEdgeGeometry* geometry = ke->geometry();
+                vacomplex::KeyEdgeData* geometry = ke->geometry();
                 if (geometry) {
                     if (started_) {
                         geometry->resetEdit();
@@ -374,7 +374,7 @@ public:
         if (element && element->vacNode() && element->vacNode()->isCell()) {
             vacomplex::KeyEdge* ke = element->vacNode()->toCellUnchecked()->toKeyEdge();
             if (ke) {
-                vacomplex::KeyEdgeGeometry* geometry = ke->geometry();
+                vacomplex::KeyEdgeData* geometry = ke->geometry();
                 if (geometry) {
                     geometry->finishEdit();
                 }
@@ -407,7 +407,7 @@ public:
         if (element && element->vacNode() && element->vacNode()->isCell()) {
             vacomplex::KeyEdge* ke = element->vacNode()->toCellUnchecked()->toKeyEdge();
             if (ke) {
-                vacomplex::KeyEdgeGeometry* geometry = ke->geometry();
+                vacomplex::KeyEdgeData* geometry = ke->geometry();
                 if (geometry) {
                     geometry->resetEdit();
                     geometry->finishEdit();
@@ -505,7 +505,7 @@ public:
         if (element && element->vacNode() && element->vacNode()->isCell()) {
             vacomplex::KeyEdge* ke = element->vacNode()->toCellUnchecked()->toKeyEdge();
             if (ke) {
-                vacomplex::KeyEdgeGeometry* geometry = ke->geometry();
+                vacomplex::KeyEdgeData* geometry = ke->geometry();
                 if (geometry) {
                     if (!started_) {
                         geometry->startEdit();
@@ -556,7 +556,7 @@ public:
         if (element && element->vacNode() && element->vacNode()->isCell()) {
             vacomplex::KeyEdge* ke = element->vacNode()->toCellUnchecked()->toKeyEdge();
             if (ke) {
-                vacomplex::KeyEdgeGeometry* geometry = ke->geometry();
+                vacomplex::KeyEdgeData* geometry = ke->geometry();
                 if (geometry) {
                     geometry->finishEdit();
                 }
@@ -589,7 +589,7 @@ public:
         if (element && element->vacNode() && element->vacNode()->isCell()) {
             vacomplex::KeyEdge* ke = element->vacNode()->toCellUnchecked()->toKeyEdge();
             if (ke) {
-                vacomplex::KeyEdgeGeometry* geometry = ke->geometry();
+                vacomplex::KeyEdgeData* geometry = ke->geometry();
                 if (geometry) {
                     geometry->resetEdit();
                     geometry->finishEdit();

@@ -29,7 +29,7 @@
 #include <vgc/geometry/range1d.h>
 #include <vgc/geometry/vec2d.h>
 #include <vgc/vacomplex/api.h>
-#include <vgc/vacomplex/keyedgegeometry.h>
+#include <vgc/vacomplex/keyedgedata.h>
 #include <vgc/vacomplex/transform.h>
 
 namespace vgc::vacomplex {
@@ -60,7 +60,7 @@ class InbetweenVertex;
 class InbetweenEdge;
 class InbetweenFace;
 
-class KeyEdgeGeometry;
+class KeyEdgeData;
 class FaceGeometry;
 
 /// \enum vgc::graph::CellSpatialType

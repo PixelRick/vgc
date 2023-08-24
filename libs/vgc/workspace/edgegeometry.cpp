@@ -21,9 +21,9 @@ namespace vgc::workspace {
 namespace detail {
 
 
-void writeDomKeyEdgeGeometry_(dom::Element* domElement, vacomplex::KeyEdgeGeometry* keg) 
+void writeDomKeyEdgeData_(dom::Element* domElement, vacomplex::KeyEdgeData* keg) 
 
-void void clearDomKeyEdgeGeometry_(dom::Element* domElement) 
+void void clearDomKeyEdgeData_(dom::Element* domElement) 
 } // namespace detail
 
 } // namespace vgc::workspace

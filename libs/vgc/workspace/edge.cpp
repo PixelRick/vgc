@@ -764,8 +764,8 @@ ElementStatus VacKeyEdge::updateFromDom_(Workspace* workspace) {
 
     // create/rebuild/update VAC node
     if (!ke) {
-        auto geometry = std::make_shared<vacomplex::KeyEdgeGeometry>(isClosed);
-        detail::updateKeyEdgeGeometryFromDom_(geometry, domElement);
+        auto geometry = std::make_shared<vacomplex::KeyEdgeData>(isClosed);
+        detail::updateKeyEdgeDataFromDom_(geometry, domElement);
         if (isClosed) {
             ke = vacomplex::ops::createKeyClosedEdge(std::move(geometry), parentGroup);
         }
@@ -861,7 +861,7 @@ void VacKeyEdge::updateFromVac_(vacomplex::NodeModificationFlags flags) {
 
 /* static */
 bool VacKeyEdge::updateGeometryFromDom_(
-    vacomplex::KeyEdgeGeometry* keg,
+    vacomplex::KeyEdgeData* keg,
     dom::Element* domElement) {
     namespace ds = dom::strings;
 
@@ -897,7 +897,7 @@ bool VacKeyEdge::updateGeometryFromDom_(
 /* static */
 void VacKeyEdge::writeDomGeometry_(
     dom::Element* domElement,
-    vacomplex::KeyEdgeGeometry* keg) {
+    vacomplex::KeyEdgeData* keg) {
     namespace ds = dom::strings;
 
     const auto& domPoints = domElement->getAttribute(ds::positions).getVec2dArray();

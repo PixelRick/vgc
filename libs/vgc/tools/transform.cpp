@@ -639,7 +639,7 @@ void TopologyAwareTransformer::transform(const geometry::Mat3d& transform) {
         vacomplex::KeyEdge* ke = findKeyEdge_(td.elementId);
         if (ke) {
             mainOp.addComplex(ke->complex());
-            vacomplex::KeyEdgeGeometry* geometry = ke->geometry();
+            vacomplex::KeyEdgeData* geometry = ke->geometry();
             if (geometry) {
                 // TODO: take layer transformations into account.
                 geometry->transform(transform);
@@ -681,7 +681,7 @@ void TopologyAwareTransformer::transform(const geometry::Vec2d& translation) {
         vacomplex::KeyEdge* ke = findKeyEdge_(td.elementId);
         if (ke) {
             mainOp.addComplex(ke->complex());
-            vacomplex::KeyEdgeGeometry* geometry = ke->geometry();
+            vacomplex::KeyEdgeData* geometry = ke->geometry();
             if (geometry) {
                 // TODO: take layer transformations into account.
                 geometry->translate(translation);
@@ -717,7 +717,7 @@ void TopologyAwareTransformer::startDragTransform() {
     for (const KeyEdgeTransformData& td : edges_) {
         vacomplex::KeyEdge* ke = findKeyEdge_(td.elementId);
         if (ke) {
-            vacomplex::KeyEdgeGeometry* geometry = ke->geometry();
+            vacomplex::KeyEdgeData* geometry = ke->geometry();
             if (geometry) {
                 geometry->startEdit();
             }
@@ -728,7 +728,7 @@ void TopologyAwareTransformer::startDragTransform() {
     for (const KeyEdgeTransformData& td : edgesToSnap_) {
         vacomplex::KeyEdge* ke = findKeyEdge_(td.elementId);
         if (ke) {
-            vacomplex::KeyEdgeGeometry* geometry = ke->geometry();
+            vacomplex::KeyEdgeData* geometry = ke->geometry();
             if (geometry) {
                 geometry->startEdit();
             }
@@ -760,7 +760,7 @@ void TopologyAwareTransformer::updateDragTransform(const geometry::Mat3d& transf
         vacomplex::KeyEdge* ke = findKeyEdge_(td.elementId);
         if (ke) {
             mainOp.addComplex(ke->complex());
-            vacomplex::KeyEdgeGeometry* geometry = ke->geometry();
+            vacomplex::KeyEdgeData* geometry = ke->geometry();
             if (geometry) {
                 geometry->resetEdit();
                 geometry->transform(transform);
@@ -773,7 +773,7 @@ void TopologyAwareTransformer::updateDragTransform(const geometry::Mat3d& transf
         vacomplex::KeyEdge* ke = findKeyEdge_(td.elementId);
         if (ke) {
             mainOp.addComplex(ke->complex());
-            vacomplex::KeyEdgeGeometry* geometry = ke->geometry();
+            vacomplex::KeyEdgeData* geometry = ke->geometry();
             if (geometry) {
                 geometry->resetEdit();
                 ke->snapGeometry();
@@ -805,7 +805,7 @@ void TopologyAwareTransformer::updateDragTransform(const geometry::Vec2d& transl
         vacomplex::KeyEdge* ke = findKeyEdge_(td.elementId);
         if (ke) {
             mainOp.addComplex(ke->complex());
-            vacomplex::KeyEdgeGeometry* geometry = ke->geometry();
+            vacomplex::KeyEdgeData* geometry = ke->geometry();
             if (geometry) {
                 geometry->resetEdit();
                 geometry->translate(translation);
@@ -818,7 +818,7 @@ void TopologyAwareTransformer::updateDragTransform(const geometry::Vec2d& transl
         vacomplex::KeyEdge* ke = findKeyEdge_(td.elementId);
         if (ke) {
             mainOp.addComplex(ke->complex());
-            vacomplex::KeyEdgeGeometry* geometry = ke->geometry();
+            vacomplex::KeyEdgeData* geometry = ke->geometry();
             if (geometry) {
                 geometry->resetEdit();
                 ke->snapGeometry();
@@ -836,7 +836,7 @@ void TopologyAwareTransformer::finalizeDragTransform() {
     for (const KeyEdgeTransformData& td : edges_) {
         vacomplex::KeyEdge* ke = findKeyEdge_(td.elementId);
         if (ke) {
-            vacomplex::KeyEdgeGeometry* geometry = ke->geometry();
+            vacomplex::KeyEdgeData* geometry = ke->geometry();
             if (geometry) {
                 geometry->finishEdit();
             }
@@ -847,7 +847,7 @@ void TopologyAwareTransformer::finalizeDragTransform() {
     for (const KeyEdgeTransformData& td : edgesToSnap_) {
         vacomplex::KeyEdge* ke = findKeyEdge_(td.elementId);
         if (ke) {
-            vacomplex::KeyEdgeGeometry* geometry = ke->geometry();
+            vacomplex::KeyEdgeData* geometry = ke->geometry();
             if (geometry) {
                 geometry->finishEdit();
             }
@@ -876,7 +876,7 @@ void TopologyAwareTransformer::cancelDragTransform() {
     for (const KeyEdgeTransformData& td : edges_) {
         vacomplex::KeyEdge* ke = findKeyEdge_(td.elementId);
         if (ke) {
-            vacomplex::KeyEdgeGeometry* geometry = ke->geometry();
+            vacomplex::KeyEdgeData* geometry = ke->geometry();
             if (geometry) {
                 geometry->abortEdit();
             }

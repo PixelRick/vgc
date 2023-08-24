@@ -14,42 +14,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <vgc/vacomplex/cellgeometry.h>
+#include <vgc/vacomplex/celldata.h>
 
 #include <vgc/vacomplex/complex.h>
 #include <vgc/vacomplex/detail/operationsimpl.h>
 
 namespace vgc::vacomplex {
 
-void CellGeometry::startEdit() {
-    startEdit_();
-}
-
-void CellGeometry::resetEdit() {
-    resetEdit_();
-}
-
-void CellGeometry::finishEdit() {
-    finishEdit_();
-}
-
-void CellGeometry::abortEdit() {
-    abortEdit_();
-}
-
-CellProperty* CellGeometry::findProperty(core::StringId name) const {
+const CellProperty* CellData::findProperty(core::StringId name) const {
     auto it = properties_.find(name);
     return it != properties_.end() ? it->second.get() : nullptr;
 }
 
-void CellGeometry::setProperty(
-    core::StringId name,
-    std::unique_ptr<CellProperty>&& value) {
-
+void CellData::setProperty(core::StringId name, std::unique_ptr<CellProperty>&& value) {
+    // XXX: skip if equal ?
     properties_[name] = std::move(value);
+    emitPropertyChanged(name);
 }
 
-void CellGeometry::emitGeometryChanged() const {
+void CellData::emitGeometryChanged() const {
     if (cell_) {
         Complex* complex = cell_->complex();
         detail::Operations ops(complex);
@@ -57,7 +40,7 @@ void CellGeometry::emitGeometryChanged() const {
     }
 }
 
-void CellGeometry::emitPropertyChanged(core::StringId name) const {
+void CellData::emitPropertyChanged(core::StringId name) const {
     if (cell_) {
         Complex* complex = cell_->complex();
         detail::Operations ops(complex);

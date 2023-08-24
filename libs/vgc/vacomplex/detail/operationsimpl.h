@@ -20,8 +20,8 @@
 #include <unordered_set>
 
 #include <vgc/vacomplex/complex.h>
-#include <vgc/vacomplex/cellgeometry.h>
-#include <vgc/vacomplex/keyedgegeometry.h>
+#include <vgc/vacomplex/celldata.h>
+#include <vgc/vacomplex/keyedgedata.h>
 
 namespace vgc::vacomplex::detail {
 
@@ -69,7 +69,7 @@ public:
     KeyEdge* createKeyOpenEdge(
         KeyVertex* startVertex,
         KeyVertex* endVertex,
-        const std::shared_ptr<KeyEdgeGeometry>& geometry,
+        const std::shared_ptr<KeyEdgeData>& geometry,
         Group* parentGroup,
         Node* nextSibling = nullptr,
         NodeSourceOperation sourceOperation = {});
@@ -77,7 +77,7 @@ public:
     // Assumes `nextSibling` is either `nullptr` or a child of `parentGroup`.
     //
     KeyEdge* createKeyClosedEdge(
-        const std::shared_ptr<KeyEdgeGeometry>& geometry,
+        const std::shared_ptr<KeyEdgeData>& geometry,
         Group* parentGroup,
         Node* nextSibling = nullptr,
         NodeSourceOperation sourceOperation = {},
@@ -103,7 +103,7 @@ public:
     //
     KeyEdge* glueKeyOpenEdges(
         core::Span<KeyHalfedge> khes,
-        std::shared_ptr<KeyEdgeGeometry> geometry,
+        std::shared_ptr<KeyEdgeData> geometry,
         const geometry::Vec2d& startPosition,
         const geometry::Vec2d& endPosition);
 
@@ -111,7 +111,7 @@ public:
     //
     KeyEdge* glueKeyClosedEdges( //
         core::Span<KeyHalfedge> khes,
-        std::shared_ptr<KeyEdgeGeometry> geometry);
+        std::shared_ptr<KeyEdgeData> geometry);
 
     core::Array<KeyEdge*> unglueKeyEdges(KeyEdge* ke);
     core::Array<KeyVertex*> unglueKeyVertices(
@@ -127,7 +127,7 @@ public:
     void setKeyVertexPosition(KeyVertex* kv, const geometry::Vec2d& pos);
 
     void
-    setKeyEdgeGeometry(KeyEdge* ke, const std::shared_ptr<KeyEdgeGeometry>& geometry);
+    setKeyEdgeData(KeyEdge* ke, const std::shared_ptr<KeyEdgeData>& geometry);
 
     void setKeyEdgeSamplingQuality(KeyEdge* ke, geometry::CurveSamplingQuality quality);
 
@@ -184,8 +184,8 @@ private:
     // Assumes that all descendants of all `nodes` are also in `nodes`.
     void destroyNodes_(const std::unordered_set<Node*>& nodes);
 
-    friend vacomplex::CellGeometry;
-    friend vacomplex::KeyEdgeGeometry;
+    friend vacomplex::CellData;
+    friend vacomplex::KeyEdgeData;
 
     void onBoundaryChanged_(Cell* cell);
     void onGeometryChanged_(Cell* cell);

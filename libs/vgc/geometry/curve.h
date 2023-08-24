@@ -18,6 +18,7 @@
 #define VGC_GEOMETRY_CURVE_H
 
 #include <array>
+#include <optional>
 
 #include <vgc/core/arithmetic.h>
 #include <vgc/core/array.h>
@@ -28,8 +29,8 @@
 #include <vgc/core/stringid.h>
 #include <vgc/geometry/api.h>
 #include <vgc/geometry/mat3d.h>
-#include <vgc/geometry/vec2d.h>
 #include <vgc/geometry/rect2d.h>
+#include <vgc/geometry/vec2d.h>
 
 namespace vgc::geometry {
 
@@ -723,6 +724,58 @@ class AdaptiveStrokeSampler;
 
 } // namespace detail
 
+class VGC_GEOMETRY_API StrokeEndInfo {
+public:
+    StrokeEndInfo() noexcept = default;
+
+    StrokeEndInfo(const Vec2d& position, const Vec2d& tangent, const Vec2d& halfwidths)
+        : position_(position)
+        , tangent_(tangent)
+        , halfwidths_(halfwidths) {
+    }
+
+    Vec2d position() const {
+        return position_;
+    }
+
+    void setPosition(Vec2d position) {
+        position_ = position;
+    }
+
+    Vec2d tangent() const {
+        return tangent_;
+    }
+
+    void setTangent(Vec2d tangent) {
+        tangent_ = tangent;
+    }
+
+    Vec2d halfwidths() const {
+        return halfwidths_;
+    }
+
+    void setHalfwidths(Vec2d halfwidths) {
+        halfwidths_ = halfwidths;
+    }
+
+    const std::array<Vec2d, 2>& offsetLineTangents() const {
+        return offsetLineTangents_;
+    }
+
+    void setOffsetLineTangents(const std::array<Vec2d, 2>& offsetLineTangents) {
+        offsetLineTangents_[0] = offsetLineTangents[0];
+        offsetLineTangents_[1] = offsetLineTangents[1];
+    }
+
+private:
+    Vec2d position_;
+    Vec2d tangent_;
+    Vec2d halfwidths_;
+    std::array<Vec2d, 2> offsetLineTangents_;
+};
+
+using StrokeBoundaryInfo = std::array<StrokeEndInfo, 2>;
+
 /// \class vgc::geometry::StrokeSampling2d
 /// \brief Sampling of a 2d stroke.
 ///
@@ -750,31 +803,18 @@ public:
         return centerlineBoundingBox_;
     }
 
-    const std::array<Vec2d, 2>& offsetLineTangentsAtEndpoint(Int endpoint) const {
-        return offsetLineTangents_[endpoint];
+    const StrokeBoundaryInfo& boundaryInfo() const {
+        return boundaryInfo_;
     }
 
-    void
-    setOffsetLineTangentsAtEndpoint(Int endpoint, const std::array<Vec2d, 2>& tangents) {
-        //
-        offsetLineTangents_[endpoint] = tangents;
-        hasOffsetLineTangents_[endpoint] = true;
-    }
-
-    void clearOffsetLineTangentsAtEndpoint(Int endpoint) {
-        hasOffsetLineTangents_[endpoint] = false;
-    }
-
-    bool hasDefinedOffsetLineTangentsAtEndpoint(Int endpoint) const {
-        return hasOffsetLineTangents_[endpoint];
+    void setBoundaryInfo(const StrokeBoundaryInfo& boundaryInfo) {
+        boundaryInfo_ = boundaryInfo;
     }
 
 private:
     StrokeSample2dArray samples_ = {};
+    StrokeBoundaryInfo boundaryInfo_;
     Rect2d centerlineBoundingBox_ = Rect2d::empty;
-    // offsetLineTangents_[i][j] is tangent at endpoint i and side j.
-    std::array<std::array<Vec2d, 2>, 2> offsetLineTangents_ = {};
-    std::array<bool, 2> hasOffsetLineTangents_ = {};
 
     void computeCenterlineBoundingBox() {
         centerlineBoundingBox_ = Rect2d::empty;
@@ -800,6 +840,18 @@ protected:
 
 public:
     virtual ~AbstractStroke2d() = default;
+
+    std::unique_ptr<AbstractStroke2d> clone() const {
+        return clone_();
+    }
+
+    bool copyAssign(const AbstractStroke2d* other) {
+        return copyAssign_(other);
+    }
+
+    bool moveAssign(AbstractStroke2d* other) {
+        return moveAssign_(other);
+    }
 
     /// Returns the name of the concrete implementation.
     ///
@@ -835,6 +887,18 @@ public:
     ///
     bool isZeroLengthSegment(Int segmentIndex) const {
         return isZeroLengthSegment_(segmentIndex);
+    }
+
+    /// Returns the centerline end positions of the stroke.
+    ///
+    std::array<Vec2d, 2> endPositions() const {
+        return endPositions_();
+    }
+
+    /// Returns geometric information for both ends of the stroke.
+    ///
+    StrokeBoundaryInfo computeBoundaryInfo() const {
+        return computeBoundaryInfo_();
     }
 
     /// Returns the position of the centerline point from segment `segmentIndex` at
@@ -954,35 +1018,6 @@ public:
         Int numSegments = -1,
         bool computeArcLengths = true) const;
 
-    /// Returns the normalized tangents of the two offset lines at the given
-    /// segment endpoint, given by its segment index and endpoint index (0 for
-    /// the start of the segment, and 1 for the end of the segment).
-    ///
-    /// Note that the tangents just before and just after a knot are not
-    /// necessarily equal in case of "corner" knots. Therefore,
-    /// `computeOffsetLineTangentsAtSegmentEndpoint(i - 1, 1)` and
-    /// `computeOffsetLineTangentsAtSegmentEndpoint(i, 0)` may not be equal.
-    ///
-    /// Throws `IndexError` if the given `segmentIndex` is not in the range
-    /// `[0, numSegments() - 1]`.
-    ///
-    /// Throws `IndexError` if the given `endpointIndex` is neither `0` or `1`.
-    ///
-    std::array<Vec2d, 2>
-    computeOffsetLineTangentsAtSegmentEndpoint(Int segmentIndex, Int endpointIndex) const;
-
-    std::unique_ptr<AbstractStroke2d> clone() const {
-        return clone_();
-    }
-
-    bool copyAssign(const AbstractStroke2d* other) {
-        return copyAssign_(other);
-    }
-
-    bool moveAssign(AbstractStroke2d* other) {
-        return moveAssign_(other);
-    }
-
     // TODO: We will later need a variant of computeSampling() that accepts a target
     // view matrix.
     // Ideally, for inbetweening we would like a sampling that is good in 2 spaces:
@@ -991,42 +1026,43 @@ public:
 
     /// Expects positions in object space.
     ///
-    StrokeSampling2d computeSampling(
-        const CurveSamplingParameters& params,
-        const Vec2d& snapStartPosition,
-        const Vec2d& snapEndPosition,
-        CurveSnapTransformationMode mode =
-            CurveSnapTransformationMode::LinearInArclength) const {
-
-        return computeSampling_(params, snapStartPosition, snapEndPosition, mode);
-    }
-
-    StrokeSampling2d
-    computeSampling(const geometry::CurveSamplingParameters& params) const {
-        return computeSampling_(params);
-    }
+    StrokeSampling2d computeSampling(const CurveSamplingParameters& params) const;
 
     /// Expects delta in object space.
     ///
-    void translate(const geometry::Vec2d& delta) {
+    void translate(const Vec2d& delta) {
         translate_(delta);
     }
 
     /// Expects transformation in object space.
     ///
-    void transform(const geometry::Mat3d& transformation) {
+    void transform(const Mat3d& transformation) {
         transform_(transformation);
     }
 
+    void prepend(AbstractStroke2d* other, bool reversed, bool smoothJoin) {
+        prepend_(other, reversed, smoothJoin);
+    }
+
+    void append(AbstractStroke2d* other, bool reversed, bool smoothJoin) {
+        append_(other, reversed, smoothJoin);
+    }
+
     /// Expects positions in object space.
+    /// Returns whether a snap actually happened.
     ///
-    void snap(
-        const geometry::Vec2d& snapStartPosition,
-        const geometry::Vec2d& snapEndPosition,
+    bool snap(
+        const Vec2d& snapStartPosition,
+        const Vec2d& snapEndPosition,
         CurveSnapTransformationMode mode =
             CurveSnapTransformationMode::LinearInArclength) {
 
         snap_(snapStartPosition, snapEndPosition, mode);
+    }
+
+    bool isSnapped(const Vec2d& startPosition, const Vec2d& endPosition) const {
+        std::array<Vec2d, 2> endPositions = this->endPositions();
+        return endPositions[0] == startPosition && endPositions[1] == endPosition;
     }
 
     /// Returns the new position of the grabbed point (center of deformation falloff).
@@ -1102,42 +1138,28 @@ protected:
     virtual StrokeSampleEx2d zeroLengthStrokeSample() const = 0;
 
 private:
-    core::StringId implementationName_;
-    bool isClosed_;
-
-    StrokeSampleEx2d sampleKnot_(Int knotIndex) const;
-
-    bool fixEvalLocation_(Int& segmentIndex, double& u) const;
+    virtual std::unique_ptr<AbstractStroke2d> clone_() const = 0;
+    virtual bool copyAssign_(const AbstractStroke2d* other) = 0;
+    virtual bool moveAssign_(AbstractStroke2d* other) = 0;
 
     virtual Int numKnots_() const = 0;
 
     virtual bool isZeroLengthSegment_(Int segmentIndex) const = 0;
 
-    virtual std::array<Vec2d, 2> computeOffsetLineTangentsAtSegmentEndpoint_(
-        Int segmentIndex,
-        Int endpointIndex) const = 0;
+    virtual std::array<Vec2d, 2> endPositions_() const = 0;
 
-    virtual std::unique_ptr<AbstractStroke2d> clone_() const = 0;
-    virtual bool copyAssign_(const AbstractStroke2d* other) = 0;
-    virtual bool moveAssign_(AbstractStroke2d* other) = 0;
+    virtual StrokeBoundaryInfo computeBoundaryInfo_() const = 0;
 
-    virtual StrokeSampling2d computeSampling_(
-        const CurveSamplingParameters& params,
+    virtual void translate_(const Vec2d& delta) = 0;
+
+    virtual void transform_(const Mat3d& transformation) = 0;
+
+    virtual void reverse_() = 0;
+    virtual void concat_(AbstractStroke2d* a, bool reverseA, AbstractStroke2d* b, bool reverseB, bool smoothJoin) = 0;
+
+    virtual bool snap_(
         const Vec2d& snapStartPosition,
         const Vec2d& snapEndPosition,
-        CurveSnapTransformationMode mode =
-            CurveSnapTransformationMode::LinearInArclength) const = 0;
-
-    virtual StrokeSampling2d
-    computeSampling_(const geometry::CurveSamplingParameters& params) const = 0;
-
-    virtual void translate_(const geometry::Vec2d& delta) = 0;
-
-    virtual void transform_(const geometry::Mat3d& transformation) = 0;
-
-    virtual void snap_(
-        const geometry::Vec2d& snapStartPosition,
-        const geometry::Vec2d& snapEndPosition,
         CurveSnapTransformationMode mode) = 0;
 
     virtual Vec2d sculptGrab_(
@@ -1161,6 +1183,14 @@ private:
         double strength,
         double tolerance,
         bool isClosed = false) = 0;
+
+private:
+    core::StringId implementationName_;
+    bool isClosed_;
+
+    StrokeSampleEx2d sampleKnot_(Int knotIndex) const;
+
+    bool fixEvalLocation_(Int& segmentIndex, double& u) const;
 };
 
 /// Specifies the type of the curve, that is, how the

@@ -230,7 +230,8 @@ std::array<Int, 4> computeKnotIndices_(bool isClosed, Int numKnots, Int segmentI
 
 } // namespace
 
-std::array<Vec2d, 2> YukselSplineStroke2d::computeOffsetLineTangentsAtSegmentEndpoint_(
+std::array<std::optional<Vec2d>, 2>
+YukselSplineStroke2d::computeOffsetLineTangentsAtSegmentBoundary_(
     Int segmentIndex,
     Int endpointIndex) const {
 

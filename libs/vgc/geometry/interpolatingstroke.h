@@ -33,6 +33,49 @@ enum class CurveSegmentType : UInt8 {
     BetweenCorners,
 };
 
+class FreehandStrokePoint {
+public:
+    VGC_WARNING_PUSH
+    VGC_WARNING_MSVC_DISABLE(26495) // member variable uninitialized
+    FreehandStrokePoint(core::NoInit)
+        : pos_(core::noInit) {
+    }
+    VGC_WARNING_POP
+
+    FreehandStrokePoint(const geometry::Vec2d& position, double width)
+        : pos_(position)
+        , width_(width) {
+    }
+
+    FreehandStrokePoint(const geometry::StrokeSample2d& sample)
+        : pos_(sample.position())
+        , width_(sample.halfwidth(0) * 2) {
+    }
+
+    FreehandStrokePoint lerp(const FreehandStrokePoint& b, double u) {
+        FreehandStrokePoint result = *this;
+        result.pos_ += u * (b.pos_ - pos_);
+        result.width_ += u * (b.width_ - width_);
+        return result;
+    }
+
+    FreehandStrokePoint average(const FreehandStrokePoint& b) {
+        return FreehandStrokePoint(0.5 * (pos_ + b.pos_), 0.5 * (width_ + b.width_));
+    }
+
+    geometry::Vec2d position() const {
+        return pos_;
+    }
+
+    double width() const {
+        return width_;
+    }
+
+private:
+    geometry::Vec2d pos_;
+    double width_ = 0;
+};
+
 class VGC_GEOMETRY_API AbstractInterpolatingStroke2d : public AbstractStroke2d {
 protected:
     AbstractInterpolatingStroke2d(core::StringId implName, bool isClosed)
@@ -63,6 +106,7 @@ protected:
         , isWidthConstant_(isWidthConstant) {
     }
 
+public:
     const core::Array<Vec2d>& positions() const {
         return positions_;
     }
@@ -128,23 +172,6 @@ protected:
     core::Array<SegmentComputeData> computeCache_() const;
 
 private:
-    Vec2dArray positions_;
-    core::DoubleArray widths_;
-
-    // It has the same number of elements as of positions_.
-    // Last chord is the closure if closed, zero otherwise.
-    mutable core::DoubleArray chordLengths_;
-    mutable core::Array<CurveSegmentType> segmentTypes_;
-
-    bool isWidthConstant_ = false;
-
-    virtual void onPositionsChanged_() = 0;
-    virtual void onWidthsChanged_() = 0;
-
-    std::array<Vec2d, 2> computeOffsetLineTangentsAtSegmentEndpoint_(
-        Int segmentIndex,
-        Int endpointIndex) const override = 0;
-
     std::unique_ptr<AbstractStroke2d> clone_() const override = 0;
     bool copyAssign_(const AbstractStroke2d* other) override = 0;
     bool moveAssign_(AbstractStroke2d* other) override = 0;
@@ -153,21 +180,19 @@ private:
 
     bool isZeroLengthSegment_(Int segmentIndex) const override;
 
-    StrokeSampling2d computeSampling_(
-        const CurveSamplingParameters& params,
-        const Vec2d& snapStartPosition,
-        const Vec2d& snapEndPosition,
-        CurveSnapTransformationMode mode =
-            CurveSnapTransformationMode::LinearInArclength) const override;
+    std::array<Vec2d, 2> endPositions_() const override;
 
-    StrokeSampling2d
-    computeSampling_(const geometry::CurveSamplingParameters& params) const override;
+    StrokeBoundaryInfo computeBoundaryInfo_() const override = 0;
 
     void translate_(const geometry::Vec2d& delta) override;
 
     void transform_(const geometry::Mat3d& transformation) override;
 
-    void snap_(
+    void reverse_() override;
+    void prepend_(AbstractStroke2d* other, bool reversed, bool smoothJoin) override;
+    void append_(AbstractStroke2d* other, bool reversed, bool smoothJoin) override;
+
+    bool snap_(
         const geometry::Vec2d& snapStartPosition,
         const geometry::Vec2d& snapEndPosition,
         CurveSnapTransformationMode mode) override;
@@ -193,6 +218,22 @@ private:
         double strength,
         double tolerance,
         bool isClosed) override;
+
+private:
+    Vec2dArray positions_;
+    core::DoubleArray widths_;
+
+    // It has the same number of elements as of positions_.
+    // Last chord is the closure if closed, zero otherwise.
+    mutable core::DoubleArray chordLengths_;
+    mutable core::Array<CurveSegmentType> segmentTypes_;
+
+    bool isWidthConstant_ = false;
+
+    void computePositionsS_(core::DoubleArray& positionsS) const;
+
+    virtual void onPositionsChanged_() = 0;
+    virtual void onWidthsChanged_() = 0;
 };
 
 namespace detail {
@@ -226,4 +267,4 @@ getElementsUnchecked(const core::Array<T>& arr, const std::array<Int, n>& indice
 
 } // namespace vgc::geometry
 
-#endif // VGC_GEOMETRY_CATMULLROM_H
+#endif // VGC_GEOMETRY_INTERPOLATINGSTROKE_H

@@ -258,7 +258,7 @@ PointData computeSegmentEndpointData(
 // Currently assumes first derivative at endpoint is non null.
 // TODO: Support null derivatives (using limit analysis).
 // TODO: Support different halfwidth on both sides.
-std::array<Vec2d, 2> computeOffsetLineTangents(const PointData& data) {
+std::array<std::optional<Vec2d>, 2> computeOffsetLineTangents(const PointData& data) {
 
     Vec2d dp = data.dp;
     double dpl = data.speed;
@@ -710,8 +710,8 @@ void CatmullRomSplineStroke2d::onWidthsChanged_() {
     }
 }
 
-std::array<Vec2d, 2>
-CatmullRomSplineStroke2d::computeOffsetLineTangentsAtSegmentEndpoint_(
+std::array<std::optional<Vec2d>, 2>
+CatmullRomSplineStroke2d::computeOffsetLineTangentsAtSegmentBoundary_(
     Int segmentIndex,
     Int endpointIndex) const {
 
@@ -730,12 +730,20 @@ std::unique_ptr<AbstractStroke2d> CatmullRomSplineStroke2d::clone_() const {
 
 bool CatmullRomSplineStroke2d::copyAssign_(const AbstractStroke2d* other_) {
     auto other = dynamic_cast<const CatmullRomSplineStroke2d*>(other_);
+    if (!other) {
+        return false;
+    }
     *this = *other;
+    return true;
 }
 
 bool CatmullRomSplineStroke2d::moveAssign_(AbstractStroke2d* other_) {
     auto other = dynamic_cast<CatmullRomSplineStroke2d*>(other_);
+    if (!other) {
+        return false;
+    }
     *this = std::move(*other);
+    return true;
 }
 
 } // namespace vgc::geometry

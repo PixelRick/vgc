@@ -24,6 +24,7 @@
 #include <vgc/core/array.h>
 #include <vgc/core/flags.h>
 #include <vgc/core/object.h>
+#include <vgc/core/stringid.h>
 #include <vgc/vacomplex/api.h>
 #include <vgc/vacomplex/cell.h>
 #include <vgc/vacomplex/exceptions.h>
@@ -46,9 +47,9 @@ enum class NodeModificationFlag {
     TransformChanged        = 0x04,
     // edge model, vertex position, ...
     GeometryChanged         = 0x08,
+    PropertyChanged         = 0x10,
     // edge sampling, ...
-    MeshChanged             = 0x10,
-    StyleChanged            = 0x20,
+    MeshChanged             = 0x20,
     BoundaryMeshChanged     = 0x40,
     BoundaryChanged         = 0x80,
     StarChanged             = 0x100,
@@ -57,20 +58,11 @@ enum class NodeModificationFlag {
 };
 VGC_DEFINE_FLAGS(NodeModificationFlags, NodeModificationFlag)
 
-class VGC_VACOMPLEX_API NodeSourceOperation {
-    // TODO
-    // This is intended to help workspace rebuild styles on different operations.
-    // For instance cutting an edge should not change the final appearance,
-    // and thus also split an eventual color gradient or adjust a pattern
-    // phase parameter.
-};
-
 class VGC_VACOMPLEX_API CreatedNodeInfo {
 public:
-    CreatedNodeInfo(Node* node, NodeSourceOperation sourceOperation)
+    CreatedNodeInfo(Node* node)
         : nodeId_(node->id())
-        , node_(node)
-        , sourceOperation_(std::move(sourceOperation)) {
+        , node_(node) {
     }
 
     core::Id nodeId() const {
@@ -81,14 +73,9 @@ public:
         return node_;
     }
 
-    const NodeSourceOperation& sourceOperation() const {
-        return sourceOperation_;
-    }
-
 private:
     core::Id nodeId_;
     Node* node_;
-    NodeSourceOperation sourceOperation_;
 };
 
 class VGC_VACOMPLEX_API DestroyedNodeInfo {
@@ -107,22 +94,16 @@ private:
 
 class VGC_VACOMPLEX_API TransientNodeInfo {
 public:
-    TransientNodeInfo(core::Id nodeId, NodeSourceOperation sourceOperation)
-        : nodeId_(nodeId)
-        , sourceOperation_(std::move(sourceOperation)) {
+    TransientNodeInfo(core::Id nodeId)
+        : nodeId_(nodeId) {
     }
 
     core::Id nodeId() const {
         return nodeId_;
     }
 
-    const NodeSourceOperation& sourceOperation() const {
-        return sourceOperation_;
-    }
-
 private:
     core::Id nodeId_;
-    NodeSourceOperation sourceOperation_;
 };
 
 class VGC_VACOMPLEX_API ModifiedNodeInfo {
@@ -149,9 +130,10 @@ public:
     }
 
 private:
-    core::Id nodeId_;
-    Node* node_;
+    core::Id nodeId_ = {};
+    Node* node_ = nullptr;
     NodeModificationFlags flags_ = {};
+    core::Array<core::StringId> modifiedProperties_;
 };
 
 enum class NodeInsertionType {
@@ -359,7 +341,7 @@ public:
 
 private:
     friend detail::Operations;
-    friend class KeyEdgeGeometry;
+    friend class KeyEdgeData;
     using NodePtrMap = std::unordered_map<core::Id, std::unique_ptr<Node>>;
 
     // Container storing and owning all the nodes in the Complex.

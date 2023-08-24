@@ -18,7 +18,7 @@
 #define VGC_WORKSPACE_EDGEGEOMETRY_H
 
 #include <vgc/dom/element.h>
-#include <vgc/vacomplex/keyedgegeometry.h>
+#include <vgc/vacomplex/keyedgedata.h>
 #include <vgc/workspace/api.h>
 
 namespace vgc::workspace {

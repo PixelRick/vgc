@@ -753,7 +753,7 @@ void Select::updateDragMovedElements_(
             }
             initOperationOn(ke);
             if (ked.isUniformTranslation) {
-                vacomplex::KeyEdgeGeometry* geometry = ke->geometry();
+                vacomplex::KeyEdgeData* geometry = ke->geometry();
                 if (geometry) {
                     if (!ked.isEditStarted) {
                         geometry->startEdit();
@@ -797,7 +797,7 @@ void Select::finalizeDragMovedElements_(workspace::Workspace* workspace) {
         if (element && element->vacNode() && element->vacNode()->isCell()) {
             vacomplex::KeyEdge* ke = element->vacNode()->toCellUnchecked()->toKeyEdge();
             if (ke && ked.isEditStarted) {
-                vacomplex::KeyEdgeGeometry* geometry = ke->geometry();
+                vacomplex::KeyEdgeData* geometry = ke->geometry();
                 if (geometry) {
                     geometry->finishEdit();
                 }

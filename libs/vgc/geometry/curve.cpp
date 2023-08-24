@@ -464,8 +464,7 @@ void AbstractStroke2d::sampleRange(
     // Compute arc lengths.
     //
     if (computeArcLengths) {
-
-        // Compute arc length of first new sample
+        // Compute arc length of first new sample.
         double s = 0;
         auto it = out.begin() + oldLength;
         if (oldLength > 0) {
@@ -476,8 +475,7 @@ void AbstractStroke2d::sampleRange(
         }
         it->setS(s);
         Vec2d lastPoint = it->position();
-
-        // Compute arclength of all subsequent samples
+        // Compute arclength of all subsequent samples.
         for (++it; it != out.end(); ++it) {
             Vec2d point = it->position();
             s += (point - lastPoint).length();
@@ -487,11 +485,37 @@ void AbstractStroke2d::sampleRange(
     }
 }
 
-std::array<Vec2d, 2> AbstractStroke2d::computeOffsetLineTangentsAtSegmentEndpoint(
-    Int segmentIndex,
-    Int endpointIndex) const {
+namespace {} // namespace
 
-    return computeOffsetLineTangentsAtSegmentEndpoint_(segmentIndex, endpointIndex);
+/// Expects positions in object space.
+///
+StrokeSampling2d
+AbstractStroke2d::computeSampling(const geometry::CurveSamplingParameters& params) const {
+
+    geometry::StrokeSampleEx2dArray samplesEx;
+    StrokeBoundaryInfo boundaryInfo;
+
+    Int n = numKnots();
+    if (n == 0) {
+        // fallback to segment
+        Vec2d tangent(0, 1);
+        Vec2d normal = tangent.orthogonalized();
+        Vec2d halfwidths(1.0, 1.0);
+        samplesEx.emplaceLast(Vec2d(), tangent, normal, halfwidths, 0.0);
+        boundaryInfo[0] = StrokeEndInfo(Vec2d(), tangent, halfwidths);
+        boundaryInfo[0].setOffsetLineTangents({tangent, tangent});
+        boundaryInfo[1] = boundaryInfo[0];
+    }
+    else {
+        sampleRange(samplesEx, params);
+        boundaryInfo = computeBoundaryInfo();
+    }
+
+    VGC_ASSERT(samplesEx.length() > 0);
+    StrokeSampling2d result{geometry::StrokeSample2dArray(samplesEx)};
+    result.setBoundaryInfo(boundaryInfo);
+
+    return result;
 }
 
 StrokeSampleEx2d AbstractStroke2d::sampleKnot_(Int index) const {
@@ -548,20 +572,6 @@ bool AbstractStroke2d::fixEvalLocation_(Int& segmentIndex, double& u) const {
         return true;
     }
 }
-
-//std::array<Vec2d, 2> StrokeView2d::computeOffsetLineTangentsAtSegmentEndpoint(
-//    Int segmentIndex,
-//    Int endpointIndex) const {
-//
-//    checkSegmentIndex_(segmentIndex, numSegments());
-//    if (endpointIndex < 0 || endpointIndex > 1) {
-//        throw vgc::core::IndexError(core::format(
-//            "The given `endpointIndex` ({}) must be `0` or `1`", endpointIndex));
-//    }
-//
-//    auto bezierData = CubicBezierStroke::fromStroke(this, segmentIndex);
-//    return computeOffsetLineTangentsAtEndPoint(bezierData, endpointIndex);
-//}
 
 namespace detail {
 

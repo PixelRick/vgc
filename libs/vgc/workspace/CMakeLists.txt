@@ -11,7 +11,6 @@ vgc_add_library(workspace
         edgegeometry.h
         element.h
         face.h
-        freehandedgegeometry.h
         layer.h
         logcategories.h
         vertex.h
@@ -22,7 +21,6 @@ vgc_add_library(workspace
         edgegeometry.cpp
         element.cpp
         face.cpp
-        freehandedgegeometry.cpp
         layer.cpp
         logcategories.cpp
         vertex.cpp
