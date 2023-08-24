@@ -189,8 +189,7 @@ private:
     void transform_(const geometry::Mat3d& transformation) override;
 
     void reverse_() override;
-    void prepend_(AbstractStroke2d* other, bool reversed, bool smoothJoin) override;
-    void append_(AbstractStroke2d* other, bool reversed, bool smoothJoin) override;
+    void concat_(AbstractStroke2d* a, bool reverseA, AbstractStroke2d* b, bool reverseB, bool smoothJoin) override;
 
     bool snap_(
         const geometry::Vec2d& snapStartPosition,

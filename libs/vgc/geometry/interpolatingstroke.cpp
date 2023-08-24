@@ -198,30 +198,26 @@ void AbstractInterpolatingStroke2d::reverse_() {
 
 void AbstractInterpolatingStroke2d::concat_(AbstractStroke2d* a_, bool reverseA, AbstractStroke2d* b_, bool reverseB, bool smoothJoin) {
 
+    auto a = dynamic_cast<AbstractInterpolatingStroke2d*>(a_);
+    auto b = dynamic_cast<AbstractInterpolatingStroke2d*>(a_);
+    if (!a || !b) {
+        // TODO: warning!
+        return;
+    }
+
     double constantWidth = 0;
 
-    auto a = dynamic_cast<AbstractInterpolatingStroke2d*>(a_);
-    Int nA = 0;
-    double cwA = 0;
-    if (a) {
-        nA = a->positions_.length();
-        cwA = a->constantWidth();
-        constantWidth = cwA;
-    }
+    Int nA = a->positions_.length();
+    double cwA = a->constantWidth();
 
-    auto b = dynamic_cast<AbstractInterpolatingStroke2d*>(a_);
-    Int nB = 0;
-    double cwB = 0;
-    if (b) {
-        nB = a->positions_.length();
-        cwB = b->constantWidth();
-        constantWidth = cwB;
-    }
+    Int nB = b->positions_.length();
+    double cwB = b->constantWidth();
+    
+    if (nA && nB) {
 
-    if (!a && !b) {
-        positions_.clear();
-        onPositionsChanged_();
-        setConstantWidth(0);
+        //positions_.clear();
+        //onPositionsChanged_();
+        //setConstantWidth(0);
         return;
     }
 
