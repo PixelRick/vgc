@@ -20,9 +20,8 @@
 #include <memory>
 
 #include <vgc/core/arithmetic.h>
-#include <vgc/geometry/curve.h>
 #include <vgc/geometry/rect2d.h>
-#include <vgc/geometry/vec2d.h>
+#include <vgc/geometry/stroke.h>
 #include <vgc/vacomplex/api.h>
 #include <vgc/vacomplex/cell.h>
 #include <vgc/vacomplex/keyedgedata.h>

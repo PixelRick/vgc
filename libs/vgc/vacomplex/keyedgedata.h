@@ -21,9 +21,8 @@
 #include <memory>
 
 #include <vgc/core/arithmetic.h>
-#include <vgc/geometry/curve.h> // AbstractStroke2d
 #include <vgc/geometry/mat3d.h>
-#include <vgc/geometry/vec2d.h>
+#include <vgc/geometry/stroke.h> // AbstractStroke2d
 #include <vgc/vacomplex/api.h>
 #include <vgc/vacomplex/celldata.h>
 

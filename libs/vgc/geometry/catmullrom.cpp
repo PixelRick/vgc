@@ -65,7 +65,7 @@ CubicBezier2d CatmullRomSplineStroke2d::segmentToBezier(
     }
     Int j = i0 * 2;
 
-    if (isWidthConstant()) {
+    if (hasConstantWidth()) {
         double chw = 0.5 * constantWidth();
         Vec2d cp(chw, chw);
         halfwidths = CubicBezier2d(cp, cp, cp, cp);
@@ -112,7 +112,7 @@ Vec2d CatmullRomSplineStroke2d::evalNonZeroCenterline(
 }
 
 StrokeSampleEx2d CatmullRomSplineStroke2d::evalNonZero(Int segmentIndex, double u) const {
-    if (isWidthConstant()) {
+    if (hasConstantWidth()) {
         CubicBezier2d centerlineBezier = segmentToBezier(segmentIndex);
         CubicBezier1d tu = segmentToNormalReparametrization(segmentIndex);
         double hw = 0.5 * constantWidth();
@@ -145,7 +145,7 @@ void CatmullRomSplineStroke2d::sampleNonZeroSegment(
     const CurveSamplingParameters& params,
     detail::AdaptiveStrokeSampler& sampler) const {
 
-    if (isWidthConstant()) {
+    if (hasConstantWidth()) {
         CubicBezier2d centerlineBezier = segmentToBezier(segmentIndex);
         CubicBezier1d tu = segmentToNormalReparametrization(segmentIndex);
         double hw = 0.5 * constantWidth();
@@ -705,7 +705,7 @@ void CatmullRomSplineStroke2d::onPositionsChanged_() {
 
 void CatmullRomSplineStroke2d::onWidthsChanged_() {
     halfwidthsControlPoints_.clear();
-    if (!isWidthConstant()) {
+    if (!hasConstantWidth()) {
         isCacheDirty_ = true;
     }
 }

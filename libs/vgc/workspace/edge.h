@@ -24,9 +24,8 @@
 #include <vgc/core/array.h>
 #include <vgc/core/color.h>
 #include <vgc/dom/element.h>
-#include <vgc/geometry/curve.h>
+#include <vgc/geometry/stroke.h>
 #include <vgc/geometry/rect2d.h>
-#include <vgc/geometry/vec2d.h>
 #include <vgc/geometry/vec2f.h>
 #include <vgc/geometry/vec3f.h>
 #include <vgc/geometry/vec4f.h>

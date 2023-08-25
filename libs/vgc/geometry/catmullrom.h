@@ -351,14 +351,14 @@ public:
     CatmullRomSplineStroke2d(
         CatmullRomSplineParameterization parameterization,
         bool isClosed,
-        bool isWidthConstant,
+        bool hasConstantWidth,
         TRangePositions&& positions,
         TRangeWidths&& widths)
 
         : AbstractStroke2d(
             implName,
             isClosed,
-            isWidthConstant,
+            hasConstantWidth,
             std::forward<TRangePositions>(positions),
             std::forward<TRangeWidths>(widths))
         , parameterization_(parameterization) {

@@ -16,6 +16,8 @@
 
 #include <vgc/geometry/interpolatingstroke.h>
 
+#include <algorithm> // std::copy
+
 #include <vgc/core/format.h>
 #include <vgc/core/span.h>
 #include <vgc/geometry/logcategories.h>
@@ -194,100 +196,99 @@ void AbstractInterpolatingStroke2d::transform_(const Mat3d& transformation) {
 }
 
 void AbstractInterpolatingStroke2d::reverse_() {
+    std::reverse(positions_.begin(), positions_.end());
+    onPositionsChanged_();
+    if (!hasConstantWidth_) {
+        std::reverse(widths_.begin(), widths_.end());
+        onWidthsChanged_();
+    }
 }
 
-void AbstractInterpolatingStroke2d::concat_(AbstractStroke2d* a_, bool reverseA, AbstractStroke2d* b_, bool reverseB, bool smoothJoin) {
+namespace {
+
+template<typename T, typename TRange>
+void extend_(core::Array<T>& dest, const TRange& range, bool reverse, bool skipFirst) {
+    Int i = skipFirst ? 1 : 0;
+    if (!reverse) {
+        dest.extend(range.begin() + i, range.end());
+    }
+    else {
+        dest.extend(range.rbegin() + i, range.rend());
+    }
+}
+
+} // namespace
+
+void AbstractInterpolatingStroke2d::assignConcat_(
+    AbstractStroke2d* a_,
+    bool reverseA,
+    AbstractStroke2d* b_,
+    bool reverseB,
+    bool smoothJoin) {
 
     auto a = dynamic_cast<AbstractInterpolatingStroke2d*>(a_);
     auto b = dynamic_cast<AbstractInterpolatingStroke2d*>(a_);
     if (!a || !b) {
-        // TODO: warning!
+        VGC_WARNING(
+            LogVgcGeometry,
+            "AbstractInterpolatingStroke2d::assignConcat() expects sources strokes to be "
+            "of type AbstractInterpolatingStroke2d");
         return;
     }
-
-    double constantWidth = 0;
 
     Int nA = a->positions_.length();
-    double cwA = a->constantWidth();
-
     Int nB = b->positions_.length();
+    double cwA = a->constantWidth();
     double cwB = b->constantWidth();
-    
-    if (nA && nB) {
 
-        //positions_.clear();
-        //onPositionsChanged_();
-        //setConstantWidth(0);
-        return;
-    }
+    bool newStrokeHasVaryingWidth =
+        !a->hasConstantWidth_ || !b->hasConstantWidth_ || (cwA != cwB);
 
-    bool isConstantWidth = (a && b) && (a->isWidthConstant() && !b->isWidthConstant()
-            || constantWidth() != other->constantWidth());
+    Vec2dArray newPositions;
+    core::DoubleArray newWidths;
 
-    Vec2dArray newPositions_;
-    core::DoubleArray newWidths_;
-
-
-    bool skipMiddle = false;
-    if (nA > 0 && nB > 0)
-    {
-        Vec2d pA, pB;
-        double wA, wB;
-        if (reverseA) {
-
-        }
-        else {
-
-        }
-        if (reverseB) {
-
-        }
-        else {
-
-        }
-    }
-
-    Int n = positions_.length();
-    
-
-    // check if we need new widths
-    bool doWidths = !isWidthConstant() || !other->isWidthConstant()
-                         || constantWidth() != other->constantWidth();
-
-    if (reversed) {
-        bool skipFirst = false;
-        if (smoothJoin && !positions_.isEmpty()) {
-            skipFirst = other->positions_.last() == positions_.last();
-        }
-        auto itp = other->positions_.crbegin();
-        if (skipFirst) {
-            ++itp;
-        }
-        
-        positions_.insert(positions_.end(), itp, other->positions_.crend());
-        if (doWidths) {
-            if (!isWidthConstant()) {
-                widths_.resize(n, constantWidth());
-            }
-            if (other->isWidthConstant()) {
-                widths_.resize(positions_.length(), other->constantWidth());
-            }
-            else {
-                auto itw = other->widths_.crbegin();
-                if (skipFirst) {
-                    ++itp;
-                }
-                widths_.insert(widths_.end(), itw, other->widths_.crend());
-            }
-            isWidthConstant_ = false;
-        }
+    newPositions.reserve(nA + nB);
+    if (newStrokeHasVaryingWidth) {
+        newWidths.reserve(nA + nB);
     }
     else {
-        bool skipFirst = false;
-        if (smoothJoin && !positions_.isEmpty()) {
-            skipFirst = other->positions_.first() == positions_.last();
-        }
+        newWidths.append(cwA);
     }
+
+    if (nA > 0) {
+        if (newStrokeHasVaryingWidth) {
+            if (a->hasConstantWidth_) {
+                newWidths.extend(nA, cwA);
+            }
+            else {
+                extend_(newWidths, a->widths_, reverseA, false);
+            }
+        }
+        extend_(newPositions, a->positions_, reverseA, false);
+    }
+
+    if (nB > 0) {
+        bool skipFirst = false;
+        if (nA > 0) {
+            Vec2d bFirst = reverseB ? b->positions_.last() : b->positions_.first();
+            if (newPositions.last() == bFirst) {
+                skipFirst = true;
+            }
+        }
+        if (newStrokeHasVaryingWidth) {
+            if (b->hasConstantWidth_) {
+                newWidths.extend(skipFirst ? nB - 1 : nB, cwB);
+            }
+            else {
+                extend_(newWidths, b->widths_, reverseB, skipFirst);
+            }
+        }
+        extend_(newPositions, b->positions_, reverseB, skipFirst);
+    }
+
+    hasConstantWidth_ = !newStrokeHasVaryingWidth;
+    positions_ = std::move(newPositions);
+    widths_ = std::move(newWidths);
 }
 
 namespace {

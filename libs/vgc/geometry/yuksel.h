@@ -17,11 +17,13 @@
 #ifndef VGC_GEOMETRY_YUKSEL_H
 #define VGC_GEOMETRY_YUKSEL_H
 
+#include <optional>
+
 #include <vgc/core/span.h>
 #include <vgc/geometry/api.h>
 #include <vgc/geometry/bezier.h>
-#include <vgc/geometry/curve.h>
-#include <vgc/geometry/vec2d.h>
+#include <vgc/geometry/stroke.h>
+#include <vgc/geometry/interpolatingstroke.h>
 
 namespace vgc::geometry {
 
@@ -205,72 +207,29 @@ struct YukselKnotData {
 
 } // namespace detail
 
-class VGC_GEOMETRY_API YukselSplineStroke2d : public AbstractStroke2d {
+class VGC_GEOMETRY_API YukselSplineStroke2d : public AbstractInterpolatingStroke2d {
 private:
     static core::StringId implName;
 
 public:
     YukselSplineStroke2d(bool isClosed)
-        : AbstractStroke2d(implName, isClosed) {
+        : AbstractInterpolatingStroke2d(implName, isClosed) {
     }
 
     YukselSplineStroke2d(bool isClosed, double constantWidth)
-        : AbstractStroke2d(implName, isClosed)
-        , widths_(1, constantWidth)
-        , isWidthConstant_(true) {
+        : AbstractInterpolatingStroke2d(implName, isClosed, constantWidth) {
     }
 
     template<typename TRangePositions, typename TRangeWidths>
     YukselSplineStroke2d(
         bool isClosed,
-        bool isWidthConstant,
+        bool hasConstantWidth,
         TRangePositions&& positions,
         TRangeWidths&& widths)
 
-        : AbstractStroke2d(implName, isClosed)
-        , positions_(std::forward<TRangePositions>(positions))
-        , widths_(std::forward<TRangeWidths>(widths))
-        , isWidthConstant_(isWidthConstant) {
+        : AbstractInterpolatingStroke2d(implName, isClosed, std::forward<TRangePositions>(positions), std::forward<TRangeWidths>(widths)) {
 
         computeCache_();
-    }
-
-    const core::Array<Vec2d>& positions() const {
-        return positions_;
-    }
-
-    core::Array<Vec2d>&& movePositions() {
-        return std::move(positions_);
-    }
-
-    template<typename TRange>
-    void setPositions(TRange&& positions) {
-        positions_ = std::forward<TRange>(positions);
-        computeCache_();
-    }
-
-    const core::Array<double>& widths() const {
-        return widths_;
-    }
-
-    // TODO: make data class and startEdit() endEdit()
-    core::Array<double>&& moveWidths() {
-        return std::move(widths_);
-    }
-
-    template<typename TRange>
-    void setWidths(TRange&& widths) {
-        widths_ = std::forward<TRange>(widths);
-    }
-
-    void setConstantWidth(double width) {
-        isWidthConstant_ = true;
-        widths_.resize(1);
-        widths_[0] = width;
-    }
-
-    bool isWidthConstant() const {
-        return isWidthConstant_;
     }
 
 protected:
@@ -310,7 +269,7 @@ private:
 
     core::Array<detail::YukselKnotData> knotsData_;
 
-    bool isWidthConstant_ = false;
+    bool hasConstantWidth_ = false;
 
     void computeCache_();
 };

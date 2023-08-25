@@ -341,7 +341,8 @@ core::Array<KeyCycle> computeKeyFaceCandidateAt(
         KeyEdge* ke = cell->toKeyEdge();
         if (ke && ke->existsAt(t)) {
             const geometry::StrokeSample2dArray& samples = ke->sampling().samples();
-            geometry::DistanceToCurve d = geometry::distanceToCurve(samples, position);
+            geometry::DistanceToCurve d =
+                geometry::distanceToCurve(samples, position);
 
             constexpr double hpi = core::pi / 2;
             double a = d.angleFromTangent();

@@ -21,8 +21,7 @@
 
 #include <vgc/core/arithmetic.h>
 #include <vgc/core/stringid.h>
-#include <vgc/geometry/curve.h> // geometry::AbstractStroke2d
-#include <vgc/geometry/vec2d.h>
+#include <vgc/geometry/stroke.h> // geometry::AbstractStroke2d
 #include <vgc/vacomplex/api.h>
 #include <vgc/vacomplex/dataobject.h>
 

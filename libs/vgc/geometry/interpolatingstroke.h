@@ -20,8 +20,7 @@
 #include <vgc/core/arithmetic.h>
 #include <vgc/core/span.h>
 #include <vgc/geometry/api.h>
-#include <vgc/geometry/curve.h>
-#include <vgc/geometry/vec2d.h>
+#include <vgc/geometry/stroke.h>
 
 namespace vgc::geometry {
 
@@ -89,21 +88,21 @@ protected:
 
         : AbstractStroke2d(implName, isClosed)
         , widths_(1, constantWidth)
-        , isWidthConstant_(true) {
+        , hasConstantWidth_(true) {
     }
 
     template<typename TRangePositions, typename TRangeWidths>
     AbstractInterpolatingStroke2d(
         core::StringId implName,
         bool isClosed,
-        bool isWidthConstant,
         TRangePositions&& positions,
         TRangeWidths&& widths)
 
         : AbstractStroke2d(implName, isClosed)
         , positions_(std::forward<TRangePositions>(positions))
-        , widths_(std::forward<TRangeWidths>(widths))
-        , isWidthConstant_(isWidthConstant) {
+        , widths_(std::forward<TRangeWidths>(widths))) {
+
+        hasConstantWidth_ = widths_.length() != positions_.length();
     }
 
 public:
@@ -135,19 +134,18 @@ public:
     template<typename TRange>
     void setWidths(TRange&& widths) {
         widths_ = std::forward<TRange>(widths);
-        isWidthConstant_ = false;
+        hasConstantWidth_ = false;
         onWidthsChanged_();
     }
 
     void setConstantWidth(double width) {
-        isWidthConstant_ = true;
-        widths_.resize(1);
-        widths_[0] = width;
+        hasConstantWidth_ = true;
+        widths_ = core::DoubleArray{width};
         onWidthsChanged_();
     }
 
-    bool isWidthConstant() const {
-        return isWidthConstant_;
+    bool hasConstantWidth() const {
+        return hasConstantWidth_;
     }
 
     double constantWidth() const {
@@ -189,7 +187,12 @@ private:
     void transform_(const geometry::Mat3d& transformation) override;
 
     void reverse_() override;
-    void concat_(AbstractStroke2d* a, bool reverseA, AbstractStroke2d* b, bool reverseB, bool smoothJoin) override;
+    void assignConcat_(
+        AbstractStroke2d* a,
+        bool reverseA,
+        AbstractStroke2d* b,
+        bool reverseB,
+        bool smoothJoin) override;
 
     bool snap_(
         const geometry::Vec2d& snapStartPosition,
@@ -227,7 +230,7 @@ private:
     mutable core::DoubleArray chordLengths_;
     mutable core::Array<CurveSegmentType> segmentTypes_;
 
-    bool isWidthConstant_ = false;
+    bool hasConstantWidth_ = false;
 
     void computePositionsS_(core::DoubleArray& positionsS) const;
 

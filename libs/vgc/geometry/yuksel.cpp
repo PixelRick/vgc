@@ -17,7 +17,7 @@
 #include <vgc/geometry/yuksel.h>
 
 #include <vgc/geometry/bezier.h>
-#include <vgc/geometry/curve.h>
+#include <vgc/geometry/stroke.h>
 
 namespace vgc::geometry {
 
@@ -45,7 +45,7 @@ Vec2d YukselSplineStroke2d::evalNonZeroCenterline(Int segmentIndex, double u, Ve
 }
 
 StrokeSampleEx2d YukselSplineStroke2d::evalNonZero(Int segmentIndex, double u) const {
-    if (isWidthConstant_) {
+    if (hasConstantWidth_) {
         YukselBezierSegment2d centerlineSegment = segmentEvaluator(segmentIndex);
         double hw = 0.5 * widths_[0];
         Vec2d tangent = core::noInit;
@@ -73,7 +73,7 @@ void YukselSplineStroke2d::sampleNonZeroSegment(
     const CurveSamplingParameters& params,
     detail::AdaptiveStrokeSampler& sampler) const {
 
-    if (isWidthConstant_) {
+    if (hasConstantWidth_) {
         YukselBezierSegment2d centerlineSegment = segmentEvaluator(segmentIndex);
         double hw = 0.5 * widths_[0];
         sampler.sample(
@@ -491,7 +491,7 @@ YukselBezierSegment2d YukselSplineStroke2d::segmentEvaluator(
     SegmentType segmentType = computeSegmentCenterlineYukselSegment_(
         centerlineSegment, positions(), knotsData_, knotIndices, chordLengths);
 
-    if (isWidthConstant_) {
+    if (hasConstantWidth_) {
         double chw = 0.5 * constantWidth();
         Vec2d cp(chw, chw);
         halfwidths = CubicBezier2d(cp, cp, cp, cp);
