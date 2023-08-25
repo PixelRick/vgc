@@ -62,8 +62,12 @@ protected:
     void emitGeometryChanged() const;
     void emitPropertyChanged(core::StringId name) const;
 
-    virtual CellDataPtr clone_() const = 0;
-    virtual CellDataPtr createDefault_() const = 0;
+    void assignClonedProperties(const CellData* other);
+
+    void translate(const geometry::Vec2d& delta);
+    void transform(const geometry::Mat3d& transformation);
+
+    virtual void onOperationEnd();
 
 private:
     std::map<core::StringId, std::unique_ptr<CellProperty>> properties_;

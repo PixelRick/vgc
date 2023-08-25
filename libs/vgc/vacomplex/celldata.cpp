@@ -48,4 +48,32 @@ void CellData::emitPropertyChanged(core::StringId name) const {
     }
 }
 
+void CellData::assignClonedProperties(const CellData* other) {
+    if (other == this) {
+        return;
+    }
+    properties_.clear();
+    for (const auto& [name, property] : other->properties_) {
+        properties_[name] = property->clone();
+    }
+}
+
+void CellData::translate(const geometry::Vec2d& delta) {
+    for (const auto& p : properties_) {
+        p.second->onTranslate_(delta);
+    }
+}
+
+void CellData::transform(const geometry::Mat3d& transformation) {
+    for (const auto& p : properties_) {
+        p.second->onTransform_(transformation);
+    }
+}
+
+void CellData::onOperationEnd() {
+    for (const auto& p : properties_) {
+        p.second->onOperationEnd_();
+    }
+}
+
 } // namespace vgc::vacomplex

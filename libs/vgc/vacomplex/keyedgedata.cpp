@@ -21,28 +21,50 @@
 
 namespace vgc::vacomplex {
 
-std::shared_ptr<KeyEdgeData>
-KeyEdgeData::merge(bool direction, KeyEdgeData* other, bool otherDirection) const {
-
-    // TODO: try both ways, if none works then convert both to a default geometry model for the merge
-    //       then rebuild with the best of the original models that supports being built from the default.
-    return merge_(direction, other, otherDirection);
-}
-
-void KeyEdgeData::dirtyEdgeSampling() const {
-    if (edge_) {
-        Complex* complex = edge_->complex();
-        detail::Operations ops(complex);
-        ops.onGeometryChanged_(edge_);
+KeyEdgeDataPtr KeyEdgeData::clone() const {
+    KeyEdgeDataPtr result = std::make_shared<KeyEdgeData>(isClosed_);
+    result->assignClonedProperties(this);
+    if (stroke_) {
+        result->stroke_ = stroke_->clone();
     }
 }
 
-void KeyEdgeData::dirtyEdgeStyle() const {
-    if (edge_) {
-        Complex* complex = edge_->complex();
-        detail::Operations ops(complex);
-        ops.onStyleChanged_(edge_);
+void KeyEdgeData::translate(const geometry::Vec2d& delta) {
+    if (stroke_) {
+        stroke_->translate(delta);
     }
+    CellData::translate(delta);
 }
+
+void KeyEdgeData::transform(const geometry::Mat3d& transformation) {
+    if (!stroke_) {
+        stroke_->transform(transformation);
+    }
+    CellData::transform(transformation);
+}
+
+//std::shared_ptr<KeyEdgeData>
+//KeyEdgeData::merge(bool direction, KeyEdgeData* other, bool otherDirection) const {
+//
+//    // TODO: try both ways, if none works then convert both to a default geometry model for the merge
+//    //       then rebuild with the best of the original models that supports being built from the default.
+//    return merge_(direction, other, otherDirection);
+//}
+//
+//void KeyEdgeData::dirtyEdgeSampling() const {
+//    if (edge_) {
+//        Complex* complex = edge_->complex();
+//        detail::Operations ops(complex);
+//        ops.onGeometryChanged_(edge_);
+//    }
+//}
+//
+//void KeyEdgeData::dirtyEdgeStyle() const {
+//    if (edge_) {
+//        Complex* complex = edge_->complex();
+//        detail::Operations ops(complex);
+//        ops.onStyleChanged_(edge_);
+//    }
+//}
 
 } // namespace vgc::vacomplex

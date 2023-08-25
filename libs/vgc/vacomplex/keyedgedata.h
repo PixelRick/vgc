@@ -35,6 +35,7 @@ namespace vgc::vacomplex {
 
 class KeyEdge;
 class KeyEdgeData;
+using KeyEdgeDataPtr = std::shared_ptr<KeyEdgeData>;
 
 namespace detail {
 
@@ -93,13 +94,7 @@ public:
 
     ~KeyEdgeData() override = default;
 
-    std::shared_ptr<KeyEdgeData> clone() const {
-        return std::static_pointer_cast<KeyEdgeData>(clone_());
-    }
-
-    std::shared_ptr<KeyEdgeData> createDefault() const {
-        return std::static_pointer_cast<KeyEdgeData>(createDefault_());
-    }
+    KeyEdgeDataPtr clone() const;
 
     bool isClosed() const {
         return isClosed_;
@@ -139,12 +134,6 @@ public:
 
 private:
     std::unique_ptr<geometry::AbstractStroke2d> stroke_;
-    std::unique_ptr<geometry::AbstractStroke2d> oldStroke_;
-
-    bool isBeingEdited_() const {
-        return oldStroke_ != nullptr;
-    }
-
     const bool isClosed_;
 };
 
