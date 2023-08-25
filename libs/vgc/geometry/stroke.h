@@ -888,7 +888,7 @@ public:
         CurveSnapTransformationMode mode =
             CurveSnapTransformationMode::LinearInArclength) {
 
-        snap_(snapStartPosition, snapEndPosition, mode);
+        return snap_(snapStartPosition, snapEndPosition, mode);
     }
 
     bool isSnapped(const Vec2d& startPosition, const Vec2d& endPosition) const {

@@ -64,8 +64,8 @@ public:
 
     bool snapGeometry();
 
-    std::shared_ptr<const EdgeSampling> samplingShared() const;
-    const EdgeSampling& sampling() const;
+    std::shared_ptr<const geometry::StrokeSampling2d> strokeSamplingShared() const;
+    const geometry::StrokeSampling2d& strokeSampling() const;
     const geometry::Rect2d& centerlineBoundingBox() const;
 
     /// Computes and returns a new array of samples for this edge according to the
@@ -73,7 +73,7 @@ public:
     ///
     /// Unlike `sampling()`, this function does not cache the result.
     ///
-    EdgeSampling computeSampling(geometry::CurveSamplingQuality quality) const;
+    geometry::StrokeSampling2d computeStrokeSampling(geometry::CurveSamplingQuality quality) const;
 
     bool isStartVertex(VertexCell* v) const override {
         return v == startVertex_;
@@ -108,10 +108,10 @@ private:
     //bool isClosed_ = false;
 
     geometry::CurveSamplingQuality samplingQuality_ = {};
-    mutable std::shared_ptr<const EdgeSampling> sampling_ = {};
+    mutable std::shared_ptr<const geometry::StrokeSampling2d> sampling_ = {};
 
-    EdgeSampling computeSampling_(geometry::CurveSamplingQuality quality) const;
-    void updateSampling_() const;
+    geometry::StrokeSampling2d computeStrokeSampling_(geometry::CurveSamplingQuality quality) const;
+    void updateStrokeSampling_() const;
 
     void dirtyMesh_() override;
     bool updateGeometryFromBoundary_() override;

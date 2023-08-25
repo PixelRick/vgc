@@ -104,12 +104,11 @@ public:
         return p;
     }
 
-    T eval(Scalar u, T& tangent, double& speed) const {
+    T eval(Scalar u, T& tangent, double& speed, T& acceleration) const {
         T position = core::noInit;
         T velocity = core::noInit;
 
         if (u == 0) {
-            T acceleration = core::noInit;
             position = computeEndPointDerivatives(0, velocity, acceleration);
             if (velocity == T()) {
                 if (acceleration == T()) {
@@ -125,7 +124,6 @@ public:
             }
         }
         else if (u == 1) {
-            T acceleration = core::noInit;
             position = computeEndPointDerivatives(1, velocity, acceleration);
             if (velocity == T()) {
                 if (acceleration == T()) {
@@ -135,7 +133,7 @@ public:
                     speed = 0;
                     return position;
                 }
-                tangent = -1.0 * acceleration.normalized();
+                tangent = -(acceleration.normalized());
                 speed = 0;
                 return position;
             }
@@ -150,6 +148,11 @@ public:
         return position;
     }
 
+    T eval(Scalar u, T& tangent, double& speed) const {
+        T dummy;
+        return eval(u, tangent, speed, dummy);
+    }
+
     const std::array<QuadraticBezier<T, Scalar>, 2>& quadratics() const {
         return quadratics_;
     }
@@ -158,15 +161,15 @@ public:
         return parameterBounds_;
     }
 
-    Vec2d computeEndPointDerivatives(
+    T computeEndPointDerivatives(
         Int endpointIndex,
-        Vec2d& velocity,
-        Vec2d& acceleration) const {
+        T& velocity,
+        T& acceleration) const {
 
         if (endpointIndex == 0) {
             Scalar v = parameterBounds_[0];
             Scalar dv_du = (1 - v);
-            Vec2d position = quadratics_[0].eval(v, velocity);
+            T position = quadratics_[0].eval(v, velocity);
             velocity *= dv_du;
             acceleration = quadratics_[0].evalSecondDerivative(v) * dv_du;
             return position;
@@ -174,7 +177,7 @@ public:
         else {
             Scalar v = parameterBounds_[1];
             Scalar dv_du = v;
-            Vec2d position = quadratics_[1].eval(v, velocity);
+            T position = quadratics_[1].eval(v, velocity);
             velocity *= dv_du;
             acceleration = quadratics_[1].evalSecondDerivative(v) * dv_du;
             return position;
@@ -199,14 +202,6 @@ private:
 using YukselBezierSegment2d = YukselBezierSegment<Vec2d, double>;
 using YukselBezierSegment1d = YukselBezierSegment<double, double>;
 
-namespace detail {
-
-struct YukselKnotData {
-    double chordLength;
-};
-
-} // namespace detail
-
 class VGC_GEOMETRY_API YukselSplineStroke2d : public AbstractInterpolatingStroke2d {
 private:
     static core::StringId implName;
@@ -228,15 +223,9 @@ public:
         TRangeWidths&& widths)
 
         : AbstractInterpolatingStroke2d(implName, isClosed, std::forward<TRangePositions>(positions), std::forward<TRangeWidths>(widths)) {
-
-        computeCache_();
     }
 
 protected:
-    Int numKnots_() const override;
-
-    bool isZeroLengthSegment_(Int segmentIndex) const override;
-
     Vec2d evalNonZeroCenterline(Int segmentIndex, double u) const override;
 
     Vec2d evalNonZeroCenterline(Int segmentIndex, double u, Vec2d& dp) const override;
@@ -251,27 +240,18 @@ protected:
 
     StrokeSampleEx2d zeroLengthStrokeSample() const override;
 
-    std::array<std::optional<Vec2d>, 2> computeOffsetLineTangentsAtSegmentBoundary_(
-        Int segmentIndex,
-        Int endpointIndex) const override;
-
     YukselBezierSegment2d segmentEvaluator(Int segmentIndex) const;
     YukselBezierSegment2d
     segmentEvaluator(Int segmentIndex, CubicBezier2d& halfwidths) const;
 
-    double constantWidth() const {
-        return widths_[0];
-    }
-
 private:
-    core::Array<Vec2d> positions_;
-    core::Array<double> widths_;
+    std::unique_ptr<AbstractStroke2d> clone_() const override;
+    bool copyAssign_(const AbstractStroke2d* other) override;
+    bool moveAssign_(AbstractStroke2d* other) override;
 
-    core::Array<detail::YukselKnotData> knotsData_;
+    StrokeBoundaryInfo computeBoundaryInfo_() const override;
 
-    bool hasConstantWidth_ = false;
-
-    void computeCache_();
+    void updateCache_(const core::Array<SegmentComputeData>& baseComputeDataArray) const override;
 };
 
 } // namespace vgc::geometry

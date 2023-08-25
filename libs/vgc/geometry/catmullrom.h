@@ -351,25 +351,18 @@ public:
     CatmullRomSplineStroke2d(
         CatmullRomSplineParameterization parameterization,
         bool isClosed,
-        bool hasConstantWidth,
         TRangePositions&& positions,
         TRangeWidths&& widths)
 
-        : AbstractStroke2d(
+        : AbstractInterpolatingStroke2d(
             implName,
             isClosed,
-            hasConstantWidth,
             std::forward<TRangePositions>(positions),
             std::forward<TRangeWidths>(widths))
         , parameterization_(parameterization) {
     }
 
 protected:
-    CubicBezier2d segmentToBezier(Int segmentIndex) const;
-    CubicBezier2d segmentToBezier(Int segmentIndex, CubicBezier2d& halfwidths) const;
-
-    CubicBezier1d segmentToNormalReparametrization(Int segmentIndex) const;
-
     Vec2d evalNonZeroCenterline(Int segmentIndex, double u) const override;
 
     Vec2d evalNonZeroCenterline(Int segmentIndex, double u, Vec2d& dp) const override;
@@ -384,6 +377,20 @@ protected:
 
     StrokeSampleEx2d zeroLengthStrokeSample() const override;
 
+    CubicBezier2d segmentToBezier(Int segmentIndex) const;
+    CubicBezier2d segmentToBezier(Int segmentIndex, CubicBezier2d& halfwidths) const;
+
+    CubicBezier1d segmentToNormalReparametrization(Int segmentIndex) const;
+
+private:
+    std::unique_ptr<AbstractStroke2d> clone_() const override;
+    bool copyAssign_(const AbstractStroke2d* other) override;
+    bool moveAssign_(AbstractStroke2d* other) override;
+
+    StrokeBoundaryInfo computeBoundaryInfo_() const override;
+
+    void updateCache_(const core::Array<SegmentComputeData>& baseComputeDataArray) const override;
+
 private:
     // These two cannot be computed separately at the moment.
     mutable Vec2dArray centerlineControlPoints_;
@@ -391,20 +398,6 @@ private:
     mutable Vec2dArray normalReparametrizationControlValues_;
 
     CatmullRomSplineParameterization parameterization_;
-    mutable bool isCacheDirty_ = true;
-
-    void computeCache_() const;
-
-    void onPositionsChanged_() override;
-    void onWidthsChanged_() override;
-
-    std::array<std::optional<Vec2d>, 2> computeOffsetLineTangentsAtSegmentBoundary_(
-        Int segmentIndex,
-        Int endpointIndex) const override;
-
-    std::unique_ptr<AbstractStroke2d> clone_() const override;
-    bool copyAssign_(const AbstractStroke2d* other) override;
-    bool moveAssign_(AbstractStroke2d* other) override;
 };
 
 } // namespace vgc::geometry

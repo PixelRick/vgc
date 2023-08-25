@@ -18,6 +18,7 @@
 #define VGC_GEOMETRY_INTERPOLATINGSTROKE_H
 
 #include <vgc/core/arithmetic.h>
+#include <vgc/core/assert.h>
 #include <vgc/core/span.h>
 #include <vgc/geometry/api.h>
 #include <vgc/geometry/stroke.h>
@@ -100,7 +101,7 @@ protected:
 
         : AbstractStroke2d(implName, isClosed)
         , positions_(std::forward<TRangePositions>(positions))
-        , widths_(std::forward<TRangeWidths>(widths))) {
+        , widths_(std::forward<TRangeWidths>(widths)) {
 
         hasConstantWidth_ = widths_.length() != positions_.length();
     }
@@ -160,14 +161,16 @@ protected:
     };
 
     const core::DoubleArray& chordLengths() const {
+        updateCache();
         return chordLengths_;
     }
 
     const core::Array<CurveSegmentType>& segmentTypes() const {
+        updateCache();
         return segmentTypes_;
     }
 
-    core::Array<SegmentComputeData> computeCache_() const;
+    void updateCache() const;
 
 private:
     std::unique_ptr<AbstractStroke2d> clone_() const override = 0;
@@ -232,18 +235,21 @@ private:
 
     bool hasConstantWidth_ = false;
 
+    mutable bool isCacheDirty_ = true;
+
     void computePositionsS_(core::DoubleArray& positionsS) const;
 
-    virtual void onPositionsChanged_() = 0;
-    virtual void onWidthsChanged_() = 0;
+    void onPositionsChanged_();
+    void onWidthsChanged_();
+
+    virtual void
+    updateCache_(const core::Array<SegmentComputeData>& baseComputeDataArray) const = 0;
 };
 
 namespace detail {
 
-void checkSegmentIndexIsValid(Int segmentIndex, Int numSegments) {
-    VGC_ASSERT(segmentIndex >= 0);
-    VGC_ASSERT(segmentIndex < numSegments);
-}
+VGC_GEOMETRY_API
+void checkSegmentIndexIsValid(Int segmentIndex, Int numSegments);
 
 template<std::size_t I, typename... T, std::size_t... Is>
 constexpr std::tuple<std::tuple_element_t<I + Is, std::tuple<T...>>...>

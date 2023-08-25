@@ -36,6 +36,12 @@ namespace vgc::vacomplex {
 class KeyEdge;
 class KeyEdgeData;
 
+namespace detail {
+
+class Operations;
+
+}
+
 class VGC_VACOMPLEX_API KeyHalfedgeGeometry {
 public:
     KeyHalfedgeGeometry() noexcept = default;

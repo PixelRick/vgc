@@ -117,8 +117,11 @@ computeSegmentTypeFromChordLengths(const std::array<double, 3>& segmentChordLeng
 
 } // namespace
 
-core::Array<AbstractInterpolatingStroke2d::SegmentComputeData>
-AbstractInterpolatingStroke2d::computeCache_() const {
+void AbstractInterpolatingStroke2d::updateCache() const {
+
+    if (!isCacheDirty_) {
+        return;
+    }
 
     core::Array<SegmentComputeData> computeDataArray;
 
@@ -160,7 +163,8 @@ AbstractInterpolatingStroke2d::computeCache_() const {
         }
     }
 
-    return computeDataArray;
+    updateCache_(computeDataArray);
+    isCacheDirty_ = false;
 }
 
 Int AbstractInterpolatingStroke2d::numKnots_() const {
@@ -168,7 +172,7 @@ Int AbstractInterpolatingStroke2d::numKnots_() const {
 }
 
 bool AbstractInterpolatingStroke2d::isZeroLengthSegment_(Int segmentIndex) const {
-    computeCache_();
+    updateCache();
     return chordLengths_[segmentIndex] == 0;
 }
 
@@ -227,7 +231,7 @@ void AbstractInterpolatingStroke2d::assignConcat_(
     bool smoothJoin) {
 
     auto a = dynamic_cast<AbstractInterpolatingStroke2d*>(a_);
-    auto b = dynamic_cast<AbstractInterpolatingStroke2d*>(a_);
+    auto b = dynamic_cast<AbstractInterpolatingStroke2d*>(b_);
     if (!a || !b) {
         VGC_WARNING(
             LogVgcGeometry,
@@ -269,7 +273,7 @@ void AbstractInterpolatingStroke2d::assignConcat_(
 
     if (nB > 0) {
         bool skipFirst = false;
-        if (nA > 0) {
+        if (smoothJoin && nA > 0) {
             Vec2d bFirst = reverseB ? b->positions_.last() : b->positions_.first();
             if (newPositions.last() == bFirst) {
                 skipFirst = true;
@@ -1864,7 +1868,7 @@ Vec2d AbstractInterpolatingStroke2d::sculptGrab_(
     const Vec2d& startPosition,
     const Vec2d& endPosition,
     double radius,
-    double strength,
+    double /*strength*/,
     double tolerance,
     bool isClosed) {
 
@@ -2136,7 +2140,7 @@ Vec2d AbstractInterpolatingStroke2d::sculptWidth_(
     const Vec2d& position,
     double delta,
     double radius,
-    double tolerance,
+    double /*tolerance*/,
     bool isClosed) {
 
     Int numKnots = positions_.length();
@@ -2401,6 +2405,19 @@ void AbstractInterpolatingStroke2d::computePositionsS_(
         positionsS[i] = s;
         sampling.clear();
     }
+}
+
+void AbstractInterpolatingStroke2d::onPositionsChanged_() {
+    isCacheDirty_ = true;
+}
+
+void AbstractInterpolatingStroke2d::onWidthsChanged_() {
+    isCacheDirty_ = true;
+}
+
+void detail::checkSegmentIndexIsValid(Int segmentIndex, Int numSegments) {
+    VGC_ASSERT(segmentIndex >= 0);
+    VGC_ASSERT(segmentIndex < numSegments);
 }
 
 /*
