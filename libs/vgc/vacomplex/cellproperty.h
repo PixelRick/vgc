@@ -30,18 +30,19 @@ namespace vgc::vacomplex {
 class CellProperty;
 class CellData;
 class KeyEdgeData;
+class KeyFaceData;
 
-class VGC_VACOMPLEX_API DirectedCellProperty {
+class VGC_VACOMPLEX_API KeyHalfedgeData {
 public:
-    DirectedCellProperty() noexcept = default;
+    KeyHalfedgeData() noexcept = default;
 
-    DirectedCellProperty(CellProperty* property, bool direction) noexcept
-        : property_(property)
+    KeyHalfedgeData(KeyEdgeData* edgeData, bool direction) noexcept
+        : edgeData_(edgeData)
         , direction_(direction) {
     }
 
-    CellProperty* property() const {
-        return property_;
+    KeyEdgeData* edgeData() const {
+        return edgeData_;
     }
 
     bool direction() const {
@@ -49,7 +50,7 @@ public:
     }
 
 private:
-    CellProperty* property_ = nullptr;
+    KeyEdgeData* edgeData_ = nullptr;
     bool direction_ = false;
 };
 
@@ -92,27 +93,23 @@ private:
     // Returns OpResult::Unchanged by default.
     virtual OpResult onTransform_(const geometry::Mat3d& transformation);
 
-    // Returns a null pointer by default.
-    virtual std::unique_ptr<CellProperty>
-    onKeyEdgeConcat_(DirectedCellProperty hep1, DirectedCellProperty hep2) const;
-
-    // Returns a null pointer by default.
-    virtual std::unique_ptr<CellProperty>
-    onKeyEdgeGlue_(core::Span<DirectedCellProperty> heps) const;
-
     // Returns OpResult::Unchanged by default.
-    virtual OpResult onKeyEdgeSnap_(
-        const geometry::Vec2d& snapStartPosition,
-        const geometry::Vec2d& snapEndPosition);
+    virtual OpResult onKeyEdgeStrokeChanged_(const geometry::AbstractStroke2d* newStroke);
 
-    // Returns OpResult::Unchanged by default.
-    virtual OpResult onKeyEdgeStrokeChanged_(
-        geometry::AbstractStroke2d* oldStroke,
-        geometry::AbstractStroke2d* newStroke);
+    // Returns a null pointer by default.
+    virtual std::unique_ptr<CellProperty> onKeyEdgeGlue_(
+        core::ConstSpan<KeyHalfedgeData> khds,
+        const geometry::AbstractStroke2d* gluedStroke) const;
+
+    // Returns a null pointer by default.
+    virtual std::unique_ptr<CellProperty> onKeyEdgeConcat_(
+        const KeyHalfedgeData& khd1,
+        const KeyHalfedgeData& khd2) const;
+
 
     // Returns a null pointer by default.
     virtual std::unique_ptr<CellProperty>
-    onKeyFaceGlue_(core::Span<CellProperty> heps) const;
+    onKeyFaceGlue_(core::ConstSpan<const KeyFaceData*> kfds) const;
 
     // Returns OpResult::Unchanged by default.
     virtual OpResult onOperationEnd_();

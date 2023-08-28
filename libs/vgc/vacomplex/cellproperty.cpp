@@ -26,34 +26,27 @@ CellProperty::OpResult CellProperty::onTransform_(const geometry::Mat3d& transfo
     return OpResult::Unchanged;
 }
 
+CellProperty::OpResult
+CellProperty::onKeyEdgeStrokeChanged_(const geometry::AbstractStroke2d* newStroke) {
+    return OpResult::Unchanged;
+}
+
 std::unique_ptr<CellProperty> CellProperty::onKeyEdgeConcat_(
-    DirectedCellProperty hep1,
-    DirectedCellProperty hep2) const {
+    const KeyHalfedgeData& khd1,
+    const KeyHalfedgeData& khd2) const {
+
+    return nullptr;
+}
+
+std::unique_ptr<CellProperty> CellProperty::onKeyEdgeGlue_(
+    core::ConstSpan<KeyHalfedgeData> khds,
+    const geometry::AbstractStroke2d* gluedStroke) const {
 
     return nullptr;
 }
 
 std::unique_ptr<CellProperty>
-CellProperty::onKeyEdgeGlue_(core::Span<DirectedCellProperty> heps) const {
-    return nullptr;
-}
-
-CellProperty::OpResult CellProperty::onKeyEdgeSnap_(
-    const geometry::Vec2d& snapStartPosition,
-    const geometry::Vec2d& snapEndPosition) {
-
-    return OpResult::Unchanged;
-}
-
-CellProperty::OpResult CellProperty::onKeyEdgeStrokeChanged_(
-    geometry::AbstractStroke2d* oldStroke,
-    geometry::AbstractStroke2d* newStroke) {
-
-    return OpResult::Unchanged;
-}
-
-std::unique_ptr<CellProperty>
-CellProperty::onKeyFaceGlue_(core::Span<CellProperty> heps) const {
+CellProperty::onKeyFaceGlue_(core::ConstSpan<const KeyFaceData*> kfds) const {
     return nullptr;
 }
 

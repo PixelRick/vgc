@@ -399,7 +399,7 @@ private:
     mutable bool selectionTestCacheResult_ = false;
 
     // stage PreJoinGeometry
-    std::shared_ptr<const vacomplex::EdgeSampling> sampling_;
+    std::shared_ptr<const geometry::StrokeSampling2d> sampling_;
     geometry::StrokeSample2dArray defaultSamples_;
 
     // stage PostJoinGeometry

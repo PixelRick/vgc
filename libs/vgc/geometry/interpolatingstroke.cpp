@@ -167,6 +167,21 @@ void AbstractInterpolatingStroke2d::updateCache() const {
     isCacheDirty_ = false;
 }
 
+bool AbstractInterpolatingStroke2d::convertAssign_(const AbstractStroke2d* other_) {
+    auto other = dynamic_cast<const AbstractInterpolatingStroke2d*>(other_);
+    if (!other) {
+        return false;
+    }
+    setPositions(other->positions());
+    if (other->hasConstantWidth()) {
+        setConstantWidth(other->constantWidth());
+    }
+    else {
+        setWidths(other->widths());
+    }
+    return true;
+}
+
 Int AbstractInterpolatingStroke2d::numKnots_() const {
     return positions_.length();
 }
@@ -224,14 +239,14 @@ void extend_(core::Array<T>& dest, const TRange& range, bool reverse, bool skipF
 } // namespace
 
 void AbstractInterpolatingStroke2d::assignConcat_(
-    AbstractStroke2d* a_,
-    bool reverseA,
-    AbstractStroke2d* b_,
-    bool reverseB,
+    const AbstractStroke2d* a_,
+    bool directionA,
+    const AbstractStroke2d* b_,
+    bool directionB,
     bool smoothJoin) {
 
-    auto a = dynamic_cast<AbstractInterpolatingStroke2d*>(a_);
-    auto b = dynamic_cast<AbstractInterpolatingStroke2d*>(b_);
+    auto a = dynamic_cast<const AbstractInterpolatingStroke2d*>(a_);
+    auto b = dynamic_cast<const AbstractInterpolatingStroke2d*>(b_);
     if (!a || !b) {
         VGC_WARNING(
             LogVgcGeometry,
@@ -265,16 +280,16 @@ void AbstractInterpolatingStroke2d::assignConcat_(
                 newWidths.extend(nA, cwA);
             }
             else {
-                extend_(newWidths, a->widths_, reverseA, false);
+                extend_(newWidths, a->widths_, !directionA, false);
             }
         }
-        extend_(newPositions, a->positions_, reverseA, false);
+        extend_(newPositions, a->positions_, !directionA, false);
     }
 
     if (nB > 0) {
         bool skipFirst = false;
         if (smoothJoin && nA > 0) {
-            Vec2d bFirst = reverseB ? b->positions_.last() : b->positions_.first();
+            Vec2d bFirst = directionB ? b->positions_.first() : b->positions_.last();
             if (newPositions.last() == bFirst) {
                 skipFirst = true;
             }
@@ -284,15 +299,173 @@ void AbstractInterpolatingStroke2d::assignConcat_(
                 newWidths.extend(skipFirst ? nB - 1 : nB, cwB);
             }
             else {
-                extend_(newWidths, b->widths_, reverseB, skipFirst);
+                extend_(newWidths, b->widths_, !directionB, skipFirst);
             }
         }
-        extend_(newPositions, b->positions_, reverseB, skipFirst);
+        extend_(newPositions, b->positions_, !directionB, skipFirst);
     }
 
     hasConstantWidth_ = !newStrokeHasVaryingWidth;
     positions_ = std::move(newPositions);
     widths_ = std::move(newWidths);
+    onPositionsChanged_();
+    onWidthsChanged_();
+}
+
+void AbstractInterpolatingStroke2d::assignAverage_(
+    core::ConstSpan<const AbstractStroke2d*> strokes,
+    core::ConstSpan<bool> directions) {
+
+    struct ThickPoint {
+        Vec2d pos;
+        double width;
+
+        ThickPoint(Vec2d pos, double width)
+            : pos(pos)
+            , width(width) {
+        }
+        explicit ThickPoint(const StrokeSample2d& sample)
+            : pos(sample.position())
+            , width(sample.halfwidth(0) + sample.halfwidth(1)) {
+        }
+
+        ThickPoint average(const ThickPoint& other) {
+            return ThickPoint{0.5 * (pos + other.pos), 0.5 * (width + other.width)};
+        }
+
+        ThickPoint average(const StrokeSample2d& sample) {
+            return ThickPoint{
+                0.5 * (pos + sample.position()),
+                0.5 * (width + sample.halfwidth(0) + sample.halfwidth(1))};
+        }
+
+        ThickPoint lerp(const ThickPoint& other, double t) {
+            return ThickPoint{
+                (1. - t) * pos + t * other.pos, (1. - t) * width + t * other.width};
+        }
+    };
+    core::Array<ThickPoint> newPoints;
+
+    if (strokes.length() != 2) {
+        // unsupported atm ?
+        return;
+    }
+
+    StrokeSampling2d sampling0 =
+        strokes[0]->computeSampling(CurveSamplingQuality::AdaptiveHigh);
+    StrokeSampling2d sampling1 =
+        strokes[1]->computeSampling(CurveSamplingQuality::AdaptiveHigh);
+
+    StrokeSample2dArray samples0 = sampling0.samples();
+    if (!directions[0]) {
+        std::reverse(samples0.begin(), samples0.end());
+        double maxS = samples0.begin()->s();
+        for (StrokeSample2d& sample : samples0) {
+            sample.setS(maxS - sample.s());
+        }
+    }
+    StrokeSample2dArray samples1 = sampling1.samples();
+    if (!directions[1]) {
+        std::reverse(samples1.begin(), samples1.end());
+        double maxS = samples1.begin()->s();
+        for (StrokeSample2d& sample : samples1) {
+            sample.setS(maxS - sample.s());
+        }
+    }
+
+    if (samples0.length() < 2) {
+        Int n = samples1.length();
+        newPoints.resizeNoInit(n);
+        ThickPoint fep0(samples0.first());
+        for (Int i = 0; i < n; ++i) {
+            newPoints[i] = fep0.average(samples1[i]);
+        }
+    }
+    else if (samples1.length() < 2) {
+        Int n = samples0.length();
+        newPoints.resizeNoInit(n);
+        ThickPoint fep1(samples1.first());
+        for (Int i = 0; i < n; ++i) {
+            newPoints[i] = fep1.average(samples1[i]);
+        }
+    }
+    else {
+        double l0 = samples0.last().s();
+        double l1 = samples1.last().s();
+
+        Int n0 = samples0.length();
+        Int n1 = samples1.length();
+        Int n = std::max<Int>(0, n0 - 2) + std::max<Int>(0, n1 - 2) + 2;
+
+        // Compute an interpolation between the two curve with the given direction.
+
+        ThickPoint p0a = ThickPoint(samples0.first());
+        ThickPoint p1a = ThickPoint(samples1.first());
+
+        core::Array<ThickPoint> points0;
+        points0.reserve(n);
+        points0.append(p0a);
+
+        core::Array<ThickPoint> points1;
+        points1.reserve(n);
+        points1.append(p1a);
+
+        double u0a = 0;
+        Int i0 = std::min<Int>(1, n0);
+        double u1a = 0;
+        Int i1 = std::min<Int>(1, n1);
+
+        for (Int i = 1; i < n - 1; ++i) {
+            const StrokeSample2d& currentSample0 = samples0[i0];
+            const StrokeSample2d& currentSample1 = samples1[i1];
+            double u0b = currentSample0.s() / l0;
+            double u1b = currentSample1.s() / l1;
+            ThickPoint p0 = ThickPoint(currentSample0);
+            ThickPoint p1 = ThickPoint(currentSample1);
+            bool canIterate0 = i0 < n0 - 1;
+            bool canIterate1 = i1 < n1 - 1;
+            if (canIterate1 && (u0b > u1b || !canIterate0)) {
+                double t = (u1b - u0a) / (u0b - u0a);
+                points0.append(p0a.lerp(p0, t));
+                points1.append(p1);
+                u1a = u1b;
+                p1a = p1;
+                ++i1;
+            }
+            else if (canIterate0) {
+                double t = (u0b - u1a) / (u1b - u1a);
+                points0.append(p0);
+                points1.append(p1a.lerp(p1, t));
+                u0a = u0b;
+                p0a = p0;
+                ++i0;
+            }
+            else {
+                // shouldn't happen if `n` is correct.
+                break;
+            }
+        }
+
+        points0.emplaceLast(samples0.last());
+        points1.emplaceLast(samples1.last());
+
+        newPoints.resizeNoInit(n);
+        for (Int i = 0; i < n; ++i) {
+            newPoints[i] = points0[i].average(points1[i]);
+        }
+    }
+
+    core::Array<Vec2d> newPositions;
+    core::Array<double> newWidths;
+    for (const ThickPoint& p : newPoints) {
+        newPositions.append(p.pos);
+        newWidths.append(p.width);
+    }
+
+    setPositions(newPositions);
+    setWidths(newWidths);
+    onPositionsChanged_();
+    onWidthsChanged_();
 }
 
 namespace {
@@ -390,7 +563,7 @@ struct SculptPoint {
 struct SculptSampling {
     core::Array<SculptPoint> sculptPoints;
     // sampling boundaries in arclength from central sculpt point.
-    geometry::Vec2d cappedRadii = {};
+    Vec2d cappedRadii = {};
     // distance between sculpt points that are before the middle sculpt point
     double ds0 = 0;
     // distance between sculpt points that are after the middle sculpt point
@@ -422,7 +595,7 @@ struct SculptSampling {
 //
 void computeSculptSampling(
     SculptSampling& outSampling,
-    geometry::StrokeSampleEx2dArray& samples,
+    StrokeSampleEx2dArray& samples,
     double sMiddle,
     double radius,
     double maxDs,
@@ -441,7 +614,7 @@ void computeSculptSampling(
 
     Int numSculptPointsBeforeMsp = 0;
     Int numSculptPointsAfterMsp = 0;
-    geometry::Vec2d cappedRadii = {};
+    Vec2d cappedRadii = {};
     double ds0 = 0;
     double ds1 = 0;
     double curveLength = samples.last().s(); // XXX substract samples.first().s()?
@@ -585,7 +758,7 @@ void computeSculptSampling(
             nextSculptPointS = samples.first().s(); // = 0
         }
 
-        core::Array<geometry::Vec2d> positions(numSamples, core::noInit);
+        core::Array<Vec2d> positions(numSamples, core::noInit);
         core::Array<double> widths(numSamples, core::noInit);
         for (Int i = 0; i < (isClosed ? numSamples - 1 : numSamples); ++i) {
             positions[i] = samples[i].position();
@@ -597,9 +770,9 @@ void computeSculptSampling(
             // Iterate over sample segments
             // Loop invariant: `nextSculptPointS >= sa1->s()` (as long as `sa2->s() >= sa1->s()`)
             //
-            const geometry::StrokeSampleEx2d* sa1 = &samples[0];
+            const StrokeSampleEx2d* sa1 = &samples[0];
             for (Int iSample2 = 1; iSample2 < numSamples && !isDone; ++iSample2) {
-                const geometry::StrokeSampleEx2d* sa2 = &samples[iSample2];
+                const StrokeSampleEx2d* sa2 = &samples[iSample2];
                 const double d = sa2->s() - sa1->s();
                 // Skip the segment if it is degenerate.
                 if (d > 0) {
@@ -609,11 +782,11 @@ void computeSculptSampling(
                         // Sample a sculpt point at t in segment [sa1:0, sa2:1].
                         double t = (nextSculptPointS - sa1->s()) * invD;
 
-                        //geometry::Vec2d p = stroke.evalPosition(t);
+                        //Vec2d p = stroke.evalPosition(t);
                         //double w = stroke.evalHalfwidths(t) * 2.0;
 
                         double u = 1.0 - t;
-                        geometry::Vec2d p = u * sa1->position() + t * sa2->position();
+                        Vec2d p = u * sa1->position() + t * sa2->position();
                         double w = (u * sa1->halfwidth(0) + t * sa2->halfwidth(0)) * 2.0;
 
                         double distanceToMiddle;
@@ -721,25 +894,25 @@ template<typename TPoint, typename PositionGetter, typename WidthGetter>
             continue;
         }
 
-        geometry::Vec2d a = positionGetter(points[iA], iA);
-        geometry::Vec2d b = positionGetter(points[iB], iB);
+        Vec2d a = positionGetter(points[iA], iA);
+        Vec2d b = positionGetter(points[iB], iB);
         double wA = widthGetter(points[iA], iA);
         double wB = widthGetter(points[iB], iB);
 
-        geometry::Vec2d ab = b - a;
+        Vec2d ab = b - a;
         double abLen = ab.length();
 
         // Compute which sample between A and B has an offset point
         // furthest from the offset line AB.
         Int maxOffsetDiffPointIndex = -1;
         if (abLen > 0) {
-            geometry::Vec2d dir = ab / abLen;
+            Vec2d dir = ab / abLen;
             // Catmull-Rom is not a linear interpolation, since we don't
             // compute the ground truth here we thus need a bigger threshold.
             // For now we use X% of the width from linear interp. value.
             for (Int j = iA + 1; j < iB; ++j) {
-                geometry::Vec2d p = positionGetter(points[j], j);
-                geometry::Vec2d ap = p - a;
+                Vec2d p = positionGetter(points[j], j);
+                Vec2d ap = p - a;
                 double t = ap.dot(dir) / abLen;
                 double w = (1 - t) * wA + t * wB;
                 double dist = (std::abs)(w - widthGetter(points[j], j));
@@ -783,9 +956,9 @@ Int filterPointsStep(
             continue;
         }
 
-        geometry::Vec2d a = positionGetter(points[iA], iA);
-        geometry::Vec2d b = positionGetter(points[iB], iB);
-        geometry::Vec2d ab = b - a;
+        Vec2d a = positionGetter(points[iA], iA);
+        Vec2d b = positionGetter(points[iB], iB);
+        Vec2d ab = b - a;
         double abLen = ab.length();
 
         // Compute which sample between A and B has a position
@@ -794,8 +967,8 @@ Int filterPointsStep(
         Int maxDistPointIndex = -1;
         if (abLen > 0) {
             for (Int j = iA + 1; j < iB; ++j) {
-                geometry::Vec2d p = positionGetter(points[j], j);
-                geometry::Vec2d ap = p - a;
+                Vec2d p = positionGetter(points[j], j);
+                Vec2d ap = p - a;
                 double dist = (std::abs)(ab.det(ap) / abLen);
                 if (dist > maxDist) {
                     maxDist = dist;
@@ -805,8 +978,8 @@ Int filterPointsStep(
         }
         else {
             for (Int j = iA + 1; j < iB; ++j) {
-                geometry::Vec2d p = positionGetter(points[j], j);
-                geometry::Vec2d ap = p - a;
+                Vec2d p = positionGetter(points[j], j);
+                Vec2d ap = p - a;
                 double dist = ap.length();
                 if (dist > maxDist) {
                     maxDist = dist;
@@ -1057,7 +1230,7 @@ private:
             q -= 1;
             r += repeatN_;
         }
-        geometry::Vec2d p = {};
+        Vec2d p = {};
         double w = 0;
         if (r >= n) {
             Int mirroredR = repeatN_ - r;
@@ -1081,15 +1254,15 @@ private:
 class SculptSmoothAlgorithm {
 public:
     bool execute(
-        geometry::Vec2dArray& outKnotPositions,
+        Vec2dArray& outKnotPositions,
         core::DoubleArray& outKnotWidths,
-        geometry::Vec2d& outSculptCursorPosition,
-        const geometry::Vec2d& position,
+        Vec2d& outSculptCursorPosition,
+        const Vec2d& position,
         double strength,
         double radius,
         const AbstractInterpolatingStroke2d* stroke,
         bool isClosed,
-        geometry::CurveSamplingQuality samplingQuality,
+        CurveSamplingQuality samplingQuality,
         double maxDs,
         double simplifyTolerance) {
 
@@ -1186,26 +1359,24 @@ public:
         core::IntArray indices;
         indices.extend({simplifyFirstIndex, simplifyLastIndex});
         if (hasWidths_) {
-            filterPointsStep<geometry::Vec2d>(
+            filterPointsStep<Vec2d>(
                 newKnotPositions_,
                 indices,
                 0,
                 isClosed,
                 simplifyTolerance,
-                [](const geometry::Vec2d& p, Int) { return p; },
-                [&](const geometry::Vec2d&, Int i) -> double {
-                    return newKnotWidths_[i];
-                });
+                [](const Vec2d& p, Int) { return p; },
+                [&](const Vec2d&, Int i) -> double { return newKnotWidths_[i]; });
         }
         else {
-            filterPointsStep<geometry::Vec2d>(
+            filterPointsStep<Vec2d>(
                 newKnotPositions_,
                 indices,
                 0,
                 isClosed,
                 simplifyTolerance,
-                [](const geometry::Vec2d& p, Int) { return p; },
-                [](const geometry::Vec2d&, Int) -> double { return 1.0; });
+                [](const Vec2d& p, Int) { return p; },
+                [](const Vec2d&, Int) -> double { return 1.0; });
         }
 
         // TODO: add index in filterPointsStep functor parameters to be
@@ -1311,13 +1482,11 @@ public:
     }
 
 private:
-    bool
-    initStrokeSampling_(geometry::CurveSamplingQuality /*quality*/, double /*maxDs*/) {
+    bool initStrokeSampling_(CurveSamplingQuality /*quality*/, double /*maxDs*/) {
         if (numKnots_ < 2) {
             return false;
         }
-        geometry::CurveSamplingParameters samplingParams(
-            geometry::CurveSamplingQuality::AdaptiveLow);
+        CurveSamplingParameters samplingParams(CurveSamplingQuality::AdaptiveLow);
         //samplingParams.setMaxDs(0.5 * maxDs);
         //samplingParams.setMaxIntraSegmentSamples(2047);
         knotsS_.resizeNoInit(numKnots_);
@@ -1339,12 +1508,11 @@ private:
         return true;
     }
 
-    bool
-    initSculptSampling_(const geometry::Vec2d& position, double radius, double maxDs) {
+    bool initSculptSampling_(const Vec2d& position, double radius, double maxDs) {
         // Note: we could have a distanceToCurve specialized for our geometry.
         // It could check each control polygon region first to skip sampling the ones
         // that are strictly farther than an other.
-        geometry::DistanceToCurve d = geometry::distanceToCurve(samples_, position);
+        DistanceToCurve d = distanceToCurve(samples_, position);
         if (d.distance() > radius) {
             return false;
         }
@@ -1352,10 +1520,10 @@ private:
         // Compute middle sculpt point info (closest point).
         Int mspSegmentIndex = d.segmentIndex();
         double mspSegmentParameter = d.segmentParameter();
-        geometry::StrokeSample2d mspSample = samples_[mspSegmentIndex];
+        StrokeSample2d mspSample = samples_[mspSegmentIndex];
         if (mspSegmentParameter > 0 && mspSegmentIndex + 1 < samples_.length()) {
-            const geometry::StrokeSample2d& s2 = samples_[mspSegmentIndex + 1];
-            mspSample = geometry::lerp(mspSample, s2, mspSegmentParameter);
+            const StrokeSample2d& s2 = samples_[mspSegmentIndex + 1];
+            mspSample = lerp(mspSample, s2, mspSegmentParameter);
         }
 
         computeSculptSampling(
@@ -1716,9 +1884,9 @@ private:
             //
             double t = (sMean - s1) / (s2 - s1);
             double u = 1.0 - t;
-            geometry::Vec2d dp = u * (wasp1.pos - sp1.pos) + t * (wasp2.pos - sp2.pos);
-            geometry::Vec2d p = u * sp1.pos + t * sp2.pos;
-            geometry::Vec2d np = p + strength * dp;
+            Vec2d dp = u * (wasp1.pos - sp1.pos) + t * (wasp2.pos - sp2.pos);
+            Vec2d p = u * sp1.pos + t * sp2.pos;
+            Vec2d np = p + strength * dp;
             newKnotPositions_.append(np);
             if (hasWidths_) {
                 double dw = u * (wasp1.width - sp1.width) + t * (wasp2.width - sp2.width);
@@ -1742,8 +1910,8 @@ private:
         }
 
         Int iMsp = sculptSampling_.closestSculptPointIndex;
-        geometry::Vec2d scp = sculptPoints[iMsp].pos;
-        geometry::Vec2d wascp = weightedAverage.computeAveraged(iMsp).pos;
+        Vec2d scp = sculptPoints[iMsp].pos;
+        Vec2d wascp = weightedAverage.computeAveraged(iMsp).pos;
         outSculptCursorPosition_ = scp + (wascp - scp) * strength;
         // XXX TODO: Fix cursor not displayed exactly at the rendered curve.
         // This is caused by the Catmull-Rom interpolation of the filtered
@@ -1834,7 +2002,7 @@ private:
     bool hasWidths_ = false;
 
     // Computed sampling
-    geometry::StrokeSampleEx2dArray samples_;
+    StrokeSampleEx2dArray samples_;
     core::Array<double> knotsS_;
     double totalS_ = 0;
 
@@ -1857,9 +2025,9 @@ private:
     Int newStartKnotIndex_ = 0;
 
     // Output
-    geometry::Vec2dArray newKnotPositions_;
+    Vec2dArray newKnotPositions_;
     core::DoubleArray newKnotWidths_;
-    geometry::Vec2d outSculptCursorPosition_;
+    Vec2d outSculptCursorPosition_;
 };
 
 } // namespace
@@ -1887,9 +2055,8 @@ Vec2d AbstractInterpolatingStroke2d::sculptGrab_(
     // Note: We sample with widths even though we only need widths for samples in radius.
     // We could benefit from a two step sampling (sample centerline points, then sample
     // cross sections on an sub-interval).
-    geometry::StrokeSampleEx2dArray samples;
-    geometry::CurveSamplingParameters samplingParams(
-        geometry::CurveSamplingQuality::AdaptiveLow);
+    StrokeSampleEx2dArray samples;
+    CurveSamplingParameters samplingParams(CurveSamplingQuality::AdaptiveLow);
     //samplingParams.setMaxDs(0.5 * maxDs);
     //samplingParams.setMaxIntraSegmentSamples(2047);
     core::Array<double> pointsS(numPoints, core::noInit);
@@ -1899,7 +2066,7 @@ Vec2d AbstractInterpolatingStroke2d::sculptGrab_(
         samples.pop();
         sampleRange(
             samples,
-            geometry::CurveSamplingQuality::AdaptiveLow,
+            CurveSamplingQuality::AdaptiveLow,
             i,
             Int{(!isClosed && i == numPoints - 1) ? 0 : 1},
             true);
@@ -1908,7 +2075,7 @@ Vec2d AbstractInterpolatingStroke2d::sculptGrab_(
     // Note: we could have a distanceToCurve specialized for our geometry.
     // It could check each control polygon region first to skip sampling the ones
     // that are strictly farther than an other.
-    geometry::DistanceToCurve d = geometry::distanceToCurve(samples, startPosition);
+    DistanceToCurve d = distanceToCurve(samples, startPosition);
     if (d.distance() > radius) {
         return endPosition;
     }
@@ -1916,10 +2083,10 @@ Vec2d AbstractInterpolatingStroke2d::sculptGrab_(
     // Compute middle sculpt point info (closest point).
     Int mspSegmentIndex = d.segmentIndex();
     double mspSegmentParameter = d.segmentParameter();
-    geometry::StrokeSample2d mspSample = samples[mspSegmentIndex];
+    StrokeSample2d mspSample = samples[mspSegmentIndex];
     if (mspSegmentParameter > 0 && mspSegmentIndex + 1 < samples.length()) {
-        const geometry::StrokeSample2d& s2 = samples[mspSegmentIndex + 1];
-        mspSample = geometry::lerp(mspSample, s2, mspSegmentParameter);
+        const StrokeSample2d& s2 = samples[mspSegmentIndex + 1];
+        mspSample = lerp(mspSample, s2, mspSegmentParameter);
     }
     double sMiddle = mspSample.s();
 
@@ -1929,12 +2096,11 @@ Vec2d AbstractInterpolatingStroke2d::sculptGrab_(
 
     core::Array<SculptPoint>& sculptPoints = sculptSampling.sculptPoints;
 
-    geometry::Vec2d delta = endPosition - startPosition;
+    Vec2d delta = endPosition - startPosition;
 
     if (!isClosed) {
-        geometry::Vec2d uMins =
-            geometry::Vec2d(1.0, 1.0) - sculptSampling.cappedRadii / radius;
-        geometry::Vec2d wMins(cubicEaseInOut(uMins[0]), cubicEaseInOut(uMins[1]));
+        Vec2d uMins = Vec2d(1.0, 1.0) - sculptSampling.cappedRadii / radius;
+        Vec2d wMins(cubicEaseInOut(uMins[0]), cubicEaseInOut(uMins[1]));
         for (Int i = 0; i < sculptPoints.length(); ++i) {
             SculptPoint& sp = sculptPoints[i];
             double u = {};
@@ -2169,9 +2335,8 @@ Vec2d AbstractInterpolatingStroke2d::sculptWidth_(
     // Note: We sample with widths even though we only need widths for samples in radius.
     // We could benefit from a two step sampling (sample centerline points, then sample
     // cross sections on an sub-interval).
-    geometry::StrokeSampleEx2dArray samples;
-    geometry::CurveSamplingParameters samplingParams(
-        geometry::CurveSamplingQuality::AdaptiveLow);
+    StrokeSampleEx2dArray samples;
+    CurveSamplingParameters samplingParams(CurveSamplingQuality::AdaptiveLow);
 
     core::Array<Int> knotToSampleIndex(numKnots, core::noInit);
     knotToSampleIndex[0] = 0;
@@ -2186,7 +2351,7 @@ Vec2d AbstractInterpolatingStroke2d::sculptWidth_(
     // Note: we could have a distanceToCurve specialized for our geometry.
     // It could check each control polygon region first to skip sampling the ones
     // that are strictly farther than an other.
-    geometry::DistanceToCurve dtc = geometry::distanceToCurve(samples, position);
+    DistanceToCurve dtc = distanceToCurve(samples, position);
     if (dtc.distance() > radius) {
         return position;
     }
@@ -2194,16 +2359,16 @@ Vec2d AbstractInterpolatingStroke2d::sculptWidth_(
     // Compute closest point info.
     Int closestSegmentIndex = dtc.segmentIndex();
     double closestSegmentParameter = dtc.segmentParameter();
-    geometry::StrokeSample2d closestSample = samples[closestSegmentIndex];
+    StrokeSample2d closestSample = samples[closestSegmentIndex];
     if (closestSegmentParameter > 0 && closestSegmentIndex + 1 < samples.length()) {
-        const geometry::StrokeSample2d& s2 = samples[closestSegmentIndex + 1];
-        closestSample = geometry::lerp(closestSample, s2, closestSegmentParameter);
+        const StrokeSample2d& s2 = samples[closestSegmentIndex + 1];
+        closestSample = lerp(closestSample, s2, closestSegmentParameter);
     }
     double sMiddle = closestSample.s();
 
     // First pass: update widths of original knots.
     for (Int i = 0; i < numKnots; ++i) {
-        geometry::StrokeSampleEx2d& sample = samples[knotToSampleIndex[i]];
+        StrokeSampleEx2d& sample = samples[knotToSampleIndex[i]];
         double s = sample.s();
         double d = std::abs(s - sMiddle);
         if (isClosed) {
@@ -2284,11 +2449,11 @@ Vec2d AbstractInterpolatingStroke2d::sculptWidth_(
     if (isClosed) {
         iKnot = numKnots - 1;
     }
-    geometry::Vec2dArray tmpPositions;
+    Vec2dArray tmpPositions;
     core::Array<double> tmpWidths;
     for (; iKnot >= 0 && iTarget >= 0; --iKnot) {
         Int j0 = knotToSampleIndex[iKnot];
-        const geometry::StrokeSampleEx2d& sample = samples[j0];
+        const StrokeSampleEx2d& sample = samples[j0];
         double s0 = sample.s();
         tmpPositions.clear();
         tmpWidths.clear();
@@ -2300,15 +2465,14 @@ Vec2d AbstractInterpolatingStroke2d::sculptWidth_(
             if ((targetS >= s0 + minD) && (targetS <= s1 - minD)) {
                 // new knot -> find the sampled segment it belongs too.
                 for (Int j = j0 + 1; j <= j1; ++j) {
-                    const geometry::StrokeSampleEx2d& sample1 = samples[j];
+                    const StrokeSampleEx2d& sample1 = samples[j];
                     if (targetS < sample1.s()) {
                         // compute and add new knot
-                        const geometry::StrokeSampleEx2d& sample0 = samples[j - 1];
+                        const StrokeSampleEx2d& sample0 = samples[j - 1];
                         // (targetS >= s0 + minD) => sample1.s() != sample0.s()
                         double t = (targetS - sample0.s()) / (sample1.s() - sample0.s());
-                        geometry::Vec2d p =
-                            (1 - t) * sample0.position() + t * sample1.position();
-                        geometry::Vec2d hws =
+                        Vec2d p = (1 - t) * sample0.position() + t * sample1.position();
+                        Vec2d hws =
                             (1 - t) * sample0.halfwidths() + t * sample1.halfwidths();
                         double w = hws[0] * 2;
                         double d = (std::min)(
@@ -2352,9 +2516,9 @@ Vec2d AbstractInterpolatingStroke2d::sculptSmooth_(
 
     const double maxDs = (std::max)(radius / 100, tolerance * 2.0);
 
-    geometry::Vec2dArray newPoints;
+    Vec2dArray newPoints;
     core::DoubleArray newWidths;
-    geometry::Vec2d sculptCursorPosition = position;
+    Vec2d sculptCursorPosition = position;
 
     SculptSmoothAlgorithm alg;
 
@@ -2369,7 +2533,7 @@ Vec2d AbstractInterpolatingStroke2d::sculptSmooth_(
         radius,
         this,
         isClosed,
-        geometry::CurveSamplingQuality::AdaptiveLow,
+        CurveSamplingQuality::AdaptiveLow,
         maxDs,
         tolerance * 0.5);
 
@@ -2428,7 +2592,7 @@ std::shared_ptr<FreehandEdgeGeometry> FreehandEdgeGeometry::createFromPoints(
     double tolerance) {
 
     // TODO: detect constant width
-    geometry::Vec2dArray positions;
+    Vec2dArray positions;
     core::Array<double> widths;
     if (points.length() > 2) {
         core::IntArray indices;
@@ -2460,7 +2624,7 @@ std::shared_ptr<FreehandEdgeGeometry> FreehandEdgeGeometry::createFromPoints(
         }
     }
     return std::make_shared<FreehandEdgeGeometry>(
-        core::SharedConst<geometry::Vec2dArray>(std::move(positions)),
+        core::SharedConst<Vec2dArray>(std::move(positions)),
         core::SharedConst<core::DoubleArray>(std::move(widths)),
         isClosed,
         false);

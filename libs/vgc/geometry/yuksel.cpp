@@ -21,9 +21,6 @@
 
 namespace vgc::geometry {
 
-/* static */
-core::StringId YukselSplineStroke2d::implName("YukselSpline");
-
 Vec2d YukselSplineStroke2d::evalNonZeroCenterline(Int segmentIndex, double u) const {
     YukselBezierSegment2d centerlineSegment = segmentEvaluator(segmentIndex);
     return centerlineSegment.eval(u);
@@ -437,6 +434,15 @@ YukselBezierSegment2d YukselSplineStroke2d::segmentEvaluator(
     }
 
     return centerlineSegment;
+}
+
+const StrokeModelInfo& YukselSplineStroke2d::modelInfo_() const {
+    static StrokeModelInfo info = StrokeModelInfo(core::StringId("YukselSpline"), 500);
+    return info;
+}
+
+std::unique_ptr<AbstractStroke2d> YukselSplineStroke2d::cloneEmpty_() const {
+    return std::make_unique<YukselSplineStroke2d>(isClosed());
 }
 
 std::unique_ptr<AbstractStroke2d> YukselSplineStroke2d::clone_() const {

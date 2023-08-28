@@ -43,28 +43,6 @@ class Operations;
 
 }
 
-class VGC_VACOMPLEX_API KeyHalfedgeGeometry {
-public:
-    KeyHalfedgeGeometry() noexcept = default;
-
-    KeyHalfedgeGeometry(KeyEdgeData* edgeGeometry, bool direction) noexcept
-        : edgeGeometry_(edgeGeometry)
-        , direction_(direction) {
-    }
-
-    KeyEdgeData* edgeGeometry() const {
-        return edgeGeometry_;
-    }
-
-    bool direction() const {
-        return direction_;
-    }
-
-private:
-    KeyEdgeData* edgeGeometry_ = nullptr;
-    bool direction_ = false;
-};
-
 /// \class vgc::vacomplex::KeyEdgeData
 /// \brief Authored model of the edge geometry.
 ///
@@ -118,19 +96,15 @@ public:
 
     const geometry::AbstractStroke2d* stroke() const;
 
-    void setStroke(geometry::AbstractStroke2d* stroke);
+    void setStroke(const geometry::AbstractStroke2d* stroke);
+    void setStroke(std::unique_ptr<geometry::AbstractStroke2d>&& stroke);
 
-    //std::shared_ptr<KeyEdgeData>
-    //concat(bool direction, KeyEdgeData* other, bool otherDirection) const;
-    //
-    //virtual std::shared_ptr<KeyEdgeData>
-    //concat_(const KeyHalfedgeGeometry& khg1, const KeyHalfedgeGeometry& khg2) const = 0;
-    //
-    //virtual void
-    //assignAverageProperties_(core::Array<KeyHalfedgeGeometry> khgs) const = 0;
-    //
-    // IDEA: do conversion to common best stroke geometry to merge
-    //       then match cell properties by pairs (use null if not present)
+private:
+    static KeyEdgeDataPtr glue_(core::Array<KeyHalfedgeData> khds, const geometry::AbstractStroke2d* gluedStroke);
+
+public:
+    static KeyEdgeDataPtr glue(core::Array<KeyHalfedgeData> khds);
+    static KeyEdgeDataPtr concat(const KeyHalfedgeData& khd1, const KeyHalfedgeData& khd2, bool smoothJoin);
 
 private:
     std::unique_ptr<geometry::AbstractStroke2d> stroke_;

@@ -56,7 +56,8 @@ public:
     const CellProperty* findProperty(core::StringId name) const;
 
 protected:
-    void setProperty(core::StringId name, std::unique_ptr<CellProperty>&& value);
+    void setProperty(std::unique_ptr<CellProperty>&& value);
+    void removeProperty(core::StringId name);
 
     // XXX: additional argument when it is only an affine transformation ?
     void emitGeometryChanged() const;

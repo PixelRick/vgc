@@ -203,16 +203,13 @@ using YukselBezierSegment2d = YukselBezierSegment<Vec2d, double>;
 using YukselBezierSegment1d = YukselBezierSegment<double, double>;
 
 class VGC_GEOMETRY_API YukselSplineStroke2d : public AbstractInterpolatingStroke2d {
-private:
-    static core::StringId implName;
-
 public:
     YukselSplineStroke2d(bool isClosed)
-        : AbstractInterpolatingStroke2d(implName, isClosed) {
+        : AbstractInterpolatingStroke2d(isClosed) {
     }
 
     YukselSplineStroke2d(bool isClosed, double constantWidth)
-        : AbstractInterpolatingStroke2d(implName, isClosed, constantWidth) {
+        : AbstractInterpolatingStroke2d(isClosed, constantWidth) {
     }
 
     template<typename TRangePositions, typename TRangeWidths>
@@ -222,7 +219,7 @@ public:
         TRangePositions&& positions,
         TRangeWidths&& widths)
 
-        : AbstractInterpolatingStroke2d(implName, isClosed, std::forward<TRangePositions>(positions), std::forward<TRangeWidths>(widths)) {
+        : AbstractInterpolatingStroke2d(isClosed, std::forward<TRangePositions>(positions), std::forward<TRangeWidths>(widths)) {
     }
 
 protected:
@@ -245,6 +242,9 @@ protected:
     segmentEvaluator(Int segmentIndex, CubicBezier2d& halfwidths) const;
 
 private:
+    const StrokeModelInfo& modelInfo_() const override;
+
+    std::unique_ptr<AbstractStroke2d> cloneEmpty_() const override;
     std::unique_ptr<AbstractStroke2d> clone_() const override;
     bool copyAssign_(const AbstractStroke2d* other) override;
     bool moveAssign_(AbstractStroke2d* other) override;

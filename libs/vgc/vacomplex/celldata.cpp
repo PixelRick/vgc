@@ -26,9 +26,15 @@ const CellProperty* CellData::findProperty(core::StringId name) const {
     return it != properties_.end() ? it->second.get() : nullptr;
 }
 
-void CellData::setProperty(core::StringId name, std::unique_ptr<CellProperty>&& value) {
+void CellData::setProperty(std::unique_ptr<CellProperty>&& value) {
     // XXX: skip if equal ?
+    core::StringId name = value->name();
     properties_[name] = std::move(value);
+    emitPropertyChanged(name);
+}
+
+void CellData::removeProperty(core::StringId name) {
+    properties_.erase(name);
     emitPropertyChanged(name);
 }
 

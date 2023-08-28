@@ -233,15 +233,15 @@ private:
 
     // ops helpers
 
-    void onNodeCreated(Node* node, NodeSourceOperation sourceOperation) {
-        createdNodes_.emplaceLast(node, std::move(sourceOperation));
+    void onNodeCreated(Node* node) {
+        createdNodes_.emplaceLast(node);
     }
 
     void onNodeDestroyed(core::Id id) {
         for (Int i = 0; i < createdNodes_.length(); ++i) {
             const CreatedNodeInfo& info = createdNodes_[i];
             if (info.nodeId() == id) {
-                transientNodes_.emplaceLast(id, info.sourceOperation());
+                transientNodes_.emplaceLast(id);
                 createdNodes_.removeAt(i);
                 break;
             }

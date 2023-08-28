@@ -649,21 +649,60 @@ public:
 
 } // namespace detail
 
+/// \class vgc::geometry::StrokeModelInfo
+/// \brief Describes a model of 2D stroke.
+///
+class VGC_GEOMETRY_API StrokeModelInfo {
+public:
+    StrokeModelInfo(core::StringId name, Int defaultConversionRank)
+        : name_(name)
+        , defaultConversionRank_(defaultConversionRank) {
+    }
+
+    /// Returns the name of the model (concrete implementation of AbstractStroke2d).
+    ///
+    core::StringId name() const {
+        return name_;
+    }
+
+    /// Returns the default conversion rank of this stroke model.
+    ///
+    Int defaultConversionRank() const {
+        return defaultConversionRank_;
+    }
+
+private:
+    core::StringId name_;
+    Int defaultConversionRank_;
+    // TODO: add other flags such as supported operations.
+};
+
 /// \class vgc::geometry::AbstractStroke2d
 /// \brief An abstract model of 2D stroke.
 ///
 class VGC_GEOMETRY_API AbstractStroke2d {
 protected:
-    AbstractStroke2d(core::StringId implementationName, bool isClosed)
-        : implementationName_(implementationName)
-        , isClosed_(isClosed) {
+    AbstractStroke2d(bool isClosed)
+        : isClosed_(isClosed) {
     }
 
 public:
     virtual ~AbstractStroke2d() = default;
 
+    const StrokeModelInfo& modelInfo() const  {
+        return modelInfo_();
+    }
+
+    std::unique_ptr<AbstractStroke2d> cloneEmpty() const {
+        return cloneEmpty_();
+    }
+
     std::unique_ptr<AbstractStroke2d> clone() const {
         return clone_();
+    }
+
+    std::unique_ptr<AbstractStroke2d> convert(const AbstractStroke2d* source) const {
+        return convert_(source);
     }
 
     bool copyAssign(const AbstractStroke2d* other) {
@@ -672,12 +711,6 @@ public:
 
     bool moveAssign(AbstractStroke2d* other) {
         return moveAssign_(other);
-    }
-
-    /// Returns the name of the concrete implementation.
-    ///
-    core::StringId implementationName() const {
-        return implementationName_;
     }
 
     /// Returns whether the stroke is closed.
@@ -861,22 +894,33 @@ public:
         transform_(transformation);
     }
 
-    void prepend(AbstractStroke2d* other, bool reversed, bool smoothJoin) {
-        assignConcat_(other, reversed, this, false, smoothJoin);
+    void reverse() {
+        reverse_();
     }
 
-    void append(AbstractStroke2d* other, bool reversed, bool smoothJoin) {
-        assignConcat_(this, false, other, reversed, smoothJoin);
+    void prepend(const AbstractStroke2d* other, bool direction, bool smoothJoin) {
+        assignConcat_(other, direction, this, true, smoothJoin);
+    }
+
+    void append(const AbstractStroke2d* other, bool direction, bool smoothJoin) {
+        assignConcat_(this, true, other, direction, smoothJoin);
     }
 
     void assignConcat(
-        AbstractStroke2d* a,
-        bool reverseA,
-        AbstractStroke2d* b,
-        bool reverseB,
+        const AbstractStroke2d* a,
+        bool directionA,
+        const AbstractStroke2d* b,
+        bool directionB,
         bool smoothJoin) {
 
-        assignConcat_(a, reverseA, b, reverseB, smoothJoin);
+        assignConcat_(a, directionA, b, directionB, smoothJoin);
+    }
+
+    void assignAverage(
+        core::ConstSpan<const AbstractStroke2d*> strokes,
+        core::ConstSpan<bool> directions) {
+
+        assignAverage_(strokes, directions);
     }
 
     /// Expects positions in object space.
@@ -969,9 +1013,15 @@ protected:
     virtual StrokeSampleEx2d zeroLengthStrokeSample() const = 0;
 
 private:
+    virtual const StrokeModelInfo& modelInfo_() const = 0;
+
+    virtual std::unique_ptr<AbstractStroke2d> cloneEmpty_() const = 0;
     virtual std::unique_ptr<AbstractStroke2d> clone_() const = 0;
+    virtual std::unique_ptr<AbstractStroke2d> convert_(const AbstractStroke2d* source) const;
+
     virtual bool copyAssign_(const AbstractStroke2d* other) = 0;
     virtual bool moveAssign_(AbstractStroke2d* other) = 0;
+    virtual bool convertAssign_(const AbstractStroke2d* other) = 0;
 
     virtual Int numKnots_() const = 0;
 
@@ -986,12 +1036,17 @@ private:
     virtual void transform_(const Mat3d& transformation) = 0;
 
     virtual void reverse_() = 0;
+
     virtual void assignConcat_(
-        AbstractStroke2d* a,
-        bool reverseA,
-        AbstractStroke2d* b,
-        bool reverseB,
+        const AbstractStroke2d* a,
+        bool directionA,
+        const AbstractStroke2d* b,
+        bool directionB,
         bool smoothJoin) = 0;
+
+    virtual void assignAverage_(
+        core::ConstSpan<const AbstractStroke2d*> strokes,
+        core::ConstSpan<bool> directions) = 0;
 
     virtual bool snap_(
         const Vec2d& snapStartPosition,
@@ -1021,7 +1076,6 @@ private:
         bool isClosed = false) = 0;
 
 private:
-    core::StringId implementationName_;
     bool isClosed_;
 
     StrokeSampleEx2d sampleKnot_(Int knotIndex) const;

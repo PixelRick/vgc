@@ -78,28 +78,26 @@ private:
 
 class VGC_GEOMETRY_API AbstractInterpolatingStroke2d : public AbstractStroke2d {
 protected:
-    AbstractInterpolatingStroke2d(core::StringId implName, bool isClosed)
-        : AbstractStroke2d(implName, isClosed) {
+    AbstractInterpolatingStroke2d(bool isClosed)
+        : AbstractStroke2d(isClosed) {
     }
 
     AbstractInterpolatingStroke2d(
-        core::StringId implName,
         bool isClosed,
         double constantWidth)
 
-        : AbstractStroke2d(implName, isClosed)
+        : AbstractStroke2d(isClosed)
         , widths_(1, constantWidth)
         , hasConstantWidth_(true) {
     }
 
     template<typename TRangePositions, typename TRangeWidths>
     AbstractInterpolatingStroke2d(
-        core::StringId implName,
         bool isClosed,
         TRangePositions&& positions,
         TRangeWidths&& widths)
 
-        : AbstractStroke2d(implName, isClosed)
+        : AbstractStroke2d(isClosed)
         , positions_(std::forward<TRangePositions>(positions))
         , widths_(std::forward<TRangeWidths>(widths)) {
 
@@ -173,9 +171,11 @@ protected:
     void updateCache() const;
 
 private:
+    std::unique_ptr<AbstractStroke2d> cloneEmpty_() const override = 0;
     std::unique_ptr<AbstractStroke2d> clone_() const override = 0;
     bool copyAssign_(const AbstractStroke2d* other) override = 0;
     bool moveAssign_(AbstractStroke2d* other) override = 0;
+    bool convertAssign_(const AbstractStroke2d* other) override;
 
     Int numKnots_() const override;
 
@@ -190,12 +190,17 @@ private:
     void transform_(const geometry::Mat3d& transformation) override;
 
     void reverse_() override;
+
     void assignConcat_(
-        AbstractStroke2d* a,
-        bool reverseA,
-        AbstractStroke2d* b,
-        bool reverseB,
+        const AbstractStroke2d* a,
+        bool directionA,
+        const AbstractStroke2d* b,
+        bool directionB,
         bool smoothJoin) override;
+
+    virtual void assignAverage_(
+        core::ConstSpan<const AbstractStroke2d*> strokes,
+        core::ConstSpan<bool> directions) override;
 
     bool snap_(
         const geometry::Vec2d& snapStartPosition,

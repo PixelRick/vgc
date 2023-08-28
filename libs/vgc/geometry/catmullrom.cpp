@@ -20,9 +20,6 @@
 
 namespace vgc::geometry {
 
-/* static */
-core::StringId CatmullRomSplineStroke2d::implName("CatmullRom");
-
 Vec2d CatmullRomSplineStroke2d::evalNonZeroCenterline(Int segmentIndex, double u) const {
     auto bezier = segmentToBezier(segmentIndex);
     return bezier.eval(u);
@@ -197,6 +194,15 @@ CatmullRomSplineStroke2d::segmentToNormalReparametrization(Int segmentIndex) con
 
     const Vec2d* cp = normalReparametrizationControlValues_.data();
     return CubicBezier1d(0, cp[i][0], cp[i][1], 1);
+}
+
+const StrokeModelInfo& CatmullRomSplineStroke2d::modelInfo_() const {
+    static StrokeModelInfo info = StrokeModelInfo(core::StringId("CatmullRom"), 1000);
+    return info;
+}
+
+std::unique_ptr<AbstractStroke2d> CatmullRomSplineStroke2d::cloneEmpty_() const {
+    return std::make_unique<CatmullRomSplineStroke2d>(parameterization_, isClosed());
 }
 
 std::unique_ptr<AbstractStroke2d> CatmullRomSplineStroke2d::clone_() const {

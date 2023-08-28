@@ -326,15 +326,12 @@ enum class CatmullRomSplineParameterization : UInt8 {
 //       & move these classes in a new set of .h/.cpp
 class VGC_GEOMETRY_API CatmullRomSplineStroke2d final
     : public AbstractInterpolatingStroke2d {
-private:
-    static core::StringId implName;
-
 public:
     CatmullRomSplineStroke2d(
         CatmullRomSplineParameterization parameterization,
         bool isClosed)
 
-        : AbstractInterpolatingStroke2d(implName, isClosed)
+        : AbstractInterpolatingStroke2d(isClosed)
         , parameterization_(parameterization) {
     }
 
@@ -343,7 +340,7 @@ public:
         bool isClosed,
         double constantWidth)
 
-        : AbstractInterpolatingStroke2d(implName, isClosed, constantWidth)
+        : AbstractInterpolatingStroke2d(isClosed, constantWidth)
         , parameterization_(parameterization) {
     }
 
@@ -355,7 +352,6 @@ public:
         TRangeWidths&& widths)
 
         : AbstractInterpolatingStroke2d(
-            implName,
             isClosed,
             std::forward<TRangePositions>(positions),
             std::forward<TRangeWidths>(widths))
@@ -383,6 +379,9 @@ protected:
     CubicBezier1d segmentToNormalReparametrization(Int segmentIndex) const;
 
 private:
+    const StrokeModelInfo& modelInfo_() const override;
+
+    std::unique_ptr<AbstractStroke2d> cloneEmpty_() const override;
     std::unique_ptr<AbstractStroke2d> clone_() const override;
     bool copyAssign_(const AbstractStroke2d* other) override;
     bool moveAssign_(AbstractStroke2d* other) override;
