@@ -70,7 +70,12 @@ public:
         : isClosed_(isClosed) {
     }
 
-    ~KeyEdgeData() override = default;
+    KeyEdgeData(const KeyEdgeData& other);
+    KeyEdgeData(KeyEdgeData&& other) noexcept;
+    KeyEdgeData& operator=(const KeyEdgeData& other);
+    KeyEdgeData& operator=(KeyEdgeData&& other) noexcept;
+
+    ~KeyEdgeData() override;
 
     KeyEdgeDataPtr clone() const;
 
@@ -99,16 +104,22 @@ public:
     void setStroke(const geometry::AbstractStroke2d* stroke);
     void setStroke(std::unique_ptr<geometry::AbstractStroke2d>&& stroke);
 
-private:
-    static KeyEdgeDataPtr glue_(core::Array<KeyHalfedgeData> khds, const geometry::AbstractStroke2d* gluedStroke);
+    static KeyEdgeDataPtr
+        concat(const KeyHalfedgeData& khd1, const KeyHalfedgeData& khd2, bool smoothJoin);
 
-public:
     static KeyEdgeDataPtr glue(core::Array<KeyHalfedgeData> khds);
-    static KeyEdgeDataPtr concat(const KeyHalfedgeData& khd1, const KeyHalfedgeData& khd2, bool smoothJoin);
 
 private:
     std::unique_ptr<geometry::AbstractStroke2d> stroke_;
-    const bool isClosed_;
+    bool isClosed_;
+
+    void onCellDestroyed_() {
+        onCellDestroyed();
+    }
+
+    static KeyEdgeDataPtr glue_(
+        core::Array<KeyHalfedgeData> khds,
+        const geometry::AbstractStroke2d* gluedStroke);
 };
 
 //std::shared_ptr<const EdgeSampling> snappedSampling_;

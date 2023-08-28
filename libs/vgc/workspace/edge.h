@@ -534,9 +534,9 @@ private:
     ElementStatus updateFromDom_(Workspace* workspace) override;
     void updateFromVac_(vacomplex::NodeModificationFlags flags) override;
 
-    static bool updateGeometryFromDom_(vacomplex::KeyEdgeData* keg, dom::Element* domElement);
-    static void writeDomGeometry_(dom::Element* domElement, vacomplex::KeyEdgeData* keg);
-    static void clearDomGeometry_(dom::Element* domElement);
+    static bool updateDataFromDom_(vacomplex::KeyEdgeData* keg, dom::Element* domElement);
+    static void writeDomData_(dom::Element* domElement, vacomplex::KeyEdgeData* keg);
+    static void clearDomData_(dom::Element* domElement);
 
     void updateVertices_(const std::array<VacKeyVertex*, 2>& newVertices);
 

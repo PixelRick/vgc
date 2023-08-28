@@ -22,6 +22,7 @@
 
 #include <vgc/core/animtime.h>
 #include <vgc/core/id.h>
+#include <vgc/core/object.h>
 #include <vgc/core/templateutil.h>
 #include <vgc/geometry/curve.h>
 #include <vgc/geometry/mat2d.h>
@@ -40,7 +41,7 @@ class Operations;
 
 } // namespace detail
 
-VGC_DECLARE_OBJECT(Complex);
+class Complex;
 
 class Node;
 class Group;
@@ -910,7 +911,7 @@ public:
     static_assert(std::is_base_of_v<CellProxy<TemporalCell>, TemporalCell>);
 
     template<typename... TemporalCellArgs>
-    SpatioTemporalCell(core::Id id, TemporalCellArgs&&... args)
+    SpatioTemporalCell(core::Id id, TemporalCellArgs&&... args) noexcept
         : TemporalCell(std::forward<TemporalCellArgs>(args)...)
         , SpatialCell(id, TemporalCell::temporalType()) {
     }

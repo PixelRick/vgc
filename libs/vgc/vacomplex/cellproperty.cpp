@@ -18,36 +18,34 @@
 
 namespace vgc::vacomplex {
 
-CellProperty::OpResult CellProperty::onTranslate_(const geometry::Vec2d& delta) {
-    return OpResult::Unchanged;
-}
-
-CellProperty::OpResult CellProperty::onTransform_(const geometry::Mat3d& transformation) {
-    return OpResult::Unchanged;
-}
-
-CellProperty::OpResult
-CellProperty::onKeyEdgeStrokeChanged_(const geometry::AbstractStroke2d* newStroke) {
-    return OpResult::Unchanged;
-}
-
-std::unique_ptr<CellProperty> CellProperty::onKeyEdgeConcat_(
-    const KeyHalfedgeData& khd1,
-    const KeyHalfedgeData& khd2) const {
-
+std::unique_ptr<CellProperty>
+CellProperty::concat_(const KeyHalfedgeData& /*khd1*/, const KeyHalfedgeData& /*khd2*/) const {
     return nullptr;
 }
 
-std::unique_ptr<CellProperty> CellProperty::onKeyEdgeGlue_(
-    core::ConstSpan<KeyHalfedgeData> khds,
-    const geometry::AbstractStroke2d* gluedStroke) const {
+std::unique_ptr<CellProperty> CellProperty::glue_(
+    core::ConstSpan<KeyHalfedgeData> /*khds*/,
+    const geometry::AbstractStroke2d* /*gluedStroke*/) const {
 
     return nullptr;
 }
 
 std::unique_ptr<CellProperty>
-CellProperty::onKeyFaceGlue_(core::ConstSpan<const KeyFaceData*> kfds) const {
+CellProperty::glue_(core::ConstSpan<const KeyFaceData*> /*kfds*/) const {
     return nullptr;
+}
+
+CellProperty::OpResult CellProperty::onTranslate_(const geometry::Vec2d& /*delta*/) {
+    return OpResult::Unchanged;
+}
+
+CellProperty::OpResult CellProperty::onTransform_(const geometry::Mat3d& /*transformation*/) {
+    return OpResult::Unchanged;
+}
+
+CellProperty::OpResult
+CellProperty::onGeometryUpdate_(const geometry::AbstractStroke2d* /*newStroke*/) {
+    return OpResult::Unchanged;
 }
 
 CellProperty::OpResult CellProperty::onOperationEnd_() {

@@ -62,9 +62,10 @@ protected:
     explicit CellProperty(core::StringId name)
         : name_(name) {
     }
-    virtual ~CellProperty() = default;
 
 public:
+    virtual ~CellProperty() = default;
+
     enum class OpResult : UInt8 {
         Unsupported,
         Unchanged,
@@ -87,6 +88,19 @@ private:
 
     virtual std::unique_ptr<CellProperty> clone_() const = 0;
 
+    // Returns a null pointer by default.
+    virtual std::unique_ptr<CellProperty>
+    concat_(const KeyHalfedgeData& khd1, const KeyHalfedgeData& khd2) const;
+
+    // Returns a null pointer by default.
+    virtual std::unique_ptr<CellProperty> glue_(
+        core::ConstSpan<KeyHalfedgeData> khds,
+        const geometry::AbstractStroke2d* gluedStroke) const;
+
+    // Returns a null pointer by default.
+    virtual std::unique_ptr<CellProperty>
+    glue_(core::ConstSpan<const KeyFaceData*> kfds) const;
+
     // Returns OpResult::Unchanged by default.
     virtual OpResult onTranslate_(const geometry::Vec2d& delta);
 
@@ -94,22 +108,7 @@ private:
     virtual OpResult onTransform_(const geometry::Mat3d& transformation);
 
     // Returns OpResult::Unchanged by default.
-    virtual OpResult onKeyEdgeStrokeChanged_(const geometry::AbstractStroke2d* newStroke);
-
-    // Returns a null pointer by default.
-    virtual std::unique_ptr<CellProperty> onKeyEdgeGlue_(
-        core::ConstSpan<KeyHalfedgeData> khds,
-        const geometry::AbstractStroke2d* gluedStroke) const;
-
-    // Returns a null pointer by default.
-    virtual std::unique_ptr<CellProperty> onKeyEdgeConcat_(
-        const KeyHalfedgeData& khd1,
-        const KeyHalfedgeData& khd2) const;
-
-
-    // Returns a null pointer by default.
-    virtual std::unique_ptr<CellProperty>
-    onKeyFaceGlue_(core::ConstSpan<const KeyFaceData*> kfds) const;
+    virtual OpResult onGeometryUpdate_(const geometry::AbstractStroke2d* newStroke);
 
     // Returns OpResult::Unchanged by default.
     virtual OpResult onOperationEnd_();

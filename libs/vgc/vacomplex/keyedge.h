@@ -54,8 +54,8 @@ public:
         return endVertex_;
     }
 
-    KeyEdgeData* geometry() const {
-        return geometry_.get();
+    KeyEdgeData* data() const {
+        return data_.get();
     }
 
     geometry::CurveSamplingQuality samplingQuality() const {
@@ -104,7 +104,7 @@ private:
     // position and orientation when not bound to vertices ?
     //detail::Transform2d transform_;
 
-    std::shared_ptr<KeyEdgeData> geometry_ = {};
+    std::shared_ptr<KeyEdgeData> data_ = {};
     //bool isClosed_ = false;
 
     geometry::CurveSamplingQuality samplingQuality_ = {};

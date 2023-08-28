@@ -764,14 +764,14 @@ ElementStatus VacKeyEdge::updateFromDom_(Workspace* workspace) {
 
     // create/rebuild/update VAC node
     if (!ke) {
-        auto geometry = std::make_shared<vacomplex::KeyEdgeData>(isClosed);
-        detail::updateKeyEdgeDataFromDom_(geometry, domElement);
+        auto data = std::make_shared<vacomplex::KeyEdgeData>(isClosed);
+        updateDataFromDom_(data.get(), domElement);
         if (isClosed) {
-            ke = vacomplex::ops::createKeyClosedEdge(std::move(geometry), parentGroup);
+            ke = vacomplex::ops::createKeyClosedEdge(std::move(data), parentGroup);
         }
         else {
             ke = vacomplex::ops::createKeyOpenEdge(
-                kvs[0], kvs[1], std::move(geometry), parentGroup);
+                kvs[0], kvs[1], std::move(data), parentGroup);
         }
         if (!ke) {
             onUpdateError_();
@@ -781,8 +781,8 @@ ElementStatus VacKeyEdge::updateFromDom_(Workspace* workspace) {
         setVacNode(ke);
     }
     else {
-        auto geometry = dynamic_cast<workspace::EdgeGeometry*>(ke->geometry());
-        if (!geometry || !geometry->updateFromDomEdge_(domElement)) {
+        auto data = dynamic_cast<vacomplex::KeyEdgeData*>(ke->data());
+        if (!data || !updateDataFromDom_(data, domElement)) {
             hasGeometryChanged = false;
         }
     }
@@ -860,7 +860,7 @@ void VacKeyEdge::updateFromVac_(vacomplex::NodeModificationFlags flags) {
 }
 
 /* static */
-bool VacKeyEdge::updateGeometryFromDom_(
+bool VacKeyEdge::updateDataFromDom_(
     vacomplex::KeyEdgeData* keg,
     dom::Element* domElement) {
     namespace ds = dom::strings;
@@ -895,7 +895,7 @@ bool VacKeyEdge::updateGeometryFromDom_(
 }
 
 /* static */
-void VacKeyEdge::writeDomGeometry_(
+void VacKeyEdge::writeDomData_(
     dom::Element* domElement,
     vacomplex::KeyEdgeData* keg) {
     namespace ds = dom::strings;
@@ -917,10 +917,12 @@ void VacKeyEdge::writeDomGeometry_(
 }
 
 /* static */
-void VacKeyEdge::clearDomGeometry_(dom::Element* domElement) {
+void VacKeyEdge::clearDomData_(dom::Element* domElement) {
     namespace ds = dom::strings;
     domElement->clearAttribute(ds::positions);
     domElement->clearAttribute(ds::widths);
+    // Stroke models will be identified by an id.
+    // It will allow for custom cleanups!
 }
 
 void VacKeyEdge::updateVertices_(const std::array<VacKeyVertex*, 2>& newVertices) {

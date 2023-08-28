@@ -42,9 +42,10 @@ protected:
 
     virtual ~CellData() = default;
 
-    // non-copyable
-    CellData(const CellData&) = delete;
-    CellData& operator=(const CellData&) = delete;
+    CellData(const CellData& other);
+    CellData(CellData&& other) noexcept;
+    CellData& operator=(const CellData& rhs);
+    CellData& operator=(CellData&& rhs) noexcept;
 
 public:
     using PropertyMap = std::map<core::StringId, std::unique_ptr<CellProperty>>;
@@ -65,14 +66,43 @@ protected:
 
     void assignClonedProperties(const CellData* other);
 
-    void translate(const geometry::Vec2d& delta);
-    void transform(const geometry::Mat3d& transformation);
+    void translateProperties(const geometry::Vec2d& delta);
+    void transformProperties(const geometry::Mat3d& transformation);
+    void updateProperties(const geometry::AbstractStroke2d* newStroke);
+    void notifyPropertiesOfOperationEnd();
 
-    virtual void onOperationEnd();
+    void onCellDestroyed() {
+        cell_ = nullptr;
+    }
 
 private:
     std::map<core::StringId, std::unique_ptr<CellProperty>> properties_;
     Cell* cell_ = nullptr;
+
+    template<typename Op>
+    bool doPropertyOperation(const Op& op) {
+        bool changed = false;
+        core::Array<core::StringId> toRemove;
+        for (const auto& p : properties()) {
+            switch (op(p.second.get())) {
+            case CellProperty::OpResult::Success:
+                emitPropertyChanged(p.first);
+                changed = true;
+                break;
+            case CellProperty::OpResult::Unchanged:
+                break;
+            case CellProperty::OpResult::Unsupported:
+                toRemove.append(p.first);
+                changed = true;
+                break;
+            }
+        }
+        for (const core::StringId& name : toRemove) {
+            removeProperty(name);
+            emitPropertyChanged(name);
+        }
+        return changed;
+    }
 };
 
 } // namespace vgc::vacomplex

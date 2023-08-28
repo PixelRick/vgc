@@ -109,10 +109,6 @@ public:
         return positions_;
     }
 
-    core::Array<Vec2d>&& movePositions() {
-        return std::move(positions_);
-    }
-
     template<typename TRange>
     void setPositions(TRange&& positions) {
         positions_ = std::forward<TRange>(positions);
@@ -123,11 +119,6 @@ public:
 
     const core::Array<double>& widths() const {
         return widths_;
-    }
-
-    // TODO: make data class and startEdit() endEdit()
-    core::Array<double>&& moveWidths() {
-        return std::move(widths_);
     }
 
     template<typename TRange>

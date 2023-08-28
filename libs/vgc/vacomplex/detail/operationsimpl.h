@@ -59,7 +59,6 @@ public:
         const geometry::Vec2d& position,
         Group* parentGroup,
         Node* nextSibling = nullptr,
-        NodeSourceOperation sourceOperation = {},
         core::AnimTime t = {});
 
     // Assumes `nextSibling` is either `nullptr` or a child of `parentGroup`.
@@ -71,8 +70,7 @@ public:
         KeyVertex* endVertex,
         const std::shared_ptr<KeyEdgeData>& geometry,
         Group* parentGroup,
-        Node* nextSibling = nullptr,
-        NodeSourceOperation sourceOperation = {});
+        Node* nextSibling = nullptr);
 
     // Assumes `nextSibling` is either `nullptr` or a child of `parentGroup`.
     //
@@ -80,7 +78,6 @@ public:
         const std::shared_ptr<KeyEdgeData>& geometry,
         Group* parentGroup,
         Node* nextSibling = nullptr,
-        NodeSourceOperation sourceOperation = {},
         core::AnimTime t = {});
 
     // Assumes `cycles` are valid.
@@ -90,7 +87,6 @@ public:
         core::Array<KeyCycle> cycles,
         Group* parentGroup,
         Node* nextSibling = nullptr,
-        NodeSourceOperation sourceOperation = {},
         core::AnimTime t = {});
 
     void hardDelete(Node* node, bool deleteIsolatedVertices);
@@ -134,7 +130,7 @@ public:
 private:
     Complex* complex_ = nullptr;
 
-    void onNodeCreated_(Node* node, NodeSourceOperation sourceOperation);
+    void onNodeCreated_(Node* node);
     void onNodeInserted_(Node* node, Node* oldParent, NodeInsertionType insertionType);
     void onNodeModified_(Node* node, NodeModificationFlags diffFlags);
 
@@ -144,7 +140,7 @@ private:
     // which is why we have to use `new` here.
     //
     template<class T, typename... Args>
-    T* createNode_(NodeSourceOperation sourceOperation, Args&&... args) {
+    T* createNode_(Args&&... args) {
         core::Id id = core::genId();
         T* node = new T(id, std::forward<Args>(args)...);
         std::unique_ptr<T> nodePtr(node);
@@ -153,7 +149,7 @@ private:
         if (!emplaced) {
             throw LogicError("Id collision error.");
         }
-        onNodeCreated_(node, std::move(sourceOperation));
+        onNodeCreated_(node);
         return node;
     }
 
@@ -163,10 +159,9 @@ private:
     T* createNodeAt_(
         Group* parentGroup,
         Node* nextSibling,
-        NodeSourceOperation sourceOperation,
         Args&&... args) {
 
-        T* node = createNode_<T>(std::move(sourceOperation), std::forward<Args>(args)...);
+        T* node = createNode_<T>(std::forward<Args>(args)...);
         moveToGroup(node, parentGroup, nextSibling);
         return node;
     }

@@ -21,40 +21,77 @@
 
 namespace vgc::vacomplex {
 
-KeyEdgeDataPtr KeyEdgeData::clone() const {
-    KeyEdgeDataPtr result = std::make_shared<KeyEdgeData>(isClosed_);
-    result->assignClonedProperties(this);
-    if (stroke_) {
-        result->stroke_ = stroke_->clone();
+KeyEdgeData::KeyEdgeData(const KeyEdgeData& other)
+    : CellData(other), isClosed_(other.isClosed_) {
+
+    if (other.stroke_) {
+        stroke_ = other.stroke_->clone();
     }
+}
+
+KeyEdgeData::KeyEdgeData(KeyEdgeData&& other) noexcept
+    : CellData(std::move(other)), isClosed_(other.isClosed_) {
+
+    stroke_ = std::move(other.stroke_);
+}
+
+KeyEdgeData& KeyEdgeData::operator=(const KeyEdgeData& other) {
+    if (&other != this) {
+        CellData::operator=(other);
+        isClosed_ = other.isClosed_;
+        if (!other.stroke_) {
+            stroke_.reset();
+        }
+        else if (!stroke_ || !stroke_->copyAssign(other.stroke_.get())) {
+            stroke_ = other.stroke_->clone();
+        }
+    }
+    return *this;
+}
+
+KeyEdgeData& KeyEdgeData::operator=(KeyEdgeData&& other) noexcept {
+    if (&other != this) {
+        CellData::operator=(std::move(other));
+        isClosed_ = other.isClosed_;
+        stroke_ = std::move(other.stroke_);
+    }
+    return *this;
+}
+
+KeyEdgeData::~KeyEdgeData() {
+    // default destruction
+}
+
+KeyEdgeDataPtr KeyEdgeData::clone() const {
+    return std::make_shared<KeyEdgeData>(*this);
 }
 
 void KeyEdgeData::translate(const geometry::Vec2d& delta) {
     if (stroke_) {
         stroke_->translate(delta);
+        emitGeometryChanged();
     }
-    CellData::translate(delta);
+    CellData::translateProperties(delta);
 }
 
 void KeyEdgeData::transform(const geometry::Mat3d& transformation) {
     if (stroke_) {
         stroke_->transform(transformation);
+        emitGeometryChanged();
     }
-    CellData::transform(transformation);
+    CellData::transformProperties(transformation);
 }
 
 void KeyEdgeData::snap(
     const geometry::Vec2d& snapStartPosition,
     const geometry::Vec2d& snapEndPosition,
-    geometry::CurveSnapTransformationMode mode =
-        geometry::CurveSnapTransformationMode::LinearInArclength) {
+    geometry::CurveSnapTransformationMode mode) {
 
     if (stroke_) {
         std::array<geometry::Vec2d, 2> oldEndPositions = stroke_->endPositions();
         if (stroke_->snap(snapStartPosition, snapEndPosition)) {
-            for (const auto& p : properties()) {
-                p.second->onKeyEdgeStrokeChanged_(stroke());
-            }
+            emitGeometryChanged();
+            updateProperties(stroke_.get());
         }
     }
 }
@@ -67,96 +104,25 @@ void KeyEdgeData::setStroke(const geometry::AbstractStroke2d* newStroke) {
     if (!newStroke) {
         stroke_.reset();
     }
-    else if (!stroke_->copyAssign(newStroke)) {
+    else if (newStroke == stroke_.get()) {
+        return;
+    }
+    else if (!stroke_ || !stroke_->copyAssign(newStroke)) {
         stroke_ = newStroke->clone();
     }
-    for (const auto& p : properties()) {
-        p.second->onKeyEdgeStrokeChanged_(stroke());
-    }
+    emitGeometryChanged();
+    updateProperties(stroke_.get());
 }
 
 void KeyEdgeData::setStroke(std::unique_ptr<geometry::AbstractStroke2d>&& newStroke) {
     stroke_ = std::move(newStroke);
-    for (const auto& p : properties()) {
-        p.second->onKeyEdgeStrokeChanged_(stroke());
-    }
-}
-
-/* static */
-KeyEdgeDataPtr KeyEdgeData::glue_(
-    core::Array<KeyHalfedgeData> khds,
-    const geometry::AbstractStroke2d* gluedStroke) {
-
-    struct PropertyTemplate {
-        core::StringId id;
-        const CellProperty* prop;
-    };
-
-    core::Array<PropertyTemplate> templates;
-    for (const KeyHalfedgeData& khd : khds) {
-        KeyEdgeData* ked = khd.edgeData();
-        for (const auto& p : ked->properties()) {
-            core::StringId id = p.first;
-            if (!templates.search(
-                    [id](const PropertyTemplate& p) { return p.id == id; })) {
-                templates.append(PropertyTemplate{id, p.second.get()});
-            }
-        }
-    }
-
-    auto result = std::make_shared<KeyEdgeData>(khds[0].edgeData()->isClosed());
-    result->setStroke(gluedStroke);
-    for (const PropertyTemplate& p : templates) {
-        std::unique_ptr<CellProperty> newProp = p.prop->onKeyEdgeGlue_(khds, gluedStroke);
-        if (newProp) {
-            result->setProperty(std::move(newProp));
-        }
-    }
-    return result;
+    emitGeometryChanged();
+    updateProperties(stroke_.get());
 }
 
 //
 // IDEA: do conversion to common best stroke geometry to merge
 //       then match cell properties by pairs (use null if not present)
-
-KeyEdgeDataPtr KeyEdgeData::glue(core::Array<KeyHalfedgeData> khds) {
-
-    struct ConvertedStroke {
-        std::unique_ptr<geometry::AbstractStroke2d> converted;
-        const geometry::AbstractStroke2d* st;
-    };
-    core::Array<ConvertedStroke> converteds;
-
-    // Find best model first.
-    const geometry::AbstractStroke2d* bestModelStroke = khds[0].edgeData()->stroke();
-    core::Array<bool> directions;
-    directions.reserve(khds.length());
-    for (const KeyHalfedgeData& khd : khds) {
-        const geometry::AbstractStroke2d* st = khd.edgeData()->stroke();
-        const geometry::StrokeModelInfo& model2 = st->modelInfo();
-        if (model2.name() != bestModelStroke->modelInfo().name()) {
-            if (model2.defaultConversionRank()
-                > bestModelStroke->modelInfo().defaultConversionRank()) {
-                bestModelStroke = khd.edgeData()->stroke();
-            }
-        }
-        converteds.emplaceLast().st = st;
-        directions.append(khd.direction());
-    }
-
-    core::Array<const geometry::AbstractStroke2d*> strokes;
-    for (ConvertedStroke& converted : converteds) {
-        if (converted.st->modelInfo().name() != bestModelStroke->modelInfo().name()) {
-            converted.converted = bestModelStroke->convert(converted.st);
-            converted.st = converted.converted.get();
-        }
-        strokes.append(converted.st);
-    }
-
-    std::unique_ptr<geometry::AbstractStroke2d> gluedStroke =
-        bestModelStroke->cloneEmpty();
-    gluedStroke->assignAverage(strokes, directions);
-}
 
 /* static */
 KeyEdgeDataPtr KeyEdgeData::concat(
@@ -210,7 +176,7 @@ KeyEdgeDataPtr KeyEdgeData::concat(
     auto result = std::make_shared<KeyEdgeData>(ked1->isClosed());
     result->setStroke(std::move(concatStroke));
     for (const PropertyTemplate& p : templates) {
-        std::unique_ptr<CellProperty> newProp = p.prop->onKeyEdgeConcat_(khd1, khd2);
+        std::unique_ptr<CellProperty> newProp = p.prop->concat_(khd1, khd2);
         if (newProp) {
             result->setProperty(std::move(newProp));
         }
@@ -218,28 +184,76 @@ KeyEdgeDataPtr KeyEdgeData::concat(
     return result;
 }
 
-//std::shared_ptr<KeyEdgeData>
-//KeyEdgeData::merge(bool direction, KeyEdgeData* other, bool otherDirection) const {
-//
-//    // TODO: try both ways, if none works then convert both to a default geometry model for the merge
-//    //       then rebuild with the best of the original models that supports being built from the default.
-//    return merge_(direction, other, otherDirection);
-//}
-//
-//void KeyEdgeData::dirtyEdgeSampling() const {
-//    if (edge_) {
-//        Complex* complex = edge_->complex();
-//        detail::Operations ops(complex);
-//        ops.onGeometryChanged_(edge_);
-//    }
-//}
-//
-//void KeyEdgeData::dirtyEdgeStyle() const {
-//    if (edge_) {
-//        Complex* complex = edge_->complex();
-//        detail::Operations ops(complex);
-//        ops.onStyleChanged_(edge_);
-//    }
-//}
+KeyEdgeDataPtr KeyEdgeData::glue(core::Array<KeyHalfedgeData> khds) {
+
+    struct ConvertedStroke {
+        std::unique_ptr<geometry::AbstractStroke2d> converted;
+        const geometry::AbstractStroke2d* st;
+    };
+    core::Array<ConvertedStroke> converteds;
+
+    // Find best model first.
+    const geometry::AbstractStroke2d* bestModelStroke = khds[0].edgeData()->stroke();
+    core::Array<bool> directions;
+    directions.reserve(khds.length());
+    for (const KeyHalfedgeData& khd : khds) {
+        const geometry::AbstractStroke2d* st = khd.edgeData()->stroke();
+        const geometry::StrokeModelInfo& model2 = st->modelInfo();
+        if (model2.name() != bestModelStroke->modelInfo().name()) {
+            if (model2.defaultConversionRank()
+                > bestModelStroke->modelInfo().defaultConversionRank()) {
+                bestModelStroke = khd.edgeData()->stroke();
+            }
+        }
+        converteds.emplaceLast().st = st;
+        directions.append(khd.direction());
+    }
+
+    core::Array<const geometry::AbstractStroke2d*> strokes;
+    for (ConvertedStroke& converted : converteds) {
+        if (converted.st->modelInfo().name() != bestModelStroke->modelInfo().name()) {
+            converted.converted = bestModelStroke->convert(converted.st);
+            converted.st = converted.converted.get();
+        }
+        strokes.append(converted.st);
+    }
+
+    std::unique_ptr<geometry::AbstractStroke2d> gluedStroke =
+        bestModelStroke->cloneEmpty();
+    gluedStroke->assignAverage(strokes, directions);
+}
+
+/* static */
+KeyEdgeDataPtr KeyEdgeData::glue_(
+    core::Array<KeyHalfedgeData> khds,
+    const geometry::AbstractStroke2d* gluedStroke) {
+
+    struct PropertyTemplate {
+        core::StringId id;
+        const CellProperty* prop;
+    };
+
+    core::Array<PropertyTemplate> templates;
+    for (const KeyHalfedgeData& khd : khds) {
+        KeyEdgeData* ked = khd.edgeData();
+        for (const auto& p : ked->properties()) {
+            core::StringId id = p.first;
+            if (!templates.search(
+                    [id](const PropertyTemplate& p) { return p.id == id; })) {
+                templates.append(PropertyTemplate{id, p.second.get()});
+            }
+        }
+    }
+
+    auto result = std::make_shared<KeyEdgeData>(khds[0].edgeData()->isClosed());
+    result->setStroke(gluedStroke);
+    for (const PropertyTemplate& p : templates) {
+        std::unique_ptr<CellProperty> newProp = p.prop->glue_(khds, gluedStroke);
+        if (newProp) {
+            result->setProperty(std::move(newProp));
+        }
+    }
+    return result;
+}
 
 } // namespace vgc::vacomplex

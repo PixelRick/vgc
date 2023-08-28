@@ -50,7 +50,7 @@ KeyVertex* createKeyVertex(
     }
     checkIsChildOrNull(nextSibling, parentGroup);
     detail::Operations ops(parentGroup->complex());
-    return ops.createKeyVertex(position, parentGroup, nextSibling, {}, t);
+    return ops.createKeyVertex(position, parentGroup, nextSibling, t);
 }
 
 KeyEdge* createKeyClosedEdge(
@@ -64,7 +64,7 @@ KeyEdge* createKeyClosedEdge(
     }
     checkIsChildOrNull(nextSibling, parentGroup);
     detail::Operations ops(parentGroup->complex());
-    return ops.createKeyClosedEdge(geometry, parentGroup, nextSibling, {}, t);
+    return ops.createKeyClosedEdge(geometry, parentGroup, nextSibling, t);
 }
 
 KeyEdge* createKeyOpenEdge(
@@ -113,8 +113,7 @@ KeyEdge* createKeyOpenEdge(
         endVertex,
         geometry,
         parentGroup,
-        nextSibling,
-        NodeSourceOperation());
+        nextSibling);
 }
 
 KeyFace* createKeyFace(
@@ -136,7 +135,7 @@ KeyFace* createKeyFace(
 
     detail::Operations ops(parentGroup->complex());
     return ops.createKeyFace(
-        std::move(cycles), parentGroup, nextSibling, NodeSourceOperation(), t);
+        std::move(cycles), parentGroup, nextSibling, t);
 }
 
 KeyFace*
