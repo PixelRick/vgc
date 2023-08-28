@@ -765,7 +765,7 @@ ElementStatus VacKeyEdge::updateFromDom_(Workspace* workspace) {
     // create/rebuild/update VAC node
     if (!ke) {
         auto data = std::make_shared<vacomplex::KeyEdgeData>(isClosed);
-        updateDataFromDom_(data.get(), domElement);
+        initDataFromDom_(data.get(), domElement);
         if (isClosed) {
             ke = vacomplex::ops::createKeyClosedEdge(std::move(data), parentGroup);
         }
@@ -782,7 +782,7 @@ ElementStatus VacKeyEdge::updateFromDom_(Workspace* workspace) {
     }
     else {
         auto data = dynamic_cast<vacomplex::KeyEdgeData*>(ke->data());
-        if (!data || !updateDataFromDom_(data, domElement)) {
+        if (!data || !initDataFromDom_(data, domElement)) {
             hasGeometryChanged = false;
         }
     }
@@ -860,14 +860,21 @@ void VacKeyEdge::updateFromVac_(vacomplex::NodeModificationFlags flags) {
 }
 
 /* static */
+bool VacKeyEdge::initDataFromDom_(vacomplex::KeyEdgeData* ked, dom::Element* domElement) {
+}
+
+/* static */
 bool VacKeyEdge::updateDataFromDom_(
-    vacomplex::KeyEdgeData* keg,
-    dom::Element* domElement) {
+    vacomplex::KeyEdgeData* ked,
+    dom::Element* domElement,
+    bool updateStroke,
+    core::ConstSpan<core::StringId> propertyNames) {
+
     namespace ds = dom::strings;
 
     bool changed = false;
 
-    const auto& domPoints = element->getAttribute(ds::positions).getVec2dArray();
+    const auto& domPoints = domElement->getAttribute(ds::positions).getVec2dArray();
     if (sharedConstPositions_ != domPoints) {
         sharedConstPositions_ = domPoints;
         stroke_->setPositions(domPoints);
@@ -895,9 +902,7 @@ bool VacKeyEdge::updateDataFromDom_(
 }
 
 /* static */
-void VacKeyEdge::writeDomData_(
-    dom::Element* domElement,
-    vacomplex::KeyEdgeData* keg) {
+void VacKeyEdge::writeDomData_(dom::Element* domElement, vacomplex::KeyEdgeData* keg) {
     namespace ds = dom::strings;
 
     const auto& domPoints = domElement->getAttribute(ds::positions).getVec2dArray();
