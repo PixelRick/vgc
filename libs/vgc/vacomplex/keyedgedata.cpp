@@ -64,7 +64,7 @@ KeyEdgeData::~KeyEdgeData() {
     // default destruction
 }
 
-KeyEdgeDataPtr KeyEdgeData::clone() const {
+std::unique_ptr<KeyEdgeData> KeyEdgeData::clone() const {
     return std::make_unique<KeyEdgeData>(*this);
 }
 
@@ -127,7 +127,7 @@ void KeyEdgeData::setStroke(std::unique_ptr<geometry::AbstractStroke2d>&& newStr
 //       then match cell properties by pairs (use null if not present)
 
 /* static */
-KeyEdgeDataPtr KeyEdgeData::fromConcatStep(
+std::unique_ptr<KeyEdgeData> KeyEdgeData::fromConcatStep(
     const KeyHalfedgeData& khd1,
     const KeyHalfedgeData& khd2,
     bool smoothJoin) {
@@ -168,7 +168,8 @@ void KeyEdgeData::concatFinalize() {
 }
 
 /* static */
-KeyEdgeDataPtr KeyEdgeData::fromGlue(core::ConstSpan<KeyHalfedgeData> khds) {
+std::unique_ptr<KeyEdgeData>
+KeyEdgeData::fromGlue(core::ConstSpan<KeyHalfedgeData> khds) {
 
     struct ConvertedStroke {
         std::unique_ptr<geometry::AbstractStroke2d> converted;
@@ -202,7 +203,8 @@ KeyEdgeDataPtr KeyEdgeData::fromGlue(core::ConstSpan<KeyHalfedgeData> khds) {
         strokes.append(converted.st);
     }
 
-    std::unique_ptr<geometry::AbstractStroke2d> gluedStroke = bestModelStroke->cloneEmpty();
+    std::unique_ptr<geometry::AbstractStroke2d> gluedStroke =
+        bestModelStroke->cloneEmpty();
     gluedStroke->assignAverage(strokes, directions);
 
     auto result = std::make_unique<KeyEdgeData>(gluedStroke->isClosed());
@@ -212,7 +214,7 @@ KeyEdgeDataPtr KeyEdgeData::fromGlue(core::ConstSpan<KeyHalfedgeData> khds) {
 }
 
 /* static */
-KeyEdgeDataPtr KeyEdgeData::fromGlue(
+std::unique_ptr<KeyEdgeData> KeyEdgeData::fromGlue(
     core::ConstSpan<KeyHalfedgeData> khds,
     const geometry::AbstractStroke2d* gluedStroke) {
 

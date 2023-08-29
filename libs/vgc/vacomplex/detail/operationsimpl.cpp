@@ -21,6 +21,7 @@
 #include <vgc/vacomplex/exceptions.h>
 #include <vgc/vacomplex/keyedgedata.h>
 #include <vgc/vacomplex/logcategories.h>
+#include <vgc/vacomplex/strings.h>
 
 namespace vgc::vacomplex::detail {
 
@@ -86,12 +87,10 @@ KeyVertex* Operations::createKeyVertex(
     return kv;
 }
 
-// TODO: replace points & widths with `std::unique_ptr<EdgeGeometry>&& geometry`.
-
 KeyEdge* Operations::createKeyOpenEdge(
     KeyVertex* startVertex,
     KeyVertex* endVertex,
-    const std::shared_ptr<KeyEdgeData>& data,
+    std::unique_ptr<KeyEdgeData>&& data,
     Group* parentGroup,
     Node* nextSibling) {
 
@@ -104,14 +103,13 @@ KeyEdge* Operations::createKeyOpenEdge(
     addToBoundary_(ke, endVertex);
 
     // Geometric attributes
-    ke->data_ = data;
-    detail::CellPropertiesPrivateInterface::setOwningCell(&data->properties(), ke);
+    ke->setData_(std::move(data));
 
     return ke;
 }
 
 KeyEdge* Operations::createKeyClosedEdge(
-    const std::shared_ptr<KeyEdgeData>& data,
+    std::unique_ptr<KeyEdgeData>&& data,
     Group* parentGroup,
     Node* nextSibling,
     core::AnimTime t) {
@@ -122,8 +120,7 @@ KeyEdge* Operations::createKeyClosedEdge(
     // -> None
 
     // Geometric attributes
-    ke->data_ = data;
-    detail::CellPropertiesPrivateInterface::setOwningCell(&data->properties(), ke);
+    ke->setData_(std::move(data));
 
     return ke;
 }
@@ -327,7 +324,7 @@ Operations::glueKeyVertices(core::Span<KeyVertex*> kvs, const geometry::Vec2d& p
 
 KeyEdge* Operations::glueKeyOpenEdges(
     core::Span<KeyHalfedge> khes,
-    std::shared_ptr<KeyEdgeData> geometry,
+    std::unique_ptr<KeyEdgeData>&& data,
     const geometry::Vec2d& startPosition,
     const geometry::Vec2d& endPosition) {
 
@@ -367,7 +364,7 @@ KeyEdge* Operations::glueKeyOpenEdges(
 
     // TODO: define source operation
     KeyEdge* newKe =
-        createKeyOpenEdge(startKv, endKv, std::move(geometry), parentGroup, nextSibling);
+        createKeyOpenEdge(startKv, endKv, std::move(data), parentGroup, nextSibling);
 
     KeyHalfedge newKhe(newKe, true);
     for (const KeyHalfedge& khe : khes) {
@@ -382,7 +379,7 @@ KeyEdge* Operations::glueKeyOpenEdges(
 
 KeyEdge* Operations::glueKeyClosedEdges( //
     core::Span<KeyHalfedge> khes,
-    std::shared_ptr<KeyEdgeData> geometry) {
+    std::unique_ptr<KeyEdgeData>&& data) {
 
     if (khes.isEmpty()) {
         return nullptr;
@@ -400,7 +397,7 @@ KeyEdge* Operations::glueKeyClosedEdges( //
     Node* nextSibling = topMostEdge->nextSibling();
 
     // TODO: define source operation
-    KeyEdge* newKe = createKeyClosedEdge(std::move(geometry), parentGroup, nextSibling);
+    KeyEdge* newKe = createKeyClosedEdge(std::move(data), parentGroup, nextSibling);
 
     KeyHalfedge newKhe(newKe, true);
     for (const KeyHalfedge& khe : khes) {
@@ -424,7 +421,7 @@ core::Array<KeyEdge*> Operations::unglueKeyEdges(KeyEdge* targetKe) {
     // Helper
     auto duplicateTargetKe = [this, targetKe, &result]() {
         KeyEdge* newKe = nullptr;
-        std::shared_ptr<KeyEdgeData> dataDuplicate = targetKe->data()->clone();
+        std::unique_ptr<KeyEdgeData> dataDuplicate = targetKe->data()->clone();
         if (targetKe->isClosed()) {
             // TODO: define source operation
             newKe = createKeyClosedEdge(
@@ -643,7 +640,7 @@ core::Array<KeyVertex*> Operations::unglueKeyVertices(
     return result;
 }
 
-bool Operations::uncutAtKeyVertex(KeyVertex* targetKv) {
+bool Operations::uncutAtKeyVertex(KeyVertex* targetKv, bool smoothJoin) {
 
     UncutAtKeyVertexInfo_ info = prepareUncutAtKeyVertex_(targetKv);
     if (!info.isValid) {
@@ -660,10 +657,9 @@ bool Operations::uncutAtKeyVertex(KeyVertex* targetKv) {
     }
     else if (info.khe1.edge() == info.khe2.edge()) {
         // Transform open edge into closed edge.
-        // TODO: define source operation
         KeyEdge* oldKe = info.khe1.edge();
         KeyEdge* newKe = createKeyClosedEdge(
-            oldKe->stealData(), oldKe->parentGroup(), oldKe->nextSibling());
+            oldKe->stealData_(), oldKe->parentGroup(), oldKe->nextSibling());
 
         KeyHalfedge oldKhe(oldKe, true);
         KeyHalfedge newKhe(newKe, true);
@@ -686,8 +682,8 @@ bool Operations::uncutAtKeyVertex(KeyVertex* targetKv) {
         hardDelete(targetKv, false);
     }
     else {
-        KeyEdgeData* keg1 = info.khe1.edge()->geometry();
-        KeyEdgeData* keg2 = info.khe2.edge()->geometry();
+        KeyEdgeData* ked1 = info.khe1.edge()->data();
+        KeyEdgeData* ked2 = info.khe2.edge()->data();
         KeyVertex* kv1 = nullptr;
         KeyVertex* kv2 = nullptr;
         bool dir1 = false;
@@ -706,7 +702,10 @@ bool Operations::uncutAtKeyVertex(KeyVertex* targetKv) {
         else {
             kv2 = info.khe2.startVertex();
         }
-        std::shared_ptr<KeyEdgeData> mergedGeometry = keg1->merge(dir1, keg2, dir2);
+        KeyHalfedgeData khd1(ked1, dir1);
+        KeyHalfedgeData khd2(ked2, dir2);
+        std::unique_ptr<KeyEdgeData> concatData =
+            ked1->fromConcatStep(khd1, khd2, smoothJoin);
 
         // TODO: really pick lower
         KeyEdge* lowerKe = info.khe1.edge();
@@ -715,7 +714,7 @@ bool Operations::uncutAtKeyVertex(KeyVertex* targetKv) {
         KeyEdge* newKe = createKeyOpenEdge(
             kv1,
             kv2,
-            std::move(mergedGeometry),
+            std::move(concatData),
             lowerKe->parentGroup(),
             lowerKe->nextSibling());
 
@@ -843,18 +842,12 @@ void Operations::setKeyVertexPosition(KeyVertex* kv, const geometry::Vec2d& pos)
     onGeometryChanged_(kv);
 }
 
-void Operations::setKeyEdgeData(
-    KeyEdge* ke,
-    const std::shared_ptr<KeyEdgeData>& geometry) {
+void Operations::setKeyEdgeData(KeyEdge* ke, std::unique_ptr<KeyEdgeData>&& data) {
 
-    KeyEdge* previousKe = geometry->edge_;
-    ke->geometry_ = geometry;
-    geometry->edge_ = ke;
+    KeyEdge* previousKe = data->keyEdge();
+    VGC_ASSERT(!previousKe);
 
-    if (previousKe) {
-        previousKe->geometry_ = nullptr;
-        onGeometryChanged_(previousKe);
-    }
+    ke->setData_(std::move(data));
 
     onGeometryChanged_(ke);
 }
@@ -885,6 +878,10 @@ void Operations::onNodeInserted_(
 
 void Operations::onNodeModified_(Node* node, NodeModificationFlags diffFlags) {
     complex_->opDiff_.onNodeModified(node, diffFlags);
+}
+
+void Operations::onNodePropertyModified_(Node* node, core::StringId name) {
+    complex_->opDiff_.onNodePropertyModified(node, name);
 }
 
 void Operations::insertNodeBeforeSibling_(Node* node, Node* nextSibling) {
@@ -989,12 +986,7 @@ void Operations::onGeometryChanged_(Cell* cell) {
 }
 
 void Operations::onPropertyChanged_(Cell* cell, core::StringId name) {
-    if (name == strings::style) {
-        onNodeModified_(cell, NodeModificationFlag::StyleChanged);
-    }
-    else {
-        // todo
-    }
+    onNodePropertyModified_(cell, name);
 }
 
 void Operations::onBoundaryMeshChanged_(Cell* cell) {

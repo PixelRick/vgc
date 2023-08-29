@@ -35,7 +35,6 @@ namespace vgc::vacomplex {
 
 class KeyEdge;
 class KeyEdgeData;
-using KeyEdgeDataPtr = std::unique_ptr<KeyEdgeData>;
 
 namespace detail {
 
@@ -77,11 +76,21 @@ public:
 
     ~KeyEdgeData() override;
 
-    KeyEdgeDataPtr clone() const;
+    std::unique_ptr<KeyEdgeData> clone() const;
+
+    KeyEdge* keyEdge() const {
+        Cell* cell = properties_.cell();
+        return cell ? cell->toKeyEdge() : nullptr;
+    }
 
     bool isClosed() const {
         return isClosed_;
     }
+
+    const geometry::AbstractStroke2d* stroke() const;
+
+    void setStroke(const geometry::AbstractStroke2d* stroke);
+    void setStroke(std::unique_ptr<geometry::AbstractStroke2d>&& stroke);
 
     /// Expects positions in object space.
     ///
@@ -91,11 +100,6 @@ public:
         geometry::CurveSnapTransformationMode mode =
             geometry::CurveSnapTransformationMode::LinearInArclength);
 
-    const geometry::AbstractStroke2d* stroke() const;
-
-    void setStroke(const geometry::AbstractStroke2d* stroke);
-    void setStroke(std::unique_ptr<geometry::AbstractStroke2d>&& stroke);
-
     /// Expects delta in object space.
     ///
     void translate(const geometry::Vec2d& delta);
@@ -104,19 +108,22 @@ public:
     ///
     void transform(const geometry::Mat3d& transformation);
 
-    static KeyEdgeDataPtr
-    fromConcatStep(const KeyHalfedgeData& khd1, const KeyHalfedgeData& khd2, bool smoothJoin);
+    static std::unique_ptr<KeyEdgeData> fromConcatStep(
+        const KeyHalfedgeData& khd1,
+        const KeyHalfedgeData& khd2,
+        bool smoothJoin);
 
     void concatFinalize();
 
-    static KeyEdgeDataPtr fromGlue(core::ConstSpan<KeyHalfedgeData> khds);
+    static std::unique_ptr<KeyEdgeData> fromGlue(core::ConstSpan<KeyHalfedgeData> khds);
 
-    static KeyEdgeDataPtr fromGlue(
+    static std::unique_ptr<KeyEdgeData> fromGlue(
         core::ConstSpan<KeyHalfedgeData> khds,
         const geometry::AbstractStroke2d* gluedStroke);
 
 private:
     std::unique_ptr<geometry::AbstractStroke2d> stroke_;
+    // In case stroke_ == nullptr.
     bool isClosed_;
 };
 

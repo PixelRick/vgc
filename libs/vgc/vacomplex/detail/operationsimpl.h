@@ -68,14 +68,14 @@ public:
     KeyEdge* createKeyOpenEdge(
         KeyVertex* startVertex,
         KeyVertex* endVertex,
-        const std::shared_ptr<KeyEdgeData>& geometry,
+        std::unique_ptr<KeyEdgeData>&& geometry,
         Group* parentGroup,
         Node* nextSibling = nullptr);
 
     // Assumes `nextSibling` is either `nullptr` or a child of `parentGroup`.
     //
     KeyEdge* createKeyClosedEdge(
-        const std::shared_ptr<KeyEdgeData>& geometry,
+        std::unique_ptr<KeyEdgeData>&& geometry,
         Group* parentGroup,
         Node* nextSibling = nullptr,
         core::AnimTime t = {});
@@ -99,7 +99,7 @@ public:
     //
     KeyEdge* glueKeyOpenEdges(
         core::Span<KeyHalfedge> khes,
-        std::shared_ptr<KeyEdgeData> geometry,
+        std::unique_ptr<KeyEdgeData>&& geometry,
         const geometry::Vec2d& startPosition,
         const geometry::Vec2d& endPosition);
 
@@ -107,14 +107,14 @@ public:
     //
     KeyEdge* glueKeyClosedEdges( //
         core::Span<KeyHalfedge> khes,
-        std::shared_ptr<KeyEdgeData> geometry);
+        std::unique_ptr<KeyEdgeData>&& geometry);
 
     core::Array<KeyEdge*> unglueKeyEdges(KeyEdge* ke);
     core::Array<KeyVertex*> unglueKeyVertices(
         KeyVertex* kv,
         core::Array<std::pair<core::Id, core::Array<KeyEdge*>>>& ungluedKeyEdges);
 
-    bool uncutAtKeyVertex(KeyVertex* kv);
+    bool uncutAtKeyVertex(KeyVertex* kv, bool smoothJoin);
     bool uncutAtKeyEdge(KeyEdge* ke);
 
     void moveToGroup(Node* node, Group* parentGroup, Node* nextSibling = nullptr);
@@ -122,7 +122,7 @@ public:
 
     void setKeyVertexPosition(KeyVertex* kv, const geometry::Vec2d& pos);
 
-    void setKeyEdgeData(KeyEdge* ke, const std::shared_ptr<KeyEdgeData>& geometry);
+    void setKeyEdgeData(KeyEdge* ke, std::unique_ptr<KeyEdgeData>&& geometry);
 
     void setKeyEdgeSamplingQuality(KeyEdge* ke, geometry::CurveSamplingQuality quality);
 
@@ -132,6 +132,7 @@ private:
     void onNodeCreated_(Node* node);
     void onNodeInserted_(Node* node, Node* oldParent, NodeInsertionType insertionType);
     void onNodeModified_(Node* node, NodeModificationFlags diffFlags);
+    void onNodePropertyModified_(Node* node, core::StringId name);
 
     // Creates a new node and inserts it to the complex.
     //

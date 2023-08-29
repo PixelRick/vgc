@@ -18,7 +18,7 @@
 #define VGC_VACOMPLEX_CELLDATA_H
 
 #include <map>
-#include <memory> // std::unique_ptr, std::shared_ptr
+#include <memory> // std::unique_ptr
 
 #include <vgc/core/arithmetic.h>
 #include <vgc/core/stringid.h>
@@ -37,7 +37,7 @@ using CellDataPtr = std::shared_ptr<CellData>;
 /// \class vgc::vacomplex::CellData
 /// \brief Abstract authored data of a cell (geometry and properties).
 ///
-class VGC_VACOMPLEX_API CellData : public std::enable_shared_from_this<CellData> {
+class VGC_VACOMPLEX_API CellData {
 protected:
     CellData() noexcept = default;
 

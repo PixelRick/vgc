@@ -129,6 +129,17 @@ public:
         flags_ = flags;
     }
 
+    const core::Array<core::StringId>& modifiedProperties() {
+        return modifiedProperties_;
+    }
+
+    void insertModifiedProperty(core::StringId name) {
+        flags_.set(NodeModificationFlag::PropertyChanged);
+        if (!modifiedProperties_.contains(name)) {
+            modifiedProperties_.append(name);
+        }
+    }
+
 private:
     core::Id nodeId_ = {};
     Node* node_ = nullptr;
@@ -270,6 +281,23 @@ private:
         }
         ModifiedNodeInfo& modifiedNodeInfo = modifiedNodes_.emplaceLast(node);
         modifiedNodeInfo.setFlags(modifiedNodeInfo.flags() | diffFlags);
+    }
+
+    void onNodePropertyModified(Node* node, core::StringId name) {
+        for (Int i = 0; i < createdNodes_.length(); ++i) {
+            if (createdNodes_[i].node() == node) {
+                // swallow node diffs when node is new
+                return;
+            }
+        }
+        for (ModifiedNodeInfo& modifiedNodeInfo : modifiedNodes_) {
+            if (modifiedNodeInfo.node() == node) {
+                modifiedNodeInfo.insertModifiedProperty(name);
+                return;
+            }
+        }
+        ModifiedNodeInfo& modifiedNodeInfo = modifiedNodes_.emplaceLast(node);
+        modifiedNodeInfo.insertModifiedProperty(name);
     }
 
     void onNodeInserted(Node* node, Node* oldParent, NodeInsertionType insertionType) {

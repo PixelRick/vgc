@@ -56,7 +56,7 @@ struct VGC_TOOLS_API KeyVertexTransformData {
 
 struct VGC_TOOLS_API KeyEdgeTransformData {
     core::Id elementId;
-    vacomplex::KeyEdgeDataPtr oldData;
+    std::unique_ptr<vacomplex::KeyEdgeData> oldData;
 };
 
 class VGC_TOOLS_API TopologyAwareTransformer {

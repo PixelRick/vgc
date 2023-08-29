@@ -59,10 +59,6 @@ public:
         return data_.get();
     }
 
-    std::unique_ptr<KeyEdgeData> stealData() {
-        return std::move(data_);
-    }
-
     geometry::CurveSamplingQuality samplingQuality() const {
         return samplingQuality_;
     }
@@ -78,7 +74,8 @@ public:
     ///
     /// Unlike `sampling()`, this function does not cache the result.
     ///
-    geometry::StrokeSampling2d computeStrokeSampling(geometry::CurveSamplingQuality quality) const;
+    geometry::StrokeSampling2d
+    computeStrokeSampling(geometry::CurveSamplingQuality quality) const;
 
     bool isStartVertex(VertexCell* v) const override {
         return v == startVertex_;
@@ -112,10 +109,23 @@ private:
     std::unique_ptr<KeyEdgeData> data_ = {};
     //bool isClosed_ = false;
 
+    std::unique_ptr<KeyEdgeData> stealData_() {
+        detail::CellPropertiesPrivateInterface::setOwningCell(
+            &data_->properties(), nullptr);
+        return std::move(data_);
+    }
+
+    void setData_(std::unique_ptr<KeyEdgeData>&& data) {
+        data_ = std::move(data);
+        detail::CellPropertiesPrivateInterface::setOwningCell(
+            &data_->properties(), this);
+    }
+
     geometry::CurveSamplingQuality samplingQuality_ = {};
     mutable std::shared_ptr<const geometry::StrokeSampling2d> sampling_ = {};
 
-    geometry::StrokeSampling2d computeStrokeSampling_(geometry::CurveSamplingQuality quality) const;
+    geometry::StrokeSampling2d
+    computeStrokeSampling_(geometry::CurveSamplingQuality quality) const;
     void updateStrokeSampling_() const;
 
     void dirtyMesh_() override;

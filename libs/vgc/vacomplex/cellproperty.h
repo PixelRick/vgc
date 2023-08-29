@@ -162,9 +162,7 @@ public:
     void onUpdateGeometry(const geometry::AbstractStroke2d* newStroke);
 
     // Returns a null pointer by default.
-    void concatStep(
-        const KeyHalfedgeData& khd1,
-        const KeyHalfedgeData& khd2);
+    void concatStep(const KeyHalfedgeData& khd1, const KeyHalfedgeData& khd2);
 
     void concatFinalize();
 

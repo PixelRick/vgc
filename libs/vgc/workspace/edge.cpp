@@ -902,7 +902,7 @@ bool VacKeyEdge::updateDataFromDom_(
 }
 
 /* static */
-void VacKeyEdge::writeDomData_(dom::Element* domElement, vacomplex::KeyEdgeData* keg) {
+void VacKeyEdge::writeDomData_(dom::Element* domElement, vacomplex::KeyEdgeData* ked) {
     namespace ds = dom::strings;
 
     const auto& domPoints = domElement->getAttribute(ds::positions).getVec2dArray();

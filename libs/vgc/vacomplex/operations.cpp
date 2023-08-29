@@ -54,7 +54,7 @@ KeyVertex* createKeyVertex(
 }
 
 KeyEdge* createKeyClosedEdge(
-    const std::shared_ptr<KeyEdgeData>& geometry,
+    std::unique_ptr<KeyEdgeData>&& geometry,
     Group* parentGroup,
     Node* nextSibling,
     core::AnimTime t) {
@@ -70,7 +70,7 @@ KeyEdge* createKeyClosedEdge(
 KeyEdge* createKeyOpenEdge(
     KeyVertex* startVertex,
     KeyVertex* endVertex,
-    const std::shared_ptr<KeyEdgeData>& geometry,
+    std::unique_ptr<KeyEdgeData>&& geometry,
     Group* parentGroup,
     Node* nextSibling,
     core::AnimTime t) {
@@ -247,7 +247,7 @@ Complex* checkGlueKeyEdges_(core::Span<KeyHalfedge> khes) {
 
 KeyEdge* glueKeyOpenEdges(
     core::Span<KeyHalfedge> khes,
-    std::shared_ptr<KeyEdgeData> geometry,
+    std::unique_ptr<KeyEdgeData> geometry,
     const geometry::Vec2d& startPosition,
     const geometry::Vec2d& endPosition) {
 
@@ -259,7 +259,7 @@ KeyEdge* glueKeyOpenEdges(
 
 KeyEdge* glueKeyClosedEdges(
     core::Span<KeyHalfedge> khes,
-    std::shared_ptr<KeyEdgeData> geometry) {
+    std::unique_ptr<KeyEdgeData> geometry) {
 
     constexpr bool isClosed = true;
     Complex* complex = checkGlueKeyEdges_<isClosed>(khes);
@@ -314,7 +314,7 @@ void setKeyVertexPosition(KeyVertex* vertex, const geometry::Vec2d& pos) {
     return ops.setKeyVertexPosition(vertex, pos);
 }
 
-void setKeyEdgeData(KeyEdge* edge, const std::shared_ptr<KeyEdgeData>& geometry) {
+void setKeyEdgeData(KeyEdge* edge, std::unique_ptr<KeyEdgeData>&& geometry) {
     if (!edge) {
         throw LogicError("setKeyEdgeData: edge is nullptr.");
     }

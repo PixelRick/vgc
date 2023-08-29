@@ -249,7 +249,7 @@ public:
     bool canAmendUndoGroup_ = false;
     bool started_ = false;
     core::Id edgeId_ = -1;
-    vacomplex::KeyEdgeDataPtr oldData_;
+    std::unique_ptr<vacomplex::KeyEdgeData> oldData_;
     std::unique_ptr<geometry::AbstractStroke2d> editStroke_;
     geometry::Vec2f cursorPositionAtPress_;
     geometry::Vec2f cursorPosition_;
@@ -442,7 +442,7 @@ public:
     bool canAmendUndoGroup_ = false;
     bool started_ = false;
     core::Id edgeId_ = -1;
-    vacomplex::KeyEdgeDataPtr oldData_;
+    std::unique_ptr<vacomplex::KeyEdgeData> oldData_;
     std::unique_ptr<geometry::AbstractStroke2d> editStroke_;
     geometry::Vec2f cursorPositionAtPress_;
     geometry::Vec2f cursorPosition_;
@@ -634,7 +634,7 @@ public:
     bool canAmendUndoGroup_ = false;
     bool started_ = false;
     core::Id edgeId_ = -1;
-    vacomplex::KeyEdgeDataPtr oldData_;
+    std::unique_ptr<vacomplex::KeyEdgeData> oldData_;
     std::unique_ptr<geometry::AbstractStroke2d> editStroke_;
     geometry::Vec2f cursorPositionAtLastSmooth_;
     geometry::Vec2f cursorPosition_;
