@@ -34,20 +34,4 @@ void CellData::emitGeometryChanged() const {
     }
 }
 
-//void CellData::translateProperties(const geometry::Vec2d& delta) {
-//    doPropertyOperation([&](CellProperty* p) { return p->onTranslate_(delta); });
-//}
-//
-//void CellData::transformProperties(const geometry::Mat3d& transformation) {
-//    doPropertyOperation([&](CellProperty* p) { return p->onTransform_(transformation); });
-//}
-//
-//void CellData::updateProperties(const geometry::AbstractStroke2d* newStroke) {
-//    doPropertyOperation([&](CellProperty* p) { return p->onGeometryUpdate_(newStroke); });
-//}
-//
-//void CellData::notifyPropertiesOfOperationEnd() {
-//    doPropertyOperation([](CellProperty* p) { return p->onOperationEnd_(); });
-//}
-
 } // namespace vgc::vacomplex

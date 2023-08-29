@@ -241,7 +241,7 @@ protected:
     YukselBezierSegment2d
     segmentEvaluator(Int segmentIndex, CubicBezier2d& halfwidths) const;
 
-private:
+protected:
     const StrokeModelInfo& modelInfo_() const override;
 
     std::unique_ptr<AbstractStroke2d> cloneEmpty_() const override;
@@ -251,6 +251,7 @@ private:
 
     StrokeBoundaryInfo computeBoundaryInfo_() const override;
 
+protected:
     void updateCache_(const core::Array<SegmentComputeData>& baseComputeDataArray) const override;
 };
 

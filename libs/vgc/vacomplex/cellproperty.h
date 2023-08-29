@@ -23,7 +23,6 @@
 #include <vgc/core/stringid.h>
 #include <vgc/geometry/stroke.h> // geometry::AbstractStroke2d
 #include <vgc/vacomplex/api.h>
-#include <vgc/vacomplex/dataobject.h>
 
 namespace vgc::vacomplex {
 
@@ -61,6 +60,12 @@ private:
     bool direction_ = false;
 };
 
+enum class CellPropertyOpResult : UInt8 {
+    Unsupported,
+    Unchanged,
+    Success
+};
+
 /// \class vgc::vacomplex::CellProperty
 /// \brief Abstract authored property of a cell geometry.
 ///
@@ -73,12 +78,6 @@ protected:
 public:
     virtual ~CellProperty() = default;
 
-    enum class OpResult : UInt8 {
-        Unsupported,
-        Unchanged,
-        Success
-    };
-
     core::StringId name() const {
         return name_;
     }
@@ -87,38 +86,48 @@ public:
         return clone_();
     }
 
+protected:
+    using OpResult = CellPropertyOpResult;
+
+    virtual std::unique_ptr<CellProperty> clone_() const = 0;
+
+    // Returns OpResult::Unchanged by default.
+    virtual OpResult onTranslateGeometry_(const geometry::Vec2d& delta);
+
+    // Returns OpResult::Unchanged by default.
+    virtual OpResult onTransformGeometry_(const geometry::Mat3d& transformation);
+
+    // Returns OpResult::Unchanged by default.
+    virtual OpResult onUpdateGeometry_(const geometry::AbstractStroke2d* newStroke);
+
+    // Returns a null pointer by default.
+    virtual std::unique_ptr<CellProperty>
+    fromConcatStep_(const KeyHalfedgeData& khd1, const KeyHalfedgeData& khd2) const;
+
+    // Returns OpResult::Unchanged by default.
+    virtual OpResult concatFinalize_();
+
+    // Returns a null pointer by default.
+    virtual std::unique_ptr<CellProperty> fromGlue_(
+        core::ConstSpan<KeyHalfedgeData> khds,
+        const geometry::AbstractStroke2d* gluedStroke) const;
+
 private:
     core::StringId name_;
 
     friend CellProperties;
-
-    virtual std::unique_ptr<CellProperty> clone_() const = 0;
-
-    // Returns a null pointer by default.
-    virtual std::unique_ptr<CellProperty>
-    concat_(const KeyHalfedgeData& khd1, const KeyHalfedgeData& khd2) const;
-
-    // Returns a null pointer by default.
-    virtual std::unique_ptr<CellProperty> glue_(
-        core::ConstSpan<KeyHalfedgeData> khds,
-        const geometry::AbstractStroke2d* gluedStroke) const;
-
-    // Returns a null pointer by default.
-    virtual std::unique_ptr<CellProperty>
-    glue_(core::ConstSpan<const KeyFaceData*> kfds) const;
-
-    // Returns OpResult::Unchanged by default.
-    virtual OpResult onTranslate_(const geometry::Vec2d& delta);
-
-    // Returns OpResult::Unchanged by default.
-    virtual OpResult onTransform_(const geometry::Mat3d& transformation);
-
-    // Returns OpResult::Unchanged by default.
-    virtual OpResult onGeometryUpdate_(const geometry::AbstractStroke2d* newStroke);
-
-    // Returns OpResult::Unchanged by default.
-    virtual OpResult finalizeCombinedOperations_();
 };
+
+namespace detail {
+
+struct CellPropertiesPrivateInterface {
+    friend Cell;
+    friend detail::Operations;
+
+    static void setOwningCell(const CellProperties* properties, Cell* cell);
+};
+
+} // namespace detail
 
 /// \class vgc::vacomplex::CellProperties
 /// \brief Abstract authored properties of a cell (e.g.: style).
@@ -148,35 +157,27 @@ public:
     void remove(core::StringId name);
     void clear();
 
-    // Returns a null pointer by default.
-    void concat(
-        CellProperties& result,
-        const KeyHalfedgeData& khd1,
-        const KeyHalfedgeData& khd2) const;
-
-    // Returns a null pointer by default.
-    void glue(
-        CellProperties& result,
-        core::ConstSpan<KeyHalfedgeData> khds,
-        const geometry::AbstractStroke2d* gluedStroke) const;
-
-    // Returns a null pointer by default.
-    void glue(CellProperties& result, core::ConstSpan<const KeyFaceData*> kfds) const;
-
-    void finalizeCombinedOperations();
-
     void onTranslateGeometry(const geometry::Vec2d& delta);
     void onTransformGeometry(const geometry::Mat3d& transformation);
     void onUpdateGeometry(const geometry::AbstractStroke2d* newStroke);
 
+    // Returns a null pointer by default.
+    void concatStep(
+        const KeyHalfedgeData& khd1,
+        const KeyHalfedgeData& khd2);
+
+    void concatFinalize();
+
+    // Returns a null pointer by default.
+    void glue(
+        core::ConstSpan<KeyHalfedgeData> khds,
+        const geometry::AbstractStroke2d* gluedStroke);
+
 private:
     std::map<core::StringId, std::unique_ptr<CellProperty>> map_;
 
-    friend Cell; // only for access to cell_
-    friend detail::Operations;
+    friend detail::CellPropertiesPrivateInterface;
     Cell* cell_ = nullptr;
-
-    void assignClonedProperties_(const CellProperties& other);
 
     template<typename Op>
     void doOperation_(const Op& op) {
@@ -205,6 +206,14 @@ private:
 
     void emitPropertyChanged_(core::StringId name);
 };
+
+/* static */
+inline void detail::CellPropertiesPrivateInterface::setOwningCell(
+    const CellProperties* properties,
+    Cell* cell) {
+
+    const_cast<CellProperties*>(properties)->cell_ = cell;
+}
 
 } // namespace vgc::vacomplex
 

@@ -18,6 +18,7 @@
 #define VGC_VACOMPLEX_KEYEDGE_H
 
 #include <memory>
+#include <utility>
 
 #include <vgc/core/arithmetic.h>
 #include <vgc/geometry/rect2d.h>
@@ -56,6 +57,10 @@ public:
 
     KeyEdgeData* data() const {
         return data_.get();
+    }
+
+    std::unique_ptr<KeyEdgeData> stealData() {
+        return std::move(data_);
     }
 
     geometry::CurveSamplingQuality samplingQuality() const {
@@ -104,7 +109,7 @@ private:
     // position and orientation when not bound to vertices ?
     //detail::Transform2d transform_;
 
-    std::shared_ptr<KeyEdgeData> data_ = {};
+    std::unique_ptr<KeyEdgeData> data_ = {};
     //bool isClosed_ = false;
 
     geometry::CurveSamplingQuality samplingQuality_ = {};

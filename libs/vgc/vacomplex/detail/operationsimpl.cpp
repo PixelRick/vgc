@@ -105,7 +105,7 @@ KeyEdge* Operations::createKeyOpenEdge(
 
     // Geometric attributes
     ke->data_ = data;
-    const_cast<CellProperties&>(data->properties()).cell_ = ke;
+    detail::CellPropertiesPrivateInterface::setOwningCell(&data->properties(), ke);
 
     return ke;
 }
@@ -123,7 +123,7 @@ KeyEdge* Operations::createKeyClosedEdge(
 
     // Geometric attributes
     ke->data_ = data;
-    const_cast<CellProperties&>(data->properties()).cell_ = ke;
+    detail::CellPropertiesPrivateInterface::setOwningCell(&data->properties(), ke);
 
     return ke;
 }
@@ -424,11 +424,11 @@ core::Array<KeyEdge*> Operations::unglueKeyEdges(KeyEdge* targetKe) {
     // Helper
     auto duplicateTargetKe = [this, targetKe, &result]() {
         KeyEdge* newKe = nullptr;
-        std::shared_ptr<KeyEdgeData> geomDuplicate = targetKe->geometry()->clone();
+        std::shared_ptr<KeyEdgeData> dataDuplicate = targetKe->data()->clone();
         if (targetKe->isClosed()) {
             // TODO: define source operation
             newKe = createKeyClosedEdge(
-                std::move(geomDuplicate),
+                std::move(dataDuplicate),
                 targetKe->parentGroup(),
                 targetKe->nextSibling());
         }
@@ -437,7 +437,7 @@ core::Array<KeyEdge*> Operations::unglueKeyEdges(KeyEdge* targetKe) {
             newKe = createKeyOpenEdge(
                 targetKe->startVertex(),
                 targetKe->endVertex(),
-                std::move(geomDuplicate),
+                std::move(dataDuplicate),
                 targetKe->parentGroup(),
                 targetKe->nextSibling());
         }
@@ -663,7 +663,7 @@ bool Operations::uncutAtKeyVertex(KeyVertex* targetKv) {
         // TODO: define source operation
         KeyEdge* oldKe = info.khe1.edge();
         KeyEdge* newKe = createKeyClosedEdge(
-            std::move(oldKe->geometry_), oldKe->parentGroup(), oldKe->nextSibling());
+            oldKe->stealData(), oldKe->parentGroup(), oldKe->nextSibling());
 
         KeyHalfedge oldKhe(oldKe, true);
         KeyHalfedge newKhe(newKe, true);

@@ -24,7 +24,6 @@
 #include <vgc/core/stringid.h>
 #include <vgc/vacomplex/api.h>
 #include <vgc/vacomplex/cellproperty.h>
-#include <vgc/vacomplex/dataobject.h>
 
 namespace vgc::vacomplex {
 
@@ -38,8 +37,7 @@ using CellDataPtr = std::shared_ptr<CellData>;
 /// \class vgc::vacomplex::CellData
 /// \brief Abstract authored data of a cell (geometry and properties).
 ///
-class VGC_VACOMPLEX_API CellData : public DataObject,
-                                   public std::enable_shared_from_this<CellData> {
+class VGC_VACOMPLEX_API CellData : public std::enable_shared_from_this<CellData> {
 protected:
     CellData() noexcept = default;
 
@@ -52,12 +50,21 @@ public:
 
     const CellProperty* findProperty(core::StringId name) const;
 
+    void setProperties(const CellProperties& properties) {
+        // emitPropertyChanged_() calls are handled by the copy-assign operator.
+        properties_ = properties;
+    }
+
+    void setProperties(CellProperties&& properties) {
+        // emitPropertyChanged_() calls are handled by the move-assign operator.
+        properties_ = std::move(properties);
+    }
+
 protected:
+    CellProperties properties_;
+
     // XXX: additional argument when it is only an affine transformation ?
     void emitGeometryChanged() const;
-
-private:
-    CellProperties properties_;
 };
 
 } // namespace vgc::vacomplex

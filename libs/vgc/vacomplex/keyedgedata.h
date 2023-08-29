@@ -35,7 +35,7 @@ namespace vgc::vacomplex {
 
 class KeyEdge;
 class KeyEdgeData;
-using KeyEdgeDataPtr = std::shared_ptr<KeyEdgeData>;
+using KeyEdgeDataPtr = std::unique_ptr<KeyEdgeData>;
 
 namespace detail {
 
@@ -83,14 +83,6 @@ public:
         return isClosed_;
     }
 
-    /// Expects delta in object space.
-    ///
-    void translate(const geometry::Vec2d& delta);
-
-    /// Expects transformation in object space.
-    ///
-    void transform(const geometry::Mat3d& transformation);
-
     /// Expects positions in object space.
     ///
     void snap(
@@ -104,18 +96,28 @@ public:
     void setStroke(const geometry::AbstractStroke2d* stroke);
     void setStroke(std::unique_ptr<geometry::AbstractStroke2d>&& stroke);
 
-    static KeyEdgeDataPtr
-    concat(const KeyHalfedgeData& khd1, const KeyHalfedgeData& khd2, bool smoothJoin);
+    /// Expects delta in object space.
+    ///
+    void translate(const geometry::Vec2d& delta);
 
-    static KeyEdgeDataPtr glue(core::Array<KeyHalfedgeData> khds);
+    /// Expects transformation in object space.
+    ///
+    void transform(const geometry::Mat3d& transformation);
+
+    static KeyEdgeDataPtr
+    fromConcatStep(const KeyHalfedgeData& khd1, const KeyHalfedgeData& khd2, bool smoothJoin);
+
+    void concatFinalize();
+
+    static KeyEdgeDataPtr fromGlue(core::ConstSpan<KeyHalfedgeData> khds);
+
+    static KeyEdgeDataPtr fromGlue(
+        core::ConstSpan<KeyHalfedgeData> khds,
+        const geometry::AbstractStroke2d* gluedStroke);
 
 private:
     std::unique_ptr<geometry::AbstractStroke2d> stroke_;
     bool isClosed_;
-
-    static KeyEdgeDataPtr glue_(
-        core::Array<KeyHalfedgeData> khds,
-        const geometry::AbstractStroke2d* gluedStroke);
 };
 
 //std::shared_ptr<const EdgeSampling> snappedSampling_;

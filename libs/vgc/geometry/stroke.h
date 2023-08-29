@@ -1012,7 +1012,7 @@ protected:
     //
     virtual StrokeSampleEx2d zeroLengthStrokeSample() const = 0;
 
-private:
+protected:
     virtual const StrokeModelInfo& modelInfo_() const = 0;
 
     virtual std::unique_ptr<AbstractStroke2d> cloneEmpty_() const = 0;

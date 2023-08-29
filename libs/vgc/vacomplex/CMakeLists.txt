@@ -8,7 +8,6 @@ vgc_add_library(vacomplex
         celldata.h
         cellproperty.h
         complex.h
-        dataobject.h
         exceptions.h
         inbetweenedge.h
         inbetweenface.h

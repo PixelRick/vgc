@@ -843,6 +843,12 @@ protected:
     virtual void dirtyMesh_();
     virtual bool updateGeometryFromBoundary_();
 
+protected:
+    virtual void substituteKeyVertex_(KeyVertex* oldVertex, KeyVertex* newVertex) = 0;
+    virtual void substituteKeyHalfedge_(
+        const class KeyHalfedge& oldHalfedge,
+        const class KeyHalfedge& newHalfedge) = 0;
+
 private:
     core::Array<Cell*> star_;
     core::Array<Cell*> boundary_;
@@ -852,11 +858,6 @@ private:
     // the new mesh. It should be set to true (either directly
     // or indirectly) in all mesh getters.
     mutable bool hasMeshBeenQueriedSinceLastDirtyEvent_ = false;
-
-    virtual void substituteKeyVertex_(KeyVertex* oldVertex, KeyVertex* newVertex) = 0;
-    virtual void substituteKeyHalfedge_(
-        const class KeyHalfedge& oldHalfedge,
-        const class KeyHalfedge& newHalfedge) = 0;
 };
 
 inline Complex* Node::complex() const {

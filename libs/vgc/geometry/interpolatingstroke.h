@@ -82,9 +82,7 @@ protected:
         : AbstractStroke2d(isClosed) {
     }
 
-    AbstractInterpolatingStroke2d(
-        bool isClosed,
-        double constantWidth)
+    AbstractInterpolatingStroke2d(bool isClosed, double constantWidth)
 
         : AbstractStroke2d(isClosed)
         , widths_(1, constantWidth)
@@ -161,7 +159,7 @@ protected:
 
     void updateCache() const;
 
-private:
+protected:
     std::unique_ptr<AbstractStroke2d> cloneEmpty_() const override = 0;
     std::unique_ptr<AbstractStroke2d> clone_() const override = 0;
     bool copyAssign_(const AbstractStroke2d* other) override = 0;
@@ -220,6 +218,10 @@ private:
         double tolerance,
         bool isClosed) override;
 
+protected:
+    virtual void
+    updateCache_(const core::Array<SegmentComputeData>& baseComputeDataArray) const = 0;
+
 private:
     Vec2dArray positions_;
     core::DoubleArray widths_;
@@ -237,9 +239,6 @@ private:
 
     void onPositionsChanged_();
     void onWidthsChanged_();
-
-    virtual void
-    updateCache_(const core::Array<SegmentComputeData>& baseComputeDataArray) const = 0;
 };
 
 namespace detail {

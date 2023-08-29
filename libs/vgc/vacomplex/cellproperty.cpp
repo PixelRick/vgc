@@ -21,61 +21,71 @@
 
 namespace vgc::vacomplex {
 
-std::unique_ptr<CellProperty> CellProperty::concat_(
+CellProperty::OpResult
+CellProperty::onTranslateGeometry_(const geometry::Vec2d& /*delta*/) {
+    return OpResult::Unchanged;
+}
+
+CellProperty::OpResult
+CellProperty::onTransformGeometry_(const geometry::Mat3d& /*transformation*/) {
+    return OpResult::Unchanged;
+}
+
+CellProperty::OpResult
+CellProperty::onUpdateGeometry_(const geometry::AbstractStroke2d* /*newStroke*/) {
+    return OpResult::Unchanged;
+}
+
+std::unique_ptr<CellProperty> CellProperty::fromConcatStep_(
     const KeyHalfedgeData& /*khd1*/,
     const KeyHalfedgeData& /*khd2*/) const {
 
     return nullptr;
 }
 
-std::unique_ptr<CellProperty> CellProperty::glue_(
+CellProperty::OpResult CellProperty::concatFinalize_() {
+    return OpResult::Unchanged;
+}
+
+std::unique_ptr<CellProperty> CellProperty::fromGlue_(
     core::ConstSpan<KeyHalfedgeData> /*khds*/,
     const geometry::AbstractStroke2d* /*gluedStroke*/) const {
 
     return nullptr;
 }
 
-std::unique_ptr<CellProperty>
-CellProperty::glue_(core::ConstSpan<const KeyFaceData*> /*kfds*/) const {
-    return nullptr;
-}
-
-CellProperty::OpResult CellProperty::onTranslate_(const geometry::Vec2d& /*delta*/) {
-    return OpResult::Unchanged;
-}
-
-CellProperty::OpResult
-CellProperty::onTransform_(const geometry::Mat3d& /*transformation*/) {
-    return OpResult::Unchanged;
-}
-
-CellProperty::OpResult
-CellProperty::onGeometryUpdate_(const geometry::AbstractStroke2d* /*newStroke*/) {
-    return OpResult::Unchanged;
-}
-
-CellProperty::OpResult CellProperty::finalizeCombinedOperations_() {
-    return OpResult::Unchanged;
-}
-
 CellProperties::CellProperties(const CellProperties& other) {
-    assignClonedProperties_(other);
+    if (&other != this) {
+        for (const auto& [name, prop] : other.map_) {
+            map_[name] = prop->clone();
+            // cell_ == nullptr, no need to call emitPropertyChanged_()
+        }
+    }
 }
 
 CellProperties::CellProperties(CellProperties&& other) noexcept
     : map_(std::move(other.map_)) {
+    // cell_ == nullptr, no need to call emitPropertyChanged_()
 }
 
 CellProperties& CellProperties::operator=(const CellProperties& other) {
     if (&other != this) {
-        assignClonedProperties_(other);
+        clear();
+        for (const auto& [name, prop] : other.map_) {
+            map_[name] = prop->clone();
+            emitPropertyChanged_(name);
+        }
     }
     return *this;
 }
 
 CellProperties& CellProperties::operator=(CellProperties&& other) noexcept {
     if (&other != this) {
+        clear();
         map_ = std::move(other.map_);
+        for (auto& it : map_) {
+            emitPropertyChanged_(it.first);
+        }
     }
     return *this;
 }
@@ -105,6 +115,19 @@ void CellProperties::clear() {
     }
 }
 
+void CellProperties::onTranslateGeometry(const geometry::Vec2d& delta) {
+    doOperation_([&](CellProperty* p) { return p->onTranslateGeometry_(delta); });
+}
+
+void CellProperties::onTransformGeometry(const geometry::Mat3d& transformation) {
+    doOperation_(
+        [&](CellProperty* p) { return p->onTransformGeometry_(transformation); });
+}
+
+void CellProperties::onUpdateGeometry(const geometry::AbstractStroke2d* newStroke) {
+    doOperation_([&](CellProperty* p) { return p->onUpdateGeometry_(newStroke); });
+}
+
 namespace {
 
 struct PropertyTemplate {
@@ -114,12 +137,11 @@ struct PropertyTemplate {
 
 } // namespace
 
-void CellProperties::concat(
-    CellProperties& result,
+void CellProperties::concatStep(
     const KeyHalfedgeData& khd1,
-    const KeyHalfedgeData& khd2) const {
+    const KeyHalfedgeData& khd2) {
 
-    result.clear();
+    clear();
 
     KeyEdgeData* ked1 = khd1.edgeData();
     KeyEdgeData* ked2 = khd2.edgeData();
@@ -140,20 +162,22 @@ void CellProperties::concat(
     }
 
     for (const PropertyTemplate& p : templates) {
-        std::unique_ptr<CellProperty> newProp = p.prop->concat_(khd1, khd2);
+        std::unique_ptr<CellProperty> newProp = p.prop->fromConcatStep_(khd1, khd2);
         if (newProp) {
-            result.insert(std::move(newProp));
+            insert(std::move(newProp));
         }
     }
 }
 
-// Returns a null pointer by default.
-void CellProperties::glue(
-    CellProperties& result,
-    core::ConstSpan<KeyHalfedgeData> khds,
-    const geometry::AbstractStroke2d* gluedStroke) const {
+void CellProperties::concatFinalize() {
+    doOperation_([](CellProperty* p) { return p->concatFinalize_(); });
+}
 
-    result.clear();
+void CellProperties::glue(
+    core::ConstSpan<KeyHalfedgeData> khds,
+    const geometry::AbstractStroke2d* gluedStroke) {
+
+    clear();
 
     core::Array<PropertyTemplate> templates;
     for (const KeyHalfedgeData& khd : khds) {
@@ -168,44 +192,9 @@ void CellProperties::glue(
     }
 
     for (const PropertyTemplate& p : templates) {
-        std::unique_ptr<CellProperty> newProp = p.prop->glue_(khds, gluedStroke);
+        std::unique_ptr<CellProperty> newProp = p.prop->fromGlue_(khds, gluedStroke);
         if (newProp) {
-            result.insert(std::move(newProp));
-        }
-    }
-}
-
-// Returns a null pointer by default.
-void CellProperties::glue(
-    CellProperties& result,
-    core::ConstSpan<const KeyFaceData*> kfds) const {
-
-    result.clear();
-
-    // TODO
-}
-
-void CellProperties::finalizeCombinedOperations() {
-    doOperation_([](CellProperty* p) { return p->finalizeCombinedOperations_(); });
-}
-
-void CellProperties::onTranslateGeometry(const geometry::Vec2d& delta) {
-    doOperation_([&](CellProperty* p) { return p->onTranslate_(delta); });
-}
-
-void CellProperties::onTransformGeometry(const geometry::Mat3d& transformation) {
-    doOperation_([&](CellProperty* p) { return p->onTransform_(transformation); });
-}
-
-void CellProperties::onUpdateGeometry(const geometry::AbstractStroke2d* newStroke) {
-    doOperation_([&](CellProperty* p) { return p->onGeometryUpdate_(newStroke); });
-}
-
-void CellProperties::assignClonedProperties_(const CellProperties& other) {
-    if (&other != this) {
-        map_.clear();
-        for (const auto& [name, prop] : other.map_) {
-            map_[name] = prop->clone();
+            insert(std::move(newProp));
         }
     }
 }
