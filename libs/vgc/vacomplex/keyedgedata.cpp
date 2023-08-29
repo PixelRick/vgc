@@ -68,6 +68,11 @@ std::unique_ptr<KeyEdgeData> KeyEdgeData::clone() const {
     return std::make_unique<KeyEdgeData>(*this);
 }
 
+KeyEdge* KeyEdgeData::keyEdge() const {
+    Cell* cell = properties_.cell();
+    return cell ? cell->toKeyEdge() : nullptr;
+}
+
 void KeyEdgeData::translate(const geometry::Vec2d& delta) {
     if (stroke_) {
         stroke_->translate(delta);
@@ -91,7 +96,7 @@ void KeyEdgeData::snap(
 
     if (stroke_) {
         std::array<geometry::Vec2d, 2> oldEndPositions = stroke_->endPositions();
-        if (stroke_->snap(snapStartPosition, snapEndPosition)) {
+        if (stroke_->snap(snapStartPosition, snapEndPosition, mode)) {
             emitGeometryChanged();
             properties_.onUpdateGeometry(stroke_.get());
         }
@@ -142,7 +147,6 @@ std::unique_ptr<KeyEdgeData> KeyEdgeData::fromConcatStep(
     const geometry::StrokeModelInfo& model2 = st2->modelInfo();
 
     std::unique_ptr<geometry::AbstractStroke2d> converted;
-    const geometry::AbstractStroke2d* model = st1;
     if (model1.name() != model2.name()) {
         if (model1.defaultConversionRank() >= model2.defaultConversionRank()) {
             converted = st1->convert(st2);
@@ -154,17 +158,17 @@ std::unique_ptr<KeyEdgeData> KeyEdgeData::fromConcatStep(
         }
     }
     std::unique_ptr<geometry::AbstractStroke2d> concatStroke = st1->cloneEmpty();
-    concatStroke->assignConcat(
+    concatStroke->assignFromConcat(
         st1, !khd1.direction(), st2, !khd1.direction(), smoothJoin);
 
     auto result = std::make_unique<KeyEdgeData>(ked1->isClosed());
     result->setStroke(std::move(concatStroke));
-    result->properties_.concatStep(khd1, khd2);
+    result->properties_.assignFromConcatStep(khd1, khd2);
     return result;
 }
 
-void KeyEdgeData::concatFinalize() {
-    properties_.concatFinalize();
+void KeyEdgeData::finalizeConcat() {
+    properties_.finalizeConcat();
 }
 
 /* static */
@@ -205,7 +209,7 @@ KeyEdgeData::fromGlue(core::ConstSpan<KeyHalfedgeData> khds) {
 
     std::unique_ptr<geometry::AbstractStroke2d> gluedStroke =
         bestModelStroke->cloneEmpty();
-    gluedStroke->assignAverage(strokes, directions);
+    gluedStroke->assignFromAverage(strokes, directions);
 
     auto result = std::make_unique<KeyEdgeData>(gluedStroke->isClosed());
     result->setStroke(std::move(gluedStroke));

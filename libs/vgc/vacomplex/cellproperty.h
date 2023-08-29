@@ -105,7 +105,7 @@ protected:
     fromConcatStep_(const KeyHalfedgeData& khd1, const KeyHalfedgeData& khd2) const;
 
     // Returns OpResult::Unchanged by default.
-    virtual OpResult concatFinalize_();
+    virtual OpResult finalizeConcat_();
 
     // Returns a null pointer by default.
     virtual std::unique_ptr<CellProperty> fromGlue_(
@@ -148,6 +148,14 @@ public:
         return map_;
     }
 
+    PropertyMap::const_iterator begin() const {
+        return map_.cbegin();
+    }
+
+    PropertyMap::const_iterator end() const {
+        return map_.cend();
+    }
+
     Cell* cell() const {
         return cell_;
     }
@@ -162,9 +170,9 @@ public:
     void onUpdateGeometry(const geometry::AbstractStroke2d* newStroke);
 
     // Returns a null pointer by default.
-    void concatStep(const KeyHalfedgeData& khd1, const KeyHalfedgeData& khd2);
+    void assignFromConcatStep(const KeyHalfedgeData& khd1, const KeyHalfedgeData& khd2);
 
-    void concatFinalize();
+    void finalizeConcat();
 
     // Returns a null pointer by default.
     void glue(
@@ -178,10 +186,10 @@ private:
     Cell* cell_ = nullptr;
 
     template<typename Op>
-    void doOperation_(const Op& op) {
+    bool doOperation_(const Op& op) {
         bool changed = false;
         core::Array<core::StringId> toRemove;
-        for (const auto& p : properties()) {
+        for (const auto& p : map_) {
             switch (op(p.second.get())) {
             case CellProperty::OpResult::Success:
                 emitPropertyChanged_(p.first);
@@ -196,8 +204,7 @@ private:
             }
         }
         for (const core::StringId& name : toRemove) {
-            removeProperty(name);
-            emitPropertyChanged_(name);
+            remove(name);
         }
         return changed;
     }

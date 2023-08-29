@@ -117,8 +117,7 @@ private:
 
     void setData_(std::unique_ptr<KeyEdgeData>&& data) {
         data_ = std::move(data);
-        detail::CellPropertiesPrivateInterface::setOwningCell(
-            &data_->properties(), this);
+        detail::CellPropertiesPrivateInterface::setOwningCell(&data_->properties(), this);
     }
 
     geometry::CurveSamplingQuality samplingQuality_ = {};

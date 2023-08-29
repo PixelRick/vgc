@@ -238,7 +238,7 @@ void extend_(core::Array<T>& dest, const TRange& range, bool reverse, bool skipF
 
 } // namespace
 
-void AbstractInterpolatingStroke2d::assignConcat_(
+void AbstractInterpolatingStroke2d::assignFromConcat_(
     const AbstractStroke2d* a_,
     bool directionA,
     const AbstractStroke2d* b_,
@@ -250,7 +250,8 @@ void AbstractInterpolatingStroke2d::assignConcat_(
     if (!a || !b) {
         VGC_WARNING(
             LogVgcGeometry,
-            "AbstractInterpolatingStroke2d::assignConcat() expects sources strokes to be "
+            "AbstractInterpolatingStroke2d::assignFromConcat_() expected source strokes "
+            "to be "
             "of type AbstractInterpolatingStroke2d");
         return;
     }
@@ -312,7 +313,7 @@ void AbstractInterpolatingStroke2d::assignConcat_(
     onWidthsChanged_();
 }
 
-void AbstractInterpolatingStroke2d::assignAverage_(
+void AbstractInterpolatingStroke2d::assignFromAverage_(
     core::ConstSpan<const AbstractStroke2d*> strokes,
     core::ConstSpan<bool> directions) {
 

@@ -689,7 +689,7 @@ protected:
 public:
     virtual ~AbstractStroke2d() = default;
 
-    const StrokeModelInfo& modelInfo() const  {
+    const StrokeModelInfo& modelInfo() const {
         return modelInfo_();
     }
 
@@ -899,28 +899,28 @@ public:
     }
 
     void prepend(const AbstractStroke2d* other, bool direction, bool smoothJoin) {
-        assignConcat_(other, direction, this, true, smoothJoin);
+        assignFromConcat_(other, direction, this, true, smoothJoin);
     }
 
     void append(const AbstractStroke2d* other, bool direction, bool smoothJoin) {
-        assignConcat_(this, true, other, direction, smoothJoin);
+        assignFromConcat_(this, true, other, direction, smoothJoin);
     }
 
-    void assignConcat(
+    void assignFromConcat(
         const AbstractStroke2d* a,
         bool directionA,
         const AbstractStroke2d* b,
         bool directionB,
         bool smoothJoin) {
 
-        assignConcat_(a, directionA, b, directionB, smoothJoin);
+        assignFromConcat_(a, directionA, b, directionB, smoothJoin);
     }
 
-    void assignAverage(
+    void assignFromAverage(
         core::ConstSpan<const AbstractStroke2d*> strokes,
         core::ConstSpan<bool> directions) {
 
-        assignAverage_(strokes, directions);
+        assignFromAverage_(strokes, directions);
     }
 
     /// Expects positions in object space.
@@ -1017,7 +1017,8 @@ protected:
 
     virtual std::unique_ptr<AbstractStroke2d> cloneEmpty_() const = 0;
     virtual std::unique_ptr<AbstractStroke2d> clone_() const = 0;
-    virtual std::unique_ptr<AbstractStroke2d> convert_(const AbstractStroke2d* source) const;
+    virtual std::unique_ptr<AbstractStroke2d>
+    convert_(const AbstractStroke2d* source) const;
 
     virtual bool copyAssign_(const AbstractStroke2d* other) = 0;
     virtual bool moveAssign_(AbstractStroke2d* other) = 0;
@@ -1037,14 +1038,14 @@ protected:
 
     virtual void reverse_() = 0;
 
-    virtual void assignConcat_(
+    virtual void assignFromConcat_(
         const AbstractStroke2d* a,
         bool directionA,
         const AbstractStroke2d* b,
         bool directionB,
         bool smoothJoin) = 0;
 
-    virtual void assignAverage_(
+    virtual void assignFromAverage_(
         core::ConstSpan<const AbstractStroke2d*> strokes,
         core::ConstSpan<bool> directions) = 0;
 

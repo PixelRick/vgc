@@ -17,11 +17,10 @@
 #include <vgc/workspace/edge.h>
 
 #include <vgc/core/span.h>
+#include <vgc/geometry/stroke.h>
 #include <vgc/geometry/triangle2d.h>
 #include <vgc/graphics/detail/shapeutil.h>
 #include <vgc/workspace/colors.h>
-#include <vgc/workspace/edgegeometry.h>
-#include <vgc/workspace/freehandedgegeometry.h>
 #include <vgc/workspace/vertex.h>
 #include <vgc/workspace/workspace.h>
 
@@ -764,7 +763,7 @@ ElementStatus VacKeyEdge::updateFromDom_(Workspace* workspace) {
 
     // create/rebuild/update VAC node
     if (!ke) {
-        auto data = std::make_shared<vacomplex::KeyEdgeData>(isClosed);
+        auto data = std::make_unique<vacomplex::KeyEdgeData>(isClosed);
         initDataFromDom_(data.get(), domElement);
         if (isClosed) {
             ke = vacomplex::ops::createKeyClosedEdge(std::move(data), parentGroup);
@@ -822,10 +821,11 @@ void VacKeyEdge::updateFromVac_(vacomplex::NodeModificationFlags flags) {
     }
 
     if (flags.has(vacomplex::NodeModificationFlag::GeometryChanged)) {
-        auto geometry = dynamic_cast<const workspace::EdgeGeometry*>(ke->geometry());
-        if (geometry) {
+        auto data = ke->data();
+        if (data) {
             // todo: if geometry type changed, remove previous geometry's attributes.
-            geometry->writeToDomEdge_(domElement);
+            //geometry->writeToDomEdge_(domElement);
+            writeDomData_(domElement, data); // TODO: only write what's necessary
             // todo: dirty only if really changed ?
             dirtyPreJoinGeometry_();
         }

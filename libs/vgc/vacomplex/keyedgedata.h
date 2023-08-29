@@ -78,10 +78,7 @@ public:
 
     std::unique_ptr<KeyEdgeData> clone() const;
 
-    KeyEdge* keyEdge() const {
-        Cell* cell = properties_.cell();
-        return cell ? cell->toKeyEdge() : nullptr;
-    }
+    KeyEdge* keyEdge() const;
 
     bool isClosed() const {
         return isClosed_;
@@ -113,7 +110,7 @@ public:
         const KeyHalfedgeData& khd2,
         bool smoothJoin);
 
-    void concatFinalize();
+    void finalizeConcat();
 
     static std::unique_ptr<KeyEdgeData> fromGlue(core::ConstSpan<KeyHalfedgeData> khds);
 

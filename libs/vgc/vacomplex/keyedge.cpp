@@ -20,7 +20,7 @@ namespace vgc::vacomplex {
 
 KeyEdge::~KeyEdge() {
     if (data_) {
-        data_->onCellDestroyed_();
+        detail::CellPropertiesPrivateInterface::setOwningCell(&data_->properties_, this);
     }
 }
 
@@ -63,7 +63,8 @@ const geometry::Rect2d& KeyEdge::centerlineBoundingBox() const {
 /// Unlike `sampling()`, this function does not cache the result unless
 /// `quality == edge->samplingQuality()`.
 ///
-geometry::StrokeSampling2d KeyEdge::computeStrokeSampling(geometry::CurveSamplingQuality quality) const {
+geometry::StrokeSampling2d
+KeyEdge::computeStrokeSampling(geometry::CurveSamplingQuality quality) const {
 
     if (samplingQuality_ == quality && sampling_) {
         // return copy of cached sampling
@@ -99,7 +100,8 @@ double KeyEdge::endAngle() const {
     return 0;
 }
 
-geometry::StrokeSampling2d KeyEdge::computeStrokeSampling_(geometry::CurveSamplingQuality quality) const {
+geometry::StrokeSampling2d
+KeyEdge::computeStrokeSampling_(geometry::CurveSamplingQuality quality) const {
     // TODO: define guarantees.
     // - what about a closed edge without points data ?
     // - what about an open edge without points data and same end points ?
@@ -110,7 +112,8 @@ geometry::StrokeSampling2d KeyEdge::computeStrokeSampling_(geometry::CurveSampli
 void KeyEdge::updateStrokeSampling_() const {
     if (!sampling_) {
         geometry::StrokeSampling2d sampling = computeStrokeSampling_(samplingQuality_);
-        sampling_ = std::make_shared<const geometry::StrokeSampling2d>(std::move(sampling));
+        sampling_ =
+            std::make_shared<const geometry::StrokeSampling2d>(std::move(sampling));
     }
     onMeshQueried();
 }

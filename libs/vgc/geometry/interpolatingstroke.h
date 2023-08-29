@@ -180,14 +180,14 @@ protected:
 
     void reverse_() override;
 
-    void assignConcat_(
+    void assignFromConcat_(
         const AbstractStroke2d* a,
         bool directionA,
         const AbstractStroke2d* b,
         bool directionB,
         bool smoothJoin) override;
 
-    virtual void assignAverage_(
+    virtual void assignFromAverage_(
         core::ConstSpan<const AbstractStroke2d*> strokes,
         core::ConstSpan<bool> directions) override;
 

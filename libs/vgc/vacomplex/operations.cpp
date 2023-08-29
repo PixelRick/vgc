@@ -54,7 +54,7 @@ KeyVertex* createKeyVertex(
 }
 
 KeyEdge* createKeyClosedEdge(
-    std::unique_ptr<KeyEdgeData>&& geometry,
+    std::unique_ptr<KeyEdgeData>&& data,
     Group* parentGroup,
     Node* nextSibling,
     core::AnimTime t) {
@@ -64,13 +64,13 @@ KeyEdge* createKeyClosedEdge(
     }
     checkIsChildOrNull(nextSibling, parentGroup);
     detail::Operations ops(parentGroup->complex());
-    return ops.createKeyClosedEdge(geometry, parentGroup, nextSibling, t);
+    return ops.createKeyClosedEdge(std::move(data), parentGroup, nextSibling, t);
 }
 
 KeyEdge* createKeyOpenEdge(
     KeyVertex* startVertex,
     KeyVertex* endVertex,
-    std::unique_ptr<KeyEdgeData>&& geometry,
+    std::unique_ptr<KeyEdgeData>&& data,
     Group* parentGroup,
     Node* nextSibling,
     core::AnimTime t) {
@@ -109,11 +109,7 @@ KeyEdge* createKeyOpenEdge(
 
     detail::Operations ops(complex);
     return ops.createKeyOpenEdge(
-        startVertex,
-        endVertex,
-        geometry,
-        parentGroup,
-        nextSibling);
+        startVertex, endVertex, std::move(data), parentGroup, nextSibling);
 }
 
 KeyFace* createKeyFace(
@@ -134,8 +130,7 @@ KeyFace* createKeyFace(
     }
 
     detail::Operations ops(parentGroup->complex());
-    return ops.createKeyFace(
-        std::move(cycles), parentGroup, nextSibling, t);
+    return ops.createKeyFace(std::move(cycles), parentGroup, nextSibling, t);
 }
 
 KeyFace*
@@ -247,24 +242,23 @@ Complex* checkGlueKeyEdges_(core::Span<KeyHalfedge> khes) {
 
 KeyEdge* glueKeyOpenEdges(
     core::Span<KeyHalfedge> khes,
-    std::unique_ptr<KeyEdgeData> geometry,
+    std::unique_ptr<KeyEdgeData>&& data,
     const geometry::Vec2d& startPosition,
     const geometry::Vec2d& endPosition) {
 
     constexpr bool isClosed = false;
     Complex* complex = checkGlueKeyEdges_<isClosed>(khes);
     detail::Operations ops(complex);
-    return ops.glueKeyOpenEdges(khes, std::move(geometry), startPosition, endPosition);
+    return ops.glueKeyOpenEdges(khes, std::move(data), startPosition, endPosition);
 }
 
-KeyEdge* glueKeyClosedEdges(
-    core::Span<KeyHalfedge> khes,
-    std::unique_ptr<KeyEdgeData> geometry) {
+KeyEdge*
+glueKeyClosedEdges(core::Span<KeyHalfedge> khes, std::unique_ptr<KeyEdgeData>&& data) {
 
     constexpr bool isClosed = true;
     Complex* complex = checkGlueKeyEdges_<isClosed>(khes);
     detail::Operations ops(complex);
-    return ops.glueKeyClosedEdges(khes, std::move(geometry));
+    return ops.glueKeyClosedEdges(khes, std::move(data));
 }
 
 core::Array<KeyEdge*> unglueKeyEdges(KeyEdge* ke) {
@@ -314,12 +308,12 @@ void setKeyVertexPosition(KeyVertex* vertex, const geometry::Vec2d& pos) {
     return ops.setKeyVertexPosition(vertex, pos);
 }
 
-void setKeyEdgeData(KeyEdge* edge, std::unique_ptr<KeyEdgeData>&& geometry) {
+void setKeyEdgeData(KeyEdge* edge, std::unique_ptr<KeyEdgeData>&& data) {
     if (!edge) {
         throw LogicError("setKeyEdgeData: edge is nullptr.");
     }
     detail::Operations ops(edge->complex());
-    return ops.setKeyEdgeData(edge, geometry);
+    return ops.setKeyEdgeData(edge, std::move(data));
 }
 
 void setKeyEdgeSamplingQuality(KeyEdge* edge, geometry::CurveSamplingQuality quality) {

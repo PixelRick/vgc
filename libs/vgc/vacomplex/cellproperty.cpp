@@ -43,7 +43,7 @@ std::unique_ptr<CellProperty> CellProperty::fromConcatStep_(
     return nullptr;
 }
 
-CellProperty::OpResult CellProperty::concatFinalize_() {
+CellProperty::OpResult CellProperty::finalizeConcat_() {
     return OpResult::Unchanged;
 }
 
@@ -137,7 +137,7 @@ struct PropertyTemplate {
 
 } // namespace
 
-void CellProperties::concatStep(
+void CellProperties::assignFromConcatStep(
     const KeyHalfedgeData& khd1,
     const KeyHalfedgeData& khd2) {
 
@@ -148,13 +148,13 @@ void CellProperties::concatStep(
     VGC_ASSERT(ked1 != nullptr && ked2 != nullptr);
 
     core::Array<PropertyTemplate> templates;
-    for (const auto& p : ked1->properties().map()) {
+    for (const auto& p : ked1->properties()) {
         core::StringId id = p.first;
         if (!templates.search([id](const PropertyTemplate& p) { return p.id == id; })) {
             templates.append(PropertyTemplate{id, p.second.get()});
         }
     }
-    for (const auto& p : ked2->properties().map()) {
+    for (const auto& p : ked2->properties()) {
         core::StringId id = p.first;
         if (!templates.search([id](const PropertyTemplate& p) { return p.id == id; })) {
             templates.append(PropertyTemplate{id, p.second.get()});
@@ -169,8 +169,8 @@ void CellProperties::concatStep(
     }
 }
 
-void CellProperties::concatFinalize() {
-    doOperation_([](CellProperty* p) { return p->concatFinalize_(); });
+void CellProperties::finalizeConcat() {
+    doOperation_([](CellProperty* p) { return p->finalizeConcat_(); });
 }
 
 void CellProperties::glue(
@@ -182,7 +182,7 @@ void CellProperties::glue(
     core::Array<PropertyTemplate> templates;
     for (const KeyHalfedgeData& khd : khds) {
         KeyEdgeData* ked = khd.edgeData();
-        for (const auto& p : ked->properties().map()) {
+        for (const auto& p : ked->properties()) {
             core::StringId id = p.first;
             if (!templates.search(
                     [id](const PropertyTemplate& p) { return p.id == id; })) {
