@@ -105,17 +105,13 @@ public:
     void setStroke(std::unique_ptr<geometry::AbstractStroke2d>&& stroke);
 
     static KeyEdgeDataPtr
-        concat(const KeyHalfedgeData& khd1, const KeyHalfedgeData& khd2, bool smoothJoin);
+    concat(const KeyHalfedgeData& khd1, const KeyHalfedgeData& khd2, bool smoothJoin);
 
     static KeyEdgeDataPtr glue(core::Array<KeyHalfedgeData> khds);
 
 private:
     std::unique_ptr<geometry::AbstractStroke2d> stroke_;
     bool isClosed_;
-
-    void onCellDestroyed_() {
-        onCellDestroyed();
-    }
 
     static KeyEdgeDataPtr glue_(
         core::Array<KeyHalfedgeData> khds,

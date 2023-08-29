@@ -19,8 +19,8 @@
 
 #include <unordered_set>
 
-#include <vgc/vacomplex/complex.h>
 #include <vgc/vacomplex/celldata.h>
+#include <vgc/vacomplex/complex.h>
 #include <vgc/vacomplex/keyedgedata.h>
 
 namespace vgc::vacomplex::detail {
@@ -122,8 +122,7 @@ public:
 
     void setKeyVertexPosition(KeyVertex* kv, const geometry::Vec2d& pos);
 
-    void
-    setKeyEdgeData(KeyEdge* ke, const std::shared_ptr<KeyEdgeData>& geometry);
+    void setKeyEdgeData(KeyEdge* ke, const std::shared_ptr<KeyEdgeData>& geometry);
 
     void setKeyEdgeSamplingQuality(KeyEdge* ke, geometry::CurveSamplingQuality quality);
 
@@ -156,10 +155,7 @@ private:
     // Creates a new node at the given location.
     //
     template<class T, typename... Args>
-    T* createNodeAt_(
-        Group* parentGroup,
-        Node* nextSibling,
-        Args&&... args) {
+    T* createNodeAt_(Group* parentGroup, Node* nextSibling, Args&&... args) {
 
         T* node = createNode_<T>(std::forward<Args>(args)...);
         moveToGroup(node, parentGroup, nextSibling);
@@ -179,6 +175,7 @@ private:
     // Assumes that all descendants of all `nodes` are also in `nodes`.
     void destroyNodes_(const std::unordered_set<Node*>& nodes);
 
+    friend vacomplex::CellProperties;
     friend vacomplex::CellData;
     friend vacomplex::KeyEdgeData;
 

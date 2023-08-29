@@ -21,86 +21,33 @@
 
 namespace vgc::vacomplex {
 
-CellData::CellData(const CellData& other) {
-    assignClonedProperties(&other);
-}
-
-CellData::CellData(CellData&& other) noexcept
-    : properties_(std::move(other.properties_)) {
-}
-
-CellData& CellData::operator=(const CellData& other) {
-    if (&other != this) {
-        assignClonedProperties(&other);
-    }
-    return *this;
-}
-
-CellData& CellData::operator=(CellData&& other) noexcept {
-    if (&other != this) {
-        properties_ = std::move(other.properties_);
-        // cell_ should not be copied.
-    }
-    return *this;
-}
-
 const CellProperty* CellData::findProperty(core::StringId name) const {
-    auto it = properties_.find(name);
-    return it != properties_.end() ? it->second.get() : nullptr;
-}
-
-void CellData::setProperty(std::unique_ptr<CellProperty>&& value) {
-    // XXX: skip if equal ?
-    core::StringId name = value->name();
-    properties_[name] = std::move(value);
-    emitPropertyChanged(name);
-}
-
-void CellData::removeProperty(core::StringId name) {
-    properties_.erase(name);
-    emitPropertyChanged(name);
+    return properties_.find(name);
 }
 
 void CellData::emitGeometryChanged() const {
-    if (cell_) {
-        Complex* complex = cell_->complex();
+    Cell* cell = properties_.cell();
+    if (cell) {
+        Complex* complex = cell->complex();
         detail::Operations ops(complex);
-        ops.onGeometryChanged_(cell_);
+        ops.onGeometryChanged_(cell);
     }
 }
 
-void CellData::emitPropertyChanged(core::StringId name) const {
-    if (cell_) {
-        Complex* complex = cell_->complex();
-        detail::Operations ops(complex);
-        ops.onPropertyChanged_(cell_, name);
-    }
-}
-
-void CellData::assignClonedProperties(const CellData* other) {
-    if (other == this) {
-        return;
-    }
-    properties_.clear();
-    for (const auto& [name, property] : other->properties_) {
-        properties_[name] = property->clone();
-    }
-}
-
-void CellData::translateProperties(const geometry::Vec2d& delta) {
-    doPropertyOperation([&](CellProperty* p) { return p->onTranslate_(delta); });
-}
-
-void CellData::transformProperties(const geometry::Mat3d& transformation) {
-    doPropertyOperation([&](CellProperty* p) { return p->onTransform_(transformation); });
-}
-
-void CellData::updateProperties(const geometry::AbstractStroke2d* newStroke) {
-    doPropertyOperation([&](CellProperty* p) { return p->onGeometryUpdate_(newStroke); });
-}
-
-void CellData::notifyPropertiesOfOperationEnd() {
-    doPropertyOperation([](CellProperty* p) { return p->onOperationEnd_(); });
-}
+//void CellData::translateProperties(const geometry::Vec2d& delta) {
+//    doPropertyOperation([&](CellProperty* p) { return p->onTranslate_(delta); });
+//}
+//
+//void CellData::transformProperties(const geometry::Mat3d& transformation) {
+//    doPropertyOperation([&](CellProperty* p) { return p->onTransform_(transformation); });
+//}
+//
+//void CellData::updateProperties(const geometry::AbstractStroke2d* newStroke) {
+//    doPropertyOperation([&](CellProperty* p) { return p->onGeometryUpdate_(newStroke); });
+//}
+//
+//void CellData::notifyPropertiesOfOperationEnd() {
+//    doPropertyOperation([](CellProperty* p) { return p->onOperationEnd_(); });
+//}
 
 } // namespace vgc::vacomplex

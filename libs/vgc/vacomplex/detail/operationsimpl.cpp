@@ -65,8 +65,7 @@ Group* Operations::createRootGroup() {
 }
 
 Group* Operations::createGroup(Group* parentGroup, Node* nextSibling) {
-    Group* group =
-        createNodeAt_<Group>(parentGroup, nextSibling, complex());
+    Group* group = createNodeAt_<Group>(parentGroup, nextSibling, complex());
     return group;
 }
 
@@ -76,8 +75,7 @@ KeyVertex* Operations::createKeyVertex(
     Node* nextSibling,
     core::AnimTime t) {
 
-    KeyVertex* kv =
-        createNodeAt_<KeyVertex>(parentGroup, nextSibling, t);
+    KeyVertex* kv = createNodeAt_<KeyVertex>(parentGroup, nextSibling, t);
 
     // Topological attributes
     // -> None
@@ -93,12 +91,11 @@ KeyVertex* Operations::createKeyVertex(
 KeyEdge* Operations::createKeyOpenEdge(
     KeyVertex* startVertex,
     KeyVertex* endVertex,
-    const std::shared_ptr<KeyEdgeData>& geometry,
+    const std::shared_ptr<KeyEdgeData>& data,
     Group* parentGroup,
     Node* nextSibling) {
 
-    KeyEdge* ke = createNodeAt_<KeyEdge>(
-        parentGroup, nextSibling, s startVertex->time());
+    KeyEdge* ke = createNodeAt_<KeyEdge>(parentGroup, nextSibling, startVertex->time());
 
     // Topological attributes
     ke->startVertex_ = startVertex;
@@ -107,27 +104,26 @@ KeyEdge* Operations::createKeyOpenEdge(
     addToBoundary_(ke, endVertex);
 
     // Geometric attributes
-    ke->geometry_ = geometry;
-    geometry->cell_ = ke;
+    ke->data_ = data;
+    const_cast<CellProperties&>(data->properties()).cell_ = ke;
 
     return ke;
 }
 
 KeyEdge* Operations::createKeyClosedEdge(
-    const std::shared_ptr<KeyEdgeData>& geometry,
+    const std::shared_ptr<KeyEdgeData>& data,
     Group* parentGroup,
     Node* nextSibling,
     core::AnimTime t) {
 
-    KeyEdge* ke =
-        createNodeAt_<KeyEdge>(parentGroup, nextSibling, t);
+    KeyEdge* ke = createNodeAt_<KeyEdge>(parentGroup, nextSibling, t);
 
     // Topological attributes
     // -> None
 
     // Geometric attributes
-    ke->geometry_ = geometry;
-    geometry->cell_ = ke;
+    ke->data_ = data;
+    const_cast<CellProperties&>(data->properties()).cell_ = ke;
 
     return ke;
 }
@@ -140,8 +136,7 @@ KeyFace* Operations::createKeyFace(
     Node* nextSibling,
     core::AnimTime t) {
 
-    KeyFace* kf =
-        createNodeAt_<KeyFace>(parentGroup, nextSibling, t);
+    KeyFace* kf = createNodeAt_<KeyFace>(parentGroup, nextSibling, t);
 
     // Topological attributes
     kf->cycles_ = std::move(cycles);
@@ -316,8 +311,7 @@ Operations::glueKeyVertices(core::Span<KeyVertex*> kvs, const geometry::Vec2d& p
     Node* nextSibling = topMostVertex->nextSibling();
 
     // TODO: define source operation
-    KeyVertex* newKv = createKeyVertex(
-        position, parentGroup, nextSibling, kv0->time());
+    KeyVertex* newKv = createKeyVertex(position, parentGroup, nextSibling, kv0->time());
 
     std::unordered_set<KeyVertex*> seen;
     for (KeyVertex* kv : kvs) {
@@ -372,12 +366,8 @@ KeyEdge* Operations::glueKeyOpenEdges(
     KeyVertex* endKv = khes[0].endVertex();
 
     // TODO: define source operation
-    KeyEdge* newKe = createKeyOpenEdge(
-        startKv,
-        endKv,
-        std::move(geometry),
-        parentGroup,
-        nextSibling);
+    KeyEdge* newKe =
+        createKeyOpenEdge(startKv, endKv, std::move(geometry), parentGroup, nextSibling);
 
     KeyHalfedge newKhe(newKe, true);
     for (const KeyHalfedge& khe : khes) {
@@ -410,8 +400,7 @@ KeyEdge* Operations::glueKeyClosedEdges( //
     Node* nextSibling = topMostEdge->nextSibling();
 
     // TODO: define source operation
-    KeyEdge* newKe = createKeyClosedEdge(
-        std::move(geometry), parentGroup, nextSibling);
+    KeyEdge* newKe = createKeyClosedEdge(std::move(geometry), parentGroup, nextSibling);
 
     KeyHalfedge newKhe(newKe, true);
     for (const KeyHalfedge& khe : khes) {
@@ -674,9 +663,7 @@ bool Operations::uncutAtKeyVertex(KeyVertex* targetKv) {
         // TODO: define source operation
         KeyEdge* oldKe = info.khe1.edge();
         KeyEdge* newKe = createKeyClosedEdge(
-            std::move(oldKe->geometry_),
-            oldKe->parentGroup(),
-            oldKe->nextSibling());
+            std::move(oldKe->geometry_), oldKe->parentGroup(), oldKe->nextSibling());
 
         KeyHalfedge oldKhe(oldKe, true);
         KeyHalfedge newKhe(newKe, true);

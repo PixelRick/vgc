@@ -22,7 +22,8 @@
 namespace vgc::vacomplex {
 
 KeyEdgeData::KeyEdgeData(const KeyEdgeData& other)
-    : CellData(other), isClosed_(other.isClosed_) {
+    : CellData(other)
+    , isClosed_(other.isClosed_) {
 
     if (other.stroke_) {
         stroke_ = other.stroke_->clone();
@@ -30,7 +31,8 @@ KeyEdgeData::KeyEdgeData(const KeyEdgeData& other)
 }
 
 KeyEdgeData::KeyEdgeData(KeyEdgeData&& other) noexcept
-    : CellData(std::move(other)), isClosed_(other.isClosed_) {
+    : CellData(std::move(other))
+    , isClosed_(other.isClosed_) {
 
     stroke_ = std::move(other.stroke_);
 }
@@ -129,6 +131,7 @@ KeyEdgeDataPtr KeyEdgeData::concat(
     const KeyHalfedgeData& khd1,
     const KeyHalfedgeData& khd2,
     bool smoothJoin) {
+
     KeyEdgeData* ked1 = khd1.edgeData();
     KeyEdgeData* ked2 = khd2.edgeData();
     VGC_ASSERT(ked1 != nullptr && ked2 != nullptr);

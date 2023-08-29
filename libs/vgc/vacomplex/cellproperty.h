@@ -27,10 +27,17 @@
 
 namespace vgc::vacomplex {
 
+class Cell;
+class CellProperties;
 class CellProperty;
-class CellData;
 class KeyEdgeData;
 class KeyFaceData;
+
+namespace detail {
+
+class Operations;
+
+} // namespace detail
 
 class VGC_VACOMPLEX_API KeyHalfedgeData {
 public:
@@ -83,8 +90,7 @@ public:
 private:
     core::StringId name_;
 
-    friend CellData;
-    friend KeyEdgeData;
+    friend CellProperties;
 
     virtual std::unique_ptr<CellProperty> clone_() const = 0;
 
@@ -111,7 +117,93 @@ private:
     virtual OpResult onGeometryUpdate_(const geometry::AbstractStroke2d* newStroke);
 
     // Returns OpResult::Unchanged by default.
-    virtual OpResult onOperationEnd_();
+    virtual OpResult finalizeCombinedOperations_();
+};
+
+/// \class vgc::vacomplex::CellProperties
+/// \brief Abstract authored properties of a cell (e.g.: style).
+///
+class VGC_VACOMPLEX_API CellProperties {
+public:
+    using PropertyMap = std::map<core::StringId, std::unique_ptr<CellProperty>>;
+
+    CellProperties() noexcept = default;
+    ~CellProperties() = default;
+
+    CellProperties(const CellProperties& other);
+    CellProperties(CellProperties&& other) noexcept;
+    CellProperties& operator=(const CellProperties& rhs);
+    CellProperties& operator=(CellProperties&& rhs) noexcept;
+
+    const PropertyMap& map() const {
+        return map_;
+    }
+
+    Cell* cell() const {
+        return cell_;
+    }
+
+    const CellProperty* find(core::StringId name) const;
+    void insert(std::unique_ptr<CellProperty>&& value);
+    void remove(core::StringId name);
+    void clear();
+
+    // Returns a null pointer by default.
+    void concat(
+        CellProperties& result,
+        const KeyHalfedgeData& khd1,
+        const KeyHalfedgeData& khd2) const;
+
+    // Returns a null pointer by default.
+    void glue(
+        CellProperties& result,
+        core::ConstSpan<KeyHalfedgeData> khds,
+        const geometry::AbstractStroke2d* gluedStroke) const;
+
+    // Returns a null pointer by default.
+    void glue(CellProperties& result, core::ConstSpan<const KeyFaceData*> kfds) const;
+
+    void finalizeCombinedOperations();
+
+    void onTranslateGeometry(const geometry::Vec2d& delta);
+    void onTransformGeometry(const geometry::Mat3d& transformation);
+    void onUpdateGeometry(const geometry::AbstractStroke2d* newStroke);
+
+private:
+    std::map<core::StringId, std::unique_ptr<CellProperty>> map_;
+
+    friend Cell; // only for access to cell_
+    friend detail::Operations;
+    Cell* cell_ = nullptr;
+
+    void assignClonedProperties_(const CellProperties& other);
+
+    template<typename Op>
+    void doOperation_(const Op& op) {
+        bool changed = false;
+        core::Array<core::StringId> toRemove;
+        for (const auto& p : properties()) {
+            switch (op(p.second.get())) {
+            case CellProperty::OpResult::Success:
+                emitPropertyChanged_(p.first);
+                changed = true;
+                break;
+            case CellProperty::OpResult::Unchanged:
+                break;
+            case CellProperty::OpResult::Unsupported:
+                toRemove.append(p.first);
+                changed = true;
+                break;
+            }
+        }
+        for (const core::StringId& name : toRemove) {
+            removeProperty(name);
+            emitPropertyChanged_(name);
+        }
+        return changed;
+    }
+
+    void emitPropertyChanged_(core::StringId name);
 };
 
 } // namespace vgc::vacomplex

@@ -32,6 +32,9 @@ class Cell;
 class CellData;
 using CellDataPtr = std::shared_ptr<CellData>;
 
+// Either have Cell* in CellProperties to emit changes
+// or return the list of changed properties for each operation
+
 /// \class vgc::vacomplex::CellData
 /// \brief Abstract authored data of a cell (geometry and properties).
 ///
@@ -42,67 +45,19 @@ protected:
 
     virtual ~CellData() = default;
 
-    CellData(const CellData& other);
-    CellData(CellData&& other) noexcept;
-    CellData& operator=(const CellData& rhs);
-    CellData& operator=(CellData&& rhs) noexcept;
-
 public:
-    using PropertyMap = std::map<core::StringId, std::unique_ptr<CellProperty>>;
-
-    const PropertyMap& properties() const {
+    const CellProperties& properties() const {
         return properties_;
     }
 
     const CellProperty* findProperty(core::StringId name) const;
 
 protected:
-    void setProperty(std::unique_ptr<CellProperty>&& value);
-    void removeProperty(core::StringId name);
-
     // XXX: additional argument when it is only an affine transformation ?
     void emitGeometryChanged() const;
-    void emitPropertyChanged(core::StringId name) const;
-
-    void assignClonedProperties(const CellData* other);
-
-    void translateProperties(const geometry::Vec2d& delta);
-    void transformProperties(const geometry::Mat3d& transformation);
-    void updateProperties(const geometry::AbstractStroke2d* newStroke);
-    void notifyPropertiesOfOperationEnd();
-
-    void onCellDestroyed() {
-        cell_ = nullptr;
-    }
 
 private:
-    std::map<core::StringId, std::unique_ptr<CellProperty>> properties_;
-    Cell* cell_ = nullptr;
-
-    template<typename Op>
-    bool doPropertyOperation(const Op& op) {
-        bool changed = false;
-        core::Array<core::StringId> toRemove;
-        for (const auto& p : properties()) {
-            switch (op(p.second.get())) {
-            case CellProperty::OpResult::Success:
-                emitPropertyChanged(p.first);
-                changed = true;
-                break;
-            case CellProperty::OpResult::Unchanged:
-                break;
-            case CellProperty::OpResult::Unsupported:
-                toRemove.append(p.first);
-                changed = true;
-                break;
-            }
-        }
-        for (const core::StringId& name : toRemove) {
-            removeProperty(name);
-            emitPropertyChanged(name);
-        }
-        return changed;
-    }
+    CellProperties properties_;
 };
 
 } // namespace vgc::vacomplex
