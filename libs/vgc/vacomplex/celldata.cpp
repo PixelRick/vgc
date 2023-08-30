@@ -21,10 +21,6 @@
 
 namespace vgc::vacomplex {
 
-const CellProperty* CellData::findProperty(core::StringId name) const {
-    return properties_.find(name);
-}
-
 void CellData::emitGeometryChanged() const {
     Cell* cell = properties_.cell();
     if (cell) {

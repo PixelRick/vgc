@@ -176,7 +176,7 @@ public:
     }
 
     bool hasPendingUpdate() const {
-        return hasPendingUpdate_;
+        return hasPendingUpdateFromDom_;
     }
 
     Workspace* workspace() const {
@@ -304,7 +304,7 @@ private:
     ElementFlags flags_;
     bool isVacElement_ = false;
 
-    bool hasPendingUpdate_ = false;
+    bool hasPendingUpdateFromDom_ = false;
     bool isBeingUpdated_ = false;
     ElementStatus status_ = ElementStatus::Uninitialized;
 

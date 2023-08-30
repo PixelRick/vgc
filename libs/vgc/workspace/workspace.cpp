@@ -25,7 +25,6 @@
 #include <vgc/vacomplex/operations.h>
 #include <vgc/workspace/edge.h>
 #include <vgc/workspace/face.h>
-#include <vgc/workspace/freehandedgegeometry.h>
 #include <vgc/workspace/layer.h>
 #include <vgc/workspace/logcategories.h>
 #include <vgc/workspace/vertex.h>
@@ -261,7 +260,7 @@ bool Workspace::updateElementFromDom(Element* element) {
         VGC_ERROR(LogVgcWorkspace, "Cyclic update dependency detected.");
         return false;
     }
-    if (element->hasPendingUpdate_) {
+    if (element->hasPendingUpdateFromDom_) {
         element->isBeingUpdated_ = true;
         const ElementStatus oldStatus = element->status_;
         const ElementStatus newStatus = element->updateFromDom_(this);
@@ -427,8 +426,8 @@ core::Id Workspace::glue(core::ConstSpan<core::Id> elementIds) {
 
             // TODO: use operation source in onVacNodesChanged_ to do the color blend
             // Note: at least 1 sample is guaranteed.
-            bool isEdge0Longer = ke0->sampling().samples().last().s()
-                                 > ke1->sampling().samples().last().s();
+            bool isEdge0Longer = ke0->strokeSampling().samples().last().s()
+                                 > ke1->strokeSampling().samples().last().s();
             VacKeyEdge* colorEdge = dynamic_cast<VacKeyEdge*>(
                 this->findVacElement(isEdge0Longer ? ke0 : ke1));
             core::Color color =
@@ -438,8 +437,8 @@ core::Id Workspace::glue(core::ConstSpan<core::Id> elementIds) {
                           ->color()
                     : core::Color{};
 
-            const geometry::StrokeSample2dArray& samples0 = ke0->sampling().samples();
-            geometry::StrokeSample2dArray samples1 = ke1->sampling().samples();
+            const geometry::StrokeSample2dArray& samples0 = ke0->strokeSampling().samples();
+            geometry::StrokeSample2dArray samples1 = ke1->strokeSampling().samples();
 
             // Detect which edge direction should be used for gluing.
             // Here, we handle the simple cases where the two edges already share
@@ -465,6 +464,8 @@ core::Id Workspace::glue(core::ConstSpan<core::Id> elementIds) {
                     isBestDirectionKnown = true;
                 }
             }
+
+            // TODO: only choose directions here then use KeyEdgeData averaging
 
             core::Array<FreehandEdgePoint> newPoints;
 
@@ -1140,15 +1141,15 @@ void Workspace::clearElements_() {
 }
 
 void Workspace::setPendingUpdateFromDom_(Element* element) {
-    if (!element->hasPendingUpdate_) {
-        element->hasPendingUpdate_ = true;
+    if (!element->hasPendingUpdateFromDom_) {
+        element->hasPendingUpdateFromDom_ = true;
         elementsToUpdateFromDom_.emplaceLast(element);
     }
 }
 
 void Workspace::clearPendingUpdateFromDom_(Element* element) {
-    if (element->hasPendingUpdate_) {
-        element->hasPendingUpdate_ = false;
+    if (element->hasPendingUpdateFromDom_) {
+        element->hasPendingUpdateFromDom_ = false;
         elementsToUpdateFromDom_.removeOne(element);
     }
 }

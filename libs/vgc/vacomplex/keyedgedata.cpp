@@ -211,19 +211,16 @@ KeyEdgeData::fromGlue(core::ConstSpan<KeyHalfedgeData> khds) {
         bestModelStroke->cloneEmpty();
     gluedStroke->assignFromAverage(strokes, directions);
 
-    auto result = std::make_unique<KeyEdgeData>(gluedStroke->isClosed());
-    result->setStroke(std::move(gluedStroke));
-    result->properties_.glue(khds, result->stroke());
-    return result;
+    return fromGlue(khds, std::move(gluedStroke));
 }
 
 /* static */
 std::unique_ptr<KeyEdgeData> KeyEdgeData::fromGlue(
     core::ConstSpan<KeyHalfedgeData> khds,
-    const geometry::AbstractStroke2d* gluedStroke) {
+    std::unique_ptr<geometry::AbstractStroke2d>&& gluedStroke) {
 
     auto result = std::make_unique<KeyEdgeData>(gluedStroke->isClosed());
-    result->setStroke(gluedStroke);
+    result->setStroke(std::move(gluedStroke));
     result->properties_.glue(khds, result->stroke());
     return result;
 }

@@ -17,12 +17,14 @@
 #include <vgc/workspace/edge.h>
 
 #include <vgc/core/span.h>
+#include <vgc/geometry/catmullrom.h>
 #include <vgc/geometry/stroke.h>
 #include <vgc/geometry/triangle2d.h>
 #include <vgc/graphics/detail/shapeutil.h>
 #include <vgc/workspace/colors.h>
 #include <vgc/workspace/vertex.h>
 #include <vgc/workspace/workspace.h>
+#include <vgc/workspace/strings.h>
 
 namespace vgc::workspace {
 
@@ -668,7 +670,123 @@ ElementStatus VacKeyEdge::onDependencyRemoved_(Element* dependency) {
     return status;
 }
 
+/* static */
+bool VacKeyEdge::updateStrokeFromDom_(
+    vacomplex::KeyEdgeData* data,
+    dom::Element* domElement) {
+
+    // XXX: We can forward the changed attribute names up to here. Should we do it ?
+    // TODO: add something better to skip update if geometry attributes didn't change.
+
+    namespace ds = dom::strings;
+
+    const auto& domPositions = domElement->getAttribute(ds::positions).getVec2dArray();
+    const auto& domWidths = domElement->getAttribute(ds::widths).getDoubleArray();
+
+    auto oldStroke =
+        dynamic_cast<const geometry::CatmullRomSplineStroke2d*>(data->stroke());
+
+    if (oldStroke) {
+        if (oldStroke->positions() == domPositions && oldStroke->widths() == domWidths) {
+            // geoemtry did not change
+            return false;
+        }
+    }
+
+
+    auto stroke = std::make_unique<geometry::CatmullRomSplineStroke2d>(
+        geometry::CatmullRomSplineParameterization::Centripetal,
+        data->isClosed(),
+        domPositions,
+        domWidths);
+
+    data->setStroke(std::move(stroke));
+
+    return true;
+}
+
+/* static */
+void VacKeyEdge::writeStrokeToDom_(dom::Element* domElement, vacomplex::KeyEdgeData* data) {
+    namespace ds = dom::strings;
+
+    auto stroke =
+        dynamic_cast<const geometry::CatmullRomSplineStroke2d*>(data->stroke());
+
+    if (stroke) {
+        domElement->setAttribute(ds::positions, stroke->positions());
+        domElement->setAttribute(ds::widths, stroke->widths());
+    }
+    else {
+        clearStrokeFromDom_(domElement);
+    }
+
+    //core::Color color = element->getAttribute(ds::color).getColor();
+    //if (color_ != color) {
+    //    element->setAttribute(ds::color, color_);
+    //}
+}
+
+/* static */
+void VacKeyEdge::clearStrokeFromDom_(dom::Element* domElement) {
+    namespace ds = dom::strings;
+    domElement->clearAttribute(ds::positions);
+    domElement->clearAttribute(ds::widths);
+    // Stroke models will be identified by an id.
+    // It will allow for custom cleanups!
+}
+
+bool VacKeyEdge::updatePropertiesFromDom_(vacomplex::KeyEdgeData* data, dom::Element* domElement) {
+    // Remove props with removed dom attribute.
+    core::Array<core::StringId> toRemove;
+    for (const auto& it : data->properties()) {
+        core::StringId propName = it.first;
+        if (domElement->getAuthoredAttribute(propName).isNone()) {
+            toRemove.append(propName);
+        }
+    }
+    for (core::StringId propName : toRemove) {
+        data->removeProperty(propName);
+    }
+    // Hard-coded props
+    { // Color
+        const dom::Value& value = domElement->getAttribute(strings::color);
+        if (value.isValid()) {
+            const auto& color = value.getColor();
+            if (frameData_.color_ != color) {
+                frameData_.color_ = color;
+                frameData_.hasPendingColorChange_ = true;
+                notifyChanges_({ ChangeFlag::Color }, false);
+            }
+        }
+    }
+    // TODO: custom props support (registry)
+}
+
+void VacKeyEdge::writePropertiesToDom_(dom::Element* domElement, vacomplex::KeyEdgeData* data, core::ConstSpan<core::StringId> propNames) {
+    for (core::StringId propName : propNames) {
+        const vacomplex::CellProperty* prop = data->findProperty(propName);
+        if (!prop) {
+            domElement->clearAttribute(propName);
+            continue;
+        }
+        // Hard-coded props
+        if (propName == strings::color) {
+            // TODO: move it to updateDataFromDom_ and use cellproperty
+            const auto& color = domElement->getAttribute(strings::color).getColor();
+            if (frameData_.color_ != color) {
+                frameData_.color_ = color;
+                frameData_.hasPendingColorChange_ = true;
+                notifyChanges_({ ChangeFlag::Color }, false);
+            }
+        }
+        // TODO: custom props support (registry)
+    }
+}
+
 ElementStatus VacKeyEdge::updateFromDom_(Workspace* workspace) {
+
+    // XXX: We can forward the changed attribute names up to here. Should we do it ?
+
     namespace ds = dom::strings;
     // TODO: update using owning composite when it is implemented
     dom::Element* const domElement = this->domElement();
@@ -764,7 +882,7 @@ ElementStatus VacKeyEdge::updateFromDom_(Workspace* workspace) {
     // create/rebuild/update VAC node
     if (!ke) {
         auto data = std::make_unique<vacomplex::KeyEdgeData>(isClosed);
-        initDataFromDom_(data.get(), domElement);
+        updateStrokeFromDom_(data.get(), domElement);
         if (isClosed) {
             ke = vacomplex::ops::createKeyClosedEdge(std::move(data), parentGroup);
         }
@@ -780,23 +898,25 @@ ElementStatus VacKeyEdge::updateFromDom_(Workspace* workspace) {
         setVacNode(ke);
     }
     else {
-        auto data = dynamic_cast<vacomplex::KeyEdgeData*>(ke->data());
-        if (!data || !initDataFromDom_(data, domElement)) {
+        auto data = ke->data();
+        if (!data || !updateStrokeFromDom_(data, domElement)) {
             hasGeometryChanged = false;
+        }
+        else if (!isClosed) {
+            // Auto-snap data when read from DOM.
+            data->snap(kvs[0]->position(), kvs[1]->position());
         }
     }
 
     // dirty cached data
-    if (hasGeometryChanged || hasBoundaryChanged) {
+    if (hasGeometryChanged) {
         dirtyPreJoinGeometry_(false);
     }
-
-    const auto& color = domElement->getAttribute(ds::color).getColor();
-    if (frameData_.color_ != color) {
-        frameData_.color_ = color;
-        frameData_.hasPendingColorChange_ = true;
-        notifyChanges_({ChangeFlag::Color}, false);
+    else if (hasBoundaryChanged) {
+        dirtyPostJoinGeometry_(false);
     }
+
+    updatePropertiesFromDom_(ke->data(), domElement);
 
     notifyChanges_({}, true);
     return ElementStatus::Ok;
@@ -825,13 +945,21 @@ void VacKeyEdge::updateFromVac_(vacomplex::NodeModificationFlags flags) {
         if (data) {
             // todo: if geometry type changed, remove previous geometry's attributes.
             //geometry->writeToDomEdge_(domElement);
-            writeDomData_(domElement, data); // TODO: only write what's necessary
+            writeStrokeToDom_(domElement, data); // TODO: only write what's necessary
             // todo: dirty only if really changed ?
             dirtyPreJoinGeometry_();
+        }
+        else {
+            clearStrokeFromDom_(domElement);
         }
     }
     else if (flags.has(vacomplex::NodeModificationFlag::MeshChanged)) {
         dirtyPreJoinGeometry_();
+    }
+
+    if (flags.has(vacomplex::NodeModificationFlag::PropertyChanged)) {
+        // TODO: do it when color/style is stored as a cell property
+        //writePropertiesToDom_(domElement, propNames);
     }
 
     const Workspace* w = workspace();
@@ -857,77 +985,6 @@ void VacKeyEdge::updateFromVac_(vacomplex::NodeModificationFlags flags) {
                 ds::endvertex, newVertices[1]->domElement()->getPathFromId());
         }
     }
-}
-
-/* static */
-bool VacKeyEdge::initDataFromDom_(vacomplex::KeyEdgeData* ked, dom::Element* domElement) {
-}
-
-/* static */
-bool VacKeyEdge::updateDataFromDom_(
-    vacomplex::KeyEdgeData* ked,
-    dom::Element* domElement,
-    bool updateStroke,
-    core::ConstSpan<core::StringId> propertyNames) {
-
-    namespace ds = dom::strings;
-
-    bool changed = false;
-
-    const auto& domPoints = domElement->getAttribute(ds::positions).getVec2dArray();
-    if (sharedConstPositions_ != domPoints) {
-        sharedConstPositions_ = domPoints;
-        stroke_->setPositions(domPoints);
-        originalKnotArclengths_.clear();
-        dirtyEdgeSampling();
-        changed = true;
-    }
-
-    const auto& domWidths = element->getAttribute(ds::widths).getDoubleArray();
-    if (sharedConstWidths_ != domWidths) {
-        sharedConstWidths_ = domWidths;
-        stroke_->setWidths(domWidths);
-        dirtyEdgeSampling();
-        changed = true;
-    }
-
-    core::Color color = element->getAttribute(ds::color).getColor();
-    if (color_ != color) {
-        color_ = color;
-        dirtyEdgeStyle();
-        changed = true;
-    }
-
-    return changed;
-}
-
-/* static */
-void VacKeyEdge::writeDomData_(dom::Element* domElement, vacomplex::KeyEdgeData* ked) {
-    namespace ds = dom::strings;
-
-    const auto& domPoints = domElement->getAttribute(ds::positions).getVec2dArray();
-    if (sharedConstPositions_ != domPoints) {
-        element->setAttribute(ds::positions, sharedConstPositions_);
-    }
-
-    const auto& domWidths = element->getAttribute(ds::widths).getDoubleArray();
-    if (sharedConstWidths_ != domWidths) {
-        element->setAttribute(ds::widths, sharedConstWidths_);
-    }
-
-    core::Color color = element->getAttribute(ds::color).getColor();
-    if (color_ != color) {
-        element->setAttribute(ds::color, color_);
-    }
-}
-
-/* static */
-void VacKeyEdge::clearDomData_(dom::Element* domElement) {
-    namespace ds = dom::strings;
-    domElement->clearAttribute(ds::positions);
-    domElement->clearAttribute(ds::widths);
-    // Stroke models will be identified by an id.
-    // It will allow for custom cleanups!
 }
 
 void VacKeyEdge::updateVertices_(const std::array<VacKeyVertex*, 2>& newVertices) {
@@ -991,17 +1048,20 @@ bool VacKeyEdge::computePreJoinGeometry_() {
         return false;
     }
 
-    auto fhGeometry =
-        dynamic_cast<const workspace::FreehandEdgeGeometry*>(ke->geometry());
-    if (fhGeometry) {
-        for (const geometry::Vec2d& p : fhGeometry->positions()) {
+    auto interpStroke =
+        dynamic_cast<const geometry::AbstractInterpolatingStroke2d*>(ke->data()->stroke());
+    if (interpStroke) {
+        for (const geometry::Vec2d& p : interpStroke->positions()) {
             controlPoints_.emplaceLast(geometry::Vec2f(p));
         }
+    }
+    else {
+        controlPoints_.clear();
     }
 
     data.isComputing_ = true;
 
-    data.sampling_ = ke->samplingShared();
+    data.sampling_ = ke->strokeSamplingShared();
     data.bbox_ = ke->centerlineBoundingBox();
 
     alreadyNotifiedChanges_.unset(ChangeFlag::EdgePreJoinGeometry);

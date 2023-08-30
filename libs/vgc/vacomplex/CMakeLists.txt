@@ -20,7 +20,6 @@ vgc_add_library(vacomplex
         keyvertex.h
         logcategories.h
         operations.h
-        strings.h
         transform.h
 
         detail/operationsimpl.h
@@ -42,7 +41,6 @@ vgc_add_library(vacomplex
         keyvertex.cpp
         logcategories.cpp
         operations.cpp
-        strings.cpp
         transform.cpp
 
         detail/operationsimpl.cpp

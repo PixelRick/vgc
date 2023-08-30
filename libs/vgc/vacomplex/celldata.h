@@ -48,7 +48,21 @@ public:
         return properties_;
     }
 
-    const CellProperty* findProperty(core::StringId name) const;
+    const CellProperty* findProperty(core::StringId name) const {
+        return properties_.find(name);
+    }
+
+    void insertProperty(std::unique_ptr<CellProperty>&& value) {
+        properties_.insert(std::move(value));
+    }
+
+    void removeProperty(core::StringId name) {
+        properties_.remove(name);
+    }
+
+    void clearProperties() {
+        properties_.clear();
+    }
 
     void setProperties(const CellProperties& properties) {
         // emitPropertyChanged_() calls are handled by the copy-assign operator.

@@ -14,16 +14,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef VGC_VACOMPLEX_STRINGS_H
-#define VGC_VACOMPLEX_STRINGS_H
+#ifndef VGC_WORKSPACE_STRINGS_H
+#define VGC_WORKSPACE_STRINGS_H
 
 #include <vgc/core/stringid.h>
-#include <vgc/vacomplex/api.h>
+#include <vgc/workspace/api.h>
 
-namespace vgc::vacomplex::strings {
+namespace vgc::workspace::strings {
 
-VGC_VACOMPLEX_API extern const core::StringId style;
+VGC_WORKSPACE_API extern const core::StringId color;
+VGC_WORKSPACE_API extern const core::StringId style;
 
 } // namespace vgc::dom::strings
 
-#endif // VGC_VACOMPLEX_STRINGS_H
+#endif // VGC_WORKSPACE_STRINGS_H

@@ -12,6 +12,7 @@ vgc_add_library(workspace
         face.h
         layer.h
         logcategories.h
+        strings.h
         vertex.h
         workspace.h
 
@@ -21,6 +22,7 @@ vgc_add_library(workspace
         face.cpp
         layer.cpp
         logcategories.cpp
+        strings.cpp
         vertex.cpp
         workspace.cpp
 )

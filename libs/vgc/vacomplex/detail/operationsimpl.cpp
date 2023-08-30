@@ -323,21 +323,24 @@ Operations::glueKeyVertices(core::Span<KeyVertex*> kvs, const geometry::Vec2d& p
 }
 
 KeyEdge* Operations::glueKeyOpenEdges(
-    core::Span<KeyHalfedge> khes,
-    std::unique_ptr<KeyEdgeData>&& data,
+    core::ConstSpan<KeyHalfedge> khs,
+    std::unique_ptr<geometry::AbstractStroke2d>&& stroke,
     const geometry::Vec2d& startPosition,
     const geometry::Vec2d& endPosition) {
 
-    if (khes.isEmpty()) {
+    if (khs.isEmpty()) {
         return nullptr;
     }
 
-    Int n = khes.length();
+    Int n = khs.length();
+    core::Array<KeyHalfedgeData> khds;
+    khds.reserve(n);
 
     core::Array<KeyVertex*> startVertices;
     startVertices.reserve(n);
-    for (const KeyHalfedge& khe : khes) {
-        startVertices.append(khe.startVertex());
+    for (const KeyHalfedge& kh : khs) {
+        startVertices.append(kh.startVertex());
+        khds.emplaceLast(kh.edge()->data(), kh.direction());
     }
     glueKeyVertices(startVertices, startPosition);
 
@@ -345,32 +348,33 @@ KeyEdge* Operations::glueKeyOpenEdges(
     // start vertices since it can substitute end vertices.
     core::Array<KeyVertex*> endVertices;
     endVertices.reserve(n);
-    for (const KeyHalfedge& khe : khes) {
-        endVertices.append(khe.endVertex());
+    for (const KeyHalfedge& kh : khs) {
+        endVertices.append(kh.endVertex());
     }
     glueKeyVertices(endVertices, endPosition);
 
     // Location: top-most input edge
     core::Array<Node*> edgeNodes(n);
     for (Int i = 0; i < n; ++i) {
-        edgeNodes[i] = khes[i].edge();
+        edgeNodes[i] = khs[i].edge();
     }
+
     Node* topMostEdge = findTopMost(edgeNodes);
     Group* parentGroup = topMostEdge->parentGroup();
     Node* nextSibling = topMostEdge->nextSibling();
 
-    KeyVertex* startKv = khes[0].startVertex();
-    KeyVertex* endKv = khes[0].endVertex();
+    KeyVertex* startKv = khs[0].startVertex();
+    KeyVertex* endKv = khs[0].endVertex();
 
-    // TODO: define source operation
+    std::unique_ptr<KeyEdgeData> newData = KeyEdgeData::fromGlue(khds, std::move(stroke));
     KeyEdge* newKe =
-        createKeyOpenEdge(startKv, endKv, std::move(data), parentGroup, nextSibling);
+        createKeyOpenEdge(startKv, endKv, std::move(newData), parentGroup, nextSibling);
 
-    KeyHalfedge newKhe(newKe, true);
-    for (const KeyHalfedge& khe : khes) {
-        substitute_(khe, newKhe);
+    KeyHalfedge newKh(newKe, true);
+    for (const KeyHalfedge& kh : khs) {
+        substitute_(kh, newKh);
         // It is important that no 2 halfedges refer to the same edge.
-        hardDelete(khe.edge(), true);
+        hardDelete(kh.edge(), true);
     }
 
     newKe->snapGeometry();
@@ -378,32 +382,37 @@ KeyEdge* Operations::glueKeyOpenEdges(
 }
 
 KeyEdge* Operations::glueKeyClosedEdges( //
-    core::Span<KeyHalfedge> khes,
-    std::unique_ptr<KeyEdgeData>&& data) {
+    core::ConstSpan<KeyHalfedge> khs,
+    std::unique_ptr<geometry::AbstractStroke2d>&& stroke) {
 
-    if (khes.isEmpty()) {
+    if (khs.isEmpty()) {
         return nullptr;
     }
 
-    Int n = khes.length();
-
     // Location: top-most input edge
-    core::Array<Node*> edgeNodes(n);
-    for (Int i = 0; i < n; ++i) {
-        edgeNodes[i] = khes[i].edge();
+
+    Int n = khs.length();
+    core::Array<Node*> edgeNodes;
+    edgeNodes.reserve(n);
+    core::Array<KeyHalfedgeData> khds;
+    khds.reserve(n);
+    for (const KeyHalfedge& kh : khs) {
+        edgeNodes.append(kh.edge());
+        khds.emplaceLast(kh.edge()->data(), kh.direction());
     }
+
     Node* topMostEdge = findTopMost(edgeNodes);
     Group* parentGroup = topMostEdge->parentGroup();
     Node* nextSibling = topMostEdge->nextSibling();
 
-    // TODO: define source operation
-    KeyEdge* newKe = createKeyClosedEdge(std::move(data), parentGroup, nextSibling);
+    std::unique_ptr<KeyEdgeData> newData = KeyEdgeData::fromGlue(khds, std::move(stroke));
+    KeyEdge* newKe = createKeyClosedEdge(std::move(newData), parentGroup, nextSibling);
 
-    KeyHalfedge newKhe(newKe, true);
-    for (const KeyHalfedge& khe : khes) {
-        substitute_(khe, newKhe);
+    KeyHalfedge newKh(newKe, true);
+    for (const KeyHalfedge& kh : khs) {
+        substitute_(kh, newKh);
         // It is important that no 2 halfedges refer to the same edge.
-        hardDelete(khe.edge(), true);
+        hardDelete(kh.edge(), true);
     }
 
     return newKe;

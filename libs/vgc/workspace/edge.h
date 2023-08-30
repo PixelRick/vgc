@@ -520,6 +520,9 @@ private:
     };
     std::array<VertexInfo, 2> verticesInfo_ = {};
 
+    // TODO: replace by style, local copy or use vacomplex::CellProperty
+    core::Color color_;
+
     mutable VacKeyEdgeFrameData frameData_;
     geometry::Vec2dArray controlPoints_;
     mutable graphics::GeometryViewPtr controlPointsGeometry_;
@@ -531,13 +534,17 @@ private:
     ElementStatus onDependencyChanged_(Element* dependency, ChangeFlags changes) override;
     ElementStatus onDependencyRemoved_(Element* dependency) override;
 
-    ElementStatus updateFromDom_(Workspace* workspace) override;
-    void updateFromVac_(vacomplex::NodeModificationFlags flags) override;
+    static bool updateStrokeFromDom_(vacomplex::KeyEdgeData* data, dom::Element* domElement);
+    static void writeStrokeToDom_(dom::Element* domElement, vacomplex::KeyEdgeData* data);
+    static void clearStrokeFromDom_(dom::Element* domElement);
 
-    static bool initDataFromDom_(vacomplex::KeyEdgeData* ked, dom::Element* domElement);
-    static bool updateDataFromDom_(vacomplex::KeyEdgeData* ked, dom::Element* domElement, bool updateStroke, core::ConstSpan<core::StringId> propertyNames);
-    static void writeDomData_(dom::Element* domElement, vacomplex::KeyEdgeData* ked);
-    static void clearDomData_(dom::Element* domElement);
+    // TODO: make both static when color is stored as a cell property.
+    bool updatePropertiesFromDom_(vacomplex::KeyEdgeData* data, dom::Element* domElement);
+    void writePropertiesToDom_(dom::Element* domElement, vacomplex::KeyEdgeData* data, core::ConstSpan<core::StringId> propNames);
+
+    ElementStatus updateFromDom_(Workspace* workspace) override;
+
+    void updateFromVac_(vacomplex::NodeModificationFlags flags) override;
 
     void updateVertices_(const std::array<VacKeyVertex*, 2>& newVertices);
 

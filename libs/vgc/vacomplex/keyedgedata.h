@@ -116,7 +116,7 @@ public:
 
     static std::unique_ptr<KeyEdgeData> fromGlue(
         core::ConstSpan<KeyHalfedgeData> khds,
-        const geometry::AbstractStroke2d* gluedStroke);
+        std::unique_ptr<geometry::AbstractStroke2d>&& gluedStroke);
 
 private:
     std::unique_ptr<geometry::AbstractStroke2d> stroke_;

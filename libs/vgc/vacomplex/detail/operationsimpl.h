@@ -98,16 +98,16 @@ public:
     // Assumes `khes` does not contain more than one halfedge for any edge.
     //
     KeyEdge* glueKeyOpenEdges(
-        core::Span<KeyHalfedge> khes,
-        std::unique_ptr<KeyEdgeData>&& geometry,
+        core::ConstSpan<KeyHalfedge> khes,
+        std::unique_ptr<geometry::AbstractStroke2d>&& stroke,
         const geometry::Vec2d& startPosition,
         const geometry::Vec2d& endPosition);
 
     // Assumes `khes` does not contain more than one halfedge for any edge.
     //
     KeyEdge* glueKeyClosedEdges( //
-        core::Span<KeyHalfedge> khes,
-        std::unique_ptr<KeyEdgeData>&& geometry);
+        core::ConstSpan<KeyHalfedge> khes,
+        std::unique_ptr<geometry::AbstractStroke2d>&& stroke);
 
     core::Array<KeyEdge*> unglueKeyEdges(KeyEdge* ke);
     core::Array<KeyVertex*> unglueKeyVertices(
