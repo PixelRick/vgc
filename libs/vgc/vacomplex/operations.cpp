@@ -242,23 +242,22 @@ Complex* checkGlueKeyEdges_(core::Span<KeyHalfedge> khes) {
 
 KeyEdge* glueKeyOpenEdges(
     core::Span<KeyHalfedge> khes,
-    std::unique_ptr<KeyEdgeData>&& data,
     const geometry::Vec2d& startPosition,
     const geometry::Vec2d& endPosition) {
 
     constexpr bool isClosed = false;
     Complex* complex = checkGlueKeyEdges_<isClosed>(khes);
     detail::Operations ops(complex);
-    return ops.glueKeyOpenEdges(khes, std::move(data), startPosition, endPosition);
+    return ops.glueKeyOpenEdges(khes, startPosition, endPosition);
 }
 
 KeyEdge*
-glueKeyClosedEdges(core::Span<KeyHalfedge> khes, std::unique_ptr<KeyEdgeData>&& data) {
+glueKeyClosedEdges(core::Span<KeyHalfedge> khes) {
 
     constexpr bool isClosed = true;
     Complex* complex = checkGlueKeyEdges_<isClosed>(khes);
     detail::Operations ops(complex);
-    return ops.glueKeyClosedEdges(khes, std::move(data));
+    return ops.glueKeyClosedEdges(khes);
 }
 
 core::Array<KeyEdge*> unglueKeyEdges(KeyEdge* ke) {

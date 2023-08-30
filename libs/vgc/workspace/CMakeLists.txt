@@ -13,6 +13,7 @@ vgc_add_library(workspace
         layer.h
         logcategories.h
         strings.h
+        style.h
         vertex.h
         workspace.h
 
@@ -23,6 +24,7 @@ vgc_add_library(workspace
         layer.cpp
         logcategories.cpp
         strings.cpp
+        style.cpp
         vertex.cpp
         workspace.cpp
 )

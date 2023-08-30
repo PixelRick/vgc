@@ -424,20 +424,8 @@ core::Id Workspace::glue(core::ConstSpan<core::Id> elementIds) {
             vacomplex::KeyEdge* ke0 = openKes[0];
             vacomplex::KeyEdge* ke1 = openKes[1];
 
-            // TODO: use operation source in onVacNodesChanged_ to do the color blend
-            // Note: at least 1 sample is guaranteed.
-            bool isEdge0Longer = ke0->strokeSampling().samples().last().s()
-                                 > ke1->strokeSampling().samples().last().s();
-            VacKeyEdge* colorEdge = dynamic_cast<VacKeyEdge*>(
-                this->findVacElement(isEdge0Longer ? ke0 : ke1));
-            core::Color color =
-                colorEdge
-                    ? colorEdge
-                          ->computeFrameData(VacEdgeComputationStage::PreJoinGeometry)
-                          ->color()
-                    : core::Color{};
-
-            const geometry::StrokeSample2dArray& samples0 = ke0->strokeSampling().samples();
+            const geometry::StrokeSample2dArray& samples0 =
+                ke0->strokeSampling().samples();
             geometry::StrokeSample2dArray samples1 = ke1->strokeSampling().samples();
 
             // Detect which edge direction should be used for gluing.
@@ -604,7 +592,6 @@ core::Id Workspace::glue(core::ConstSpan<core::Id> elementIds) {
 
             vacomplex::Cell* result = vacomplex::ops::glueKeyOpenEdges(
                 halfedges,
-                std::move(newGeometry),
                 newPoints.first().position(),
                 newPoints.last().position());
             Element* e = this->findVacElement(result);
@@ -621,20 +608,9 @@ core::Id Workspace::glue(core::ConstSpan<core::Id> elementIds) {
             vacomplex::KeyEdge* ke0 = closedKes[0];
             vacomplex::KeyEdge* ke1 = closedKes[1];
 
-            // TODO: use operation source in onVacNodesChanged_ to do the color blend
-            bool isEdge0Longer = ke0->sampling().samples().last().s()
-                                 > ke1->sampling().samples().last().s();
-            VacKeyEdge* colorEdge = dynamic_cast<VacKeyEdge*>(
-                this->findVacElement(isEdge0Longer ? ke0 : ke1));
-            core::Color color =
-                colorEdge
-                    ? colorEdge
-                          ->computeFrameData(VacEdgeComputationStage::PreJoinGeometry)
-                          ->color()
-                    : core::Color{};
-
-            const geometry::StrokeSample2dArray& samples0 = ke0->sampling().samples();
-            geometry::StrokeSample2dArray samples1 = ke1->sampling().samples();
+            const geometry::StrokeSample2dArray& samples0 =
+                ke0->strokeSampling().samples();
+            geometry::StrokeSample2dArray samples1 = ke1->strokeSampling().samples();
 
             if (samples0.length() >= 2 && samples1.length() >= 2) {
                 double l0 = samples0.last().s();
@@ -781,32 +757,8 @@ core::Id Workspace::glue(core::ConstSpan<core::Id> elementIds) {
                 core::Array<vacomplex::KeyHalfedge> halfedges(
                     {{ke0, true}, {ke1, !reverse1}});
 
-                core::Array<FreehandEdgePoint> newPoints(n, core::noInit);
-                for (Int i = 0; i < n; ++i) {
-                    newPoints[i] = points0[i].average(points1[i]);
-                }
-
-                double maxWidth = 0;
-                for (Int i = 0; i < n; ++i) {
-                    double w = newPoints[i].width();
-                    if (w > maxWidth) {
-                        maxWidth = w;
-                    }
-                }
-
-                // tolerance = 5% of max width
-                std::shared_ptr<vacomplex::KeyEdgeData> newGeometry =
-                    FreehandEdgeGeometry::createFromPoints(
-                        newPoints, true, maxWidth * 0.05);
-
                 vacomplex::Cell* result =
-                    vacomplex::ops::glueKeyClosedEdges(halfedges, std::move(newGeometry));
-
-                Element* e = this->findVacElement(result);
-                if (e) {
-                    e->domElement()->setAttribute(dom::strings::color, color);
-                    resultId = e->id();
-                }
+                    vacomplex::ops::glueKeyClosedEdges(halfedges);
             }
             else {
                 // TODO: warning ?

@@ -324,7 +324,6 @@ Operations::glueKeyVertices(core::Span<KeyVertex*> kvs, const geometry::Vec2d& p
 
 KeyEdge* Operations::glueKeyOpenEdges(
     core::ConstSpan<KeyHalfedge> khs,
-    std::unique_ptr<geometry::AbstractStroke2d>&& stroke,
     const geometry::Vec2d& startPosition,
     const geometry::Vec2d& endPosition) {
 
@@ -366,7 +365,7 @@ KeyEdge* Operations::glueKeyOpenEdges(
     KeyVertex* startKv = khs[0].startVertex();
     KeyVertex* endKv = khs[0].endVertex();
 
-    std::unique_ptr<KeyEdgeData> newData = KeyEdgeData::fromGlue(khds, std::move(stroke));
+    std::unique_ptr<KeyEdgeData> newData = KeyEdgeData::fromGlue(khds);
     KeyEdge* newKe =
         createKeyOpenEdge(startKv, endKv, std::move(newData), parentGroup, nextSibling);
 
@@ -382,8 +381,7 @@ KeyEdge* Operations::glueKeyOpenEdges(
 }
 
 KeyEdge* Operations::glueKeyClosedEdges( //
-    core::ConstSpan<KeyHalfedge> khs,
-    std::unique_ptr<geometry::AbstractStroke2d>&& stroke) {
+    core::ConstSpan<KeyHalfedge> khs) {
 
     if (khs.isEmpty()) {
         return nullptr;
@@ -405,7 +403,7 @@ KeyEdge* Operations::glueKeyClosedEdges( //
     Group* parentGroup = topMostEdge->parentGroup();
     Node* nextSibling = topMostEdge->nextSibling();
 
-    std::unique_ptr<KeyEdgeData> newData = KeyEdgeData::fromGlue(khds, std::move(stroke));
+    std::unique_ptr<KeyEdgeData> newData = KeyEdgeData::fromGlue(khds);
     KeyEdge* newKe = createKeyClosedEdge(std::move(newData), parentGroup, nextSibling);
 
     KeyHalfedge newKh(newKe, true);

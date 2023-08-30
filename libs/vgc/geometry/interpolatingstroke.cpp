@@ -17,7 +17,9 @@
 #include <vgc/geometry/interpolatingstroke.h>
 
 #include <algorithm> // std::copy
+#include <numeric>   // std::accumulate
 
+#include <vgc/core/algorithm.h>
 #include <vgc/core/format.h>
 #include <vgc/core/span.h>
 #include <vgc/geometry/logcategories.h>
@@ -137,6 +139,7 @@ void AbstractInterpolatingStroke2d::updateCache() const {
     bool updateSegmentTypes = false;
     if (chordLengths_.isEmpty()) {
         computeLengths(chords, chordLengths_);
+        totalChordalLength_ = core::sum(chordLengths_);
         segmentTypes_.resizeNoInit(numSegments);
         updateSegmentTypes = true;
     }
@@ -180,6 +183,11 @@ bool AbstractInterpolatingStroke2d::convertAssign_(const AbstractStroke2d* other
         setWidths(other->widths());
     }
     return true;
+}
+
+double AbstractInterpolatingStroke2d::approximateLength_() const {
+    updateCache();
+    return totalChordalLength_;
 }
 
 Int AbstractInterpolatingStroke2d::numKnots_() const {
@@ -315,7 +323,10 @@ void AbstractInterpolatingStroke2d::assignFromConcat_(
 
 void AbstractInterpolatingStroke2d::assignFromAverage_(
     core::ConstSpan<const AbstractStroke2d*> strokes,
-    core::ConstSpan<bool> directions) {
+    core::ConstSpan<bool> directions,
+    core::ConstSpan<double> offsets) {
+
+    // if closed it becomes way harder
 
     struct ThickPoint {
         Vec2d pos;
@@ -352,19 +363,57 @@ void AbstractInterpolatingStroke2d::assignFromAverage_(
         return;
     }
 
-    StrokeSampling2d sampling0 =
-        strokes[0]->computeSampling(CurveSamplingQuality::AdaptiveHigh);
-    StrokeSampling2d sampling1 =
-        strokes[1]->computeSampling(CurveSamplingQuality::AdaptiveHigh);
+    Int n = strokes.length();
+    core::Array<StrokeSample2dArray> sampleArrays;
+    sampleArrays.reserve(n);
 
-    StrokeSample2dArray samples0 = sampling0.samples();
-    if (!directions[0]) {
-        std::reverse(samples0.begin(), samples0.end());
-        double maxS = samples0.begin()->s();
-        for (StrokeSample2d& sample : samples0) {
-            sample.setS(maxS - sample.s());
+    for (Int i = 0; i < n; ++i) {
+
+        StrokeSampling2d sampling =
+            strokes[i]->computeSampling(CurveSamplingQuality::AdaptiveHigh);
+        sampleArrays.append(sampling.stealSamples());
+        StrokeSample2dArray& samples = sampleArrays.last();
+
+        if (!offsets.isEmpty() && offsets[i] > 0) {
+            double offset = offsets[i];
+
+            Int j = 0;
+            Int n = samples.length();
+            for (; j < n; ++j) {
+                if (samples[j].s() >= offset) {
+                    break;
+                }
+            }
+
+            const geometry::StrokeSample2d& s0 = samples[(n + j - 1) % n];
+            const geometry::StrokeSample2d& s1 = samples[j];
+            double ds = s1.s() - s0.s();
+            if (ds > 0) {
+                double t = (offset - s0.s()) / ds;
+                p1a = ThickPoint(s0).lerp(ThickPoint(s1), t);
+            }
+            else {
+                p1a = s1;
+            }
+            std::rotate(samples1.begin(), samples1.begin() + m, samples1.end());
+            Int mr = n1 - m;
+            for (Int i = 0; i < mr; ++i) {
+                samples1[i].setS(samples1[i].s() - offset1);
+            }
+            for (Int i = mr; i < n1; ++i) {
+                samples1[i].setS(samples1[i].s() - offset1 + l1);
+            }
+        }
+
+        if (!directions[i]) {
+            std::reverse(samples.begin(), samples.end());
+            double maxS = samples.begin()->s();
+            for (StrokeSample2d& sample : samples) {
+                sample.setS(maxS - sample.s());
+            }
         }
     }
+
     StrokeSample2dArray samples1 = sampling1.samples();
     if (!directions[1]) {
         std::reverse(samples1.begin(), samples1.end());

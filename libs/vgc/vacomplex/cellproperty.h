@@ -71,7 +71,7 @@ enum class CellPropertyOpResult : UInt8 {
 ///
 class VGC_VACOMPLEX_API CellProperty {
 protected:
-    explicit CellProperty(core::StringId name)
+    explicit CellProperty(core::StringId name) noexcept
         : name_(name) {
     }
 
@@ -86,9 +86,9 @@ public:
         return clone_();
     }
 
-protected:
     using OpResult = CellPropertyOpResult;
 
+protected:
     virtual std::unique_ptr<CellProperty> clone_() const = 0;
 
     // Returns OpResult::Unchanged by default.

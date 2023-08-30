@@ -160,11 +160,18 @@ protected:
     void updateCache() const;
 
 protected:
+    const StrokeModelInfo& modelInfo_() const override = 0;
+
     std::unique_ptr<AbstractStroke2d> cloneEmpty_() const override = 0;
     std::unique_ptr<AbstractStroke2d> clone_() const override = 0;
+    std::unique_ptr<AbstractStroke2d>
+    convert_(const AbstractStroke2d* source) const override = 0;
+
     bool copyAssign_(const AbstractStroke2d* other) override = 0;
     bool moveAssign_(AbstractStroke2d* other) override = 0;
     bool convertAssign_(const AbstractStroke2d* other) override;
+
+    double approximateLength_() const override;
 
     Int numKnots_() const override;
 
@@ -189,7 +196,8 @@ protected:
 
     virtual void assignFromAverage_(
         core::ConstSpan<const AbstractStroke2d*> strokes,
-        core::ConstSpan<bool> directions) override;
+        core::ConstSpan<bool> directions,
+        core::ConstSpan<double> offsets) override;
 
     bool snap_(
         const geometry::Vec2d& snapStartPosition,
@@ -229,6 +237,7 @@ private:
     // It has the same number of elements as of positions_.
     // Last chord is the closure if closed, zero otherwise.
     mutable core::DoubleArray chordLengths_;
+    mutable double totalChordalLength_ = 0;
     mutable core::Array<CurveSegmentType> segmentTypes_;
 
     bool hasConstantWidth_ = false;

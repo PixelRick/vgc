@@ -22,9 +22,10 @@
 #include <vgc/geometry/triangle2d.h>
 #include <vgc/graphics/detail/shapeutil.h>
 #include <vgc/workspace/colors.h>
+#include <vgc/workspace/strings.h>
+#include <vgc/workspace/style.h>
 #include <vgc/workspace/vertex.h>
 #include <vgc/workspace/workspace.h>
-#include <vgc/workspace/strings.h>
 
 namespace vgc::workspace {
 
@@ -693,7 +694,6 @@ bool VacKeyEdge::updateStrokeFromDom_(
         }
     }
 
-
     auto stroke = std::make_unique<geometry::CatmullRomSplineStroke2d>(
         geometry::CatmullRomSplineParameterization::Centripetal,
         data->isClosed(),
@@ -706,11 +706,12 @@ bool VacKeyEdge::updateStrokeFromDom_(
 }
 
 /* static */
-void VacKeyEdge::writeStrokeToDom_(dom::Element* domElement, vacomplex::KeyEdgeData* data) {
+void VacKeyEdge::writeStrokeToDom_(
+    dom::Element* domElement,
+    vacomplex::KeyEdgeData* data) {
     namespace ds = dom::strings;
 
-    auto stroke =
-        dynamic_cast<const geometry::CatmullRomSplineStroke2d*>(data->stroke());
+    auto stroke = dynamic_cast<const geometry::CatmullRomSplineStroke2d*>(data->stroke());
 
     if (stroke) {
         domElement->setAttribute(ds::positions, stroke->positions());
@@ -719,11 +720,6 @@ void VacKeyEdge::writeStrokeToDom_(dom::Element* domElement, vacomplex::KeyEdgeD
     else {
         clearStrokeFromDom_(domElement);
     }
-
-    //core::Color color = element->getAttribute(ds::color).getColor();
-    //if (color_ != color) {
-    //    element->setAttribute(ds::color, color_);
-    //}
 }
 
 /* static */
@@ -735,50 +731,58 @@ void VacKeyEdge::clearStrokeFromDom_(dom::Element* domElement) {
     // It will allow for custom cleanups!
 }
 
-bool VacKeyEdge::updatePropertiesFromDom_(vacomplex::KeyEdgeData* data, dom::Element* domElement) {
-    // Remove props with removed dom attribute.
-    core::Array<core::StringId> toRemove;
-    for (const auto& it : data->properties()) {
-        core::StringId propName = it.first;
-        if (domElement->getAuthoredAttribute(propName).isNone()) {
-            toRemove.append(propName);
-        }
-    }
-    for (core::StringId propName : toRemove) {
-        data->removeProperty(propName);
-    }
+bool VacKeyEdge::updatePropertiesFromDom_(
+    vacomplex::KeyEdgeData* data,
+    dom::Element* domElement) {
+
+    bool styleChanged = false;
+
     // Hard-coded props
-    { // Color
+    { // Style
         const dom::Value& value = domElement->getAttribute(strings::color);
         if (value.isValid()) {
+            const CellStyle* oldStyle =
+                static_cast<const CellStyle*>(data->findProperty(strings::style));
+            auto newStyle = std::make_unique<CellStyle>();
             const auto& color = value.getColor();
-            if (frameData_.color_ != color) {
-                frameData_.color_ = color;
-                frameData_.hasPendingColorChange_ = true;
-                notifyChanges_({ ChangeFlag::Color }, false);
+            if (oldStyle && oldStyle->color() != color) {
+                newStyle->setColor(color);
+                styleChanged = true;
             }
+            data->insertProperty(std::move(newStyle));
+        }
+        else {
+            data->removeProperty(strings::style);
         }
     }
+
     // TODO: custom props support (registry)
+
+    return styleChanged;
 }
 
-void VacKeyEdge::writePropertiesToDom_(dom::Element* domElement, vacomplex::KeyEdgeData* data, core::ConstSpan<core::StringId> propNames) {
+void VacKeyEdge::writePropertiesToDom_(
+    dom::Element* domElement,
+    vacomplex::KeyEdgeData* data,
+    core::ConstSpan<core::StringId> propNames) {
     for (core::StringId propName : propNames) {
         const vacomplex::CellProperty* prop = data->findProperty(propName);
-        if (!prop) {
-            domElement->clearAttribute(propName);
-            continue;
-        }
         // Hard-coded props
-        if (propName == strings::color) {
-            // TODO: move it to updateDataFromDom_ and use cellproperty
-            const auto& color = domElement->getAttribute(strings::color).getColor();
-            if (frameData_.color_ != color) {
-                frameData_.color_ = color;
-                frameData_.hasPendingColorChange_ = true;
-                notifyChanges_({ ChangeFlag::Color }, false);
+        if (propName == strings::style) {
+            if (!prop) {
+                domElement->clearAttribute(strings::color);
+            }
+            else {
+                auto style = static_cast<const CellStyle*>(prop);
+                domElement->setAttribute(strings::color, style->color());
             }
         }
+
+        if (!prop) {
+            // TODO: clear property's attributes
+            continue;
+        }
+
         // TODO: custom props support (registry)
     }
 }
@@ -916,7 +920,14 @@ ElementStatus VacKeyEdge::updateFromDom_(Workspace* workspace) {
         dirtyPostJoinGeometry_(false);
     }
 
-    updatePropertiesFromDom_(ke->data(), domElement);
+    bool styleChanged = updatePropertiesFromDom_(ke->data(), domElement);
+    if (styleChanged) {
+        const CellStyle* style =
+            static_cast<const CellStyle*>(ke->data()->findProperty(strings::style));
+        frameData_.color_ = style ? style->color() : core::Color();
+        frameData_.hasPendingColorChange_ = true;
+        notifyChanges_({ChangeFlag::Color}, false);
+    }
 
     notifyChanges_({}, true);
     return ElementStatus::Ok;
@@ -1048,8 +1059,8 @@ bool VacKeyEdge::computePreJoinGeometry_() {
         return false;
     }
 
-    auto interpStroke =
-        dynamic_cast<const geometry::AbstractInterpolatingStroke2d*>(ke->data()->stroke());
+    auto interpStroke = dynamic_cast<const geometry::AbstractInterpolatingStroke2d*>(
+        ke->data()->stroke());
     if (interpStroke) {
         for (const geometry::Vec2d& p : interpStroke->positions()) {
             controlPoints_.emplaceLast(geometry::Vec2f(p));

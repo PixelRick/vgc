@@ -582,6 +582,10 @@ public:
         return samples_;
     }
 
+    StrokeSample2dArray stealSamples() {
+        return std::move(samples_);
+    }
+
     const Rect2d& centerlineBoundingBox() const {
         return centerlineBoundingBox_;
     }
@@ -717,6 +721,10 @@ public:
     ///
     bool isClosed() const {
         return isClosed_;
+    }
+
+    double approximateLength() const {
+        return approximateLength_();
     }
 
     /// Returns the number of knots of the stroke.
@@ -918,9 +926,10 @@ public:
 
     void assignFromAverage(
         core::ConstSpan<const AbstractStroke2d*> strokes,
-        core::ConstSpan<bool> directions) {
+        core::ConstSpan<bool> directions,
+        core::ConstSpan<double> offsets) {
 
-        assignFromAverage_(strokes, directions);
+        assignFromAverage_(strokes, directions, offsets);
     }
 
     /// Expects positions in object space.
@@ -1024,6 +1033,8 @@ protected:
     virtual bool moveAssign_(AbstractStroke2d* other) = 0;
     virtual bool convertAssign_(const AbstractStroke2d* other) = 0;
 
+    virtual double approximateLength_() const = 0;
+
     virtual Int numKnots_() const = 0;
 
     virtual bool isZeroLengthSegment_(Int segmentIndex) const = 0;
@@ -1047,7 +1058,8 @@ protected:
 
     virtual void assignFromAverage_(
         core::ConstSpan<const AbstractStroke2d*> strokes,
-        core::ConstSpan<bool> directions) = 0;
+        core::ConstSpan<bool> directions,
+        core::ConstSpan<double> offsets) = 0;
 
     virtual bool snap_(
         const Vec2d& snapStartPosition,
