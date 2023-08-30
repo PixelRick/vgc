@@ -192,6 +192,10 @@ public:
         s_ = s;
     }
 
+    void offsetS(double offset) {
+        s_ += offset;
+    }
+
     bool isCornerStart() const {
         return isCornerStart_;
     }
@@ -444,6 +448,10 @@ public:
 
     void setS(double s) {
         sample_.setS(s);
+    }
+
+    void offsetS(double offset) {
+        sample_.offsetS(offset);
     }
 
     bool isCornerStart() const {

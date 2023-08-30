@@ -326,34 +326,46 @@ void AbstractInterpolatingStroke2d::assignFromAverage_(
     core::ConstSpan<bool> directions,
     core::ConstSpan<double> offsets) {
 
-    // if closed it becomes way harder
-
     struct ThickPoint {
-        Vec2d pos;
-        double width;
+        Vec2d pos = {};
+        double width = 0;
+        double u = 0;
 
-        ThickPoint(Vec2d pos, double width)
+        ThickPoint() noexcept = default;
+
+        ThickPoint(Vec2d pos, double width, double u)
             : pos(pos)
-            , width(width) {
+            , width(width)
+            , u(u) {
         }
-        explicit ThickPoint(const StrokeSample2d& sample)
+
+        explicit ThickPoint(const StrokeSample2d& sample, double arclen)
             : pos(sample.position())
-            , width(sample.halfwidth(0) + sample.halfwidth(1)) {
+            , width(sample.halfwidth(0) + sample.halfwidth(1))
+            , u(sample.s() / arclen) {
         }
 
         ThickPoint average(const ThickPoint& other) {
-            return ThickPoint{0.5 * (pos + other.pos), 0.5 * (width + other.width)};
+            return ThickPoint{
+                0.5 * (pos + other.pos),
+                0.5 * (width + other.width),
+                0.5 * (u + other.u)};
         }
 
-        ThickPoint average(const StrokeSample2d& sample) {
+        ThickPoint average(const StrokeSample2d& sample, double arclen) {
+            double uOther = sample.s() / arclen;
             return ThickPoint{
                 0.5 * (pos + sample.position()),
-                0.5 * (width + sample.halfwidth(0) + sample.halfwidth(1))};
+                0.5 * (width + sample.halfwidth(0) + sample.halfwidth(1)),
+                0.5 * (u + uOther),
+            };
         }
 
         ThickPoint lerp(const ThickPoint& other, double t) {
             return ThickPoint{
-                (1. - t) * pos + t * other.pos, (1. - t) * width + t * other.width};
+                (1. - t) * pos + t * other.pos,
+                (1. - t) * width + t * other.width,
+                (1. - t) * u + t * other.u};
         }
     };
     core::Array<ThickPoint> newPoints;
@@ -363,65 +375,77 @@ void AbstractInterpolatingStroke2d::assignFromAverage_(
         return;
     }
 
-    Int n = strokes.length();
+    Int nStroke = strokes.length();
     core::Array<StrokeSample2dArray> sampleArrays;
-    sampleArrays.reserve(n);
+    sampleArrays.reserve(nStroke);
 
-    for (Int i = 0; i < n; ++i) {
+    bool isClosed0 = strokes[0]->isClosed();
+
+    // offset/reverse arrays
+    for (Int iStroke = 0; iStroke < nStroke; ++iStroke) {
 
         StrokeSampling2d sampling =
-            strokes[i]->computeSampling(CurveSamplingQuality::AdaptiveHigh);
+            strokes[iStroke]->computeSampling(CurveSamplingQuality::AdaptiveLow);
         sampleArrays.append(sampling.stealSamples());
         StrokeSample2dArray& samples = sampleArrays.last();
+        double arclen = samples.last().s();
 
-        if (!offsets.isEmpty() && offsets[i] > 0) {
-            double offset = offsets[i];
+        if (isClosed0) {
+            if (!offsets.isEmpty() && offsets[iStroke] > 0) {
+                double offset = offsets[iStroke];
 
-            Int j = 0;
-            Int n = samples.length();
-            for (; j < n; ++j) {
-                if (samples[j].s() >= offset) {
-                    break;
+                Int iNewStart = 1;
+                Int nSample = samples.length();
+                for (; iNewStart < nSample; ++iNewStart) {
+                    if (samples[iNewStart].s() >= offset) {
+                        break;
+                    }
                 }
-            }
 
-            const geometry::StrokeSample2d& s0 = samples[(n + j - 1) % n];
-            const geometry::StrokeSample2d& s1 = samples[j];
-            double ds = s1.s() - s0.s();
-            if (ds > 0) {
-                double t = (offset - s0.s()) / ds;
-                p1a = ThickPoint(s0).lerp(ThickPoint(s1), t);
-            }
-            else {
-                p1a = s1;
-            }
-            std::rotate(samples1.begin(), samples1.begin() + m, samples1.end());
-            Int mr = n1 - m;
-            for (Int i = 0; i < mr; ++i) {
-                samples1[i].setS(samples1[i].s() - offset1);
-            }
-            for (Int i = mr; i < n1; ++i) {
-                samples1[i].setS(samples1[i].s() - offset1 + l1);
+                const geometry::StrokeSample2d& s1 = samples[iNewStart];
+
+                if (s1.s() != offset) {
+                    const geometry::StrokeSample2d& s0 = samples[iNewStart - 1];
+                    double ds = s1.s() - s0.s();
+                    double t = (offset - s0.s()) / ds;
+                    ThickPoint tpAtOffset = ThickPoint(s0, arclen).lerp(ThickPoint(s1, arclen), t);
+                    samples.emplace(
+                        iNewStart,
+                        tpAtOffset.pos,
+                        Vec2d(),
+                        Vec2d(),
+                        tpAtOffset.width * 0.5,
+                        offset);
+                }
+
+                // remove last
+                samples.pop();
+
+                // rotate
+                for (Int i = 0; i < iNewStart; ++i) {
+                    samples.getUnchecked(i).offsetS(-offset + arclen);
+                }
+                for (Int i = iNewStart; i < nSample; ++i) {
+                    samples.getUnchecked(i).offsetS(-offset);
+                }
+                std::rotate(samples.begin(), samples.begin() + iNewStart, samples.end());
+
+                // rebuild last
+                ThickPoint tpFirst(samples.first(), arclen);
+                samples.emplaceLast(
+                    tpFirst.pos, Vec2d(), Vec2d(), tpFirst.width * 0.5, arclen);
             }
         }
 
-        if (!directions[i]) {
+        if (!directions[iStroke]) {
             std::reverse(samples.begin(), samples.end());
-            double maxS = samples.begin()->s();
             for (StrokeSample2d& sample : samples) {
-                sample.setS(maxS - sample.s());
+                sample.setS(arclen - sample.s());
             }
         }
     }
 
-    StrokeSample2dArray samples1 = sampling1.samples();
-    if (!directions[1]) {
-        std::reverse(samples1.begin(), samples1.end());
-        double maxS = samples1.begin()->s();
-        for (StrokeSample2d& sample : samples1) {
-            sample.setS(maxS - sample.s());
-        }
-    }
+    //newPoints.reserve();
 
     if (samples0.length() < 2) {
         Int n = samples1.length();
