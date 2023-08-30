@@ -258,9 +258,8 @@ void AbstractInterpolatingStroke2d::assignFromConcat_(
     if (!a || !b) {
         VGC_WARNING(
             LogVgcGeometry,
-            "AbstractInterpolatingStroke2d::assignFromConcat_() expected source strokes "
-            "to be "
-            "of type AbstractInterpolatingStroke2d");
+            "AbstractInterpolatingStroke2d::assignFromConcat_() expected "
+            "source strokes to be of type AbstractInterpolatingStroke2d.");
         return;
     }
 
@@ -345,20 +344,8 @@ void AbstractInterpolatingStroke2d::assignFromAverage_(
             , u(sample.s() / arclen) {
         }
 
-        ThickPoint average(const ThickPoint& other) {
-            return ThickPoint{
-                0.5 * (pos + other.pos),
-                0.5 * (width + other.width),
-                0.5 * (u + other.u)};
-        }
-
-        ThickPoint average(const StrokeSample2d& sample, double arclen) {
-            double uOther = sample.s() / arclen;
-            return ThickPoint{
-                0.5 * (pos + sample.position()),
-                0.5 * (width + sample.halfwidth(0) + sample.halfwidth(1)),
-                0.5 * (u + uOther),
-            };
+        ThickPoint average(const ThickPoint& other, double u) {
+            return ThickPoint{0.5 * (pos + other.pos), 0.5 * (width + other.width), other.u};
         }
 
         ThickPoint lerp(const ThickPoint& other, double t) {
@@ -368,7 +355,6 @@ void AbstractInterpolatingStroke2d::assignFromAverage_(
                 (1. - t) * u + t * other.u};
         }
     };
-    core::Array<ThickPoint> newPoints;
 
     if (strokes.length() != 2) {
         // unsupported atm ?
@@ -384,18 +370,31 @@ void AbstractInterpolatingStroke2d::assignFromAverage_(
     // offset/reverse arrays
     for (Int iStroke = 0; iStroke < nStroke; ++iStroke) {
 
+        if (strokes[iStroke]->isClosed() != isClosed0) {
+            VGC_WARNING(
+                LogVgcGeometry,
+                "AbstractInterpolatingStroke2d::assignFromAverage_() expected "
+                "source strokes to be all closed or all open.");
+            return;
+        }
+
         StrokeSampling2d sampling =
             strokes[iStroke]->computeSampling(CurveSamplingQuality::AdaptiveLow);
         sampleArrays.append(sampling.stealSamples());
         StrokeSample2dArray& samples = sampleArrays.last();
-        double arclen = samples.last().s();
+        Int nSample = samples.length();
+        if (nSample < 2) {
+            continue;
+        }
+
+        double arclength = samples.last().s();
 
         if (isClosed0) {
             if (!offsets.isEmpty() && offsets[iStroke] > 0) {
                 double offset = offsets[iStroke];
 
                 Int iNewStart = 1;
-                Int nSample = samples.length();
+
                 for (; iNewStart < nSample; ++iNewStart) {
                     if (samples[iNewStart].s() >= offset) {
                         break;
@@ -408,7 +407,8 @@ void AbstractInterpolatingStroke2d::assignFromAverage_(
                     const geometry::StrokeSample2d& s0 = samples[iNewStart - 1];
                     double ds = s1.s() - s0.s();
                     double t = (offset - s0.s()) / ds;
-                    ThickPoint tpAtOffset = ThickPoint(s0, arclen).lerp(ThickPoint(s1, arclen), t);
+                    ThickPoint tpAtOffset =
+                        ThickPoint(s0, arclength).lerp(ThickPoint(s1, arclength), t);
                     samples.emplace(
                         iNewStart,
                         tpAtOffset.pos,
@@ -423,7 +423,7 @@ void AbstractInterpolatingStroke2d::assignFromAverage_(
 
                 // rotate
                 for (Int i = 0; i < iNewStart; ++i) {
-                    samples.getUnchecked(i).offsetS(-offset + arclen);
+                    samples.getUnchecked(i).offsetS(-offset + arclength);
                 }
                 for (Int i = iNewStart; i < nSample; ++i) {
                     samples.getUnchecked(i).offsetS(-offset);
@@ -431,101 +431,119 @@ void AbstractInterpolatingStroke2d::assignFromAverage_(
                 std::rotate(samples.begin(), samples.begin() + iNewStart, samples.end());
 
                 // rebuild last
-                ThickPoint tpFirst(samples.first(), arclen);
+                ThickPoint tpFirst(samples.first(), arclength);
                 samples.emplaceLast(
-                    tpFirst.pos, Vec2d(), Vec2d(), tpFirst.width * 0.5, arclen);
+                    tpFirst.pos, Vec2d(), Vec2d(), tpFirst.width * 0.5, arclength);
             }
         }
 
         if (!directions[iStroke]) {
             std::reverse(samples.begin(), samples.end());
             for (StrokeSample2d& sample : samples) {
-                sample.setS(arclen - sample.s());
+                sample.setS(arclength - sample.s());
             }
         }
     }
 
-    //newPoints.reserve();
+    core::Array<ThickPoint> newPoints;
 
-    if (samples0.length() < 2) {
-        Int n = samples1.length();
-        newPoints.resizeNoInit(n);
-        ThickPoint fep0(samples0.first());
-        for (Int i = 0; i < n; ++i) {
-            newPoints[i] = fep0.average(samples1[i]);
-        }
-    }
-    else if (samples1.length() < 2) {
-        Int n = samples0.length();
-        newPoints.resizeNoInit(n);
-        ThickPoint fep1(samples1.first());
-        for (Int i = 0; i < n; ++i) {
-            newPoints[i] = fep1.average(samples1[i]);
+    double arclength0 = sampleArrays[0].last().s();
+    newPoints.reserve(sampleArrays[0].length());
+    if (arclength0 > 0) {
+        for (const StrokeSample2d& sample : sampleArrays[0]) {
+            newPoints.emplaceLast(sample, arclength0);
         }
     }
     else {
-        double l0 = samples0.last().s();
-        double l1 = samples1.last().s();
+        newPoints.emplaceLast(sampleArrays[0].first(), 1.);
+    }
 
-        Int n0 = samples0.length();
-        Int n1 = samples1.length();
-        Int n = std::max<Int>(0, n0 - 2) + std::max<Int>(0, n1 - 2) + 2;
+    for (Int iStroke = 1; iStroke < nStroke; ++iStroke) {
 
-        // Compute an interpolation between the two curve with the given direction.
+        const StrokeSample2dArray& samples = sampleArrays[1];
+        double arclength = samples.last().s();
 
-        ThickPoint p0a = ThickPoint(samples0.first());
-        ThickPoint p1a = ThickPoint(samples1.first());
-
-        core::Array<ThickPoint> points0;
-        points0.reserve(n);
-        points0.append(p0a);
-
-        core::Array<ThickPoint> points1;
-        points1.reserve(n);
-        points1.append(p1a);
-
-        double u0a = 0;
-        Int i0 = std::min<Int>(1, n0);
-        double u1a = 0;
-        Int i1 = std::min<Int>(1, n1);
-
-        for (Int i = 1; i < n - 1; ++i) {
-            const StrokeSample2d& currentSample0 = samples0[i0];
-            const StrokeSample2d& currentSample1 = samples1[i1];
-            double u0b = currentSample0.s() / l0;
-            double u1b = currentSample1.s() / l1;
-            ThickPoint p0 = ThickPoint(currentSample0);
-            ThickPoint p1 = ThickPoint(currentSample1);
-            bool canIterate0 = i0 < n0 - 1;
-            bool canIterate1 = i1 < n1 - 1;
-            if (canIterate1 && (u0b > u1b || !canIterate0)) {
-                double t = (u1b - u0a) / (u0b - u0a);
-                points0.append(p0a.lerp(p0, t));
-                points1.append(p1);
-                u1a = u1b;
-                p1a = p1;
-                ++i1;
-            }
-            else if (canIterate0) {
-                double t = (u0b - u1a) / (u1b - u1a);
-                points0.append(p0);
-                points1.append(p1a.lerp(p1, t));
-                u0a = u0b;
-                p0a = p0;
-                ++i0;
-            }
-            else {
-                // shouldn't happen if `n` is correct.
-                break;
+        if (newPoints.length() < 2) {
+            ThickPoint tp0 = newPoints.pop();
+            Int n = samples.length();
+            newPoints.reserve(n);
+            for (const StrokeSample2d& sample : samples) {
+                ThickPoint tp(sample, arclength);
+                newPoints.append(tp0.average(tp, tp.u));
             }
         }
+        else if (samples.length() < 2) {
+            ThickPoint tp0(samples[0], 1.);
+            for (ThickPoint& tp : newPoints) {
+                tp = tp.average(tp0, tp.u);
+            }
+        }
+        else {
+            // WIP
 
-        points0.emplaceLast(samples0.last());
-        points1.emplaceLast(samples1.last());
+            double l0 = samples0.last().s();
+            double l1 = samples1.last().s();
 
-        newPoints.resizeNoInit(n);
-        for (Int i = 0; i < n; ++i) {
-            newPoints[i] = points0[i].average(points1[i]);
+            Int n0 = samples0.length();
+            Int n1 = samples1.length();
+            Int n = std::max<Int>(0, n0 - 2) + std::max<Int>(0, n1 - 2) + 2;
+
+            // Compute an interpolation between the two curve with the given direction.
+
+            ThickPoint p0a = ThickPoint(samples0.first());
+            ThickPoint p1a = ThickPoint(samples1.first());
+
+            core::Array<ThickPoint> points0;
+            points0.reserve(n);
+            points0.append(p0a);
+
+            core::Array<ThickPoint> points1;
+            points1.reserve(n);
+            points1.append(p1a);
+
+            double u0a = 0;
+            Int i0 = std::min<Int>(1, n0);
+            double u1a = 0;
+            Int i1 = std::min<Int>(1, n1);
+
+            for (Int i = 1; i < n - 1; ++i) {
+                const StrokeSample2d& currentSample0 = samples0[i0];
+                const StrokeSample2d& currentSample1 = samples1[i1];
+                double u0b = currentSample0.s() / l0;
+                double u1b = currentSample1.s() / l1;
+                ThickPoint p0 = ThickPoint(currentSample0);
+                ThickPoint p1 = ThickPoint(currentSample1);
+                bool canIterate0 = i0 < n0 - 1;
+                bool canIterate1 = i1 < n1 - 1;
+                if (canIterate1 && (u0b > u1b || !canIterate0)) {
+                    double t = (u1b - u0a) / (u0b - u0a);
+                    points0.append(p0a.lerp(p0, t));
+                    points1.append(p1);
+                    u1a = u1b;
+                    p1a = p1;
+                    ++i1;
+                }
+                else if (canIterate0) {
+                    double t = (u0b - u1a) / (u1b - u1a);
+                    points0.append(p0);
+                    points1.append(p1a.lerp(p1, t));
+                    u0a = u0b;
+                    p0a = p0;
+                    ++i0;
+                }
+                else {
+                    // shouldn't happen if `n` is correct.
+                    break;
+                }
+            }
+
+            points0.emplaceLast(samples0.last());
+            points1.emplaceLast(samples1.last());
+
+            newPoints.resizeNoInit(n);
+            for (Int i = 0; i < n; ++i) {
+                newPoints[i] = points0[i].average(points1[i]);
+            }
         }
     }
 

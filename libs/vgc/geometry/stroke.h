@@ -932,12 +932,17 @@ public:
         assignFromConcat_(a, directionA, b, directionB, smoothJoin);
     }
 
+    /// Assigns to `this` the average of the `strokes`.
+    /// Prior to averaging and for each stroke in order:
+    /// - parameterization [0, s] is rotated by the given offset (only if closed).
+    /// - parameterization is reversed according to its given direction.
+    ///
     void assignFromAverage(
         core::ConstSpan<const AbstractStroke2d*> strokes,
         core::ConstSpan<bool> directions,
-        core::ConstSpan<double> offsets) {
+        core::ConstSpan<double> sOffsets) {
 
-        assignFromAverage_(strokes, directions, offsets);
+        assignFromAverage_(strokes, directions, sOffsets);
     }
 
     /// Expects positions in object space.
@@ -1067,7 +1072,7 @@ protected:
     virtual void assignFromAverage_(
         core::ConstSpan<const AbstractStroke2d*> strokes,
         core::ConstSpan<bool> directions,
-        core::ConstSpan<double> offsets) = 0;
+        core::ConstSpan<double> sOffsets) = 0;
 
     virtual bool snap_(
         const Vec2d& snapStartPosition,
