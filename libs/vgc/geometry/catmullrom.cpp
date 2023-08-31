@@ -316,23 +316,31 @@ computeOffsetLineTangents(const PointData& pData, const WidthData& wData) {
 
 StrokeBoundaryInfo CatmullRomSplineStroke2d::computeBoundaryInfo_() const {
 
-    Int n = this->numSegments();
-
-    CubicBezier2d halfwidthBezier0(core::noInit);
-    CubicBezier2d positionsBezier0 = segmentToBezier(0, halfwidthBezier0);
-    CubicBezier2d halfwidthBezier1(core::noInit);
-    CubicBezier2d positionsBezier1 = segmentToBezier(n - 1, halfwidthBezier1);
-
-    PointData pData0 = computeSegmentEndPointData(positionsBezier0, 0);
-    PointData pData1 = computeSegmentEndPointData(positionsBezier1, 1);
-    WidthData wData0 = computeSegmentEndWidthData(halfwidthBezier0, 0);
-    WidthData wData1 = computeSegmentEndWidthData(halfwidthBezier1, 1);
-
     StrokeBoundaryInfo result;
-    result[0] = StrokeEndInfo(pData0.p, pData0.dp / pData0.speed, wData0.w);
-    result[0].setOffsetLineTangents(computeOffsetLineTangents(pData0, wData0));
-    result[1] = StrokeEndInfo(pData1.p, pData1.dp / pData1.speed, wData1.w);
-    result[1].setOffsetLineTangents(computeOffsetLineTangents(pData1, wData1));
+
+    Int n = this->numSegments();
+    if (n > 0) {
+        CubicBezier2d halfwidthBezier0(core::noInit);
+        CubicBezier2d positionsBezier0 = segmentToBezier(0, halfwidthBezier0);
+        CubicBezier2d halfwidthBezier1(core::noInit);
+        CubicBezier2d positionsBezier1 = segmentToBezier(n - 1, halfwidthBezier1);
+
+        PointData pData0 = computeSegmentEndPointData(positionsBezier0, 0);
+        PointData pData1 = computeSegmentEndPointData(positionsBezier1, 1);
+        WidthData wData0 = computeSegmentEndWidthData(halfwidthBezier0, 0);
+        WidthData wData1 = computeSegmentEndWidthData(halfwidthBezier1, 1);
+
+        result[0] = StrokeEndInfo(pData0.p, pData0.dp / pData0.speed, wData0.w);
+        result[0].setOffsetLineTangents(computeOffsetLineTangents(pData0, wData0));
+        result[1] = StrokeEndInfo(pData1.p, pData1.dp / pData1.speed, wData1.w);
+        result[1].setOffsetLineTangents(computeOffsetLineTangents(pData1, wData1));
+    }
+    else if (this->numKnots() > 0) {
+        Vec2d p = positions().first();
+        double hw = 0.5 * (hasConstantWidth() ? constantWidth() : widths().first());
+        result[0] = StrokeEndInfo(p, Vec2d(0, 1), Vec2d(hw, hw));
+        result[1] = StrokeEndInfo(p, Vec2d(0, 1), Vec2d(hw, hw));
+    }
     return result;
 }
 

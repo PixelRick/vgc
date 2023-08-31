@@ -112,7 +112,12 @@ public:
 
     void finalizeConcat();
 
-    static std::unique_ptr<KeyEdgeData> fromGlue(core::ConstSpan<KeyHalfedgeData> khds);
+    static std::unique_ptr<KeyEdgeData>
+    fromGlueOpen(core::ConstSpan<KeyHalfedgeData> khds);
+
+    static std::unique_ptr<KeyEdgeData> fromGlueClosed(
+        core::ConstSpan<KeyHalfedgeData> khds,
+        core::ConstSpan<double> uOffsets);
 
     static std::unique_ptr<KeyEdgeData> fromGlue(
         core::ConstSpan<KeyHalfedgeData> khds,

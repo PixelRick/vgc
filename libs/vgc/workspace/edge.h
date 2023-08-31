@@ -538,7 +538,8 @@ private:
 
     // returns whether style changed
     static bool updatePropertiesFromDom_(vacomplex::KeyEdgeData* data, dom::Element* domElement);
-    static void writePropertiesToDom_(dom::Element* domElement, vacomplex::KeyEdgeData* data, core::ConstSpan<core::StringId> propNames);
+    static void writePropertiesToDom_(dom::Element* domElement, const vacomplex::KeyEdgeData* data, core::ConstSpan<core::StringId> propNames);
+    static void writeAllPropertiesToDom_(dom::Element* domElement, const vacomplex::KeyEdgeData* data);
 
     ElementStatus updateFromDom_(Workspace* workspace) override;
 

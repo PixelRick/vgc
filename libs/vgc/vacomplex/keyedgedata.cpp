@@ -173,7 +173,7 @@ void KeyEdgeData::finalizeConcat() {
 
 /* static */
 std::unique_ptr<KeyEdgeData>
-KeyEdgeData::fromGlue(core::ConstSpan<KeyHalfedgeData> khds) {
+KeyEdgeData::fromGlueOpen(core::ConstSpan<KeyHalfedgeData> khds) {
 
     struct ConvertedStroke {
         std::unique_ptr<geometry::AbstractStroke2d> converted;
@@ -209,7 +209,52 @@ KeyEdgeData::fromGlue(core::ConstSpan<KeyHalfedgeData> khds) {
 
     std::unique_ptr<geometry::AbstractStroke2d> gluedStroke =
         bestModelStroke->cloneEmpty();
-    gluedStroke->assignFromAverage(strokes, directions);
+
+    gluedStroke->assignFromAverageOpen(strokes, directions);
+
+    return fromGlue(khds, std::move(gluedStroke));
+}
+
+/* static */
+std::unique_ptr<KeyEdgeData>
+KeyEdgeData::fromGlueClosed(core::ConstSpan<KeyHalfedgeData> khds, core::ConstSpan<double> uOffsets) {
+
+    struct ConvertedStroke {
+        std::unique_ptr<geometry::AbstractStroke2d> converted;
+        const geometry::AbstractStroke2d* st;
+    };
+    core::Array<ConvertedStroke> converteds;
+
+    // Find best model first.
+    const geometry::AbstractStroke2d* bestModelStroke = khds[0].edgeData()->stroke();
+    core::Array<bool> directions;
+    directions.reserve(khds.length());
+    for (const KeyHalfedgeData& khd : khds) {
+        const geometry::AbstractStroke2d* st = khd.edgeData()->stroke();
+        const geometry::StrokeModelInfo& model2 = st->modelInfo();
+        if (model2.name() != bestModelStroke->modelInfo().name()) {
+            if (model2.defaultConversionRank()
+                > bestModelStroke->modelInfo().defaultConversionRank()) {
+                bestModelStroke = khd.edgeData()->stroke();
+            }
+        }
+        converteds.emplaceLast().st = st;
+        directions.append(khd.direction());
+    }
+
+    core::Array<const geometry::AbstractStroke2d*> strokes;
+    for (ConvertedStroke& converted : converteds) {
+        if (converted.st->modelInfo().name() != bestModelStroke->modelInfo().name()) {
+            converted.converted = bestModelStroke->convert(converted.st);
+            converted.st = converted.converted.get();
+        }
+        strokes.append(converted.st);
+    }
+
+    std::unique_ptr<geometry::AbstractStroke2d> gluedStroke =
+        bestModelStroke->cloneEmpty();
+
+    gluedStroke->assignFromAverageClosed(strokes, directions, uOffsets);
 
     return fromGlue(khds, std::move(gluedStroke));
 }

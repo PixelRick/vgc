@@ -98,13 +98,20 @@ KeyVertex* glueKeyVertices(core::Span<KeyVertex*> kvs, const geometry::Vec2d& po
 
 VGC_VACOMPLEX_API
 KeyEdge* glueKeyOpenEdges(
-    core::Span<KeyHalfedge> khes,
-    const geometry::Vec2d& startPosition,
-    const geometry::Vec2d& endPosition);
+    core::Span<KeyHalfedge> khs);
+
+VGC_VACOMPLEX_API
+KeyEdge* glueKeyOpenEdges(
+    core::Span<KeyEdge*> kes);
 
 VGC_VACOMPLEX_API
 KeyEdge* glueKeyClosedEdges(
-    core::Span<KeyHalfedge> khes);
+    core::Span<KeyHalfedge> khs);
+
+VGC_VACOMPLEX_API
+KeyEdge* glueKeyClosedEdges(
+    core::Span<KeyEdge*> kes);
+
 
 VGC_VACOMPLEX_API
 core::Array<KeyEdge*> unglueKeyEdges(KeyEdge* ke);

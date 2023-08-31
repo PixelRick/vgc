@@ -763,8 +763,9 @@ bool VacKeyEdge::updatePropertiesFromDom_(
 
 void VacKeyEdge::writePropertiesToDom_(
     dom::Element* domElement,
-    vacomplex::KeyEdgeData* data,
+    const vacomplex::KeyEdgeData* data,
     core::ConstSpan<core::StringId> propNames) {
+
     for (core::StringId propName : propNames) {
         const vacomplex::CellProperty* prop = data->findProperty(propName);
         // Hard-coded props
@@ -783,6 +784,22 @@ void VacKeyEdge::writePropertiesToDom_(
             continue;
         }
 
+        // TODO: custom props support (registry)
+    }
+}
+
+void VacKeyEdge::writeAllPropertiesToDom_(
+    dom::Element* domElement,
+    const vacomplex::KeyEdgeData* data) {
+
+    for (const auto& it : data->properties()) {
+        core::StringId propName = it.first;
+        const vacomplex::CellProperty* prop = it.second.get();
+        // Hard-coded props
+        if (propName == strings::style) {
+            auto style = static_cast<const CellStyle*>(prop);
+            domElement->setAttribute(strings::color, style->color());
+        }
         // TODO: custom props support (registry)
     }
 }
@@ -951,26 +968,45 @@ void VacKeyEdge::updateFromVac_(vacomplex::NodeModificationFlags flags) {
         return;
     }
 
+    auto data = ke->data();
+
     if (flags.has(vacomplex::NodeModificationFlag::GeometryChanged)) {
-        auto data = ke->data();
         if (data) {
             // todo: if geometry type changed, remove previous geometry's attributes.
             //geometry->writeToDomEdge_(domElement);
             writeStrokeToDom_(domElement, data); // TODO: only write what's necessary
             // todo: dirty only if really changed ?
-            dirtyPreJoinGeometry_();
+            dirtyPreJoinGeometry_(false);
         }
         else {
             clearStrokeFromDom_(domElement);
         }
     }
     else if (flags.has(vacomplex::NodeModificationFlag::MeshChanged)) {
-        dirtyPreJoinGeometry_();
+        dirtyPreJoinGeometry_(false);
     }
 
     if (flags.has(vacomplex::NodeModificationFlag::PropertyChanged)) {
-        // TODO: do it when color/style is stored as a cell property
-        //writePropertiesToDom_(domElement, propNames);
+        // TODO: forward changed property names, and do all only if element
+        //       was just created.
+        //       maybe workspace could create the list of all properties in the latter case.
+        if (data) {
+            bool isNew = true;
+            if (isNew) {
+                writeAllPropertiesToDom_(domElement, data);
+            }
+            else {
+                //writePropertiesToDom_(domElement, data, propNames);
+            }
+            bool hasStyleChanged = true;
+            if (hasStyleChanged) {
+                const CellStyle* style =
+                    static_cast<const CellStyle*>(data->findProperty(strings::style));
+                frameData_.color_ = style ? style->color() : core::Color();
+                frameData_.hasPendingColorChange_ = true;
+                notifyChanges_({ ChangeFlag::Color }, false);
+            }
+        }
     }
 
     const Workspace* w = workspace();
@@ -996,6 +1032,8 @@ void VacKeyEdge::updateFromVac_(vacomplex::NodeModificationFlags flags) {
                 ds::endvertex, newVertices[1]->domElement()->getPathFromId());
         }
     }
+
+    notifyChanges_({}, true);
 }
 
 void VacKeyEdge::updateVertices_(const std::array<VacKeyVertex*, 2>& newVertices) {

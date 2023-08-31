@@ -166,8 +166,15 @@ void AbstractInterpolatingStroke2d::updateCache() const {
         }
     }
 
-    updateCache_(computeDataArray);
+    // flag must be false before calling updateCache_()
     isCacheDirty_ = false;
+
+    updateCache_(computeDataArray);
+}
+
+std::unique_ptr<AbstractStroke2d>
+AbstractInterpolatingStroke2d::convert_(const AbstractStroke2d* source) const {
+    return AbstractStroke2d::convert_(source);
 }
 
 bool AbstractInterpolatingStroke2d::convertAssign_(const AbstractStroke2d* other_) {
@@ -320,10 +327,150 @@ void AbstractInterpolatingStroke2d::assignFromConcat_(
     onWidthsChanged_();
 }
 
+namespace {
+
+template<typename TPoint, typename PositionGetter, typename WidthGetter>
+[[maybe_unused]] Int filterSculptPointsWidthStep(
+    core::Span<TPoint> points,
+    core::IntArray& indices,
+    Int intervalStart,
+    bool /*isClosed*/,
+    double /*tolerance*/,
+    PositionGetter positionGetter,
+    WidthGetter widthGetter) {
+
+    Int i = intervalStart;
+    Int endIndex = indices[i + 1];
+    while (indices[i] != endIndex) {
+        Int iA = indices[i];
+        Int iB = indices[i + 1];
+        if (iA + 1 == iB) {
+            ++i;
+            continue;
+        }
+
+        Vec2d a = positionGetter(points[iA], iA);
+        Vec2d b = positionGetter(points[iB], iB);
+        double wA = widthGetter(points[iA], iA);
+        double wB = widthGetter(points[iB], iB);
+
+        Vec2d ab = b - a;
+        double abLen = ab.length();
+
+        // Compute which sample between A and B has an offset point
+        // furthest from the offset line AB.
+        Int maxOffsetDiffPointIndex = -1;
+        if (abLen > 0) {
+            Vec2d dir = ab / abLen;
+            // Catmull-Rom is not a linear interpolation, since we don't
+            // compute the ground truth here we thus need a bigger threshold.
+            // For now we use X% of the width from linear interp. value.
+            for (Int j = iA + 1; j < iB; ++j) {
+                Vec2d p = positionGetter(points[j], j);
+                Vec2d ap = p - a;
+                double t = ap.dot(dir) / abLen;
+                double w = (1 - t) * wA + t * wB;
+                double dist = (std::abs)(w - widthGetter(points[j], j));
+                double maxOffsetDiff = w * 0.05;
+                if (dist > maxOffsetDiff) {
+                    maxOffsetDiff = dist;
+                    maxOffsetDiffPointIndex = j;
+                }
+            }
+        }
+        // If the distance exceeds the tolerance, then recurse.
+        // Otherwise, stop the recursion and move one to the next segment.
+        if (maxOffsetDiffPointIndex != -1) {
+            // Add sample to the list of selected samples
+            indices.insert(i + 1, maxOffsetDiffPointIndex);
+        }
+        else {
+            ++i;
+        }
+    }
+    return i;
+}
+
+template<typename TPoint, typename PositionGetter, typename WidthGetter>
+Int filterPointsStep(
+    core::Span<TPoint> points,
+    core::IntArray& indices,
+    Int intervalStart,
+    bool isClosed,
+    double tolerance,
+    PositionGetter positionGetter,
+    WidthGetter widthGetter) {
+
+    Int i = intervalStart;
+    Int endIndex = indices[i + 1];
+    while (indices[i] != endIndex) {
+        Int iA = indices[i];
+        Int iB = indices[i + 1];
+        if (iA + 1 == iB) {
+            ++i;
+            continue;
+        }
+
+        Vec2d a = positionGetter(points[iA], iA);
+        Vec2d b = positionGetter(points[iB], iB);
+        Vec2d ab = b - a;
+        double abLen = ab.length();
+
+        // Compute which sample between A and B has a position
+        // furthest from the line AB.
+        double maxDist = tolerance;
+        Int maxDistPointIndex = -1;
+        if (abLen > 0) {
+            for (Int j = iA + 1; j < iB; ++j) {
+                Vec2d p = positionGetter(points[j], j);
+                Vec2d ap = p - a;
+                double dist = (std::abs)(ab.det(ap) / abLen);
+                if (dist > maxDist) {
+                    maxDist = dist;
+                    maxDistPointIndex = j;
+                }
+            }
+        }
+        else {
+            for (Int j = iA + 1; j < iB; ++j) {
+                Vec2d p = positionGetter(points[j], j);
+                Vec2d ap = p - a;
+                double dist = ap.length();
+                if (dist > maxDist) {
+                    maxDist = dist;
+                    maxDistPointIndex = j;
+                }
+            }
+        }
+
+        // If the furthest point is too far from AB, then recurse.
+        // Otherwise, stop the recursion and move one to the next segment.
+        if (maxDistPointIndex != -1) {
+            // Add sample to the list of selected samples
+            indices.insert(i + 1, maxDistPointIndex);
+        }
+        else {
+            i = filterSculptPointsWidthStep(
+                points, indices, i, isClosed, tolerance, positionGetter, widthGetter);
+            //++i;
+        }
+    }
+    return i;
+}
+
+} // namespace
+
 void AbstractInterpolatingStroke2d::assignFromAverage_(
     core::ConstSpan<const AbstractStroke2d*> strokes,
     core::ConstSpan<bool> directions,
-    core::ConstSpan<double> offsets) {
+    core::ConstSpan<double> uOffsets,
+    bool areClosed) {
+
+    if (strokes.length() == 0) {
+        setPositions(Vec2dArray{});
+        setConstantWidth(0);
+        return;
+    }
 
     struct ThickPoint {
         Vec2d pos = {};
@@ -344,44 +491,39 @@ void AbstractInterpolatingStroke2d::assignFromAverage_(
             , u(sample.s() / arclen) {
         }
 
-        ThickPoint average(const ThickPoint& other, double u) {
-            return ThickPoint{0.5 * (pos + other.pos), 0.5 * (width + other.width), other.u};
-        }
-
-        ThickPoint lerp(const ThickPoint& other, double t) {
+        ThickPoint lerp(const ThickPoint& other, double t, double newU) {
             return ThickPoint{
-                (1. - t) * pos + t * other.pos,
-                (1. - t) * width + t * other.width,
-                (1. - t) * u + t * other.u};
+                (1. - t) * pos + t * other.pos, (1. - t) * width + t * other.width, newU};
         }
     };
 
-    if (strokes.length() != 2) {
-        // unsupported atm ?
-        return;
+    Int nStroke = strokes.length();
+    for (Int iStroke = 0; iStroke < nStroke; ++iStroke) {
+        if (strokes[iStroke]->isClosed() != areClosed) {
+            VGC_WARNING(
+                LogVgcGeometry,
+                "AbstractInterpolatingStroke2d::assignFromAverage_() expected "
+                "all source strokes to be {} according to the `areClosed` argument.",
+                (areClosed ? "closed" : "open"));
+            return;
+        }
     }
 
-    Int nStroke = strokes.length();
     core::Array<StrokeSample2dArray> sampleArrays;
     sampleArrays.reserve(nStroke);
-
-    bool isClosed0 = strokes[0]->isClosed();
 
     // offset/reverse arrays
     for (Int iStroke = 0; iStroke < nStroke; ++iStroke) {
 
-        if (strokes[iStroke]->isClosed() != isClosed0) {
-            VGC_WARNING(
-                LogVgcGeometry,
-                "AbstractInterpolatingStroke2d::assignFromAverage_() expected "
-                "source strokes to be all closed or all open.");
-            return;
-        }
+        // get samples
+        {
+            StrokeSampling2d sampling =
+                strokes[iStroke]->computeSampling(CurveSamplingQuality::AdaptiveLow);
 
-        StrokeSampling2d sampling =
-            strokes[iStroke]->computeSampling(CurveSamplingQuality::AdaptiveLow);
-        sampleArrays.append(sampling.stealSamples());
+            sampleArrays.append(sampling.stealSamples());
+        }
         StrokeSample2dArray& samples = sampleArrays.last();
+
         Int nSample = samples.length();
         if (nSample < 2) {
             continue;
@@ -389,63 +531,64 @@ void AbstractInterpolatingStroke2d::assignFromAverage_(
 
         double arclength = samples.last().s();
 
-        if (isClosed0) {
-            if (!offsets.isEmpty() && offsets[iStroke] > 0) {
-                double offset = offsets[iStroke];
-
-                Int iNewStart = 1;
-
-                for (; iNewStart < nSample; ++iNewStart) {
-                    if (samples[iNewStart].s() >= offset) {
-                        break;
-                    }
-                }
-
-                const geometry::StrokeSample2d& s1 = samples[iNewStart];
-
-                if (s1.s() != offset) {
-                    const geometry::StrokeSample2d& s0 = samples[iNewStart - 1];
-                    double ds = s1.s() - s0.s();
-                    double t = (offset - s0.s()) / ds;
-                    ThickPoint tpAtOffset =
-                        ThickPoint(s0, arclength).lerp(ThickPoint(s1, arclength), t);
-                    samples.emplace(
-                        iNewStart,
-                        tpAtOffset.pos,
-                        Vec2d(),
-                        Vec2d(),
-                        tpAtOffset.width * 0.5,
-                        offset);
-                }
-
-                // remove last
-                samples.pop();
-
-                // rotate
-                for (Int i = 0; i < iNewStart; ++i) {
-                    samples.getUnchecked(i).offsetS(-offset + arclength);
-                }
-                for (Int i = iNewStart; i < nSample; ++i) {
-                    samples.getUnchecked(i).offsetS(-offset);
-                }
-                std::rotate(samples.begin(), samples.begin() + iNewStart, samples.end());
-
-                // rebuild last
-                ThickPoint tpFirst(samples.first(), arclength);
-                samples.emplaceLast(
-                    tpFirst.pos, Vec2d(), Vec2d(), tpFirst.width * 0.5, arclength);
-            }
-        }
-
         if (!directions[iStroke]) {
             std::reverse(samples.begin(), samples.end());
             for (StrokeSample2d& sample : samples) {
                 sample.setS(arclength - sample.s());
             }
         }
+
+        if (areClosed && !uOffsets.isEmpty() && uOffsets[iStroke] > 0) {
+
+            double sOffset = uOffsets[iStroke] * arclength;
+
+            Int iNewStart = 1;
+
+            for (; iNewStart < nSample; ++iNewStart) {
+                if (samples[iNewStart].s() >= sOffset) {
+                    break;
+                }
+            }
+
+            const geometry::StrokeSample2d& s1 = samples[iNewStart];
+
+            if (s1.s() != sOffset) {
+                const geometry::StrokeSample2d& s0 = samples[iNewStart - 1];
+                ThickPoint p0(s0, arclength);
+                ThickPoint p1(s1, arclength);
+                double uOffset = sOffset / arclength;
+                double t = (uOffset - p0.u) / (p1.u - p0.u);
+                ThickPoint tpAtOffset = p0.lerp(p1, t, uOffset);
+                samples.emplace(
+                    iNewStart,
+                    tpAtOffset.pos,
+                    Vec2d(),
+                    Vec2d(),
+                    tpAtOffset.width * 0.5,
+                    sOffset);
+            }
+
+            // remove last
+            samples.pop();
+
+            // rotate
+            for (Int i = 0; i < iNewStart; ++i) {
+                samples.getUnchecked(i).offsetS(-sOffset + arclength);
+            }
+            for (Int i = iNewStart; i < nSample; ++i) {
+                samples.getUnchecked(i).offsetS(-sOffset);
+            }
+            std::rotate(samples.begin(), samples.begin() + iNewStart, samples.end());
+
+            // rebuild last
+            ThickPoint tpFirst(samples.first(), arclength);
+            samples.emplaceLast(
+                tpFirst.pos, Vec2d(), Vec2d(), tpFirst.width * 0.5, arclength);
+        }
     }
 
     core::Array<ThickPoint> newPoints;
+    core::Array<ThickPoint> tmp;
 
     double arclength0 = sampleArrays[0].last().s();
     newPoints.reserve(sampleArrays[0].length());
@@ -469,66 +612,60 @@ void AbstractInterpolatingStroke2d::assignFromAverage_(
             newPoints.reserve(n);
             for (const StrokeSample2d& sample : samples) {
                 ThickPoint tp(sample, arclength);
-                newPoints.append(tp0.average(tp, tp.u));
+                tp.pos += tp0.pos;
+                tp.width += tp0.width;
+                newPoints.append(tp);
             }
         }
         else if (samples.length() < 2) {
             ThickPoint tp0(samples[0], 1.);
             for (ThickPoint& tp : newPoints) {
-                tp = tp.average(tp0, tp.u);
+                tp.pos += tp0.pos;
+                tp.width += tp0.width;
             }
         }
         else {
-            // WIP
-
-            double l0 = samples0.last().s();
-            double l1 = samples1.last().s();
-
-            Int n0 = samples0.length();
-            Int n1 = samples1.length();
+            Int n0 = newPoints.length();
+            Int n1 = samples.length();
+            // curves share 2 values of u (0 at start and 1 at end).
             Int n = std::max<Int>(0, n0 - 2) + std::max<Int>(0, n1 - 2) + 2;
 
             // Compute an interpolation between the two curve with the given direction.
 
-            ThickPoint p0a = ThickPoint(samples0.first());
-            ThickPoint p1a = ThickPoint(samples1.first());
+            ThickPoint p0a = newPoints.first();
+            ThickPoint p1a = ThickPoint(samples.first(), arclength);
 
-            core::Array<ThickPoint> points0;
-            points0.reserve(n);
-            points0.append(p0a);
+            ThickPoint p01a = p0a;
+            p01a.pos += p1a.pos;
+            p01a.width += p1a.width;
 
-            core::Array<ThickPoint> points1;
-            points1.reserve(n);
-            points1.append(p1a);
+            tmp.reserve(n);
+            tmp.append(p01a);
 
-            double u0a = 0;
-            Int i0 = std::min<Int>(1, n0);
-            double u1a = 0;
-            Int i1 = std::min<Int>(1, n1);
+            Int i0 = 1;
+            Int i1 = 1;
 
             for (Int i = 1; i < n - 1; ++i) {
-                const StrokeSample2d& currentSample0 = samples0[i0];
-                const StrokeSample2d& currentSample1 = samples1[i1];
-                double u0b = currentSample0.s() / l0;
-                double u1b = currentSample1.s() / l1;
-                ThickPoint p0 = ThickPoint(currentSample0);
-                ThickPoint p1 = ThickPoint(currentSample1);
+                const ThickPoint& p0b = newPoints[i0];
+                ThickPoint p1b = ThickPoint(samples[i1], arclength);
                 bool canIterate0 = i0 < n0 - 1;
                 bool canIterate1 = i1 < n1 - 1;
-                if (canIterate1 && (u0b > u1b || !canIterate0)) {
-                    double t = (u1b - u0a) / (u0b - u0a);
-                    points0.append(p0a.lerp(p0, t));
-                    points1.append(p1);
-                    u1a = u1b;
-                    p1a = p1;
+                if (canIterate1 && (p0b.u > p1b.u || !canIterate0)) {
+                    double t = (p1b.u - p0a.u) / (p0b.u - p0a.u);
+                    ThickPoint tp = p0a.lerp(p0b, t, p1b.u);
+                    tp.pos += p1b.pos;
+                    tp.width += p1b.width;
+                    tmp.append(tp);
+                    p1a = p1b;
                     ++i1;
                 }
                 else if (canIterate0) {
-                    double t = (u0b - u1a) / (u1b - u1a);
-                    points0.append(p0);
-                    points1.append(p1a.lerp(p1, t));
-                    u0a = u0b;
-                    p0a = p0;
+                    double t = (p0b.u - p1a.u) / (p1b.u - p1a.u);
+                    ThickPoint tp = p1a.lerp(p1b, t, p0b.u);
+                    tp.pos += p0b.pos;
+                    tp.width += p0b.width;
+                    tmp.append(tp);
+                    p0a = p0b;
                     ++i0;
                 }
                 else {
@@ -537,27 +674,53 @@ void AbstractInterpolatingStroke2d::assignFromAverage_(
                 }
             }
 
-            points0.emplaceLast(samples0.last());
-            points1.emplaceLast(samples1.last());
-
-            newPoints.resizeNoInit(n);
-            for (Int i = 0; i < n; ++i) {
-                newPoints[i] = points0[i].average(points1[i]);
-            }
+            newPoints.append(newPoints.first());
+            newPoints.swap(tmp);
+            tmp.clear();
         }
+    }
+
+    for (ThickPoint& tp : newPoints) {
+        tp.pos /= nStroke;
+        tp.width /= nStroke;
+    }
+
+    double minWidth = core::DoubleMax;
+    double maxWidth = 0;
+    for (Int i = 0; i < newPoints.length(); ++i) {
+        double w = newPoints[i].width;
+        if (w < minWidth) {
+            minWidth = w;
+        }
+        if (w > maxWidth) {
+            maxWidth = w;
+        }
+    }
+
+    core::Array<Int> indices = {0, newPoints.length() - 1};
+    filterPointsStep<ThickPoint>(
+        newPoints,
+        indices,
+        0,
+        areClosed,
+        minWidth * 0.2,
+        [](const ThickPoint& tp, Int) { return tp.pos; },
+        [](const ThickPoint& tp, Int) { return tp.width; });
+
+    if (areClosed && indices.length() > 1) {
+        indices.removeLast();
     }
 
     core::Array<Vec2d> newPositions;
     core::Array<double> newWidths;
-    for (const ThickPoint& p : newPoints) {
-        newPositions.append(p.pos);
-        newWidths.append(p.width);
+    for (Int idx : indices) {
+        const ThickPoint& tp = newPoints[idx];
+        newPositions.append(tp.pos);
+        newWidths.append(tp.width);
     }
 
     setPositions(newPositions);
     setWidths(newWidths);
-    onPositionsChanged_();
-    onWidthsChanged_();
 }
 
 namespace {
@@ -964,135 +1127,6 @@ void computeSculptSampling(
     outSampling.ds1 = ds1;
     outSampling.radius = radius;
     outSampling.sMiddle = sMiddle;
-}
-
-template<typename TPoint, typename PositionGetter, typename WidthGetter>
-[[maybe_unused]] Int filterSculptPointsWidthStep(
-    core::Span<TPoint> points,
-    core::IntArray& indices,
-    Int intervalStart,
-    bool /*isClosed*/,
-    double /*tolerance*/,
-    PositionGetter positionGetter,
-    WidthGetter widthGetter) {
-
-    Int i = intervalStart;
-    Int endIndex = indices[i + 1];
-    while (indices[i] != endIndex) {
-        Int iA = indices[i];
-        Int iB = indices[i + 1];
-        if (iA + 1 == iB) {
-            ++i;
-            continue;
-        }
-
-        Vec2d a = positionGetter(points[iA], iA);
-        Vec2d b = positionGetter(points[iB], iB);
-        double wA = widthGetter(points[iA], iA);
-        double wB = widthGetter(points[iB], iB);
-
-        Vec2d ab = b - a;
-        double abLen = ab.length();
-
-        // Compute which sample between A and B has an offset point
-        // furthest from the offset line AB.
-        Int maxOffsetDiffPointIndex = -1;
-        if (abLen > 0) {
-            Vec2d dir = ab / abLen;
-            // Catmull-Rom is not a linear interpolation, since we don't
-            // compute the ground truth here we thus need a bigger threshold.
-            // For now we use X% of the width from linear interp. value.
-            for (Int j = iA + 1; j < iB; ++j) {
-                Vec2d p = positionGetter(points[j], j);
-                Vec2d ap = p - a;
-                double t = ap.dot(dir) / abLen;
-                double w = (1 - t) * wA + t * wB;
-                double dist = (std::abs)(w - widthGetter(points[j], j));
-                double maxOffsetDiff = w * 0.05;
-                if (dist > maxOffsetDiff) {
-                    maxOffsetDiff = dist;
-                    maxOffsetDiffPointIndex = j;
-                }
-            }
-        }
-        // If the distance exceeds the tolerance, then recurse.
-        // Otherwise, stop the recursion and move one to the next segment.
-        if (maxOffsetDiffPointIndex != -1) {
-            // Add sample to the list of selected samples
-            indices.insert(i + 1, maxOffsetDiffPointIndex);
-        }
-        else {
-            ++i;
-        }
-    }
-    return i;
-}
-
-template<typename TPoint, typename PositionGetter, typename WidthGetter>
-Int filterPointsStep(
-    core::Span<TPoint> points,
-    core::IntArray& indices,
-    Int intervalStart,
-    bool isClosed,
-    double tolerance,
-    PositionGetter positionGetter,
-    WidthGetter widthGetter) {
-
-    Int i = intervalStart;
-    Int endIndex = indices[i + 1];
-    while (indices[i] != endIndex) {
-        Int iA = indices[i];
-        Int iB = indices[i + 1];
-        if (iA + 1 == iB) {
-            ++i;
-            continue;
-        }
-
-        Vec2d a = positionGetter(points[iA], iA);
-        Vec2d b = positionGetter(points[iB], iB);
-        Vec2d ab = b - a;
-        double abLen = ab.length();
-
-        // Compute which sample between A and B has a position
-        // furthest from the line AB.
-        double maxDist = tolerance;
-        Int maxDistPointIndex = -1;
-        if (abLen > 0) {
-            for (Int j = iA + 1; j < iB; ++j) {
-                Vec2d p = positionGetter(points[j], j);
-                Vec2d ap = p - a;
-                double dist = (std::abs)(ab.det(ap) / abLen);
-                if (dist > maxDist) {
-                    maxDist = dist;
-                    maxDistPointIndex = j;
-                }
-            }
-        }
-        else {
-            for (Int j = iA + 1; j < iB; ++j) {
-                Vec2d p = positionGetter(points[j], j);
-                Vec2d ap = p - a;
-                double dist = ap.length();
-                if (dist > maxDist) {
-                    maxDist = dist;
-                    maxDistPointIndex = j;
-                }
-            }
-        }
-
-        // If the furthest point is too far from AB, then recurse.
-        // Otherwise, stop the recursion and move one to the next segment.
-        if (maxDistPointIndex != -1) {
-            // Add sample to the list of selected samples
-            indices.insert(i + 1, maxDistPointIndex);
-        }
-        else {
-            i = filterSculptPointsWidthStep(
-                points, indices, i, isClosed, tolerance, positionGetter, widthGetter);
-            //++i;
-        }
-    }
-    return i;
 }
 
 } // namespace
@@ -2380,6 +2414,8 @@ Vec2d AbstractInterpolatingStroke2d::sculptGrab_(
         }
     }
 
+    chordLengths_.clear();
+    segmentTypes_.clear();
     onPositionsChanged_();
     onWidthsChanged_();
 
@@ -2664,6 +2700,8 @@ void AbstractInterpolatingStroke2d::computePositionsS_(
 }
 
 void AbstractInterpolatingStroke2d::onPositionsChanged_() {
+    chordLengths_.clear();
+    segmentTypes_.clear();
     isCacheDirty_ = true;
 }
 

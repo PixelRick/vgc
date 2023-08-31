@@ -553,6 +553,11 @@ public:
         return offsetLineTangents_;
     }
 
+    template<size_t Side, VGC_REQUIRES(Side == 0 || Side == 1)>
+    const Vec2d& getOffsetLineTangent() const {
+        return offsetLineTangents_[Side];
+    }
+
     void setOffsetLineTangents(const std::array<Vec2d, 2>& offsetLineTangents) {
         offsetLineTangents_[0] = offsetLineTangents[0];
         offsetLineTangents_[1] = offsetLineTangents[1];
@@ -933,16 +938,27 @@ public:
     }
 
     /// Assigns to `this` the average of the `strokes`.
-    /// Prior to averaging and for each stroke in order:
-    /// - parameterization [0, s] is rotated by the given offset (only if closed).
+    /// Prior to averaging and for each stroke:
     /// - parameterization is reversed according to its given direction.
     ///
-    void assignFromAverage(
+    void assignFromAverageOpen(
+        core::ConstSpan<const AbstractStroke2d*> strokes,
+        core::ConstSpan<bool> directions) {
+
+        assignFromAverage_(strokes, directions, core::ConstSpan<double>(), false);
+    }
+
+    /// Assigns to `this` the average of the `strokes`.
+    /// Prior to averaging and for each closed stroke in order:
+    /// - parameterization is reversed according to its given direction.
+    /// - parameterization [0, 1] is rotated by the given offset.
+    ///
+    void assignFromAverageClosed(
         core::ConstSpan<const AbstractStroke2d*> strokes,
         core::ConstSpan<bool> directions,
-        core::ConstSpan<double> sOffsets) {
+        core::ConstSpan<double> uOffsets) {
 
-        assignFromAverage_(strokes, directions, sOffsets);
+        assignFromAverage_(strokes, directions, uOffsets, true);
     }
 
     /// Expects positions in object space.
@@ -1072,7 +1088,8 @@ protected:
     virtual void assignFromAverage_(
         core::ConstSpan<const AbstractStroke2d*> strokes,
         core::ConstSpan<bool> directions,
-        core::ConstSpan<double> sOffsets) = 0;
+        core::ConstSpan<double> uOffsets,
+        bool areClosed) = 0;
 
     virtual bool snap_(
         const Vec2d& snapStartPosition,

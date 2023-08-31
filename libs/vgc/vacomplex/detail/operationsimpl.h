@@ -98,14 +98,22 @@ public:
     // Assumes `khes` does not contain more than one halfedge for any edge.
     //
     KeyEdge* glueKeyOpenEdges(
-        core::ConstSpan<KeyHalfedge> khes,
-        const geometry::Vec2d& startPosition,
-        const geometry::Vec2d& endPosition);
+        core::ConstSpan<KeyHalfedge> khes);
+
+    // Assumes `kes` does not contain any edge more than once.
+    //
+    KeyEdge* glueKeyOpenEdges(
+        core::ConstSpan<KeyEdge*> kes);
 
     // Assumes `khes` does not contain more than one halfedge for any edge.
     //
     KeyEdge* glueKeyClosedEdges( //
         core::ConstSpan<KeyHalfedge> khes);
+
+    // Assumes `kes` does not contain any edge more than once.
+    //
+    KeyEdge* glueKeyClosedEdges(
+        core::ConstSpan<KeyEdge*> kes);
 
     core::Array<KeyEdge*> unglueKeyEdges(KeyEdge* ke);
     core::Array<KeyVertex*> unglueKeyVertices(
@@ -227,6 +235,12 @@ private:
     };
 
     UncutAtKeyEdgeInfo_ prepareUncutAtKeyEdge_(KeyEdge* ke);
+
+    KeyEdge* glueKeyOpenEdges_(
+        core::ConstSpan<KeyHalfedge> khes);
+
+    KeyEdge* glueKeyClosedEdges_(
+        core::ConstSpan<KeyHalfedge> khes, core::ConstSpan<double> uOffsets);
 
     Int countSteinerUses_(KeyVertex* kv);
 

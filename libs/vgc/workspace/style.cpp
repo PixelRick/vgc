@@ -19,18 +19,21 @@
 
 namespace vgc::workspace {
 
-CellStyle::OpResult CellStyle::onTranslateGeometry_(const geometry::Vec2d& delta) {
+CellStyle::OpResult CellStyle::onTranslateGeometry_(const geometry::Vec2d& /*delta*/) {
     // XXX: gradient ?
+    return OpResult::Unchanged;
 }
 
 CellStyle::OpResult
-CellStyle::onTransformGeometry_(const geometry::Mat3d& transformation) {
+CellStyle::onTransformGeometry_(const geometry::Mat3d& /*transformation*/) {
     // XXX: gradient ?
+    return OpResult::Unchanged;
 }
 
 CellStyle::OpResult
-CellStyle::onUpdateGeometry_(const geometry::AbstractStroke2d* newStroke) {
+CellStyle::onUpdateGeometry_(const geometry::AbstractStroke2d* /*newStroke*/) {
     // XXX: something to do ?
+    return OpResult::Unchanged;
 }
 
 std::unique_ptr<vacomplex::CellProperty> CellStyle::fromConcatStep_(
@@ -116,11 +119,12 @@ CellStyle::OpResult CellStyle::finalizeConcat_() {
         concatArray_.clear();
         return OpResult::Success;
     }
+    return OpResult::Unchanged;
 }
 
 std::unique_ptr<vacomplex::CellProperty> CellStyle::fromGlue_(
     core::ConstSpan<vacomplex::KeyHalfedgeData> khds,
-    const geometry::AbstractStroke2d* gluedStroke) const {
+    const geometry::AbstractStroke2d* /*gluedStroke*/) const {
 
     // currently mixing colors weighted by arclength
 
@@ -132,12 +136,12 @@ std::unique_ptr<vacomplex::CellProperty> CellStyle::fromGlue_(
         if (data && data->stroke()) {
             double w = data->stroke()->approximateLength();
             const CellStyle* s = static_cast<const CellStyle*>(data->findProperty(strings::style));
-            result->style_.color += w * (s ? s->style_ : defaultStyle).color;
+            result->style_.color += static_cast<float>(w) * (s ? s->style_ : defaultStyle).color;
             d += w;
         }
     }
     if (d > 0) {
-        result->style_.color /= d;
+        result->style_.color /= static_cast<float>(d);
     }
     else {
         result->style_ = defaultStyle;

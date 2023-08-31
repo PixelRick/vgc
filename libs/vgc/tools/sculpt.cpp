@@ -521,11 +521,7 @@ public:
             if (ke) {
                 vacomplex::KeyEdgeData* data = ke->data();
                 if (data) {
-                    if (started_) {
-                        *data = *oldData_;
-                        editStroke_->copyAssign(oldData_->stroke());
-                    }
-                    else {
+                    if (!started_) {
                         oldData_ = data->clone();
                         editStroke_ = oldData_->stroke()->clone();
                         started_ = true;

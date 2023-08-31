@@ -110,8 +110,6 @@ public:
     template<typename TRange>
     void setPositions(TRange&& positions) {
         positions_ = std::forward<TRange>(positions);
-        chordLengths_.clear();
-        segmentTypes_.clear();
         onPositionsChanged_();
     }
 
@@ -165,7 +163,7 @@ protected:
     std::unique_ptr<AbstractStroke2d> cloneEmpty_() const override = 0;
     std::unique_ptr<AbstractStroke2d> clone_() const override = 0;
     std::unique_ptr<AbstractStroke2d>
-    convert_(const AbstractStroke2d* source) const override = 0;
+    convert_(const AbstractStroke2d* source) const override;
 
     bool copyAssign_(const AbstractStroke2d* other) override = 0;
     bool moveAssign_(AbstractStroke2d* other) override = 0;
@@ -197,7 +195,8 @@ protected:
     virtual void assignFromAverage_(
         core::ConstSpan<const AbstractStroke2d*> strokes,
         core::ConstSpan<bool> directions,
-        core::ConstSpan<double> offsets) override;
+        core::ConstSpan<double> uOffsets,
+        bool areClosed) override;
 
     bool snap_(
         const geometry::Vec2d& snapStartPosition,
