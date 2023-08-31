@@ -603,7 +603,7 @@ void AbstractInterpolatingStroke2d::assignFromAverage_(
 
     for (Int iStroke = 1; iStroke < nStroke; ++iStroke) {
 
-        const StrokeSample2dArray& samples = sampleArrays[1];
+        const StrokeSample2dArray& samples = sampleArrays[iStroke];
         double arclength = samples.last().s();
 
         if (newPoints.length() < 2) {
