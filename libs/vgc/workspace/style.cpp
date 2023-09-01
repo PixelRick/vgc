@@ -97,7 +97,6 @@ std::unique_ptr<vacomplex::CellProperty> CellStyle::fromConcatStep_(
 }
 
 CellStyle::OpResult CellStyle::finalizeConcat_() {
-
     if (!concatArray_.isEmpty()) {
         // for now, we take the longest edge style
         double maxWeight = 0;
@@ -126,27 +125,35 @@ std::unique_ptr<vacomplex::CellProperty> CellStyle::fromGlue_(
     core::ConstSpan<vacomplex::KeyHalfedgeData> khds,
     const geometry::AbstractStroke2d* /*gluedStroke*/) const {
 
-    // currently mixing colors weighted by arclength
+    // use color used the most arclength-wise
 
-    auto result = std::make_unique<CellStyle>();
-    double d = 0;
+    std::map<core::Color, double> arclengthByColor;
+
     Style defaultStyle = {}; // XXX: default style
+
     for (const vacomplex::KeyHalfedgeData& khd : khds) {
         vacomplex::KeyEdgeData* data = khd.edgeData();
         if (data && data->stroke()) {
-            double w = data->stroke()->approximateLength();
-            const CellStyle* s = static_cast<const CellStyle*>(data->findProperty(strings::style));
-            result->style_.color += static_cast<float>(w) * (s ? s->style_ : defaultStyle).color;
-            d += w;
+            double arclength = data->stroke()->approximateLength();
+            const CellStyle* cellStyle =
+                static_cast<const CellStyle*>(data->findProperty(strings::style));
+            core::Color c = (cellStyle ? cellStyle->style_ : defaultStyle).color;
+            arclengthByColor.try_emplace(c, 0).first->second += arclength;
         }
     }
-    if (d > 0) {
-        result->style_.color /= static_cast<float>(d);
+
+    auto result = std::make_unique<CellStyle>();
+    if (!arclengthByColor.empty()) {
+        auto it = std::max_element(
+            arclengthByColor.begin(),
+            arclengthByColor.end(),
+            [](const auto& a, const auto& b) { return a.second < b.second; });
+        result->style_.color = it->first;
     }
     else {
         result->style_ = defaultStyle;
     }
-    
+
     return result;
 }
 

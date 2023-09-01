@@ -291,7 +291,7 @@ const VacKeyEdgeFrameData* VacKeyEdge::computeFrameData(VacEdgeComputationStage 
     bool success = true;
     switch (stage) {
     case VacEdgeComputationStage::StrokeMesh:
-        success = computeStrokeMesh_();
+        success = computeStrokeMesh_() && computeStrokeStyle_();
         break;
     case VacEdgeComputationStage::PreJoinGeometry:
         success = computePreJoinGeometry_();
@@ -316,6 +316,7 @@ VacKeyEdge::computeFrameDataAt(core::AnimTime t, VacEdgeComputationStage stage) 
 void VacKeyEdge::onPaintPrepare(core::AnimTime /*t*/, PaintOptions /*flags*/) {
     // todo, use paint options to not compute everything or with lower quality
     computeStrokeMesh_();
+    computeStrokeStyle_();
 }
 
 void VacKeyEdge::onPaintDraw(
@@ -350,7 +351,8 @@ void VacKeyEdge::onPaintDraw(
         (isPaintingOutline || isSelected
          || flags.hasAny({PaintOption::Hovered, PaintOption::Editing}));
 
-    // TODO: reuse buffers and geometry views
+    // XXX: reuse buffers and geometry views
+    // reuse geometry objects, create buffers separately (attributes waiting in EdgeGraphics).
 
     VacKeyEdgeFrameData& data = frameData_;
     vacomplex::KeyEdge* ke = vacKeyEdgeNode();
@@ -362,19 +364,16 @@ void VacKeyEdge::onPaintDraw(
 
     // if not already done (should we leave preparePaint_ optional?)
     const_cast<VacKeyEdge*>(this)->computeStrokeMesh_();
+    const_cast<VacKeyEdge*>(this)->computeStrokeStyle_();
 
     using namespace graphics;
     namespace ds = dom::strings;
 
-    const dom::Element* const domElement = this->domElement();
-    // XXX "implicit" cells' domElement would be the composite ?
-
-    // XXX todo: reuse geometry objects, create buffers separately (attributes waiting in EdgeGraphics).
-
-    core::Color color = domElement->getAttribute(ds::color).getColor();
-
     EdgeGraphics& graphics = data.graphics_;
     bool hasNewStrokeGraphics = false;
+
+    bool hasPendingColorUpdate = !graphics.hasStyle();
+    core::Color color = data.color();
 
     if (isPaintingStroke && !graphics.strokeGeometry()) {
         hasNewStrokeGraphics = true;
@@ -418,8 +417,7 @@ void VacKeyEdge::onPaintDraw(
         //    graphics.joinGeometry()->indexBuffer(), //
         //    std::move(joinIndices));
     }
-    if (graphics.strokeGeometry()
-        && (data.hasPendingColorChange_ || hasNewStrokeGraphics)) {
+    if (graphics.strokeGeometry() && (hasPendingColorUpdate || hasNewStrokeGraphics)) {
         engine->updateBufferData(
             graphics.strokeGeometry()->vertexBuffer(1), //
             core::Array<float>({color.r(), color.g(), color.b(), color.a()}));
@@ -555,7 +553,7 @@ void VacKeyEdge::onPaintDraw(
     }
 
     if (graphics.selectionGeometry()
-        && (data.hasPendingColorChange_ || hasNewCenterlineGraphics)) {
+        && (hasPendingColorUpdate || hasNewCenterlineGraphics)) {
         const core::Color& c = colors::selection;
         float hw = selectionCenterlineThickness * 0.5f;
         core::FloatArray bufferData = {0.f, 0.f, 1.f, hw, c.r(), c.g(), c.b(), c.a()};
@@ -614,7 +612,7 @@ void VacKeyEdge::onPaintDraw(
         }
     }
 
-    data.hasPendingColorChange_ = false;
+    graphics.setStyle();
 
     if (isPaintingStroke) {
         engine->setProgram(graphics::BuiltinProgram::Simple /*TexturedDebug*/);
@@ -674,7 +672,7 @@ ElementStatus VacKeyEdge::onDependencyRemoved_(Element* dependency) {
 /* static */
 bool VacKeyEdge::updateStrokeFromDom_(
     vacomplex::KeyEdgeData* data,
-    dom::Element* domElement) {
+    const dom::Element* domElement) {
 
     // XXX: We can forward the changed attribute names up to here. Should we do it ?
     // TODO: add something better to skip update if geometry attributes didn't change.
@@ -708,7 +706,7 @@ bool VacKeyEdge::updateStrokeFromDom_(
 /* static */
 void VacKeyEdge::writeStrokeToDom_(
     dom::Element* domElement,
-    vacomplex::KeyEdgeData* data) {
+    const vacomplex::KeyEdgeData* data) {
     namespace ds = dom::strings;
 
     auto stroke = dynamic_cast<const geometry::CatmullRomSplineStroke2d*>(data->stroke());
@@ -733,7 +731,7 @@ void VacKeyEdge::clearStrokeFromDom_(dom::Element* domElement) {
 
 bool VacKeyEdge::updatePropertiesFromDom_(
     vacomplex::KeyEdgeData* data,
-    dom::Element* domElement) {
+    const dom::Element* domElement) {
 
     bool styleChanged = false;
 
@@ -745,11 +743,11 @@ bool VacKeyEdge::updatePropertiesFromDom_(
                 static_cast<const CellStyle*>(data->findProperty(strings::style));
             auto newStyle = std::make_unique<CellStyle>();
             const auto& color = value.getColor();
-            if (oldStyle && oldStyle->color() != color) {
+            if (!oldStyle || oldStyle->color() != color) {
                 newStyle->setColor(color);
+                data->insertProperty(std::move(newStyle));
                 styleChanged = true;
             }
-            data->insertProperty(std::move(newStyle));
         }
         else {
             data->removeProperty(strings::style);
@@ -919,7 +917,7 @@ ElementStatus VacKeyEdge::updateFromDom_(Workspace* workspace) {
         setVacNode(ke);
     }
     else {
-        auto data = ke->data();
+        vacomplex::KeyEdgeData* data = ke->data();
         if (!data || !updateStrokeFromDom_(data, domElement)) {
             hasGeometryChanged = false;
         }
@@ -937,13 +935,15 @@ ElementStatus VacKeyEdge::updateFromDom_(Workspace* workspace) {
         dirtyPostJoinGeometry_(false);
     }
 
-    bool styleChanged = updatePropertiesFromDom_(ke->data(), domElement);
-    if (styleChanged) {
-        const CellStyle* style =
-            static_cast<const CellStyle*>(ke->data()->findProperty(strings::style));
-        frameData_.color_ = style ? style->color() : core::Color();
-        frameData_.hasPendingColorChange_ = true;
-        notifyChanges_({ChangeFlag::Color}, false);
+    vacomplex::KeyEdgeData* data = ke->data();
+    if (data) {
+        bool styleChanged = updatePropertiesFromDom_(data, domElement);
+        if (styleChanged) {
+            dirtyStrokeStyle_(false);
+        }
+    }
+    else {
+        // missing data
     }
 
     notifyChanges_({}, true);
@@ -968,7 +968,7 @@ void VacKeyEdge::updateFromVac_(vacomplex::NodeModificationFlags flags) {
         return;
     }
 
-    auto data = ke->data();
+    vacomplex::KeyEdgeData* data = ke->data();
 
     if (flags.has(vacomplex::NodeModificationFlag::GeometryChanged)) {
         if (data) {
@@ -1000,11 +1000,7 @@ void VacKeyEdge::updateFromVac_(vacomplex::NodeModificationFlags flags) {
             }
             bool hasStyleChanged = true;
             if (hasStyleChanged) {
-                const CellStyle* style =
-                    static_cast<const CellStyle*>(data->findProperty(strings::style));
-                frameData_.color_ = style ? style->color() : core::Color();
-                frameData_.hasPendingColorChange_ = true;
-                notifyChanges_({ ChangeFlag::Color }, false);
+                dirtyStrokeStyle_(false);
             }
         }
     }
@@ -1085,6 +1081,41 @@ void VacKeyEdge::notifyChanges_(ChangeFlags changes, bool immediately) {
     }
 }
 
+bool VacKeyEdge::computeStrokeStyle_() {
+    VacKeyEdgeFrameData& data = frameData_;
+    if (!data.isStyleDirty_) {
+        return true;
+    }
+
+    vacomplex::KeyEdge* ke = vacKeyEdgeNode();
+    if (!ke) {
+        return false;
+    }
+    vacomplex::KeyEdgeData* kd = ke->data();
+    if (!kd) {
+        return false;
+    }
+
+    const vacomplex::CellProperty* styleProp = kd->findProperty(strings::style);
+    const CellStyle* style = dynamic_cast<const CellStyle*>(styleProp);
+
+    // XXX: default style instead of core::Color()
+    data.color_ = style ? style->color() : core::Color();
+
+    alreadyNotifiedChanges_.unset(ChangeFlag::EdgePreJoinGeometry);
+    data.isStyleDirty_ = false;
+    return true;
+}
+
+void VacKeyEdge::dirtyStrokeStyle_(bool notifyDependentsImmediately) {
+    VacKeyEdgeFrameData& data = frameData_;
+    if (!data.isStyleDirty_) {
+        data.isStyleDirty_ = true;
+        data.graphics_.clearStyle();
+        notifyChanges_({ChangeFlag::Style}, notifyDependentsImmediately);
+    }
+}
+
 bool VacKeyEdge::computePreJoinGeometry_() {
     VacKeyEdgeFrameData& data = frameData_;
     if (data.stage_ >= VacEdgeComputationStage::PreJoinGeometry) {
@@ -1096,9 +1127,16 @@ bool VacKeyEdge::computePreJoinGeometry_() {
     if (!ke) {
         return false;
     }
+    vacomplex::KeyEdgeData* kd = ke->data();
+    if (!kd) {
+        return false;
+    }
 
-    auto interpStroke = dynamic_cast<const geometry::AbstractInterpolatingStroke2d*>(
-        ke->data()->stroke());
+    auto interpStroke =
+        dynamic_cast<const geometry::AbstractInterpolatingStroke2d*>(kd->stroke());
+
+    data.isComputing_ = true;
+
     if (interpStroke) {
         for (const geometry::Vec2d& p : interpStroke->positions()) {
             controlPoints_.emplaceLast(geometry::Vec2f(p));
@@ -1107,8 +1145,6 @@ bool VacKeyEdge::computePreJoinGeometry_() {
     else {
         controlPoints_.clear();
     }
-
-    data.isComputing_ = true;
 
     data.sampling_ = ke->strokeSamplingShared();
     data.bbox_ = ke->centerlineBoundingBox();

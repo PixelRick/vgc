@@ -106,8 +106,7 @@ enum class ChangeFlag : UInt {
     EdgePostJoinGeometry = 0x04,
     EdgeStrokeMesh = 0x08,
     FaceFillMesh = 0x10,
-    Color = 0x20,
-    Style = 0x40,
+    Style = 0x20,
     EdgeGeometry = EdgePreJoinGeometry | EdgePostJoinGeometry | EdgeStrokeMesh,
 };
 VGC_DEFINE_FLAGS(ChangeFlags, ChangeFlag)

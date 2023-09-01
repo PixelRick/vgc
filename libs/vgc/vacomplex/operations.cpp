@@ -275,12 +275,12 @@ Complex* checkGlueKeyEdges_(core::ConstSpan<KeyEdge*> kes) {
         }
         if (ke->complex() != complex) {
             throw LogicError(core::format( //
-                "{}: a key halfedge is from a different complex than the others.",
+                "{}: a key edge is from a different complex than the others.",
                 opName));
         }
         if (ke->time() != t0) {
             throw LogicError(core::format( //
-                "{}: a key halfedge is from a different time than the others.",
+                "{}: a key edge is from a different time than the others.",
                 opName));
         }
     }

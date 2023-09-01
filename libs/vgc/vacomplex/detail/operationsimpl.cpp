@@ -928,6 +928,10 @@ bool Operations::uncutAtKeyVertex(KeyVertex* targetKv, bool smoothJoin) {
         else {
             kv2 = info.khe2.startVertex();
         }
+        if (!ked1 || !ked2) {
+            // missing geometry
+            return false;
+        }
         KeyHalfedgeData khd1(ked1, dir1);
         KeyHalfedgeData khd2(ked2, dir2);
         std::unique_ptr<KeyEdgeData> concatData =
@@ -1533,7 +1537,12 @@ KeyEdge* Operations::glueKeyOpenEdges_(core::ConstSpan<KeyHalfedge> khs) {
     core::Array<KeyHalfedgeData> khds;
     khds.reserve(n);
     for (const KeyHalfedge& kh : khs) {
-        khds.emplaceLast(kh.edge()->data(), kh.direction());
+        KeyEdgeData* kd = kh.edge()->data();
+        if (!kd) {
+            // missing data
+            return nullptr;
+        }
+        khds.emplaceLast(kd, kh.direction());
     }
     std::unique_ptr<KeyEdgeData> newData = KeyEdgeData::fromGlueOpen(khds);
     VGC_ASSERT(newData && newData->stroke());
@@ -1544,7 +1553,6 @@ KeyEdge* Operations::glueKeyOpenEdges_(core::ConstSpan<KeyHalfedge> khs) {
     startVertices.reserve(n);
     for (const KeyHalfedge& kh : khs) {
         startVertices.append(kh.startVertex());
-        khds.emplaceLast(kh.edge()->data(), kh.direction());
     }
     KeyVertex* startKv = glueKeyVertices(startVertices, endPositions[0]);
 
@@ -1560,8 +1568,12 @@ KeyEdge* Operations::glueKeyOpenEdges_(core::ConstSpan<KeyHalfedge> khs) {
         // collapsing start and end to single vertex
         endVertexPosition = 0.5 * (endPositions[0] + endVertexPosition);
         newData->snap(endVertexPosition, endVertexPosition);
+        startKv = nullptr;
     }
     KeyVertex* endKv = glueKeyVertices(endVertices, endVertexPosition);
+    if (!startKv) {
+        startKv = endKv;
+    }
 
     // Location: top-most input edge
     core::Array<Node*> edgeNodes(n);
@@ -1603,7 +1615,12 @@ KeyEdge* Operations::glueKeyClosedEdges_(
     khds.reserve(n);
     for (const KeyHalfedge& kh : khs) {
         edgeNodes.append(kh.edge());
-        khds.emplaceLast(kh.edge()->data(), kh.direction());
+        KeyEdgeData* kd = kh.edge()->data();
+        if (!kd) {
+            // missing data
+            return nullptr;
+        }
+        khds.emplaceLast(kd, kh.direction());
     }
 
     Node* topMostEdge = findTopMost(edgeNodes);

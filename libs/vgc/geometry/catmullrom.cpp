@@ -309,7 +309,15 @@ computeOffsetLineTangents(const PointData& pData, const WidthData& wData) {
     Vec2d dn = dp * pData.curvature;
     Vec2d offset0 = dn * wData.w[0] + n * wData.dw[0];
     Vec2d offset1 = -(dn * wData.w[1] + n * wData.dw[1]);
-    return {(dp + offset0).normalized(), (dp + offset1).normalized()};
+    Vec2d t0 = (dp + offset0).normalized();
+    Vec2d t1 = (dp + offset1).normalized();
+    if (!std::isnormal(t0.x()) || !std::isnormal(t0.y())) {
+        t0 = Vec2d();
+    }
+    if (!std::isnormal(t1.x()) || !std::isnormal(t1.y())) {
+        t1 = Vec2d();
+    }
+    return {t0, t1};
 }
 
 } // namespace
@@ -330,9 +338,11 @@ StrokeBoundaryInfo CatmullRomSplineStroke2d::computeBoundaryInfo_() const {
         WidthData wData0 = computeSegmentEndWidthData(halfwidthBezier0, 0);
         WidthData wData1 = computeSegmentEndWidthData(halfwidthBezier1, 1);
 
-        result[0] = StrokeEndInfo(pData0.p, pData0.dp / pData0.speed, wData0.w);
+        result[0] = StrokeEndInfo(
+            pData0.p, pData0.speed != 0 ? (pData0.dp / pData0.speed) : Vec2d(0, 1), wData0.w);
         result[0].setOffsetLineTangents(computeOffsetLineTangents(pData0, wData0));
-        result[1] = StrokeEndInfo(pData1.p, pData1.dp / pData1.speed, wData1.w);
+        result[1] = StrokeEndInfo(
+            pData1.p, pData1.speed != 0 ? (pData1.dp / pData1.speed) : Vec2d(0, 1), wData1.w);
         result[1].setOffsetLineTangents(computeOffsetLineTangents(pData1, wData1));
     }
     else if (this->numKnots() > 0) {

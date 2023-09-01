@@ -34,11 +34,12 @@ public:
     }
 
     const core::Color& color() const {
+        const_cast<CellStyle*>(this)->finalizeConcat_();
         return style_.color;
     }
 
     void setColor(const core::Color& color) {
-        finalizeConcat_();
+        concatArray_.clear();
         style_.color = color;
     }
 
