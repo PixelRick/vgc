@@ -24,6 +24,7 @@
 #include <vgc/vacomplex/api.h>
 #include <vgc/vacomplex/cell.h>
 #include <vgc/vacomplex/keycycle.h>
+#include <vgc/vacomplex/keyfacedata.h>
 
 namespace vgc::vacomplex {
 
@@ -58,6 +59,9 @@ private:
 
     explicit KeyFace(core::Id id, core::AnimTime t) noexcept
         : SpatioTemporalCell(id, t) {
+
+        detail::CellPropertiesPrivateInterface::setOwningCell(
+            &data_.properties(), this);
     }
 
 public:
@@ -67,8 +71,13 @@ public:
         return cycles_;
     }
 
+    KeyFaceData& data() const {
+        return data_;
+    }
+
 private:
     core::Array<KeyCycle> cycles_;
+    mutable KeyFaceData data_;
 
     void substituteKeyVertex_(KeyVertex* oldVertex, KeyVertex* newVertex) override;
 

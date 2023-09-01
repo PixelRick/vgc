@@ -74,8 +74,6 @@ public:
     KeyEdgeData& operator=(const KeyEdgeData& other);
     KeyEdgeData& operator=(KeyEdgeData&& other) noexcept;
 
-    ~KeyEdgeData() override;
-
     std::unique_ptr<KeyEdgeData> clone() const;
 
     KeyEdge* keyEdge() const;

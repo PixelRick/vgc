@@ -60,10 +60,6 @@ KeyEdgeData& KeyEdgeData::operator=(KeyEdgeData&& other) noexcept {
     return *this;
 }
 
-KeyEdgeData::~KeyEdgeData() {
-    // default destruction
-}
-
 std::unique_ptr<KeyEdgeData> KeyEdgeData::clone() const {
     return std::make_unique<KeyEdgeData>(*this);
 }

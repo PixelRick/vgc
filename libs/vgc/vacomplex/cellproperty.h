@@ -104,6 +104,10 @@ protected:
     virtual std::unique_ptr<CellProperty>
     fromConcatStep_(const KeyHalfedgeData& khd1, const KeyHalfedgeData& khd2) const;
 
+    // Returns a null pointer by default.
+    virtual std::unique_ptr<CellProperty>
+    fromConcatStep_(const KeyFaceData& kfd1, const KeyFaceData& kfd2) const;
+
     // Returns OpResult::Unchanged by default.
     virtual OpResult finalizeConcat_();
 
@@ -169,8 +173,8 @@ public:
     void onTransformGeometry(const geometry::Mat3d& transformation);
     void onUpdateGeometry(const geometry::AbstractStroke2d* newStroke);
 
-    // Returns a null pointer by default.
     void assignFromConcatStep(const KeyHalfedgeData& khd1, const KeyHalfedgeData& khd2);
+    void assignFromConcatStep(const KeyFaceData& kfd1, const KeyFaceData& kfd2);
 
     void finalizeConcat();
 
