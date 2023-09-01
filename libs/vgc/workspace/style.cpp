@@ -98,23 +98,29 @@ std::unique_ptr<vacomplex::CellProperty> CellStyle::fromConcatStep_(
 
 CellStyle::OpResult CellStyle::finalizeConcat_() {
     if (!concatArray_.isEmpty()) {
-        // for now, we take the longest edge style
-        double maxWeight = 0;
-        Int maxWeightIndex = -1;
-        Int i = 0;
+        // use color used the most arclength-wise
+
+        std::map<core::Color, double> wByColor;
+
+        Style defaultStyle = {}; // XXX: default style
+
         for (const StyleConcatEntry& entry : concatArray_) {
-            if (entry.sourceWeight > maxWeight) {
-                maxWeight = entry.sourceWeight;
-                maxWeightIndex = i;
-            }
-            ++i;
+            double w = entry.sourceWeight;
+            core::Color c = entry.style.value_or(defaultStyle).color;
+            wByColor.try_emplace(c, 0).first->second += w;
         }
-        if (maxWeightIndex < 0 || !concatArray_[maxWeightIndex].style.has_value()) {
-            style_ = Style(); // XXX: default style
+
+        if (!wByColor.empty()) {
+            auto it = std::max_element(
+                wByColor.begin(),
+                wByColor.end(),
+                [](const auto& a, const auto& b) { return a.second < b.second; });
+            style_.color = it->first;
         }
         else {
-            style_ = concatArray_[maxWeightIndex].style.value();
+            style_ = defaultStyle;
         }
+
         concatArray_.clear();
         return OpResult::Success;
     }

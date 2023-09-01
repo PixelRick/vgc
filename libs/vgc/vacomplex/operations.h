@@ -119,6 +119,9 @@ core::Array<KeyVertex*> unglueKeyVertices(
     KeyVertex* kv,
     core::Array<std::pair<core::Id, core::Array<KeyEdge*>>>& ungluedKeyEdges);
 
+VGC_VACOMPLEX_API
+KeyEdge* uncutAtKeyVertex(KeyVertex* kv, bool smoothJoin);
+
 /// Throws `NotAChildError` if `nextSibling` is not a child of `parentGroup` or `nullptr`.
 // XXX should check if node belongs to same VAC.
 VGC_VACOMPLEX_API

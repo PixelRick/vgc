@@ -229,6 +229,19 @@ void AbstractInterpolatingStroke2d::transform_(const Mat3d& transformation) {
     onPositionsChanged_();
 }
 
+void AbstractInterpolatingStroke2d::close_(bool smoothJoin) {
+    if (positions_.length() > 1) {
+        if (smoothJoin && positions_.last() == positions_.first()) {
+            positions_.removeLast();
+            onPositionsChanged_();
+            if (!hasConstantWidth_) {
+                widths_.removeLast();
+                onWidthsChanged_();
+            }
+        }
+    }
+}
+
 void AbstractInterpolatingStroke2d::reverse_() {
     std::reverse(positions_.begin(), positions_.end());
     onPositionsChanged_();

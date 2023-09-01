@@ -154,7 +154,7 @@ std::unique_ptr<KeyEdgeData> KeyEdgeData::fromConcatStep(
     }
     std::unique_ptr<geometry::AbstractStroke2d> concatStroke = st1->cloneEmpty();
     concatStroke->assignFromConcat(
-        st1, !khd1.direction(), st2, !khd1.direction(), smoothJoin);
+        st1, khd1.direction(), st2, khd2.direction(), smoothJoin);
 
     auto result = std::make_unique<KeyEdgeData>(ked1->isClosed());
     result->setStroke(std::move(concatStroke));

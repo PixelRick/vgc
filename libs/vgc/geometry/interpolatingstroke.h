@@ -183,6 +183,8 @@ protected:
 
     void transform_(const geometry::Mat3d& transformation) override;
 
+    void close_(bool smoothJoin) override;
+
     void reverse_() override;
 
     void assignFromConcat_(

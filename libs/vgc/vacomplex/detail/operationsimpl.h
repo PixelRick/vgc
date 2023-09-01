@@ -117,6 +117,9 @@ public:
         KeyVertex* kv,
         core::Array<std::pair<core::Id, core::Array<KeyEdge*>>>& ungluedKeyEdges);
 
+    KeyEdge* uncutAtKeyVertex(KeyVertex* kv, bool smoothJoin);
+    bool uncutAtKeyEdge(KeyEdge* ke);
+
     void moveToGroup(Node* node, Group* parentGroup, Node* nextSibling = nullptr);
     void moveBelowBoundary(Node* node);
 
@@ -213,6 +216,28 @@ private:
     KeyEdge* glueKeyClosedEdges_(
         core::ConstSpan<KeyHalfedge> khes,
         core::ConstSpan<double> uOffsets);
+
+    struct UncutAtKeyVertexInfo_ {
+        KeyFace* kf = nullptr;
+        Int cycleIndex = 0;
+        KeyHalfedge khe1 = {};
+        KeyHalfedge khe2 = {};
+        bool isValid = false;
+    };
+
+    UncutAtKeyVertexInfo_ prepareUncutAtKeyVertex_(KeyVertex* kv);
+
+    struct UncutAtKeyEdgeInfo_ {
+        KeyFace* kf1 = nullptr;
+        Int cycleIndex1 = 0;
+        Int componentIndex1 = 0;
+        KeyFace* kf2 = nullptr;
+        Int cycleIndex2 = 0;
+        Int componentIndex2 = 0;
+        bool isValid = false;
+    };
+
+    UncutAtKeyEdgeInfo_ prepareUncutAtKeyEdge_(KeyEdge* ke);
 
     Int countSteinerUses_(KeyVertex* kv);
 

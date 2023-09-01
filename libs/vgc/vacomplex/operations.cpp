@@ -339,6 +339,14 @@ core::Array<KeyVertex*> unglueKeyVertices(
     return ops.unglueKeyVertices(kv, ungluedKeyEdges);
 }
 
+KeyEdge* uncutAtKeyVertex(KeyVertex* kv, bool smoothJoin) {
+    if (!kv) {
+        throw LogicError("uncutAtKeyVertex: kv is nullptr.");
+    }
+    detail::Operations ops(kv->complex());
+    return ops.uncutAtKeyVertex(kv, smoothJoin);
+}
+
 void moveToGroup(Node* node, Group* parentGroup, Node* nextSibling) {
     if (!node) {
         throw LogicError("moveToGroup: node is nullptr.");

@@ -539,6 +539,76 @@ core::Array<core::Id> Workspace::unglue(core::ConstSpan<core::Id> elementIds) {
     return result;
 }
 
+core::Array<core::Id>
+Workspace::simplify(core::ConstSpan<core::Id> elementIds, bool smoothJoins) {
+    core::Array<core::Id> result;
+
+    core::Array<vacomplex::KeyVertex*> kvs;
+    core::Array<vacomplex::KeyEdge*> kes;
+    for (core::Id id : elementIds) {
+        workspace::Element* element = find(id);
+        if (!element) {
+            continue;
+        }
+        vacomplex::Node* node = element->vacNode();
+        if (!node || !node->isCell()) {
+            continue;
+        }
+        vacomplex::Cell* cell = node->toCellUnchecked();
+        switch (cell->cellType()) {
+        case vacomplex::CellType::KeyVertex: {
+            kvs.append(cell->toKeyVertexUnchecked());
+            break;
+        }
+        case vacomplex::CellType::KeyEdge: {
+            kes.append(cell->toKeyEdgeUnchecked());
+            break;
+        }
+        default:
+            break;
+        }
+    }
+
+    if (kvs.isEmpty() && kes.isEmpty()) {
+        return result;
+    }
+
+    // Open history group
+    static core::StringId commandId = core::StringId("workspace.simplify");
+    core::UndoGroup* undoGroup = nullptr;
+    core::History* history = this->history();
+    if (history) {
+        undoGroup = history->createUndoGroup(commandId);
+    }
+
+    auto appendToResult = [&](vacomplex::Node* node) {
+        Element* e = this->findVacElement(node);
+        if (e) {
+            result.append(e->id());
+        }
+    };
+
+    for (vacomplex::KeyVertex* kv : kvs) {
+        vacomplex::KeyEdge* uncutEdge = vacomplex::ops::uncutAtKeyVertex(kv, smoothJoins);
+        if (uncutEdge) {
+            appendToResult(uncutEdge);
+        }
+        else {
+            // uncut failed, return the vertex id
+            appendToResult(kv);
+        }
+    }
+
+    sync();
+
+    // Close history group
+    if (undoGroup) {
+        undoGroup->close();
+    }
+
+    return result;
+}
+
 dom::DocumentPtr Workspace::cut(core::ConstSpan<core::Id> elementIds) {
     dom::DocumentPtr res = copy(elementIds);
     hardDelete(elementIds);
