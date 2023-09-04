@@ -302,7 +302,10 @@ public:
     /// This function supports uncutting an arbitrary number of key vertices
     /// or key edges.
     ///
-    core::Array<core::Id> simplify(core::ConstSpan<core::Id> elementIds, bool smoothJoins);
+    core::Array<core::Id> simplify(
+        core::ConstSpan<core::Id> elementIds,
+        bool smoothJoins,
+        bool deleteCycleLessFaces);
 
     /// Makes a copy of the given elements in the form of a new document (see
     /// `copy()` for details), then deletes the elements and return the new

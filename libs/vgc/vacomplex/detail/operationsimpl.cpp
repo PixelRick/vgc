@@ -1001,12 +1001,14 @@ KeyEdge* Operations::uncutAtKeyVertex(KeyVertex* targetKv, bool smoothJoin) {
     return newKe;
 }
 
-bool Operations::uncutAtKeyEdge(KeyEdge* ke, bool deleteCycleLessFace) {
+KeyFace* Operations::uncutAtKeyEdge(KeyEdge* ke, bool deleteCycleLessFace) {
 
     UncutAtKeyEdgeInfo_ info = prepareUncutAtKeyEdge_(ke);
     if (!info.isValid) {
         return false;
     }
+
+    KeyFace* result = nullptr;
 
     if (ke->isClosed()) {
         if (info.kf1 == info.kf2) {
@@ -1021,6 +1023,7 @@ bool Operations::uncutAtKeyEdge(KeyEdge* ke, bool deleteCycleLessFace) {
             if (deleteCycleLessFace && kf->cycles_.isEmpty()) {
                 hardDelete(kf, false);
             }
+            result = kf;
         }
         else {
             // make new face from 2 input faces
@@ -1035,21 +1038,97 @@ bool Operations::uncutAtKeyEdge(KeyEdge* ke, bool deleteCycleLessFace) {
                 }
             }
 
-            std::array<Node*, 2> kfs = { info.kf1, info.kf2 };
-            Node* topMostFace = findTopMost(kfs);
-
-            Group* parentGroup = topMostFace->parentGroup();
-            Node* nextSibling = topMostFace->nextSibling();
-
-            createKeyFace(newCycles, parentGroup, nextSibling);
+            std::array<Node*, 2> kfs = {info.kf1, info.kf2};
+            Node* bottomMostFace = findBottomMost(kfs);
+            Group* parentGroup = bottomMostFace->parentGroup();
+            Node* nextSibling = bottomMostFace;
+            result = createKeyFace(std::move(newCycles), parentGroup, nextSibling);
+            hardDelete(info.kf1, false);
+            hardDelete(info.kf2, false);
         }
     }
     else { // key open edge
+        if (info.kf1 == info.kf2) {
+            KeyFace* kf = info.kf1;
+            if (info.cycleIndex1 == info.cycleIndex2) {
+                KeyCycle& cycle = kf->cycles_[info.cycleIndex1];
+                Int i1 = info.componentIndex1;
+                Int i2 = info.componentIndex2;
+                KeyPath p1 = subPath(cycle, i1 + 1, i2);
+                KeyPath p2 = subPath(cycle, i2 + 1, i1);
+                bool d1 = cycle.halfedges_[i1].direction();
+                bool d2 = cycle.halfedges_[i2].direction();
+                if (d1 == d2) {
+                    p2.reverse();
+                    kf->cycles_.append(KeyCycle(concatPath(p1, p2)));
+                }
+                else {
+                    kf->cycles_.append(KeyCycle(std::move(p1)));
+                    kf->cycles_.append(KeyCycle(std::move(p2)));
+                }
+                kf->cycles_.removeAt(info.cycleIndex1);
+                result = kf;
+            }
+            else {
+                KeyCycle& cycle1 = kf->cycles_[info.cycleIndex1];
+                KeyCycle& cycle2 = kf->cycles_[info.cycleIndex2];
+                Int i1 = info.componentIndex1;
+                Int i2 = info.componentIndex2;
+                KeyPath p1 = subPath(cycle1, i1 + 1, i1);
+                KeyPath p2 = subPath(cycle2, i2 + 1, i2);
+                bool d1 = cycle1.halfedges_[i1].direction();
+                bool d2 = cycle2.halfedges_[i2].direction();
+                if (d1 == d2) {
+                    p2.reverse();
+                }
 
+                kf->cycles_.append(KeyCycle(concatPath(p1, p2)));
+                auto indices = std::minmax(info.cycleIndex1, info.cycleIndex2);
+                kf->cycles_.removeAt(indices.second);
+                kf->cycles_.removeAt(indices.first);
+            }
+        }
+        else {
+            KeyFace* kf1 = info.kf1;
+            KeyFace* kf2 = info.kf2;
+            KeyCycle& cycle1 = kf1->cycles_[info.cycleIndex1];
+            KeyCycle& cycle2 = kf2->cycles_[info.cycleIndex2];
+            Int i1 = info.componentIndex1;
+            Int i2 = info.componentIndex2;
+            KeyPath p1 = subPath(cycle1, i1 + 1, i1);
+            KeyPath p2 = subPath(cycle2, i2 + 1, i2);
+            bool d1 = cycle1.halfedges_[i1].direction();
+            bool d2 = cycle2.halfedges_[i2].direction();
+            if (d1 == d2) {
+                p2.reverse();
+            }
 
+            core::Array<KeyCycle> newCycles;
+
+            newCycles.append(KeyCycle(concatPath(p1, p2)));
+            for (Int j = 0; j < kf1->cycles_.length(); ++j) {
+                if (j != info.cycleIndex1) {
+                    newCycles.append(kf1->cycles_[j]);
+                }
+            }
+            for (Int j = 0; j < kf2->cycles_.length(); ++j) {
+                if (j != info.cycleIndex2) {
+                    newCycles.append(kf2->cycles_[j]);
+                }
+            }
+
+            std::array<Node*, 2> kfs = { info.kf1, info.kf2 };
+            Node* bottomMostFace = findBottomMost(kfs);
+            Group* parentGroup = bottomMostFace->parentGroup();
+            Node* nextSibling = bottomMostFace;
+            result = createKeyFace(std::move(newCycles), parentGroup, nextSibling);
+            hardDelete(info.kf1, false);
+            hardDelete(info.kf2, false);
+        }
     }
 
-    return true;
+    hardDelete(ke, false);
+    return result;
 }
 
 void Operations::moveToGroup(Node* node, Group* parentGroup, Node* nextSibling) {
@@ -1514,6 +1593,42 @@ KeyEdge* Operations::glueKeyClosedEdges_(
     }
 
     return newKe;
+}
+
+KeyPath Operations::subPath(const KeyCycle& cycle, Int first, Int last) {
+    if (cycle.steinerVertex()) {
+        return KeyPath(cycle.steinerVertex());
+    }
+    if (first == last) {
+        KeyVertex* singleVertex = cycle.halfedges_[first].startVertex();
+        return KeyPath(singleVertex);
+    }
+    else {
+        Int n = cycle.halfedges_.length();
+        first = ((first % n) + n) % n;
+        last = ((last % n) + n) % n;
+        core::Array<KeyHalfedge> halfedges = {};
+        for (Int i = first; i != last; i = (i + 1) % n) {
+            halfedges.append(cycle.halfedges_[i]);
+        }
+        return KeyPath(std::move(halfedges));
+    }
+}
+
+KeyPath Operations::concatPath(const KeyPath& p1, const KeyPath& p2) {
+    if (p1.singleVertex()) {
+        return p2;
+    }
+    else if (p2.singleVertex()) {
+        return p1;
+    }
+    else {
+        core::Array<KeyHalfedge> halfedges = {};
+        halfedges.reserve(p1.halfedges_.length());
+        halfedges.extend(p1.halfedges_);
+        halfedges.extend(p2.halfedges_);
+        return KeyPath(std::move(halfedges));
+    }
 }
 
 // Note: Uncut does not yet support incident inbetween cells. As a

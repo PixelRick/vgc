@@ -347,6 +347,15 @@ KeyEdge* uncutAtKeyVertex(KeyVertex* kv, bool smoothJoin) {
     return ops.uncutAtKeyVertex(kv, smoothJoin);
 }
 
+KeyFace* uncutAtKeyEdge(KeyEdge* ke, bool deleteCycleLessFace) {
+    if (!ke) {
+        throw LogicError("uncutAtKeyEdge: ke is nullptr.");
+    }
+    detail::Operations ops(ke->complex());
+    return ops.uncutAtKeyEdge(ke, deleteCycleLessFace);
+}
+
+
 void moveToGroup(Node* node, Group* parentGroup, Node* nextSibling) {
     if (!node) {
         throw LogicError("moveToGroup: node is nullptr.");

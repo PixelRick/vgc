@@ -118,7 +118,7 @@ public:
         core::Array<std::pair<core::Id, core::Array<KeyEdge*>>>& ungluedKeyEdges);
 
     KeyEdge* uncutAtKeyVertex(KeyVertex* kv, bool smoothJoin);
-    bool uncutAtKeyEdge(KeyEdge* ke, bool deleteCycleLessFace);
+    KeyFace* uncutAtKeyEdge(KeyEdge* ke, bool deleteCycleLessFace);
 
     void moveToGroup(Node* node, Group* parentGroup, Node* nextSibling = nullptr);
     void moveBelowBoundary(Node* node);
@@ -217,6 +217,9 @@ private:
     KeyEdge* glueKeyClosedEdges_(
         core::ConstSpan<KeyHalfedge> khes,
         core::ConstSpan<double> uOffsets);
+
+    static KeyPath subPath(const KeyCycle& cycle, Int first, Int last);
+    static KeyPath concatPath(const KeyPath& p1, const KeyPath& p2);
 
     struct UncutAtKeyVertexInfo_ {
         KeyFace* kf = nullptr;

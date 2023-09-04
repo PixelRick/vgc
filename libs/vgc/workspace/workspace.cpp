@@ -540,7 +540,7 @@ core::Array<core::Id> Workspace::unglue(core::ConstSpan<core::Id> elementIds) {
 }
 
 core::Array<core::Id>
-Workspace::simplify(core::ConstSpan<core::Id> elementIds, bool smoothJoins) {
+Workspace::simplify(core::ConstSpan<core::Id> elementIds, bool smoothJoins, bool deleteCycleLessFaces) {
     core::Array<core::Id> result;
 
     core::Array<vacomplex::KeyVertex*> kvs;
@@ -588,6 +588,17 @@ Workspace::simplify(core::ConstSpan<core::Id> elementIds, bool smoothJoins) {
         }
     };
 
+    for (vacomplex::KeyEdge* ke : kes) {
+        vacomplex::KeyFace* uncutFace = vacomplex::ops::uncutAtKeyEdge(ke, deleteCycleLessFaces);
+        if (uncutFace) {
+            appendToResult(uncutFace);
+        }
+        else {
+            // uncut failed, return the edge id
+            appendToResult(ke);
+        }
+    }
+
     for (vacomplex::KeyVertex* kv : kvs) {
         vacomplex::KeyEdge* uncutEdge = vacomplex::ops::uncutAtKeyVertex(kv, smoothJoins);
         if (uncutEdge) {
@@ -598,6 +609,8 @@ Workspace::simplify(core::ConstSpan<core::Id> elementIds, bool smoothJoins) {
             appendToResult(kv);
         }
     }
+
+    // TODO: filter out resulting ids that are no longer alive (lost in concatenation)
 
     sync();
 
