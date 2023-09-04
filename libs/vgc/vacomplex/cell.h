@@ -32,6 +32,7 @@
 #include <vgc/vacomplex/api.h>
 #include <vgc/vacomplex/keyedgedata.h>
 #include <vgc/vacomplex/transform.h>
+#include <vgc/vacomplex/cellproperty.h>
 
 namespace vgc::vacomplex {
 
@@ -839,6 +840,9 @@ protected:
     void onMeshQueried() const {
         hasMeshBeenQueriedSinceLastDirtyEvent_ = true;
     }
+
+    void bindCellProperties(CellProperties* properties);
+    void unbindCellProperties(CellProperties* properties);
 
     virtual void dirtyMesh_();
     virtual bool updateGeometryFromBoundary_();

@@ -36,9 +36,11 @@ class CellData;
 class VGC_VACOMPLEX_API CellData {
 protected:
     CellData() noexcept = default;
+    ~CellData() = default; // not virtual
 
-    // not virtual
-    ~CellData() = default;
+    CellData(Cell* owner) noexcept {
+        properties_.cell_ = owner;
+    }
 
     // protected to prevent partial copy/move
     CellData(const CellData& other) = default;

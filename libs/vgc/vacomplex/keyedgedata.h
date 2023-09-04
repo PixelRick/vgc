@@ -65,9 +65,10 @@ private:
     friend KeyEdge;
 
 public:
-    KeyEdgeData(bool isClosed)
+    KeyEdgeData(bool isClosed) noexcept
         : isClosed_(isClosed) {
     }
+    ~KeyEdgeData() = default;
 
     KeyEdgeData(const KeyEdgeData& other);
     KeyEdgeData(KeyEdgeData&& other) noexcept;

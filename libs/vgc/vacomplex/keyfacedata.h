@@ -32,7 +32,13 @@ namespace detail {
 
 class Operations;
 
-}
+struct KeyFacePrivateKey {
+private:
+    friend KeyFace;
+    constexpr KeyFacePrivateKey() noexcept = default;
+};
+
+} // namespace detail
 
 /// \class vgc::vacomplex::KeyFaceData
 /// \brief Authored model of the face geometry.
@@ -40,10 +46,12 @@ class Operations;
 class VGC_VACOMPLEX_API KeyFaceData final : public CellData {
 private:
     friend detail::Operations;
-    friend KeyFace;
 
 public:
     KeyFaceData() noexcept = default;
+    ~KeyFaceData() = default;
+
+    KeyFaceData(KeyFace* owner, detail::KeyFacePrivateKey) noexcept;
 
     KeyFaceData(const KeyFaceData& other);
     KeyFaceData(KeyFaceData&& other) noexcept;

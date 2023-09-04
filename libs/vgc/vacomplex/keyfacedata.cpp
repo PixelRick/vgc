@@ -21,6 +21,10 @@
 
 namespace vgc::vacomplex {
 
+KeyFaceData::KeyFaceData(KeyFace* owner, detail::KeyFacePrivateKey) noexcept
+    : CellData(owner) {
+}
+
 KeyFaceData::KeyFaceData(const KeyFaceData& other)
     : CellData(other) {
 }

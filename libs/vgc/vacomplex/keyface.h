@@ -58,10 +58,8 @@ private:
     friend detail::Operations;
 
     explicit KeyFace(core::Id id, core::AnimTime t) noexcept
-        : SpatioTemporalCell(id, t) {
-
-        detail::CellPropertiesPrivateInterface::setOwningCell(
-            &data_.properties(), this);
+        : SpatioTemporalCell(id, t)
+        , data_(this, detail::KeyFacePrivateKey{}) {
     }
 
 public:
@@ -71,13 +69,17 @@ public:
         return cycles_;
     }
 
-    KeyFaceData& data() const {
+    KeyFaceData& data() {
+        return data_;
+    }
+
+    const KeyFaceData& data() const {
         return data_;
     }
 
 private:
     core::Array<KeyCycle> cycles_;
-    mutable KeyFaceData data_;
+    KeyFaceData data_;
 
     void substituteKeyVertex_(KeyVertex* oldVertex, KeyVertex* newVertex) override;
 

@@ -29,6 +29,7 @@ namespace vgc::vacomplex {
 class Cell;
 class CellProperties;
 class CellProperty;
+class CellData;
 class KeyEdgeData;
 class KeyFaceData;
 
@@ -122,17 +123,6 @@ private:
     friend CellProperties;
 };
 
-namespace detail {
-
-struct CellPropertiesPrivateInterface {
-    friend Cell;
-    friend detail::Operations;
-
-    static void setOwningCell(const CellProperties* properties, Cell* cell);
-};
-
-} // namespace detail
-
 /// \class vgc::vacomplex::CellProperties
 /// \brief Abstract authored properties of a cell (e.g.: style).
 ///
@@ -186,7 +176,8 @@ public:
 private:
     std::map<core::StringId, std::unique_ptr<CellProperty>> map_;
 
-    friend detail::CellPropertiesPrivateInterface;
+    friend Cell;
+    friend CellData;
     Cell* cell_ = nullptr;
 
     template<typename Op>
@@ -215,14 +206,6 @@ private:
 
     void emitPropertyChanged_(core::StringId name);
 };
-
-/* static */
-inline void detail::CellPropertiesPrivateInterface::setOwningCell(
-    const CellProperties* properties,
-    Cell* cell) {
-
-    const_cast<CellProperties*>(properties)->cell_ = cell;
-}
 
 } // namespace vgc::vacomplex
 
