@@ -118,7 +118,7 @@ public:
         core::Array<std::pair<core::Id, core::Array<KeyEdge*>>>& ungluedKeyEdges);
 
     KeyEdge* uncutAtKeyVertex(KeyVertex* kv, bool smoothJoin);
-    bool uncutAtKeyEdge(KeyEdge* ke);
+    bool uncutAtKeyEdge(KeyEdge* ke, bool deleteCycleLessFace);
 
     void moveToGroup(Node* node, Group* parentGroup, Node* nextSibling = nullptr);
     void moveBelowBoundary(Node* node);
@@ -172,6 +172,7 @@ private:
     void insertNodeAsLastChild_(Node* node, Group* parent);
 
     static Node* findTopMost(core::Span<Node*> nodes);
+    static Node* findBottomMost(core::Span<Node*> nodes);
 
     // Assumes node has no children.
     void destroyNode_(Node* node);

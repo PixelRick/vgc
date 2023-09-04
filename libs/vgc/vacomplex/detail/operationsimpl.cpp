@@ -1001,14 +1001,53 @@ KeyEdge* Operations::uncutAtKeyVertex(KeyVertex* targetKv, bool smoothJoin) {
     return newKe;
 }
 
-bool Operations::uncutAtKeyEdge(KeyEdge* ke) {
+bool Operations::uncutAtKeyEdge(KeyEdge* ke, bool deleteCycleLessFace) {
 
     UncutAtKeyEdgeInfo_ info = prepareUncutAtKeyEdge_(ke);
     if (!info.isValid) {
         return false;
     }
 
-    //
+    if (ke->isClosed()) {
+        if (info.kf1 == info.kf2) {
+            KeyFace* kf = info.kf1;
+            kf->cycles_.removeIf([ke](const KeyCycle& cycle) {
+                return !cycle.steinerVertex() && cycle.halfedges().first().edge() == ke;
+            });
+            kf->boundary_.removeOne(ke);
+            onBoundaryChanged_(kf);
+            ke->star_.removeOne(kf);
+            hardDelete(ke, false);
+            if (deleteCycleLessFace && kf->cycles_.isEmpty()) {
+                hardDelete(kf, false);
+            }
+        }
+        else {
+            // make new face from 2 input faces
+            core::Array<KeyCycle> newCycles = {};
+
+            for (KeyCycle& cycle : info.kf1->cycles_) {
+                if (cycle.steinerVertex()) {
+                    newCycles.append(cycle);
+                }
+                else if (cycle.halfedges_.first().edge() != ke) {
+                    newCycles.append(cycle);
+                }
+            }
+
+            std::array<Node*, 2> kfs = { info.kf1, info.kf2 };
+            Node* topMostFace = findTopMost(kfs);
+
+            Group* parentGroup = topMostFace->parentGroup();
+            Node* nextSibling = topMostFace->nextSibling();
+
+            createKeyFace(newCycles, parentGroup, nextSibling);
+        }
+    }
+    else { // key open edge
+
+
+    }
 
     return true;
 }
@@ -1154,6 +1193,7 @@ void Operations::insertNodeAsLastChild_(Node* node, Group* parent) {
     }
 }
 
+/* static */
 Node* Operations::findTopMost(core::Span<Node*> nodes) {
     // currently only looking under a single parent
     // TODO: tree-wide top most.
@@ -1170,6 +1210,25 @@ Node* Operations::findTopMost(core::Span<Node*> nodes) {
         topMostNode = topMostNode->previousSibling();
     }
     return topMostNode;
+}
+
+/* static */
+Node* Operations::findBottomMost(core::Span<Node*> nodes) {
+    // currently only looking under a single parent
+    // TODO: tree-wide bottom most.
+    if (nodes.isEmpty()) {
+        return nullptr;
+    }
+    Node* node0 = nodes[0];
+    Group* parent = node0->parentGroup();
+    Node* bottomMostNode = parent->firstChild();
+    while (bottomMostNode) {
+        if (nodes.contains(bottomMostNode)) {
+            break;
+        }
+        bottomMostNode = bottomMostNode->nextSibling();
+    }
+    return bottomMostNode;
 }
 
 // Assumes node has no children.
