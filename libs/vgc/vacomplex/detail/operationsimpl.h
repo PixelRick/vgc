@@ -19,11 +19,28 @@
 
 #include <unordered_set>
 
+#include <vgc/core/arithmetic.h>
 #include <vgc/vacomplex/celldata.h>
 #include <vgc/vacomplex/complex.h>
 #include <vgc/vacomplex/keyedgedata.h>
 
-namespace vgc::vacomplex::detail {
+namespace vgc::vacomplex {
+
+namespace detail {
+
+struct UncutAtKeyVertexResult {
+    core::Id removedKeId1 = 0;
+    core::Id removedKeId2 = 0;
+    KeyEdge* resultKe = nullptr;
+    bool success = false;
+};
+
+struct UncutAtKeyEdgeResult {
+    core::Id removedKfId1 = 0;
+    core::Id removedKfId2 = 0;
+    KeyFace* resultKf = nullptr;
+    bool success = false;
+};
 
 class VGC_VACOMPLEX_API Operations {
 private:
@@ -89,8 +106,16 @@ public:
         Node* nextSibling = nullptr,
         core::AnimTime t = {});
 
-    void hardDelete(Node* node, bool deleteIsolatedVertices);
-    void softDelete(Node* node, bool deleteIsolatedVertices);
+    void
+    hardDelete(Node* node, bool deleteIsolatedVertices = false);
+
+    void
+    softDelete(core::ConstSpan<Node*> nodes);
+
+    core::Array<KeyCell*> simplify(
+        core::Span<KeyVertex*> kvs,
+        core::Span<KeyEdge*> kes,
+        bool smoothJoins);
 
     KeyVertex*
     glueKeyVertices(core::Span<KeyVertex*> kvs, const geometry::Vec2d& position);
@@ -117,8 +142,10 @@ public:
         KeyVertex* kv,
         core::Array<std::pair<core::Id, core::Array<KeyEdge*>>>& ungluedKeyEdges);
 
-    KeyEdge* uncutAtKeyVertex(KeyVertex* kv, bool smoothJoin);
-    KeyFace* uncutAtKeyEdge(KeyEdge* ke, bool deleteCycleLessFace);
+    UncutAtKeyVertexResult
+    uncutAtKeyVertex(KeyVertex* kv, bool smoothJoin);
+
+    UncutAtKeyEdgeResult uncutAtKeyEdge(KeyEdge* ke);
 
     void moveToGroup(Node* node, Group* parentGroup, Node* nextSibling = nullptr);
     void moveBelowBoundary(Node* node);
@@ -184,7 +211,6 @@ private:
     friend vacomplex::CellData;
     friend vacomplex::KeyEdgeData;
 
-    void onBoundaryChanged_(Cell* cell);
     void onGeometryChanged_(Cell* cell);
     void onPropertyChanged_(Cell* cell, core::StringId name);
     void onBoundaryMeshChanged_(Cell* cell);
@@ -202,6 +228,8 @@ private:
     // Adds all the cells in the given `cycle` to the boundary of the `face`.
     //
     void addToBoundary_(FaceCell* face, const KeyCycle& cycle);
+
+    void removeFromBoundary_(Cell* boundedCell, Cell* boundingCell);
 
     void substitute_(KeyVertex* oldVertex, KeyVertex* newVertex);
 
@@ -249,6 +277,8 @@ private:
     Int countUses_(KeyEdge* ke);
 };
 
-} // namespace vgc::vacomplex::detail
+} // namespace detail
+
+} // namespace vgc::vacomplex
 
 #endif // VGC_VACOMPLEX_DETAIL_OPERATIONS_H

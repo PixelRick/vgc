@@ -114,12 +114,10 @@ private:
     }
 
     void setData_(std::unique_ptr<KeyEdgeData>&& data) {
-        if (data_) {
-            *data_ = std::move(*data);
+        if (!data_) {
+            data_ = std::make_unique<KeyEdgeData>(this, detail::KeyEdgePrivateKey{});
         }
-        else {
-            data_ = std::make_unique<KeyEdgeData>(std::move(*data));
-        }
+        *data_ = std::move(*data);
         data.reset();
     }
 

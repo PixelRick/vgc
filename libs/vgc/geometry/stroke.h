@@ -922,6 +922,13 @@ public:
         }
     }
 
+    void open(bool keepJoinAsBestAsPossible) {
+        if (isClosed_) {
+            open_(keepJoinAsBestAsPossible);
+            isClosed_ = false;
+        }
+    }
+
     void reverse() {
         reverse_();
     }
@@ -1084,6 +1091,8 @@ protected:
     virtual void transform_(const Mat3d& transformation) = 0;
 
     virtual void close_(bool smoothJoin) = 0;
+
+    virtual void open_(bool keepJoinAsBestAsPossible) = 0;
 
     virtual void reverse_() = 0;
 

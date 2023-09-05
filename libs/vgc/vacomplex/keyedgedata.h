@@ -40,7 +40,13 @@ namespace detail {
 
 class Operations;
 
-}
+struct KeyEdgePrivateKey {
+private:
+    friend KeyEdge;
+    constexpr KeyEdgePrivateKey() noexcept = default;
+};
+
+} // namespace detail
 
 /// \class vgc::vacomplex::KeyEdgeData
 /// \brief Authored model of the edge geometry.
@@ -69,6 +75,8 @@ public:
         : isClosed_(isClosed) {
     }
     ~KeyEdgeData() = default;
+
+    KeyEdgeData(KeyEdge* owner, detail::KeyEdgePrivateKey) noexcept;
 
     KeyEdgeData(const KeyEdgeData& other);
     KeyEdgeData(KeyEdgeData&& other) noexcept;

@@ -185,6 +185,8 @@ protected:
 
     void close_(bool smoothJoin) override;
 
+    void open_(bool keepJoinAsBestAsPossible) override;
+
     void reverse_() override;
 
     void assignFromConcat_(

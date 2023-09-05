@@ -233,12 +233,23 @@ void AbstractInterpolatingStroke2d::close_(bool smoothJoin) {
     if (positions_.length() > 1) {
         if (smoothJoin && positions_.last() == positions_.first()) {
             positions_.removeLast();
-            onPositionsChanged_();
             if (!hasConstantWidth_) {
                 widths_.removeLast();
                 onWidthsChanged_();
             }
+            onPositionsChanged_();
         }
+    }
+}
+
+void AbstractInterpolatingStroke2d::open_(bool /*keepJoinAsBestAsPossible*/) {
+    if (positions_.length() > 0) {
+        positions_.append(positions_.first());
+        if (!hasConstantWidth_) {
+            widths_.append(widths_.first());
+            onWidthsChanged_();
+        }
+        onPositionsChanged_();
     }
 }
 

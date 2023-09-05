@@ -409,13 +409,8 @@ core::Id Workspace::glue(core::ConstSpan<core::Id> elementIds) {
 core::Array<core::Id> Workspace::unglue(core::ConstSpan<core::Id> elementIds) {
     core::Array<core::Id> result;
 
-    struct TargetEdge {
-        vacomplex::KeyEdge* ke;
-        core::Color color;
-    };
-
     core::Array<vacomplex::KeyVertex*> kvs;
-    core::Array<TargetEdge> edges;
+    core::Array<vacomplex::KeyEdge*> kes;
     for (core::Id id : elementIds) {
         workspace::Element* element = find(id);
         if (!element) {
@@ -433,15 +428,7 @@ core::Array<core::Id> Workspace::unglue(core::ConstSpan<core::Id> elementIds) {
         }
         case vacomplex::CellType::KeyEdge: {
             vacomplex::KeyEdge* ke = cell->toKeyEdgeUnchecked();
-            core::Color color(1, 0, 0);
-            dom::Element* sourceDomElement = element->domElement();
-            if (sourceDomElement) {
-                color = sourceDomElement->getAttribute(dom::strings::color).getColor();
-            }
-            else {
-                // TODO: warn ?
-            }
-            edges.append(TargetEdge{ke, color});
+            kes.append(ke);
             break;
         }
         default:
@@ -449,7 +436,7 @@ core::Array<core::Id> Workspace::unglue(core::ConstSpan<core::Id> elementIds) {
         }
     }
 
-    if (kvs.isEmpty() && edges.isEmpty()) {
+    if (kvs.isEmpty() && kes.isEmpty()) {
         return result;
     }
 
@@ -461,9 +448,8 @@ core::Array<core::Id> Workspace::unglue(core::ConstSpan<core::Id> elementIds) {
         undoGroup = history->createUndoGroup(commandId);
     }
 
-    for (const TargetEdge& targetEdge : edges) {
-        // TODO: use operation source in onVacNodesChanged_ to do the color copy
-        vacomplex::KeyEdge* targetKe = targetEdge.ke;
+    for (vacomplex::KeyEdge* targetKe : kes) {
+
         core::Array<vacomplex::KeyEdge*> ungluedKeyEdges =
             vacomplex::ops::unglueKeyEdges(targetKe);
 
@@ -471,56 +457,17 @@ core::Array<core::Id> Workspace::unglue(core::ConstSpan<core::Id> elementIds) {
             Element* e = this->findVacElement(ke);
             if (e) {
                 result.append(e->id());
-                dom::Element* domElement = e->domElement();
-                if (domElement) {
-                    domElement->setAttribute(dom::strings::color, targetEdge.color);
-                }
-                else {
-                    // TODO: warn ?
-                }
             }
         }
     }
 
     for (vacomplex::KeyVertex* targetKv : kvs) {
-        std::unordered_map<core::Id, core::Color> starEdgeColors;
-        for (vacomplex::Cell* cell : targetKv->star()) {
-            vacomplex::KeyEdge* ke = cell->toKeyEdge();
-            if (ke) {
-                VacKeyEdge* e = dynamic_cast<VacKeyEdge*>(findVacElement(ke->id()));
-                if (e && e->domElement()) {
-                    starEdgeColors[ke->id()] =
-                        e->domElement()->getAttribute(dom::strings::color).getColor();
-                }
-            }
-        }
 
         core::Array<std::pair<core::Id, core::Array<vacomplex::KeyEdge*>>>
             ungluedKeyEdges;
         core::Array<vacomplex::KeyVertex*> ungluedKeyVertices =
             vacomplex::ops::unglueKeyVertices(targetKv, ungluedKeyEdges);
 
-        // TODO: use operation source in onVacNodesChanged_ to do the color copy
-        for (const auto& entry : ungluedKeyEdges) {
-            core::Id id = entry.first;
-            const core::Array<vacomplex::KeyEdge*>& kes = entry.second;
-            auto it = starEdgeColors.find(id);
-            core::Color color =
-                it != starEdgeColors.end() ? it->second : core::Color(1, 0, 0);
-            for (vacomplex::KeyEdge* ke : kes) {
-                Element* e = this->findVacElement(ke);
-                if (e) {
-                    //result.append(e->id());
-                    dom::Element* domElement = e->domElement();
-                    if (domElement) {
-                        domElement->setAttribute(dom::strings::color, color);
-                    }
-                    else {
-                        // TODO: warn ?
-                    }
-                }
-            }
-        }
         for (vacomplex::KeyVertex* kv : ungluedKeyVertices) {
             Element* e = this->findVacElement(kv);
             if (e) {

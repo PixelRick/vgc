@@ -18,8 +18,13 @@
 
 #include <vgc/vacomplex/detail/operationsimpl.h>
 #include <vgc/vacomplex/keyedge.h>
+#include <vgc/vacomplex/logcategories.h>
 
 namespace vgc::vacomplex {
+
+KeyEdgeData::KeyEdgeData(KeyEdge* owner, detail::KeyEdgePrivateKey) noexcept
+    : CellData(owner) {
+}
 
 KeyEdgeData::KeyEdgeData(const KeyEdgeData& other)
     : CellData(other)
@@ -102,6 +107,28 @@ const geometry::AbstractStroke2d* KeyEdgeData::stroke() const {
     return stroke_.get();
 }
 
+namespace {
+
+void fixStrokeClosedness(geometry::AbstractStroke2d* stroke, bool isEdgeClosed) {
+    if (stroke && stroke->isClosed() != isEdgeClosed) {
+        std::string_view strokeType;
+        std::string_view edgeType;
+        if (isEdgeClosed) {
+            stroke->close(false);
+            strokeType = "an open stroke";
+            edgeType = "a closed edge";
+        }
+        else {
+            stroke->open(true);
+            strokeType = "a closed stroke";
+            edgeType = "an open edge";
+        }
+        VGC_WARNING(LogVgcVacomplex, "Assigning {} to {} caused implicit closedness conversion.");
+    }
+}
+
+} // namespace
+
 void KeyEdgeData::setStroke(const geometry::AbstractStroke2d* newStroke) {
     if (!newStroke) {
         stroke_.reset();
@@ -112,12 +139,14 @@ void KeyEdgeData::setStroke(const geometry::AbstractStroke2d* newStroke) {
     else if (!stroke_ || !stroke_->copyAssign(newStroke)) {
         stroke_ = newStroke->clone();
     }
+    fixStrokeClosedness(stroke_.get(), isClosed());
     emitGeometryChanged();
     properties_.onUpdateGeometry(stroke_.get());
 }
 
 void KeyEdgeData::setStroke(std::unique_ptr<geometry::AbstractStroke2d>&& newStroke) {
     stroke_ = std::move(newStroke);
+    fixStrokeClosedness(stroke_.get(), isClosed());
     emitGeometryChanged();
     properties_.onUpdateGeometry(stroke_.get());
 }

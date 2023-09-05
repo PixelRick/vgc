@@ -61,11 +61,9 @@ void KeyFaceData::transform(const geometry::Mat3d& transformation) {
 }
 
 /* static */
-std::unique_ptr<KeyFaceData>
-KeyFaceData::fromConcatStep(const KeyFaceData& kfd1, const KeyFaceData& kfd2) {
-    auto result = std::make_unique<KeyFaceData>();
-    result->properties_.assignFromConcatStep(kfd1, kfd2);
-    return result;
+void
+KeyFaceData::assignFromConcatStep(KeyFaceData& result, const KeyFaceData& kfd1, const KeyFaceData& kfd2) {
+    result.properties_.assignFromConcatStep(kfd1, kfd2);
 }
 
 void KeyFaceData::finalizeConcat() {

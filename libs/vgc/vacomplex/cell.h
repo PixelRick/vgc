@@ -465,6 +465,7 @@ private:
     const UInt8 cellType_;
     // used during hard/soft delete operations
     bool isBeingDeleted_ = false;
+    bool canBeUncut_ = false;
 
     virtual void debugPrint_(core::StringWriter& out) = 0;
 };
@@ -762,6 +763,14 @@ public:
 
     Int length() const {
         return container_.length();
+    }
+
+    bool isEmpty() const {
+        return container_.isEmpty();
+    }
+
+    core::Array<Cell*> copy() const {
+        return container_;
     }
 
 private:

@@ -980,7 +980,8 @@ void Select::onSimplify_() {
     }
 
     bool smoothJoins = true;
-    core::Array<core::Id> uncutIds = workspace->simplify(selection, smoothJoins);
+    bool deleteCycleLessFaces = true;
+    core::Array<core::Id> uncutIds = workspace->simplify(selection, smoothJoins, deleteCycleLessFaces);
     canvas->setSelection(std::move(uncutIds));
 
     // Close history group
