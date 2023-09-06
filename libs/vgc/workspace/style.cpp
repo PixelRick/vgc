@@ -143,7 +143,7 @@ std::unique_ptr<vacomplex::CellProperty> CellStyle::fromConcatStep_(
     const CellStyle* s2 = nullptr;
     double l2 = 0;
     Int n2 = 0;
-    vacomplex::KeyFace* kf2 = kfd1.keyFace();
+    vacomplex::KeyFace* kf2 = kfd2.keyFace();
     if (kf2) {
         s2 = static_cast<const CellStyle*>(kfd2.findProperty(strings::style));
         if (s2) {

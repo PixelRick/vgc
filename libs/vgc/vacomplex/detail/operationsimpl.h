@@ -106,16 +106,12 @@ public:
         Node* nextSibling = nullptr,
         core::AnimTime t = {});
 
-    void
-    hardDelete(Node* node, bool deleteIsolatedVertices = false);
+    void hardDelete(Node* node, bool deleteIsolatedVertices = false);
 
-    void
-    softDelete(core::ConstSpan<Node*> nodes);
+    void softDelete(core::ConstSpan<Node*> nodes, bool deleteIsolatedVertices = false);
 
-    core::Array<KeyCell*> simplify(
-        core::Span<KeyVertex*> kvs,
-        core::Span<KeyEdge*> kes,
-        bool smoothJoins);
+    core::Array<KeyCell*>
+    simplify(core::Span<KeyVertex*> kvs, core::Span<KeyEdge*> kes, bool smoothJoins);
 
     KeyVertex*
     glueKeyVertices(core::Span<KeyVertex*> kvs, const geometry::Vec2d& position);
@@ -142,8 +138,7 @@ public:
         KeyVertex* kv,
         core::Array<std::pair<core::Id, core::Array<KeyEdge*>>>& ungluedKeyEdges);
 
-    UncutAtKeyVertexResult
-    uncutAtKeyVertex(KeyVertex* kv, bool smoothJoin);
+    UncutAtKeyVertexResult uncutAtKeyVertex(KeyVertex* kv, bool smoothJoin);
 
     UncutAtKeyEdgeResult uncutAtKeyEdge(KeyEdge* ke);
 
@@ -198,14 +193,14 @@ private:
     void insertNodeAsFirstChild_(Node* node, Group* parent);
     void insertNodeAsLastChild_(Node* node, Group* parent);
 
-    static Node* findTopMost(core::Span<Node*> nodes);
-    static Node* findBottomMost(core::Span<Node*> nodes);
+    static Node* findTopMost(core::ConstSpan<Node*> nodes);
+    static Node* findBottomMost(core::ConstSpan<Node*> nodes);
 
     // Assumes node has no children.
-    void destroyNode_(Node* node);
+    void destroyChildlessNode_(Node* node);
 
     // Assumes that all descendants of all `nodes` are also in `nodes`.
-    void destroyNodes_(const std::unordered_set<Node*>& nodes);
+    void destroyNodes_(core::ConstSpan<Node*> nodes);
 
     friend vacomplex::CellProperties;
     friend vacomplex::CellData;

@@ -164,19 +164,17 @@ void softDelete(core::ConstSpan<Node*> nodes, bool deleteIsolatedVertices) {
     }
 
     detail::Operations ops(complex0);
-    ops.softDelete(nodes);
+    ops.softDelete(nodes, deleteIsolatedVertices);
 }
 
-core::Array<KeyCell*> simplify(
-    core::Span<KeyVertex*> kvs,
-    core::Span<KeyEdge*> kes,
-    bool smoothJoins) {
+core::Array<KeyCell*>
+simplify(core::Span<KeyVertex*> kvs, core::Span<KeyEdge*> kes, bool smoothJoins) {
 
     Complex* complex = nullptr;
     core::AnimTime t0 = {};
     if (kvs.isEmpty()) {
         if (kes.isEmpty()) {
-            return;
+            return {};
         }
         complex = kes[0]->complex();
         t0 = kes[0]->time();
@@ -417,7 +415,7 @@ KeyFace* uncutAtKeyEdge(KeyEdge* ke) {
         throw LogicError("uncutAtKeyEdge: ke is nullptr.");
     }
     detail::Operations ops(ke->complex());
-    return ops.uncutAtKeyEdge(ke).resultFace;
+    return ops.uncutAtKeyEdge(ke).resultKf;
 }
 
 void moveToGroup(Node* node, Group* parentGroup, Node* nextSibling) {

@@ -465,7 +465,7 @@ private:
     const UInt8 cellType_;
     // used during hard/soft delete operations
     bool isBeingDeleted_ = false;
-    bool canBeUncut_ = false;
+    bool canBeAtomicallyUncut_ = false;
 
     virtual void debugPrint_(core::StringWriter& out) = 0;
 };

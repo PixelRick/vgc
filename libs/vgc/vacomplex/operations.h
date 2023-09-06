@@ -91,7 +91,7 @@ VGC_VACOMPLEX_API
 void hardDelete(Node* node, bool deleteIsolatedVertices);
 
 VGC_VACOMPLEX_API
-void softDelete(core::ConstSpan<Node*> nodes);
+void softDelete(core::ConstSpan<Node*> nodes, bool deleteIsolatedVertices);
 
 VGC_VACOMPLEX_API
 core::Array<KeyCell*>

@@ -147,6 +147,7 @@ const VacFaceCellFrameData* VacKeyFace::computeFrameDataAt(core::AnimTime t) {
 void VacKeyFace::onPaintPrepare(core::AnimTime /*t*/, PaintOptions /*flags*/) {
     // todo, use paint options to not compute everything or with lower quality
     computeFillMesh_();
+    computeStrokeStyle_();
 }
 
 void VacKeyFace::onPaintDraw(
@@ -162,6 +163,7 @@ void VacKeyFace::onPaintDraw(
 
     // if not already done (should we leave preparePaint_ optional?)
     const_cast<VacKeyFace*>(this)->computeFillMesh_();
+    const_cast<VacKeyFace*>(this)->computeStrokeStyle_();
 
     using namespace graphics;
     namespace ds = dom::strings;
@@ -651,6 +653,7 @@ void VacKeyFace::dirtyStrokeStyle_(bool /*notifyDependentsImmediately*/) {
     if (!frameData.isStyleDirty_) {
         frameData.isStyleDirty_ = true;
         frameData.graphics_.clearStyle();
+        notifyChangesToDependents(ChangeFlag::Style);
         //notifyChanges_({ ChangeFlag::Style }, notifyDependentsImmediately);
     }
 }

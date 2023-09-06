@@ -28,6 +28,42 @@ namespace vgc::vacomplex {
 
 namespace detail {
 
+core::Array<Cell*> star(core::ConstSpan<Cell*> cells) {
+    core::Array<Cell*> result;
+    for (Cell* c : cells) {
+        for (Cell* sc : c->star()) {
+            if (!result.contains(sc) && !cells.contains(sc)) {
+                result.append(sc);
+            }
+        }
+    }
+    return result;
+};
+
+core::Array<Cell*> opening(core::ConstSpan<Cell*> cells) {
+    core::Array<Cell*> result(cells);
+    for (Cell* c : cells) {
+        for (Cell* sc : c->star()) {
+            if (!result.contains(sc)) {
+                result.append(sc);
+            }
+        }
+    }
+    return result;
+};
+
+core::Array<Cell*> closure(core::ConstSpan<Cell*> cells) {
+    core::Array<Cell*> result(cells);
+    for (Cell* c : cells) {
+        for (Cell* bc : c->boundary()) {
+            if (!result.contains(bc)) {
+                result.append(bc);
+            }
+        }
+    }
+    return result;
+};
+
 Operations::Operations(Complex* complex)
     : complex_(complex) {
 
@@ -61,14 +97,27 @@ Operations::~Operations() {
         for (const CreatedNodeInfo& info : complex->opDiff_.createdNodes_) {
             Cell* cell = info.node()->toCell();
             if (cell) {
-                KeyEdge* ke = cell->toKeyEdge();
-                if (ke && ke->data()) {
-                    ke->data()->finalizeConcat();
+                switch (cell->cellType()) {
+                case CellType::KeyEdge: {
+                    KeyEdge* ke = cell->toKeyEdgeUnchecked();
+                    if (ke->data()) {
+                        ke->data()->finalizeConcat();
+                    }
+                    break;
+                }
+                case CellType::KeyFace: {
+                    KeyFace* kf = cell->toKeyFaceUnchecked();
+                    kf->data().finalizeConcat();
+                    break;
+                }
+                default:
+                    break;
                 }
             }
         }
         complex->nodesChanged().emit(complex->opDiff_);
         complex->opDiff_.clear();
+        complex->temporaryCellSet_.clear();
     }
 }
 
@@ -284,9 +333,9 @@ void Operations::hardDelete(Node* node, bool deleteIsolatedVertices) {
         nodesToDestroy.merge(isolatedInbetweenVertices);
     }
 
-    destroyNodes_(nodesToDestroy);
+    core::Array<Node*> nodesToDestroyArray(nodesToDestroy);
+    destroyNodes_(nodesToDestroyArray);
 }
-
 
 /*
 
@@ -309,73 +358,343 @@ softDeleteRec<Dim, MaxDim>(Array<Cell<Dim>> cells)
 
 */
 
+namespace {
 
-// assumes same time for all key cells
-void Operations::softDelete(core::ConstSpan<Node*> nodes) {
+class ClassifiedCells {
+public:
+    ClassifiedCells() noexcept = default;
 
-    std::unordered_set<Node*> nodesToDelete;
-    for (Node* node : nodes) {
-        nodesToDelete.insert(node);
-        collectDependentNodes_(node, nodesToDelete);
+    ClassifiedCells(core::ConstSpan<Cell*> cells) {
+        insert(cells.begin(), cells.end());
     }
 
-    core::Array<Group*> groups;
-    core::Array<KeyFace*> kfs;
-    core::Array<KeyEdge*> kes;
-    core::Array<KeyVertex*> kvs;
+    bool insert(Cell* cell) {
+        return insert_(cell);
+    }
 
-    for (Node* node : nodesToDelete) {
-        node->isBeingDeleted_ = true;
-        if (node->isCell()) {
-            Cell* cell = node->toCellUnchecked();
-            switch (cell->cellType()) {
-            case CellType::KeyFace:
-                kfs.append(cell->toKeyFaceUnchecked());
-                break;
-            case CellType::KeyEdge:
-                kes.append(cell->toKeyEdgeUnchecked());
-                break;
-            case CellType::KeyVertex:
-                kvs.append(cell->toKeyVertexUnchecked());
-                break;
-            default:
-                break;
+    template<typename Iter>
+    void insert(Iter first, Iter last) {
+        while (first != last) {
+            insert_(*first);
+            ++first;
+        }
+    }
+
+    void insert(const CellRangeView& rangeView) {
+        for (Cell* cell : rangeView) {
+            insert_(cell);
+        }
+    }
+
+    void clear() {
+        kvs_.clear();
+        kes_.clear();
+        kfs_.clear();
+        ivs_.clear();
+        ies_.clear();
+        ifs_.clear();
+    }
+
+    core::Array<KeyVertex*>& kvs() {
+        return kvs_;
+    }
+
+    const core::Array<KeyVertex*>& kvs() const {
+        return kvs_;
+    }
+
+    core::Array<KeyEdge*>& kes() {
+        return kes_;
+    }
+
+    const core::Array<KeyEdge*>& kes() const {
+        return kes_;
+    }
+
+    core::Array<KeyFace*>& kfs() {
+        return kfs_;
+    }
+
+    const core::Array<KeyFace*>& kfs() const {
+        return kfs_;
+    }
+
+    core::Array<InbetweenVertex*>& ivs() {
+        return ivs_;
+    }
+
+    const core::Array<InbetweenVertex*>& ivs() const {
+        return ivs_;
+    }
+
+    core::Array<InbetweenEdge*>& ies() {
+        return ies_;
+    }
+
+    const core::Array<InbetweenEdge*>& ies() const {
+        return ies_;
+    }
+
+    core::Array<InbetweenFace*>& ifs() {
+        return ifs_;
+    }
+
+    const core::Array<InbetweenFace*>& ifs() const {
+        return ifs_;
+    }
+
+private:
+    core::Array<KeyVertex*> kvs_;
+    core::Array<KeyEdge*> kes_;
+    core::Array<KeyFace*> kfs_;
+    core::Array<InbetweenVertex*> ivs_;
+    core::Array<InbetweenEdge*> ies_;
+    core::Array<InbetweenFace*> ifs_;
+
+    bool insert_(Cell* cell) {
+        switch (cell->cellType()) {
+        case vacomplex::CellType::KeyVertex: {
+            KeyVertex* kv = cell->toKeyVertexUnchecked();
+            if (!kvs_.contains(kv)) {
+                kvs_.append(kv);
+                return true;
+            }
+            break;
+        }
+        case vacomplex::CellType::KeyEdge: {
+            KeyEdge* ke = cell->toKeyEdgeUnchecked();
+            if (!kes_.contains(ke)) {
+                kes_.append(ke);
+                return true;
+            }
+            break;
+        }
+        case vacomplex::CellType::KeyFace: {
+            KeyFace* kf = cell->toKeyFaceUnchecked();
+            if (!kfs_.contains(kf)) {
+                kfs_.append(kf);
+                return true;
+            }
+            break;
+        }
+        case vacomplex::CellType::InbetweenVertex: {
+            InbetweenVertex* iv = cell->toInbetweenVertexUnchecked();
+            if (!ivs_.contains(iv)) {
+                ivs_.append(iv);
+                return true;
+            }
+            break;
+        }
+        case vacomplex::CellType::InbetweenEdge: {
+            InbetweenEdge* ie = cell->toInbetweenEdgeUnchecked();
+            if (!ies_.contains(ie)) {
+                ies_.append(ie);
+                return true;
+            }
+            break;
+        }
+        case vacomplex::CellType::InbetweenFace: {
+            InbetweenFace* if_ = cell->toInbetweenFaceUnchecked();
+            if (!ifs_.contains(if_)) {
+                ifs_.append(if_);
+                return true;
+            }
+            break;
+        }
+        }
+        return false;
+    }
+};
+
+class ResolvedSelection {
+public:
+    ResolvedSelection(core::ConstSpan<Node*> nodes) {
+        for (Node* node : nodes) {
+            if (node->isGroup()) {
+                Group* group = node->toGroupUnchecked();
+                visitGroup_(group);
             }
         }
+        for (Node* node : nodes) {
+            if (node->isCell()) {
+                Cell* cell = node->toCellUnchecked();
+                if (!cells_.contains(cell)) {
+                    cells_.append(cell);
+                    topCells_.append(cell);
+                }
+            }
+        }
+    }
+
+    const core::Array<Group*>& groups() const {
+        return groups_;
+    }
+    const core::Array<Cell*>& cells() const {
+        return cells_;
+    }
+
+    const core::Array<Group*>& topGroups() const {
+        return topGroups_;
+    }
+    const core::Array<Cell*>& topCells() const {
+        return topCells_;
+    }
+
+private:
+    core::Array<Group*> groups_;
+    core::Array<Cell*> cells_;
+
+    core::Array<Group*> topGroups_;
+    core::Array<Cell*> topCells_;
+
+    void visitChildNode_(Node* node) {
+        if (node->isGroup()) {
+            Group* group = node->toGroupUnchecked();
+            visitGroup_(group);
+        }
         else {
-            groups.append(node->toGroupUnchecked());
+            Cell* cell = node->toCellUnchecked();
+            if (cells_.contains(cell)) {
+                topCells_.removeOne(cell);
+            }
+            else {
+                cells_.append(cell);
+            }
         }
     }
 
-    /*
-    std::unordered_set<KeyVertex*> resultVertices;
-    std::unordered_set<KeyEdge*> resultEdges;
-
-    for (KeyEdge* ke : kes) {
-        KeyVertex* kv1 = ke->startVertex();
-        KeyVertex* kv2 = ke->endVertex();
-        UncutAtKeyEdgeResult uncutFace = uncutAtKeyEdge(ke);
-        if (uncutFace.success) {
-            resultVertices.insert(kv1);
-            resultVertices.insert(kv2);
-        }
-        else { // uncut failed
-            resultEdges.insert(ke);
-        }
-    }
-
-    for (KeyVertex* kv : kvs) {
-        UncutAtKeyVertexResult uncutEdge = uncutAtKeyVertex(kv, smoothJoins);
-        if (uncutEdge.resultKe) {
-            appendToResult(uncutEdge);
+    void visitGroup_(Group* group) {
+        if (groups_.contains(group)) {
+            topGroups_.removeOne(group);
         }
         else {
-            // uncut failed, return the vertex id
-            appendToResult(kv);
+            groups_.append(group);
+            topGroups_.append(group);
+            for (Node* child : *group) {
+                visitChildNode_(child);
+            }
         }
     }
-    
-    */
+};
+
+} // namespace
+
+// deleteIsolatedVertices is not supported yet
+void Operations::softDelete(
+    core::ConstSpan<Node*> nodes,
+    bool /*deleteIsolatedVertices*/) {
+
+    if (nodes.isEmpty()) {
+        return;
+    }
+
+    constexpr bool smoothJoins = false;
+
+    // classifyCells
+    ClassifiedCells classifiedStar;
+    auto classifyStar = [&](auto& cells) {
+        classifiedStar.clear();
+        for (const auto& cell : cells) {
+            classifiedStar.insert(cell->star());
+        }
+    };
+
+    // cells is updated to contain only cells that could not be uncut.
+    auto uncutCells = [&](auto& cells) {
+        using CellType =
+            std::remove_pointer_t<core::RemoveCVRef<decltype(cells)>::value_type>;
+        for (CellType*& cell : cells) {
+            bool wasUncut = false;
+            if constexpr (std::is_same_v<CellType, KeyVertex>) {
+                wasUncut = uncutAtKeyVertex(cell, smoothJoins).success;
+                VGC_DEBUG_TMP("uncutAtKeyVertex->{}", wasUncut);
+            }
+            if constexpr (std::is_same_v<CellType, KeyEdge>) {
+                wasUncut = uncutAtKeyEdge(cell).success;
+                VGC_DEBUG_TMP("uncutAtKeyEdge->{}", wasUncut);
+            }
+            if (wasUncut) {
+                cell = nullptr;
+            }
+        }
+        cells.removeAll(nullptr);
+    };
+
+    auto hardDeleteCells = [=](auto& cells) {
+        for (const auto& cell : cells) {
+            // Note: deleteIsolatedVertices could remove cells that are
+            // in `cells` and it would cause a crash.
+            hardDelete(cell, false);
+        }
+        cells.clear();
+    };
+
+    // Resolve selection
+    ResolvedSelection selection(nodes);
+    ClassifiedCells selectionCells(selection.cells());
+
+    Complex* complex = nodes.first()->complex();
+    complex->temporaryCellSet_ = closure(opening(selection.cells()));
+
+    // Faces
+    {
+        core::Array<KeyFace*> kfs(selectionCells.kfs());
+        if (!kfs.isEmpty()) {
+            uncutCells(kfs);
+        }
+        hardDeleteCells(kfs);
+    }
+
+    // Edges
+    {
+        core::Array<KeyEdge*> kes(selectionCells.kes());
+        if (!kes.isEmpty()) {
+            uncutCells(kes);
+        }
+        if (!kes.isEmpty()) {
+            classifyStar(kes);
+            core::Array<KeyFace*>& kfs = classifiedStar.kfs();
+            uncutCells(kfs);
+            uncutCells(kes);
+        }
+        hardDeleteCells(kes);
+    }
+
+    // Vertices
+    {
+        core::Array<KeyVertex*> kvs(selectionCells.kvs());
+        if (!kvs.isEmpty()) {
+            uncutCells(kvs);
+        }
+        if (!kvs.isEmpty()) {
+            classifyStar(kvs);
+            core::Array<KeyEdge*>& kes = classifiedStar.kes();
+            uncutCells(kes);
+            uncutCells(kvs);
+        }
+        if (!kvs.isEmpty()) {
+            classifyStar(kvs);
+            core::Array<KeyFace*>& kfs = classifiedStar.kfs();
+            uncutCells(kfs);
+            core::Array<KeyEdge*>& kes = classifiedStar.kes();
+            uncutCells(kes);
+            uncutCells(kvs);
+        }
+        hardDeleteCells(kvs);
+    }
+
+    // Groups
+    for (Group* g : selection.topGroups()) {
+        destroyChildlessNode_(g);
+    }
+
+    // Check closure for residual cells to remove such as isolated vertices.
+    ClassifiedCells residualCells(complex->temporaryCellSet_);
+    for (KeyVertex* kv : residualCells.kvs()) {
+        if (kv->star().isEmpty()) {
+            destroyChildlessNode_(kv);
+        }
+    }
 }
 
 core::Array<KeyCell*> Operations::simplify(
@@ -386,7 +705,7 @@ core::Array<KeyCell*> Operations::simplify(
     Complex* complex = nullptr;
     if (kvs.isEmpty()) {
         if (kes.isEmpty()) {
-            return;
+            return {};
         }
         complex = kes.first()->complex();
     }
@@ -400,8 +719,6 @@ core::Array<KeyCell*> Operations::simplify(
     std::unordered_set<core::Id> resultFaceIds;
 
     for (KeyEdge* ke : kes) {
-        KeyVertex* kv1 = ke->startVertex();
-        KeyVertex* kv2 = ke->endVertex();
         UncutAtKeyEdgeResult uncutFace = uncutAtKeyEdge(ke);
         if (uncutFace.success) {
             resultFaceIds.erase(uncutFace.removedKfId1);
@@ -433,9 +750,9 @@ core::Array<KeyCell*> Operations::simplify(
     for (core::Id id : resultEdgeIds) {
         Cell* cell = complex->findCell(id);
         if (cell) {
-            KeyCell* kc = cell->toKeyCell();
-            if (kc) {
-                result.append(kc);
+            KeyEdge* ke = cell->toKeyEdge();
+            if (ke) {
+                result.append(ke);
             }
         }
     }
@@ -1050,8 +1367,13 @@ Operations::uncutAtKeyVertex(KeyVertex* targetKv, bool smoothJoin) {
 
         KeyHalfedge oldKhe(oldKe, true);
         KeyHalfedge newKhe(newKe, true);
-        for (Cell* starCell : oldKe->star().copy()) {
-            substitute_(oldKhe, newKhe);
+        substitute_(oldKhe, newKhe);
+
+        // Since substitute expects end vertices to be the same,
+        // it didn't remove our targetKv from its star. So
+        // we do it manually here.
+        for (Cell* cell : targetKv->star().copy()) {
+            removeFromBoundary_(cell, targetKv);
         }
 
         // Delete oldKe and targetKv
@@ -1076,19 +1398,16 @@ Operations::uncutAtKeyVertex(KeyVertex* targetKv, bool smoothJoin) {
         std::unique_ptr<KeyEdgeData> concatData =
             ked1->fromConcatStep(khd1, khd2, smoothJoin);
 
-        // TODO: really pick lower
-        KeyEdge* lowerKe = info.khe1.edge();
+        std::array<Node*, 2> kes = {info.khe1.edge(), info.khe2.edge()};
+        Node* bottomMostEdge = findBottomMost(kes);
+        Group* parentGroup = bottomMostEdge->parentGroup();
+        Node* nextSibling = bottomMostEdge;
 
-        newKe = createKeyOpenEdge(
-            kv1,
-            kv2,
-            std::move(concatData),
-            lowerKe->parentGroup(),
-            lowerKe->nextSibling());
+        newKe =
+            createKeyOpenEdge(kv1, kv2, std::move(concatData), parentGroup, nextSibling);
         result.resultKe = newKe;
 
-        bool hasStar = false;
-        for (Cell* starCell : lowerKe->star().copy()) {
+        for (Cell* starCell : info.khe1.edge()->star().copy()) {
             KeyFace* kf = starCell->toKeyFace();
             if (!kf) {
                 continue;
@@ -1109,14 +1428,18 @@ Operations::uncutAtKeyVertex(KeyVertex* targetKv, bool smoothJoin) {
                         khe = KeyHalfedge(newKe, dir);
                         ++it;
                     }
-                    if (khe.startVertex() == targetKv) {
+                    else if (khe.startVertex() == targetKv) {
                         it = cycle.halfedges_.erase(it);
+                    }
+                    else {
+                        ++it;
                     }
                 }
             }
 
             removeFromBoundary_(kf, info.khe1.edge());
             removeFromBoundary_(kf, info.khe2.edge());
+            removeFromBoundary_(kf, targetKv);
             addToBoundary_(kf, newKe);
         }
 
@@ -1146,8 +1469,6 @@ UncutAtKeyEdgeResult Operations::uncutAtKeyEdge(KeyEdge* targetKe) {
     if (!info.isValid) {
         return result;
     }
-
-    KeyFace* result = nullptr;
 
     if (targetKe->isClosed()) {
         if (info.kf1 == info.kf2) {
@@ -1181,11 +1502,12 @@ UncutAtKeyEdgeResult Operations::uncutAtKeyEdge(KeyEdge* targetKe) {
             Node* bottomMostFace = findBottomMost(kfs);
             Group* parentGroup = bottomMostFace->parentGroup();
             Node* nextSibling = bottomMostFace;
+
             KeyFace* newKf =
                 createKeyFace(std::move(newCycles), parentGroup, nextSibling);
 
             KeyFaceData::assignFromConcatStep(
-                newKf->data(), info.kf1->data(), info.kf1->data());
+                newKf->data(), info.kf1->data(), info.kf2->data());
 
             result.removedKfId1 = info.kf1->id();
             result.removedKfId2 = info.kf2->id();
@@ -1277,11 +1599,12 @@ UncutAtKeyEdgeResult Operations::uncutAtKeyEdge(KeyEdge* targetKe) {
             Node* bottomMostFace = findBottomMost(kfs);
             Group* parentGroup = bottomMostFace->parentGroup();
             Node* nextSibling = bottomMostFace;
+
             KeyFace* newKf =
                 createKeyFace(std::move(newCycles), parentGroup, nextSibling);
 
             KeyFaceData::assignFromConcatStep(
-                newKf->data(), info.kf1->data(), info.kf1->data());
+                newKf->data(), info.kf1->data(), info.kf2->data());
 
             result.removedKfId1 = info.kf1->id();
             result.removedKfId2 = info.kf2->id();
@@ -1439,7 +1762,7 @@ void Operations::insertNodeAsLastChild_(Node* node, Group* parent) {
 }
 
 /* static */
-Node* Operations::findTopMost(core::Span<Node*> nodes) {
+Node* Operations::findTopMost(core::ConstSpan<Node*> nodes) {
     // currently only looking under a single parent
     // TODO: tree-wide top most.
     if (nodes.isEmpty()) {
@@ -1458,7 +1781,7 @@ Node* Operations::findTopMost(core::Span<Node*> nodes) {
 }
 
 /* static */
-Node* Operations::findBottomMost(core::Span<Node*> nodes) {
+Node* Operations::findBottomMost(core::ConstSpan<Node*> nodes) {
     // currently only looking under a single parent
     // TODO: tree-wide bottom most.
     if (nodes.isEmpty()) {
@@ -1478,42 +1801,46 @@ Node* Operations::findBottomMost(core::Span<Node*> nodes) {
 
 // Assumes node has no children.
 // maybe we should also handle star/boundary changes here
-void Operations::destroyNode_(Node* node) {
+void Operations::destroyChildlessNode_(Node* node) {
     [[maybe_unused]] Group* group = node->toGroup();
-    VGC_ASSERT(!group || group->numChildren() == 0);
+    if (group) {
+        VGC_ASSERT(group->numChildren() == 0);
+    }
     Group* parentGroup = node->parentGroup();
-    core::Id nodeId = node->id();
-    node->unparent();
-    complex()->nodes_.erase(nodeId);
-    complex_->opDiff_.onNodeDestroyed(nodeId);
     if (parentGroup) {
+        node->unparent();
         complex_->opDiff_.onNodeModified(
             parentGroup, NodeModificationFlag::ChildrenChanged);
     }
+    if (node->isCell()) {
+        complex_->temporaryCellSet_.removeOne(node->toCellUnchecked());
+    }
+    complex_->opDiff_.onNodeDestroyed(node->id());
+    complex_->nodes_.erase(node->id());
 }
 
 // Assumes that all descendants of all `nodes` are also in `nodes`.
-void Operations::destroyNodes_(const std::unordered_set<Node*>& nodes) {
+void Operations::destroyNodes_(core::ConstSpan<Node*> nodes) {
     // debug check
     for (Node* node : nodes) {
         Group* group = node->toGroup();
         if (group) {
             for (Node* child : *group) {
-                VGC_ASSERT(nodes.count(child)); // == contains
+                VGC_ASSERT(nodes.contains(child));
             }
         }
     }
     for (Node* node : nodes) {
         Group* parentGroup = node->parentGroup();
-        node->unparent();
-        complex_->opDiff_.onNodeDestroyed(node->id());
         if (parentGroup) {
+            node->unparent();
             complex_->opDiff_.onNodeModified(
                 parentGroup, NodeModificationFlag::ChildrenChanged);
         }
     }
     for (Node* node : nodes) {
-        complex()->nodes_.erase(node->id());
+        complex_->opDiff_.onNodeDestroyed(node->id());
+        complex_->nodes_.erase(node->id());
     }
 }
 
@@ -1601,20 +1928,28 @@ void Operations::removeFromBoundary_(Cell* boundedCell, Cell* boundingCell) {
 }
 
 void Operations::substitute_(KeyVertex* oldVertex, KeyVertex* newVertex) {
-    for (Cell* starCell : oldVertex->star().copy()) {
-        addToBoundary_(starCell, newVertex);
-        starCell->substituteKeyVertex_(oldVertex, newVertex);
-        removeFromBoundary_(starCell, oldVertex);
+    if (newVertex != oldVertex) {
+        for (Cell* starCell : oldVertex->star().copy()) {
+            starCell->substituteKeyVertex_(oldVertex, newVertex);
+            removeFromBoundary_(starCell, oldVertex);
+            addToBoundary_(starCell, newVertex);
+        }
     }
 }
 
+// it assumes end vertices are the same!
 void Operations::substitute_(const KeyHalfedge& oldKhe, const KeyHalfedge& newKhe) {
     KeyEdge* const oldKe = oldKhe.edge();
     KeyEdge* const newKe = newKhe.edge();
-    for (Cell* starCell : oldKe->star().copy()) {
-        addToBoundary_(starCell, newKe);
+    auto star = oldKe->star().copy();
+    for (Cell* starCell : star) {
         starCell->substituteKeyHalfedge_(oldKhe, newKhe);
-        removeFromBoundary_(starCell, oldKe);
+    }
+    if (newKe != oldKe) {
+        for (Cell* starCell : star) {
+            removeFromBoundary_(starCell, oldKe);
+            addToBoundary_(starCell, newKe);
+        }
     }
 }
 

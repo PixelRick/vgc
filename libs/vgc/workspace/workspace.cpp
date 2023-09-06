@@ -487,7 +487,7 @@ core::Array<core::Id> Workspace::unglue(core::ConstSpan<core::Id> elementIds) {
 }
 
 core::Array<core::Id>
-Workspace::simplify(core::ConstSpan<core::Id> elementIds, bool smoothJoins, bool deleteCycleLessFaces) {
+Workspace::simplify(core::ConstSpan<core::Id> elementIds, bool smoothJoins) {
     core::Array<core::Id> result;
 
     core::Array<vacomplex::KeyVertex*> kvs;
@@ -536,7 +536,7 @@ Workspace::simplify(core::ConstSpan<core::Id> elementIds, bool smoothJoins, bool
     };
 
     for (vacomplex::KeyEdge* ke : kes) {
-        vacomplex::KeyFace* uncutFace = vacomplex::ops::uncutAtKeyEdge(ke, deleteCycleLessFaces);
+        vacomplex::KeyFace* uncutFace = vacomplex::ops::uncutAtKeyEdge(ke);
         if (uncutFace) {
             appendToResult(uncutFace);
         }
@@ -571,7 +571,7 @@ Workspace::simplify(core::ConstSpan<core::Id> elementIds, bool smoothJoins, bool
 
 dom::DocumentPtr Workspace::cut(core::ConstSpan<core::Id> elementIds) {
     dom::DocumentPtr res = copy(elementIds);
-    hardDelete(elementIds);
+    softDelete(elementIds);
     return res;
 }
 
@@ -644,11 +644,9 @@ namespace {
 // same, so it would be best to have the delete method virtual in
 // workspace::Element.
 //
-// For now we simply use hard delete since it's the only deletion method
-// implemented. Later, the default for VAC cells should probably be soft
-// delete.
+// Later, the default for VAC cells should probably be soft delete.
 //
-void deleteElement(workspace::Element* element) {
+void hardDeleteElement(workspace::Element* element) {
     vacomplex::Node* node = element->vacNode();
     bool deleteIsolatedVertices = true;
     vacomplex::ops::hardDelete(node, deleteIsolatedVertices);
@@ -657,7 +655,6 @@ void deleteElement(workspace::Element* element) {
 } // namespace
 
 void Workspace::hardDelete(core::ConstSpan<core::Id> elementIds) {
-
     // Iterate over all elements to delete.
     //
     // For now, deletion is done via the DOM, so we need to sync() before
@@ -666,9 +663,24 @@ void Workspace::hardDelete(core::ConstSpan<core::Id> elementIds) {
     for (core::Id id : elementIds) {
         workspace::Element* element = find(id);
         if (element) {
-            deleteElement(element);
+            hardDeleteElement(element);
         }
     }
+}
+
+void Workspace::softDelete(core::ConstSpan<core::Id> elementIds) {
+    core::Array<vacomplex::Node*> nodes;
+    for (core::Id id : elementIds) {
+        workspace::Element* element = find(id);
+        if (element) {
+            vacomplex::Node* node = element->vacNode();
+            if (node && !nodes.contains(node)) {
+                nodes.append(node);
+            }
+        }
+    }
+    bool deleteIsolatedVertices = true;
+    vacomplex::ops::softDelete(nodes, deleteIsolatedVertices);
 }
 
 std::unordered_map<core::StringId, Workspace::ElementCreator>&
