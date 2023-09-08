@@ -1,44 +1,57 @@
 
-struct PS_INPUT {
+struct PS_INPUT
+{
     float4 pos : SV_POSITION;
     float4 clipPos : POSITION0;
     float2 uv : TEXCOORD0;
     float4 col : COLOR0;
 };
 
-float avg(float3 x) {
+float avg(float3 x)
+{
     return (x.x + x.y + x.z) / 3;
 }
 
 float4 main(PS_INPUT input)
-    : SV_Target {
-
-    // gradient in V (-1:red, 0: black, 1:green) with 0.5 opacity
-    //if (input.uv.y > 0) {
-    //    return float4(input.uv.y, 0.f, 0.f, 0.5f);
-    //}
-    //else {
-    //    return float4(0.f, 0.f, -input.uv.y, 0.5f);
-    //}
-
+    : SV_Target
+{
     // smooth brush test (easings.net/#easeInOutQuad)
-    //float x = 1.f - abs(input.uv.y);
-    //float k = -2 * x + 2;
-    //float ca = x < 0.5 ? 2 * x * x : 1 - k * k / 2;
-    //return float4(input.col.rgb, input.col.a * ca);
+    // v: [-1, 1]
+    float v = input.uv.y;
+    // u: [0, 1]
+    float u = input.uv.x;
+    float vAbs = abs(v);
 
-    const float square_size = 0.05;
-    const float m = square_size * 2;
-    float2 uvm = (m + ((input.uv + 2.0) % m)) % m;
+    // x: linear, 1 on centerline, 0 on offset line
+    float x = 1.f - vAbs;
 
-    if ((uvm.x < square_size) == (uvm.y < square_size)) {
-        return float4(0, 0, 0, input.col.a * 2);
+    // vGrad: easeInOut, 1 on centerline, 0 on offset line
+    float k = -2 * x + 2;
+    float gradV = x < 0.5 ? 2 * x * x : 1 - k * k / 2;
+   
+    float light = 0.9 * gradV + (vAbs < 0.32 ? 0.1 : 0);
+
+    float t0 = 0.1;
+    float t1 = 0.25;
+    float3 color = lerp(input.col.rgb, input.col.gbr, input.uv.x * 0.5);
+    float colorBurn = 0.0;
+    
+    float minCC = min(min(color.r, color.g), color.b);
+    float burn = max(0, 0.9f - minCC);
+    if (vAbs < t1)
+    {
+        if (vAbs > t0)
+        {
+            float cx = 1.f - (vAbs - t0) / (t1 - t0);
+            float ck = -2 * cx + 2;
+            float grad1 = cx < 0.5 ? 2 * cx * cx : 1 - ck * ck / 2;
+            colorBurn = grad1 * burn;
+        }
+        else
+        {
+            colorBurn = burn;
+        }
     }
-    float3 c =
-        input.col.rgb; // lerp(input.col.rgb, input.col.gbr, input.uv.x / 160.0 % 0.5);
-    if (input.uv.y < -0.1) {
-        c += (round(avg(c)) * 2 - 1) * 0.5;
-    }
 
-    return float4(c, input.col.a);
+    return float4(color + colorBurn, input.col.a * light);
 }

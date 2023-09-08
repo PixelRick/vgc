@@ -429,7 +429,7 @@ private:
 };
 
 int main(int argc, char* argv[]) {
-    vgc::workspace::detail::setMultiJoinEnabled(true);
+    //vgc::workspace::detail::setMultiJoinEnabled(true);
     auto application = UiTestApplication::create(argc, argv);
     return application->exec();
 }

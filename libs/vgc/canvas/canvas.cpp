@@ -710,10 +710,10 @@ void Canvas::onPaintDraw(graphics::Engine* engine, ui::PaintOptions options) {
         core::FloatArray a;
         geometry::Vec2f sz = size();
         a.extend({
-            0.f,    0.f,    1.f, 1.f, 1.f, //
-            0.f,    sz.y(), 1.f, 1.f, 1.f, //
-            sz.x(), 0.f,    1.f, 1.f, 1.f, //
-            sz.x(), sz.y(), 1.f, 1.f, 1.f  //
+            0.f,    0.f,    0.f, 0.f, 0.f, //
+            0.f,    sz.y(), 0.f, 0.f, 0.f, //
+            sz.x(), 0.f,    0.f, 0.f, 0.f, //
+            sz.x(), sz.y(), 0.f, 0.f, 0.f  //
         });
         engine->updateVertexBufferData(bgGeometry_, std::move(a));
     }

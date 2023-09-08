@@ -615,9 +615,19 @@ void VacKeyEdge::onPaintDraw(
     graphics.setStyle();
 
     if (isPaintingStroke) {
-        engine->setProgram(graphics::BuiltinProgram::Simple /*TexturedDebug*/);
+        graphics::BlendStateCreateInfo ci = {};
+        ci.setEnabled(true);
+        ci.setEquationRGB(
+            graphics::BlendOp::Add,
+            graphics::BlendFactor::SourceAlpha,
+            graphics::BlendFactor::One);
+        auto bs = engine->createBlendState(ci);
+        geometry::Vec4f constantFactors = {};
+        engine->pushBlendState(bs, constantFactors);
+        engine->setProgram(graphics::BuiltinProgram::SimpleTexturedDebug);
         engine->draw(graphics.strokeGeometry());
         //engine->draw(graphics.joinGeometry());
+        engine->popBlendState();
     }
 
     if (isSelected) {
