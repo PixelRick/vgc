@@ -1156,14 +1156,19 @@ private:
     bool fixEvalLocation_(Int& segmentIndex, double& u) const;
 };
 
-core::Array<CurveIntersectionRecord> intersectStrokeCenterlines(
+// WIP
+
+SampledCurveLocation closestCenterlineLocation(
+    const StrokeSampleEx2dArray& sampleExArray,
+    const Vec2d& position);
+
+core::Array<SampledCurveIntersectionRecord> intersectStrokeCenterlines(
     AbstractStroke2d* stroke,
     core::ConstSpan<AbstractStroke2d*> otherStrokes,
     const CurveSamplingParameters& samplingParams) {
 
     // TODO
-    return {
-    }
+    return {};
 }
 
 } // namespace vgc::geometry

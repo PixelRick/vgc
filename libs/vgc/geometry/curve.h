@@ -352,54 +352,112 @@ private:
     double u_; // parameter in stroke segment.
 };
 
-/// \class vgc::geometry::CurveIntersectionRecord
-/// \brief Record of a curve intersection with another.
+/// \class vgc::geometry::SampledCurveLocation
+/// \brief The implicit parametric location of a point between two samples.
+///
+class VGC_GEOMETRY_API SampledCurveLocation {
+public:
+    constexpr SampledCurveLocation() noexcept
+        : lerpParameter_(0.) {
+    }
+
+    VGC_WARNING_PUSH
+    VGC_WARNING_MSVC_DISABLE(26495) // member variable uninitialized
+    SampledCurveLocation(core::NoInit) noexcept
+        : sampleParameter1_(core::noInit)
+        , sampleParameter2_(core::noInit) {
+    }
+    VGC_WARNING_POP
+
+    explicit SampledCurveLocation(
+        const CurveParameter& sampleParameter1,
+        const CurveParameter& sampleParameter2,
+        double lerpParameter) noexcept
+
+        : sampleParameter1_(sampleParameter1)
+        , sampleParameter2_(sampleParameter2)
+        , lerpParameter_(lerpParameter) {
+    }
+
+    const CurveParameter& sampleParameter1() const {
+        return sampleParameter1_;
+    }
+
+    void setSampleParameter1(const CurveParameter& sampleParameter1) {
+        sampleParameter1_ = sampleParameter1;
+    }
+
+    double lerpParameter() const {
+        return lerpParameter_;
+    }
+
+    void setLerpParameter(double lerpParameter) {
+        lerpParameter_ = lerpParameter;
+    }
+
+private:
+    CurveParameter sampleParameter1_;
+    CurveParameter sampleParameter2_;
+    double lerpParameter_;
+};
+
+/// \class vgc::geometry::SampledCurveIntersectionRecord
+/// \brief Record of a curve intersection with an other curve,
+///        done with the polylines of samples.
 ///
 /// \sa intersectStrokeCenterlines
 ///
-class VGC_GEOMETRY_API CurveIntersectionRecord {
+class VGC_GEOMETRY_API SampledCurveIntersectionRecord {
 public:
-    constexpr CurveIntersectionRecord() noexcept
+    constexpr SampledCurveIntersectionRecord() noexcept
         : otherCurveIndex_(-1) {
     }
 
     VGC_WARNING_PUSH
     VGC_WARNING_MSVC_DISABLE(26495) // member variable uninitialized
-    CurveIntersectionRecord(core::NoInit) noexcept
-        : targetCurveParameter_(core::noInit)
-        , otherCurveParameter_(core::noInit) {
+    SampledCurveIntersectionRecord(core::NoInit) noexcept
+        : targetCurveLocation_(core::noInit)
+        , otherCurveLocation_(core::noInit) {
     }
     VGC_WARNING_POP
 
-    explicit CurveIntersectionRecord(
-        const CurveParameter& targetCurveParameter,
-        const CurveParameter& otherCurveParameter,
+    explicit SampledCurveIntersectionRecord(
+        const SampledCurveLocation& targetCurveLocation,
+        const SampledCurveLocation& otherCurveLocation,
         Int otherCurveIndex) noexcept
 
-        : targetCurveParameter_(targetCurveParameter)
-        , otherCurveParameter_(otherCurveParameter)
+        : targetCurveLocation_(targetCurveLocation)
+        , otherCurveLocation_(otherCurveLocation)
         , otherCurveIndex_(otherCurveIndex) {
     }
 
-    Int segmentIndex() const {
-        return segmentIndex_;
+    const SampledCurveLocation& targetCurveLocation() const {
+        return targetCurveLocation_;
     }
 
-    void setSegmentIndex(Int segmentIndex) {
-        segmentIndex_ = segmentIndex;
+    void setTargetCurveLocation(const SampledCurveLocation& targetCurveLocation) {
+        targetCurveLocation_ = targetCurveLocation;
     }
 
-    double u() const {
-        return u_;
+    const SampledCurveLocation& otherCurveLocation() const {
+        return otherCurveLocation_;
     }
 
-    void setU(double u) {
-        u_ = u;
+    void setOtherCurveLocation(const SampledCurveLocation& otherCurveLocation) {
+        otherCurveLocation_ = otherCurveLocation;
+    }
+
+    Int otherCurveIndex() const {
+        return otherCurveIndex_;
+    }
+
+    void setOtherCurveIndex(Int otherCurveIndex) {
+        otherCurveIndex_ = otherCurveIndex;
     }
 
 private:
-    CurveParameter targetCurveParameter_;
-    CurveParameter otherCurveParameter_;
+    SampledCurveLocation targetCurveLocation_;
+    SampledCurveLocation otherCurveLocation_;
     Int otherCurveIndex_;
 };
 
