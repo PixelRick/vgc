@@ -258,16 +258,14 @@ using SharedConstStrokeSample2dArray = core::SharedConstArray<StrokeSample2d>;
 class VGC_GEOMETRY_API StrokeSampleEx2d {
 public:
     constexpr StrokeSampleEx2d() noexcept
-        : sample_()
-        , speed_(0)
-        , segmentIndex_(-1)
-        , u_(-1) {
+        : speed_(0) {
     }
 
     VGC_WARNING_PUSH
     VGC_WARNING_MSVC_DISABLE(26495) // member variable uninitialized
     StrokeSampleEx2d(core::NoInit) noexcept
-        : sample_(core::noInit) {
+        : sample_(core::noInit)
+        , parameter_(core::noInit) {
     }
     VGC_WARNING_POP
 
@@ -282,8 +280,7 @@ public:
 
         : sample_(position, tangent, normal, halfwidths)
         , speed_(speed)
-        , segmentIndex_(segmentIndex)
-        , u_(u) {
+        , parameter_(segmentIndex, u) {
 
         updateOffsetPoints_();
     }
@@ -462,28 +459,35 @@ public:
         sample_.setCornerStart(isCornerStart);
     }
 
+    const CurveParameter& parameter() const {
+        return parameter_;
+    }
+
+    void setParameter(const CurveParameter& parameter) {
+        parameter_ = parameter;
+    }
+
     Int segmentIndex() const {
-        return segmentIndex_;
+        return parameter_.segmentIndex();
     }
 
     void setSegmentIndex(Int segmentIndex) {
-        segmentIndex_ = segmentIndex;
+        parameter_.setSegmentIndex(segmentIndex);
     }
 
     double u() const {
-        return u_;
+        return parameter_.u();
     }
 
     void setU(double u) {
-        u_ = u;
+        parameter_.setU(u);
     }
 
 private:
     StrokeSample2d sample_;
     std::array<Vec2d, 2> offsetPoints_;
     double speed_;
-    Int segmentIndex_;
-    double u_; // parameter in stroke segment.
+    CurveParameter parameter_;
 
     void updateOffsetPoints_() {
         offsetPoints_ = sample_.offsetPoints();
@@ -929,6 +933,11 @@ public:
         }
     }
 
+    core::Array<std::unique_ptr<AbstractStroke2d>>
+    split(core::ConstSpan<CurveParameter> locations) {
+        return split_(locations);
+    }
+
     void reverse() {
         reverse_();
     }
@@ -1094,6 +1103,9 @@ protected:
 
     virtual void open_(bool keepJoinAsBestAsPossible) = 0;
 
+    virtual core::Array<std::unique_ptr<AbstractStroke2d>>
+    split(core::ConstSpan<CurveParameter> locations) = 0;
+
     virtual void reverse_() = 0;
 
     virtual void assignFromConcat_(
@@ -1143,6 +1155,16 @@ private:
 
     bool fixEvalLocation_(Int& segmentIndex, double& u) const;
 };
+
+core::Array<CurveIntersectionRecord> intersectStrokeCenterlines(
+    AbstractStroke2d* stroke,
+    core::ConstSpan<AbstractStroke2d*> otherStrokes,
+    const CurveSamplingParameters& samplingParams) {
+
+    // TODO
+    return {
+    }
+}
 
 } // namespace vgc::geometry
 

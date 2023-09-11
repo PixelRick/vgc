@@ -308,6 +308,101 @@ private:
     //bool isScreenspace_ = false;
 };
 
+/// \class vgc::geometry::CurveParameter
+/// \brief Generic parameter of a parametric curve.
+///
+/// It is made of two values: an integer `segmentIndex` and a real `u`.
+///
+class VGC_GEOMETRY_API CurveParameter {
+public:
+    constexpr CurveParameter() noexcept
+        : segmentIndex_(-1)
+        , u_(-1.0) {
+    }
+
+    VGC_WARNING_PUSH
+    VGC_WARNING_MSVC_DISABLE(26495) // member variable uninitialized
+    CurveParameter(core::NoInit) noexcept {
+    }
+    VGC_WARNING_POP
+
+    explicit CurveParameter(Int segmentIndex, double u = 0) noexcept
+        : segmentIndex_(segmentIndex)
+        , u_(u) {
+    }
+
+    Int segmentIndex() const {
+        return segmentIndex_;
+    }
+
+    void setSegmentIndex(Int segmentIndex) {
+        segmentIndex_ = segmentIndex;
+    }
+
+    double u() const {
+        return u_;
+    }
+
+    void setU(double u) {
+        u_ = u;
+    }
+
+private:
+    Int segmentIndex_;
+    double u_; // parameter in stroke segment.
+};
+
+/// \class vgc::geometry::CurveIntersectionRecord
+/// \brief Record of a curve intersection with another.
+///
+/// \sa intersectStrokeCenterlines
+///
+class VGC_GEOMETRY_API CurveIntersectionRecord {
+public:
+    constexpr CurveIntersectionRecord() noexcept
+        : otherCurveIndex_(-1) {
+    }
+
+    VGC_WARNING_PUSH
+    VGC_WARNING_MSVC_DISABLE(26495) // member variable uninitialized
+    CurveIntersectionRecord(core::NoInit) noexcept
+        : targetCurveParameter_(core::noInit)
+        , otherCurveParameter_(core::noInit) {
+    }
+    VGC_WARNING_POP
+
+    explicit CurveIntersectionRecord(
+        const CurveParameter& targetCurveParameter,
+        const CurveParameter& otherCurveParameter,
+        Int otherCurveIndex) noexcept
+
+        : targetCurveParameter_(targetCurveParameter)
+        , otherCurveParameter_(otherCurveParameter)
+        , otherCurveIndex_(otherCurveIndex) {
+    }
+
+    Int segmentIndex() const {
+        return segmentIndex_;
+    }
+
+    void setSegmentIndex(Int segmentIndex) {
+        segmentIndex_ = segmentIndex;
+    }
+
+    double u() const {
+        return u_;
+    }
+
+    void setU(double u) {
+        u_ = u;
+    }
+
+private:
+    CurveParameter targetCurveParameter_;
+    CurveParameter otherCurveParameter_;
+    Int otherCurveIndex_;
+};
+
 namespace detail {
 
 // TODO: We may want to have a lean version of AbstractStroke2d dedicated to
