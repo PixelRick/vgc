@@ -124,6 +124,10 @@ core::Array<KeyVertex*> unglueKeyVertices(
     KeyVertex* kv,
     core::Array<std::pair<core::Id, core::Array<KeyEdge*>>>& ungluedKeyEdges);
 
+
+VGC_VACOMPLEX_API
+VertexCutEdgeResult vertexCutEdge(KeyEdge* ke, const geometry::CurveParameter& parameter);
+
 /// Performs an atomic simplification at the given `KeyVertex`, if possible.
 ///
 /// Such atomic simplification is possible in the following cases:

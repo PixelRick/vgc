@@ -179,6 +179,9 @@ protected:
 
     StrokeBoundaryInfo computeBoundaryInfo_() const override = 0;
 
+    CurveParameter
+    resolveSampledLocation_(const SampledCurveLocation& location) const override;
+
     void translate_(const geometry::Vec2d& delta) override;
 
     void transform_(const geometry::Mat3d& transformation) override;
@@ -186,6 +189,11 @@ protected:
     void close_(bool smoothJoin) override;
 
     void open_(bool keepJoinAsBestAsPossible) override;
+
+    std::unique_ptr<AbstractStroke2d> subStroke_(
+        const CurveParameter& p1,
+        const CurveParameter& p2,
+        Int numWraps) override;
 
     void reverse_() override;
 

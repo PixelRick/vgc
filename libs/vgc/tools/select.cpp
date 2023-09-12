@@ -43,6 +43,69 @@ ui::BoolSetting* showTransformBox() {
 
 } // namespace options
 
+VGC_DECLARE_OBJECT(VertexCutEdgeAction);
+
+class VertexCutEdgeAction : public ui::Action {
+private:
+    VGC_OBJECT(VertexCutEdgeAction, ui::Action)
+
+protected:
+    /// This is an implementation details.
+    /// Please use `VertexCutEdgeAction::create()` instead.
+    ///
+    VertexCutEdgeAction(CreateKey key)
+        : ui::Action(key, commands::vertexCutEdge()) {
+    }
+
+public:
+    /// Creates a `VertexCutEdgeAction`.
+    ///
+    static VertexCutEdgeActionPtr create() {
+        return core::createObject<VertexCutEdgeAction>();
+    }
+
+public:
+    void onMouseClick(ui::MouseEvent* event) override {
+
+        canvas::Canvas* canvas = tool_->canvas();
+        workspace::Workspace* workspace = tool_->workspace();
+        if (!canvas || !workspace) {
+            return;
+        }
+
+        // Open history group
+        core::UndoGroup* undoGroup = nullptr;
+        core::History* history = workspace->history();
+        if (history) {
+            undoGroup = history->createUndoGroup(actionName());
+        }
+
+        //workspace::Element* element = workspace->find(edgeId_);
+        //if (element && element->vacNode() && element->vacNode()->isCell()) {
+        //    vacomplex::KeyEdge* ke = element->vacNode()->toCellUnchecked()->toKeyEdge();
+        //    if (ke) {
+        //        vacomplex::KeyEdgeData* data = ke->data();
+        //        if (data) {
+        //            data->finishEdit();
+        //        }
+        //    }
+        //}
+
+        // Close operation
+        if (undoGroup) {
+            undoGroup->close();
+        }
+    }
+
+public:
+    Select* tool_ = nullptr;
+
+    core::StringId actionName() const {
+        static core::StringId actionName_("Vertex-Cut Edge");
+        return actionName_;
+    }
+};
+
 } // namespace
 
 Select::Select(CreateKey key)
@@ -65,6 +128,9 @@ Select::Select(CreateKey key)
 
     ui::Action* unglueAction = createTriggerAction(commands::unglue());
     unglueAction->triggered().connect(onUnglueSlot_());
+
+    VertexCutEdgeAction* vertexCutEdgeAction = createAction<VertexCutEdgeAction>();
+    vertexCutEdgeAction->tool_ = this;
 
     ui::Action* simplifyAction = createTriggerAction(commands::simplify());
     simplifyAction->triggered().connect(onSimplifySlot_());

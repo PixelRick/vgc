@@ -25,6 +25,7 @@
 #include <vgc/geometry/bezier.h>
 #include <vgc/geometry/catmullrom.h>
 #include <vgc/geometry/curve.h>
+#include <vgc/geometry/logcategories.h>
 
 namespace vgc::geometry {
 
@@ -540,6 +541,66 @@ AbstractStroke2d::computeSampling(const geometry::CurveSamplingParameters& param
     return result;
 }
 
+CurveParameter
+AbstractStroke2d::resolveSampledLocation(const SampledCurveLocation& location) const {
+    const Int numSegments = this->numSegments();
+    if (location.segmentIndex() < 0) {
+        return CurveParameter(0, 0);
+    }
+    else if (location.segmentIndex() > numSegments - 1) {
+        return CurveParameter(numSegments - 1, 1);
+    }
+    else if (!location.isLerped()) {
+        return CurveParameter(location.segmentIndex(), core::clamp(location.u1(), 0, 1));
+    }
+    else {
+        SampledCurveLocation sanitizedLocation(
+            location.segmentIndex(),
+            core::clamp(location.u1(), 0, 1),
+            core::clamp(location.u2(), 0, 1),
+            core::clamp(location.lerpParameter(), 0, 1));
+        return resolveSampledLocation_(location);
+    }
+}
+
+namespace {
+
+CurveParameter sanitizeCurveParameter(const CurveParameter& p, Int numSegments) {
+    Int segmentIndex = p.segmentIndex();
+    if (segmentIndex < 0) {
+        return CurveParameter(0, 0);
+    }
+    else if (segmentIndex > numSegments - 1) {
+        return CurveParameter(numSegments - 1, 1);
+    }
+    else {
+        return CurveParameter(segmentIndex, core::clamp(p.u(), 0, 1));
+    }
+}
+
+} // namespace
+
+std::unique_ptr<AbstractStroke2d> AbstractStroke2d::subStroke(
+    const CurveParameter& p1,
+    const CurveParameter& p2,
+    Int numWraps = 0) {
+
+    if (numWraps < 0) {
+        throw vgc::core::LogicError("AbstractStroke2d::subStroke(): argument `numWraps` "
+                                    "must be greater or equal than 0.");
+    }
+
+    if (!isClosed() && numWraps != 0) {
+        throw vgc::core::LogicError("AbstractStroke2d::subStroke(): argument `numWraps` "
+                                    "must be 0 if the stroke is open.");
+    }
+
+    const Int numSegments = this->numSegments();
+    CurveParameter p1_ = sanitizeCurveParameter(p1, numSegments);
+    CurveParameter p2_ = sanitizeCurveParameter(p2, numSegments);
+    return subStroke_(p1_, p2_, numWraps);
+}
+
 std::unique_ptr<AbstractStroke2d>
 AbstractStroke2d::convert_(const AbstractStroke2d* source) const {
     std::unique_ptr<AbstractStroke2d> result = clone_();
@@ -602,6 +663,104 @@ bool AbstractStroke2d::fixEvalLocation_(Int& segmentIndex, double& u) const {
         // It is a non-zero-length segment.
         return true;
     }
+}
+
+SampledCurveClosestLocationResult
+closestCenterlineLocation(const StrokeSampleEx2dArray& samples, const Vec2d& position) {
+
+    SampledCurveClosestLocationResult result(detail::internalKey);
+
+    if (samples.isEmpty()) {
+        return result;
+    }
+
+    double minDist = core::DoubleInfinity;
+
+    auto it2 = samples.begin();
+    Int i = 0;
+    for (auto it1 = it2++; it2 != samples.end(); it1 = it2++, ++i) {
+        const Vec2d p1 = it1->position();
+        const Vec2d p2 = it2->position();
+        const Vec2d p1p = position - p1;
+        double d = p1p.length();
+        if (d > 0) {
+            Vec2d p1p2 = p2 - p1;
+            double l = p1p2.length();
+            if (l > 0) {
+                Vec2d p1p2Dir = p1p2 / l;
+                double tx = p1p2Dir.dot(p1p);
+                if (tx >= 0 && tx <= l) { // does p project in segment?
+                    double ty = p1p2Dir.det(p1p);
+                    d = std::abs(ty);
+                    if (d < minDist) {
+                        Int segIdx1 = it1->segmentIndex();
+                        Int segIdx2 = it2->segmentIndex();
+                        bool isInvalidSamplePair = false;
+                        double u2 = 0;
+                        if (segIdx1 == segIdx2) {
+                            u2 = it2->u();
+                        }
+                        else if ((segIdx1 + 1 == segIdx2) && (it2->u() == 0)) {
+                            u2 = 1.;
+                        }
+                        else {
+                            isInvalidSamplePair = true;
+                            VGC_WARNING(
+                                LogVgcGeometry,
+                                "closestCenterlineLocation(): consecutive samples s1 and "
+                                "s2 do not respect the constraint (s1.segmentIndex() == "
+                                "s2.segmentIndex()) nor (s1.segmentIndex() + 1 == "
+                                "s2.segmentIndex()) && s2.u() == 0");
+                        }
+                        if (!isInvalidSamplePair) {
+                            double t = tx / l;
+                            Vec2d pos = core::fastLerp(p1, p2, t);
+                            result.setLocation(
+                                SampledCurveLocation(it1->parameter(), u2, t));
+                            result.setPosition(pos);
+                            minDist = d;
+                            if (d == 0) {
+                                // (p on segment) => no better result can be found.
+                                return result;
+                            }
+                        }
+                    }
+                }
+                else if (d < minDist && tx < 0) {
+                    result.setLocation(SampledCurveLocation(it1->parameter()));
+                    result.setPosition(p1);
+                    minDist = d;
+                }
+            }
+        }
+        else {
+            // (p == sample) => no better result can be found.
+            result.setLocation(SampledCurveLocation(it1->parameter()));
+            result.setPosition(p1);
+            minDist = d;
+            return result;
+        }
+    }
+
+    // Test last sample as point.
+    const StrokeSampleEx2d& lastSample = samples.last();
+    Vec2d q = lastSample.position();
+    Vec2d qp = position - q;
+    double d = qp.length();
+    if (d < minDist) {
+        result.setLocation(SampledCurveLocation(lastSample.parameter()));
+        result.setPosition(q);
+    }
+
+    return result;
+}
+
+core::Array<SampledCurvesIntersectionRecord> intersectStrokeCenterlines(
+    const StrokeSampleEx2dArray& targetStroke,
+    const StrokeSampleEx2dArray& otherStroke) {
+
+    // TODO
+    return {};
 }
 
 } // namespace vgc::geometry

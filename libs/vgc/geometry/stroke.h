@@ -160,6 +160,10 @@ public:
         std::swap(halfwidths_[0], halfwidths_[1]);
     }
 
+    double width() const {
+        return halfwidths_[0] + halfwidths_[1];
+    }
+
     // ┌─── x
     // │  ↑ offsetPoints[1]
     // │ ─segment─→
@@ -788,6 +792,11 @@ public:
     ///
     Vec2d evalCenterline(Int segmentIndex, double u) const;
 
+    /// \overload
+    Vec2d evalCenterline(const CurveParameter& parameter) const {
+        return evalCenterline(parameter.segmentIndex(), parameter.u());
+    }
+
     /// Returns the position of the centerline point from segment `segmentIndex` at
     /// parameter `u`. It additionally sets the value of `velocity` as the
     /// position derivative at `u` with respect to the parameter u.
@@ -797,6 +806,11 @@ public:
     ///
     Vec2d evalCenterline(Int segmentIndex, double u, Vec2d& velocity) const;
 
+    /// \overload
+    Vec2d evalCenterline(const CurveParameter& parameter, Vec2d& velocity) const {
+        return evalCenterline(parameter.segmentIndex(), parameter.u(), velocity);
+    }
+
     /// Returns a `StrokeSample` from the segment `segmentIndex` at
     /// parameter `u`. The attribute `s` of the sample is left to 0.
     ///
@@ -804,6 +818,11 @@ public:
     /// `[0, numSegments() - 1]`.
     ///
     StrokeSampleEx2d eval(Int segmentIndex, double u) const;
+
+    /// \overload
+    StrokeSampleEx2d eval(const CurveParameter& parameter) const {
+        return eval(parameter.segmentIndex(), parameter.u());
+    }
 
     // TODO: add variants of sampleSegment() and sampleRange() for CurveSample2d ?
 
@@ -907,6 +926,8 @@ public:
     ///
     StrokeSampling2d computeSampling(const CurveSamplingParameters& params) const;
 
+    CurveParameter resolveSampledLocation(const SampledCurveLocation& location) const;
+
     /// Expects delta in object space.
     ///
     void translate(const Vec2d& delta) {
@@ -933,10 +954,10 @@ public:
         }
     }
 
-    core::Array<std::unique_ptr<AbstractStroke2d>>
-    split(core::ConstSpan<CurveParameter> locations) {
-        return split_(locations);
-    }
+    std::unique_ptr<AbstractStroke2d> subStroke(
+        const CurveParameter& from,
+        const CurveParameter& to,
+        Int numWraps = 0);
 
     void reverse() {
         reverse_();
@@ -1095,6 +1116,10 @@ protected:
 
     virtual StrokeBoundaryInfo computeBoundaryInfo_() const = 0;
 
+    // Assumes location is lerp'd.
+    virtual CurveParameter
+    resolveSampledLocation_(const SampledCurveLocation& location) const = 0;
+
     virtual void translate_(const Vec2d& delta) = 0;
 
     virtual void transform_(const Mat3d& transformation) = 0;
@@ -1103,8 +1128,11 @@ protected:
 
     virtual void open_(bool keepJoinAsBestAsPossible) = 0;
 
-    virtual core::Array<std::unique_ptr<AbstractStroke2d>>
-    split(core::ConstSpan<CurveParameter> locations) = 0;
+    // Assumes l1 and l2 are sanitized and numWraps == 0 for open strokes.
+    virtual std::unique_ptr<AbstractStroke2d> subStroke_(
+        const CurveParameter& l1,
+        const CurveParameter& l2,
+        Int numWraps) = 0;
 
     virtual void reverse_() = 0;
 
@@ -1158,18 +1186,61 @@ private:
 
 // WIP
 
-SampledCurveLocation closestCenterlineLocation(
+class VGC_GEOMETRY_API SampledCurveClosestLocationResult {
+public:
+    constexpr SampledCurveClosestLocationResult(detail::InternalKey) noexcept
+        : location_()
+        , position_() {
+    }
+
+    VGC_WARNING_PUSH
+    VGC_WARNING_MSVC_DISABLE(26495) // member variable uninitialized
+    SampledCurveClosestLocationResult(detail::InternalKey, core::NoInit) noexcept
+        : location_(core::noInit)
+        , position_(core::noInit) {
+    }
+    VGC_WARNING_POP
+
+    SampledCurveClosestLocationResult(
+        detail::InternalKey,
+        const SampledCurveLocation& location,
+        const Vec2d& position) noexcept
+
+        : location_(location)
+        , position_(position) {
+    }
+
+    const SampledCurveLocation& location() const {
+        return location_;
+    }
+
+    void setLocation(const SampledCurveLocation& location) {
+        location_ = location;
+    }
+
+    const Vec2d& position() const {
+        return position_;
+    }
+
+    void setPosition(const Vec2d& position) {
+        position_ = position;
+    }
+
+private:
+    SampledCurveLocation location_;
+    geometry::Vec2d position_;
+};
+
+VGC_GEOMETRY_API
+SampledCurveClosestLocationResult closestCenterlineLocation(
     const StrokeSampleEx2dArray& sampleExArray,
     const Vec2d& position);
 
-core::Array<SampledCurveIntersectionRecord> intersectStrokeCenterlines(
+VGC_GEOMETRY_API
+core::Array<SampledCurvesIntersectionRecord> intersectStrokeCenterlines(
     AbstractStroke2d* stroke,
     core::ConstSpan<AbstractStroke2d*> otherStrokes,
-    const CurveSamplingParameters& samplingParams) {
-
-    // TODO
-    return {};
-}
+    const CurveSamplingParameters& samplingParams);
 
 } // namespace vgc::geometry
 

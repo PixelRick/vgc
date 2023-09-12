@@ -22,6 +22,7 @@
 #include <vgc/core/enum.h>
 #include <vgc/core/span.h>
 #include <vgc/geometry/api.h>
+#include <vgc/geometry/detail/internalkey.h>
 #include <vgc/geometry/vec2d.h>
 
 namespace vgc::geometry {
@@ -331,7 +332,7 @@ public:
         , u_(u) {
     }
 
-    Int segmentIndex() const {
+    constexpr Int segmentIndex() const {
         return segmentIndex_;
     }
 
@@ -339,12 +340,27 @@ public:
         segmentIndex_ = segmentIndex;
     }
 
-    double u() const {
+    constexpr double u() const {
         return u_;
     }
 
     void setU(double u) {
         u_ = u;
+    }
+
+    friend bool operator==(const CurveParameter& lhs, const CurveParameter& rhs) {
+        return lhs.segmentIndex_ == rhs.segmentIndex_ && lhs.u_ == rhs.u_;
+    }
+
+    friend bool operator!=(const CurveParameter& lhs, const CurveParameter& rhs) {
+        return !(lhs == rhs);
+    }
+
+    friend bool operator<(const CurveParameter& lhs, const CurveParameter& rhs) {
+        if (lhs.segmentIndex_ != rhs.segmentIndex_) {
+            return lhs.segmentIndex_ < rhs.segmentIndex_;
+        }
+        return lhs.u_ < rhs.u_;
     }
 
 private:
@@ -358,33 +374,70 @@ private:
 class VGC_GEOMETRY_API SampledCurveLocation {
 public:
     constexpr SampledCurveLocation() noexcept
-        : lerpParameter_(0.) {
+        : segmentIndex_(0)
+        , u1_(0.)
+        , u2_(0.)
+        , lerpParameter_(0.) {
     }
 
     VGC_WARNING_PUSH
     VGC_WARNING_MSVC_DISABLE(26495) // member variable uninitialized
-    SampledCurveLocation(core::NoInit) noexcept
-        : sampleParameter1_(core::noInit)
-        , sampleParameter2_(core::noInit) {
+    SampledCurveLocation(core::NoInit) noexcept {
     }
     VGC_WARNING_POP
 
-    explicit SampledCurveLocation(
-        const CurveParameter& sampleParameter1,
-        const CurveParameter& sampleParameter2,
+    explicit SampledCurveLocation(const CurveParameter& sampleParameter1) noexcept
+        : segmentIndex_(sampleParameter1.segmentIndex())
+        , u1_(sampleParameter1.u())
+        , u2_(sampleParameter1.u())
+        , lerpParameter_(0.) {
+    }
+
+    SampledCurveLocation(
+        Int segmentIndex,
+        double u1,
+        double u2,
         double lerpParameter) noexcept
 
-        : sampleParameter1_(sampleParameter1)
-        , sampleParameter2_(sampleParameter2)
+        : segmentIndex_(segmentIndex)
+        , u1_(u1)
+        , u2_(u2)
         , lerpParameter_(lerpParameter) {
     }
 
-    const CurveParameter& sampleParameter1() const {
-        return sampleParameter1_;
+    SampledCurveLocation(
+        const CurveParameter& sampleParameter1,
+        double u2,
+        double lerpParameter) noexcept
+
+        : segmentIndex_(sampleParameter1.segmentIndex())
+        , u1_(sampleParameter1.u())
+        , u2_(u2)
+        , lerpParameter_(lerpParameter) {
     }
 
-    void setSampleParameter1(const CurveParameter& sampleParameter1) {
-        sampleParameter1_ = sampleParameter1;
+    Int segmentIndex() const {
+        return segmentIndex_;
+    }
+
+    void setSegmentIndex(Int segmentIndex) {
+        segmentIndex_ = segmentIndex;
+    }
+
+    double u1() const {
+        return u1_;
+    }
+
+    void setU1(double u1) {
+        u1_ = u1;
+    }
+
+    double u2() const {
+        return u2_;
+    }
+
+    void setU2(double u2) {
+        u2_ = u2;
     }
 
     double lerpParameter() const {
@@ -395,70 +448,95 @@ public:
         lerpParameter_ = lerpParameter;
     }
 
+    bool isLerped() const {
+        return u1_ != u2_;
+    }
+
+    CurveParameter sampleParameter1() const {
+        return CurveParameter(segmentIndex_, u1_);
+    }
+
+    CurveParameter sampleParameter2() const {
+        return CurveParameter(segmentIndex_, u2_);
+    }
+
+    friend bool
+    operator==(const SampledCurveLocation& lhs, const SampledCurveLocation& rhs) {
+        return lhs.segmentIndex_ == rhs.segmentIndex_ && lhs.u1_ == rhs.u1_
+               && lhs.u2_ == rhs.u2_ && lhs.lerpParameter_ == rhs.lerpParameter_;
+    }
+
+    friend bool
+    operator!=(const SampledCurveLocation& lhs, const SampledCurveLocation& rhs) {
+        return !(lhs == rhs);
+    }
+
+    friend bool
+    operator<(const SampledCurveLocation& lhs, const SampledCurveLocation& rhs) {
+        if (lhs.segmentIndex_ != rhs.segmentIndex_) {
+            return lhs.segmentIndex_ < rhs.segmentIndex_;
+        }
+        return lhs.approxU_() < rhs.approxU_();
+    }
+
 private:
-    CurveParameter sampleParameter1_;
-    CurveParameter sampleParameter2_;
+    Int segmentIndex_;
+    double u1_;
+    double u2_;
     double lerpParameter_;
+
+    double approxU_() const {
+        core::fastLerp(u1_, u2_, lerpParameter_);
+    }
 };
 
-/// \class vgc::geometry::SampledCurveIntersectionRecord
+/// \class vgc::geometry::SampledCurvesIntersectionRecord
 /// \brief Record of a curve intersection with an other curve,
 ///        done with the polylines of samples.
 ///
 /// \sa intersectStrokeCenterlines
 ///
-class VGC_GEOMETRY_API SampledCurveIntersectionRecord {
+class VGC_GEOMETRY_API SampledCurvesIntersectionRecord {
 public:
-    constexpr SampledCurveIntersectionRecord() noexcept
-        : otherCurveIndex_(-1) {
+    explicit constexpr SampledCurvesIntersectionRecord(detail::InternalKey) noexcept {
     }
 
     VGC_WARNING_PUSH
     VGC_WARNING_MSVC_DISABLE(26495) // member variable uninitialized
-    SampledCurveIntersectionRecord(core::NoInit) noexcept
-        : targetCurveLocation_(core::noInit)
-        , otherCurveLocation_(core::noInit) {
+    SampledCurvesIntersectionRecord(detail::InternalKey, core::NoInit) noexcept
+        : locationOnCurve1_(core::noInit)
+        , locationOnCurve2_(core::noInit) {
     }
     VGC_WARNING_POP
 
-    explicit SampledCurveIntersectionRecord(
-        const SampledCurveLocation& targetCurveLocation,
-        const SampledCurveLocation& otherCurveLocation,
-        Int otherCurveIndex) noexcept
+    explicit SampledCurvesIntersectionRecord(
+        detail::InternalKey,
+        const SampledCurveLocation& locationOnCurve1,
+        const SampledCurveLocation& locationOnCurve2) noexcept
 
-        : targetCurveLocation_(targetCurveLocation)
-        , otherCurveLocation_(otherCurveLocation)
-        , otherCurveIndex_(otherCurveIndex) {
+        : locationOnCurve1_(locationOnCurve1)
+        , locationOnCurve2_(locationOnCurve2) {
     }
 
-    const SampledCurveLocation& targetCurveLocation() const {
-        return targetCurveLocation_;
+    const SampledCurveLocation& locationOnCurve1() const {
+        return locationOnCurve1_;
     }
 
-    void setTargetCurveLocation(const SampledCurveLocation& targetCurveLocation) {
-        targetCurveLocation_ = targetCurveLocation;
+    void setLocationOnCurve1(const SampledCurveLocation& locationOnCurve1) {
+        locationOnCurve1_ = locationOnCurve1;
     }
 
-    const SampledCurveLocation& otherCurveLocation() const {
-        return otherCurveLocation_;
+    const SampledCurveLocation& locationOnCurve2() const {
+        return locationOnCurve2_;
     }
 
-    void setOtherCurveLocation(const SampledCurveLocation& otherCurveLocation) {
-        otherCurveLocation_ = otherCurveLocation;
-    }
-
-    Int otherCurveIndex() const {
-        return otherCurveIndex_;
-    }
-
-    void setOtherCurveIndex(Int otherCurveIndex) {
-        otherCurveIndex_ = otherCurveIndex;
+    void setLocationOnCurve2(const SampledCurveLocation& locationOnCurve2) {
+        locationOnCurve2_ = locationOnCurve2;
     }
 
 private:
-    SampledCurveLocation targetCurveLocation_;
-    SampledCurveLocation otherCurveLocation_;
-    Int otherCurveIndex_;
+    SampledCurveLocation locationOnCurve1_;
+    SampledCurveLocation locationOnCurve2_;
 };
 
 namespace detail {
