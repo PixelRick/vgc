@@ -266,7 +266,7 @@ void AbstractInterpolatingStroke2d::open_(bool /*keepJoinAsBestAsPossible*/) {
 std::unique_ptr<AbstractStroke2d> AbstractInterpolatingStroke2d::subStroke_(
     const CurveParameter& p1,
     const CurveParameter& p2,
-    Int numWraps) {
+    Int numWraps) const {
 
     std::unique_ptr<AbstractStroke2d> result = cloneEmpty();
     AbstractInterpolatingStroke2d* newStroke =
@@ -275,6 +275,8 @@ std::unique_ptr<AbstractStroke2d> AbstractInterpolatingStroke2d::subStroke_(
     StrokeSample2d s1 = eval(p1);
 
     bool isStrictlyPositiveRange = p1 < p2;
+    bool isPositiveRange = !(p2 < p1);
+
     if (!isStrictlyPositiveRange && (numWraps == 0)) {
         std::array<Vec2d, 1> points = {s1.position()};
         newStroke->setPositions(points);
@@ -293,7 +295,7 @@ std::unique_ptr<AbstractStroke2d> AbstractInterpolatingStroke2d::subStroke_(
     // n <= numSegments - 1
 
     Int reserveLength = 2 + numWraps * numKnots;
-    if (isStrictlyPositiveRange) {
+    if (isPositiveRange) {
         reserveLength += (i2 - i1);
     }
     else {
@@ -344,7 +346,7 @@ std::unique_ptr<AbstractStroke2d> AbstractInterpolatingStroke2d::subStroke_(
         widths.append(s1.width());
     }
 
-    if (isStrictlyPositiveRange) {
+    if (isPositiveRange) {
         if (numWraps > 0) {
             // e.g.: closed  P0 -[- P1 --- P2 -]-(P0)
             // ->                [- P1 --- P2 ---(P0)

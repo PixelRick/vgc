@@ -486,7 +486,7 @@ private:
     double lerpParameter_;
 
     double approxU_() const {
-        core::fastLerp(u1_, u2_, lerpParameter_);
+        return core::fastLerp(u1_, u2_, lerpParameter_);
     }
 };
 
@@ -509,7 +509,7 @@ public:
     }
     VGC_WARNING_POP
 
-    explicit SampledCurvesIntersectionRecord(
+    SampledCurvesIntersectionRecord(
         detail::InternalKey,
         const SampledCurveLocation& locationOnCurve1,
         const SampledCurveLocation& locationOnCurve2) noexcept

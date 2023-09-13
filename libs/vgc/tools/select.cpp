@@ -80,16 +80,41 @@ public:
             undoGroup = history->createUndoGroup(actionName());
         }
 
-        //workspace::Element* element = workspace->find(edgeId_);
-        //if (element && element->vacNode() && element->vacNode()->isCell()) {
-        //    vacomplex::KeyEdge* ke = element->vacNode()->toCellUnchecked()->toKeyEdge();
-        //    if (ke) {
-        //        vacomplex::KeyEdgeData* data = ke->data();
-        //        if (data) {
-        //            data->finishEdit();
-        //        }
-        //    }
-        //}
+        geometry::Mat4d inverseViewMatrix = canvas->camera().viewMatrix().inverted();
+        geometry::Vec2d cursorPositionInWorkspace =
+            inverseViewMatrix.transformPointAffine(geometry::Vec2d(event->position()));
+
+        core::Array<canvas::SelectionCandidate> candidates =
+            canvas->computeSelectionCandidates(event->position());
+
+        for (const auto& candidate : candidates) {
+            workspace::Element* item = workspace->find(candidate.id());
+            auto keItem = dynamic_cast<workspace::VacKeyEdge*>(item);
+            if (keItem) {
+                if (vacomplex::KeyEdge* ke = keItem->vacKeyEdgeNode()) {
+                    const geometry::AbstractStroke2d* stroke = ke->data()->stroke();
+                    auto samplingEx = stroke->computeSamplingEx(
+                        geometry::CurveSamplingQuality::AdaptiveHigh);
+                    // find closest location on curve
+                    geometry::SampledCurveLocation closestLoc =
+                        geometry::closestCenterlineLocation(
+                            samplingEx.samples(), cursorPositionInWorkspace)
+                            .location();
+                    // convert to curve parameter
+                    geometry::CurveParameter param =
+                        stroke->resolveSampledLocation(closestLoc);
+                    // do the cut
+                    auto result = vacomplex::ops::vertexCutEdge(ke, param);
+                    // select resulting vertex
+                    workspace::Element* vertexItem =
+                        workspace->findVacElement(result.vertex());
+                    if (vertexItem) {
+                        canvas->setSelection(std::array{vertexItem->id()});
+                    }
+                    break;
+                }
+            }
+        }
 
         // Close operation
         if (undoGroup) {
@@ -1041,7 +1066,7 @@ void Select::onGlue_() {
     core::Array<core::Id> selection = canvas->selection();
     core::Id gluedId = workspace->glue(selection);
     if (gluedId >= 0) {
-        canvas->setSelection({gluedId});
+        canvas->setSelection(std::array{gluedId});
     }
 
     // Close history group

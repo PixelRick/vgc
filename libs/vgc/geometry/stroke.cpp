@@ -510,8 +510,6 @@ void AbstractStroke2d::sampleRange(
     }
 }
 
-/// Expects positions in object space.
-///
 StrokeSampling2d
 AbstractStroke2d::computeSampling(const geometry::CurveSamplingParameters& params) const {
 
@@ -536,6 +534,35 @@ AbstractStroke2d::computeSampling(const geometry::CurveSamplingParameters& param
 
     VGC_ASSERT(samplesEx.length() > 0);
     StrokeSampling2d result{geometry::StrokeSample2dArray(samplesEx)};
+    result.setBoundaryInfo(boundaryInfo);
+
+    return result;
+}
+
+StrokeSamplingEx2d AbstractStroke2d::computeSamplingEx(
+    const geometry::CurveSamplingParameters& params) const {
+
+    geometry::StrokeSampleEx2dArray samplesEx;
+    StrokeBoundaryInfo boundaryInfo;
+
+    Int n = numKnots();
+    if (n == 0) {
+        // fallback to segment
+        Vec2d tangent(0, 1);
+        Vec2d normal = tangent.orthogonalized();
+        Vec2d halfwidths(1.0, 1.0);
+        samplesEx.emplaceLast(Vec2d(), tangent, normal, halfwidths, 0.0);
+        boundaryInfo[0] = StrokeEndInfo(Vec2d(), tangent, halfwidths);
+        boundaryInfo[0].setOffsetLineTangents({tangent, tangent});
+        boundaryInfo[1] = boundaryInfo[0];
+    }
+    else {
+        sampleRange(samplesEx, params);
+        boundaryInfo = computeBoundaryInfo();
+    }
+
+    VGC_ASSERT(samplesEx.length() > 0);
+    StrokeSamplingEx2d result{std::move(samplesEx)};
     result.setBoundaryInfo(boundaryInfo);
 
     return result;
@@ -583,7 +610,7 @@ CurveParameter sanitizeCurveParameter(const CurveParameter& p, Int numSegments) 
 std::unique_ptr<AbstractStroke2d> AbstractStroke2d::subStroke(
     const CurveParameter& p1,
     const CurveParameter& p2,
-    Int numWraps = 0) {
+    Int numWraps) const {
 
     if (numWraps < 0) {
         throw vgc::core::LogicError("AbstractStroke2d::subStroke(): argument `numWraps` "
@@ -756,8 +783,8 @@ closestCenterlineLocation(const StrokeSampleEx2dArray& samples, const Vec2d& pos
 }
 
 core::Array<SampledCurvesIntersectionRecord> intersectStrokeCenterlines(
-    const StrokeSampleEx2dArray& targetStroke,
-    const StrokeSampleEx2dArray& otherStroke) {
+    const StrokeSampleEx2dArray& /*targetStroke*/,
+    const StrokeSampleEx2dArray& /*otherStroke*/) {
 
     // TODO
     return {};

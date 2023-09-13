@@ -632,6 +632,58 @@ private:
     }
 };
 
+/// \class vgc::geometry::StrokeSampling2d
+/// \brief Sampling of a 2d stroke.
+///
+class VGC_GEOMETRY_API StrokeSamplingEx2d {
+public:
+    StrokeSamplingEx2d() noexcept = default;
+
+    explicit StrokeSamplingEx2d(const StrokeSampleEx2dArray& samples)
+        : samples_(samples) {
+
+        computeCenterlineBoundingBox();
+    }
+
+    explicit StrokeSamplingEx2d(StrokeSampleEx2dArray&& samples)
+        : samples_(std::move(samples)) {
+
+        computeCenterlineBoundingBox();
+    }
+
+    const StrokeSampleEx2dArray& samples() const {
+        return samples_;
+    }
+
+    StrokeSampleEx2dArray stealSamples() {
+        return std::move(samples_);
+    }
+
+    const Rect2d& centerlineBoundingBox() const {
+        return centerlineBoundingBox_;
+    }
+
+    const StrokeBoundaryInfo& boundaryInfo() const {
+        return boundaryInfo_;
+    }
+
+    void setBoundaryInfo(const StrokeBoundaryInfo& boundaryInfo) {
+        boundaryInfo_ = boundaryInfo;
+    }
+
+private:
+    StrokeSampleEx2dArray samples_ = {};
+    StrokeBoundaryInfo boundaryInfo_;
+    Rect2d centerlineBoundingBox_ = Rect2d::empty;
+
+    void computeCenterlineBoundingBox() {
+        centerlineBoundingBox_ = Rect2d::empty;
+        for (const StrokeSample2d& cs : samples_) {
+            centerlineBoundingBox_.uniteWith(cs.position());
+        }
+    }
+};
+
 namespace detail {
 
 bool isCenterlineSegmentUnderTolerance(
@@ -922,9 +974,9 @@ public:
     // - the common ancestor group space for best morphing.
     // - the canvas space for best rendering.
 
-    /// Expects positions in object space.
-    ///
     StrokeSampling2d computeSampling(const CurveSamplingParameters& params) const;
+
+    StrokeSamplingEx2d computeSamplingEx(const CurveSamplingParameters& params) const;
 
     CurveParameter resolveSampledLocation(const SampledCurveLocation& location) const;
 
@@ -957,7 +1009,7 @@ public:
     std::unique_ptr<AbstractStroke2d> subStroke(
         const CurveParameter& from,
         const CurveParameter& to,
-        Int numWraps = 0);
+        Int numWraps = 0) const;
 
     void reverse() {
         reverse_();
@@ -1132,7 +1184,7 @@ protected:
     virtual std::unique_ptr<AbstractStroke2d> subStroke_(
         const CurveParameter& l1,
         const CurveParameter& l2,
-        Int numWraps) = 0;
+        Int numWraps) const = 0;
 
     virtual void reverse_() = 0;
 
