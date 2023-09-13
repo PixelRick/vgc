@@ -1334,14 +1334,10 @@ Operations::vertexCutEdge(KeyEdge* ke, const geometry::CurveParameter& parameter
     const geometry::AbstractStroke2d* oldStroke = ke->data()->stroke();
 
     if (ke->isClosed()) {
-        auto newKeData = std::make_unique<KeyEdgeData>(false);
-        std::unique_ptr<geometry::AbstractStroke2d> newStroke =
-            oldStroke->subStroke(parameter, parameter, 1);
+        std::unique_ptr<KeyEdgeData> newKeData =
+            KeyEdgeData::fromSlice(ke->data(), parameter, parameter, 1);
 
-        geometry::Vec2d vertexPos = newStroke->endPositions()[0];
-
-        newKeData->setStroke(std::move(newStroke));
-        newKeData->setProperties(ke->data()->properties());
+        geometry::Vec2d vertexPos = newKeData->stroke()->endPositions()[0];
 
         KeyVertex* newKv =
             createKeyVertex(vertexPos, ke->parentGroup(), ke->nextSibling(), ke->time());
@@ -1367,20 +1363,13 @@ Operations::vertexCutEdge(KeyEdge* ke, const geometry::CurveParameter& parameter
         return VertexCutEdgeResult(newKe, newKv, newKe);
     }
     else {
-        auto newKeData1 = std::make_unique<KeyEdgeData>(false);
-        std::unique_ptr<geometry::AbstractStroke2d> newStroke1 =
-            oldStroke->subStroke(geometry::CurveParameter(0, 0), parameter, 0);
+        std::unique_ptr<KeyEdgeData> newKeData1 =
+            KeyEdgeData::fromSlice(ke->data(), geometry::CurveParameter(0, 0), parameter, 1);
 
-        auto newKeData2 = std::make_unique<KeyEdgeData>(false);
-        std::unique_ptr<geometry::AbstractStroke2d> newStroke2 = oldStroke->subStroke(
-            parameter, geometry::CurveParameter(oldStroke->numSegments() - 1, 1), 0);
+        std::unique_ptr<KeyEdgeData> newKeData2 =
+            KeyEdgeData::fromSlice(ke->data(), parameter, geometry::CurveParameter(oldStroke->numSegments() - 1, 1), 1);
 
-        geometry::Vec2d vertexPos = newStroke2->endPositions()[0];
-
-        newKeData1->setStroke(std::move(newStroke1));
-        newKeData1->setProperties(ke->data()->properties());
-        newKeData2->setStroke(std::move(newStroke2));
-        newKeData2->setProperties(ke->data()->properties());
+        geometry::Vec2d vertexPos = newKeData2->stroke()->endPositions()[0];
 
         KeyVertex* newKv =
             createKeyVertex(vertexPos, ke->parentGroup(), ke->nextSibling(), ke->time());
