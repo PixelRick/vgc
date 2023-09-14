@@ -147,8 +147,7 @@ public:
         KeyVertex* kv,
         core::Array<std::pair<core::Id, core::Array<KeyEdge*>>>& ungluedKeyEdges);
 
-    VertexCutEdgeResult
-    vertexCutEdge(KeyEdge* ke, const geometry::CurveParameter& parameter);
+    CutEdgeResult cutEdge(KeyEdge* ke, const geometry::CurveParameter& parameter);
 
     UncutAtKeyVertexResult uncutAtKeyVertex(KeyVertex* kv, bool smoothJoin);
 

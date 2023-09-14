@@ -1326,8 +1326,8 @@ core::Array<KeyVertex*> Operations::unglueKeyVertices(
     return result;
 }
 
-VertexCutEdgeResult
-Operations::vertexCutEdge(KeyEdge* ke, const geometry::CurveParameter& parameter) {
+CutEdgeResult
+Operations::cutEdge(KeyEdge* ke, const geometry::CurveParameter& parameter) {
 
     const geometry::AbstractStroke2d* oldStroke = ke->data().stroke();
 
@@ -1358,7 +1358,7 @@ Operations::vertexCutEdge(KeyEdge* ke, const geometry::CurveParameter& parameter
         // Delete old edge
         hardDelete(ke);
 
-        return VertexCutEdgeResult(newKe, newKv, newKe);
+        return CutEdgeResult(newKe, newKv, newKe);
     }
     else {
         KeyEdgeData newKeData1 = KeyEdgeData::fromSlice(
@@ -1417,7 +1417,7 @@ Operations::vertexCutEdge(KeyEdge* ke, const geometry::CurveParameter& parameter
         // Delete old edge
         hardDelete(ke);
 
-        return VertexCutEdgeResult(newKe1, newKv, newKe2);
+        return CutEdgeResult(newKe1, newKv, newKe2);
     }
 }
 

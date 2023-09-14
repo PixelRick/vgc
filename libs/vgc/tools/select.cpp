@@ -43,25 +43,25 @@ ui::BoolSetting* showTransformBox() {
 
 } // namespace options
 
-VGC_DECLARE_OBJECT(VertexCutEdgeAction);
+VGC_DECLARE_OBJECT(CutEdgeAction);
 
-class VertexCutEdgeAction : public ui::Action {
+class CutEdgeAction : public ui::Action {
 private:
-    VGC_OBJECT(VertexCutEdgeAction, ui::Action)
+    VGC_OBJECT(CutEdgeAction, ui::Action)
 
 protected:
     /// This is an implementation details.
-    /// Please use `VertexCutEdgeAction::create()` instead.
+    /// Please use `CutEdgeAction::create()` instead.
     ///
-    VertexCutEdgeAction(CreateKey key)
-        : ui::Action(key, commands::vertexCutEdge()) {
+    CutEdgeAction(CreateKey key)
+        : ui::Action(key, commands::cutEdge()) {
     }
 
 public:
-    /// Creates a `VertexCutEdgeAction`.
+    /// Creates a `CutEdgeAction`.
     ///
-    static VertexCutEdgeActionPtr create() {
-        return core::createObject<VertexCutEdgeAction>();
+    static CutEdgeActionPtr create() {
+        return core::createObject<CutEdgeAction>();
     }
 
 public:
@@ -104,7 +104,7 @@ public:
                     geometry::CurveParameter param =
                         stroke->resolveSampledLocation(closestLoc);
                     // do the cut
-                    auto result = vacomplex::ops::vertexCutEdge(ke, param);
+                    auto result = vacomplex::ops::cutEdgeAt(ke, param);
                     // select resulting vertex
                     workspace::Element* vertexItem =
                         workspace->findVacElement(result.vertex());
@@ -154,8 +154,8 @@ Select::Select(CreateKey key)
     ui::Action* unglueAction = createTriggerAction(commands::unglue());
     unglueAction->triggered().connect(onUnglueSlot_());
 
-    VertexCutEdgeAction* vertexCutEdgeAction = createAction<VertexCutEdgeAction>();
-    vertexCutEdgeAction->tool_ = this;
+    CutEdgeAction* cutEdgeAction = createAction<CutEdgeAction>();
+    cutEdgeAction->tool_ = this;
 
     ui::Action* simplifyAction = createTriggerAction(commands::simplify());
     simplifyAction->triggered().connect(onSimplifySlot_());

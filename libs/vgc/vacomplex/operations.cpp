@@ -18,7 +18,20 @@
 
 #include <vgc/vacomplex/detail/operationsimpl.h>
 
-namespace vgc::vacomplex::ops {
+namespace vgc::vacomplex {
+
+VGC_DEFINE_ENUM( //
+    OneCycleCutPolicy,
+    (Disk, "Disk"),
+    (Mobius, "Mobius"),
+    (Torus, "Torus"))
+
+VGC_DEFINE_ENUM( //
+    TwoCycleCutPolicy,
+    (ReverseNone, "ReverseNone"),
+    (ReverseOne, "ReverseOne"))
+
+namespace ops {
 
 namespace {
 
@@ -402,13 +415,34 @@ core::Array<KeyVertex*> unglueKeyVertices(
     return ops.unglueKeyVertices(kv, ungluedKeyEdges);
 }
 
-VertexCutEdgeResult
-vertexCutEdge(KeyEdge* ke, const geometry::CurveParameter& parameter) {
+CutEdgeResult cutEdge(KeyEdge* ke, const geometry::CurveParameter& parameter) {
     if (!ke) {
-        throw LogicError("vertexCutEdge: ke is nullptr.");
+        throw LogicError("cutEdge: ke is nullptr.");
     }
     detail::Operations ops(ke->complex());
-    return ops.vertexCutEdge(ke, parameter);
+    return ops.cutEdge(ke, parameter);
+}
+
+KeyVertex* cutFaceWithVertex(KeyFace* kf) {
+}
+
+void cutFace(
+    KeyFace* kf,
+    KeyEdge* ke,
+    KeyFaceVertexUsageIndex startIndex,
+    KeyFaceVertexUsageIndex endIndex,
+    OneCycleCutPolicy oneCycleCutPolicy,
+    TwoCycleCutPolicy twoCycleCutPolicy) {
+}
+
+void cutFace(
+    KeyFace* kf,
+    KeyEdge* ke,
+    KeyFaceVertexUsageIndex startIndex,
+    KeyFaceVertexUsageIndex endIndex) {
+}
+
+void cutFace(KeyFace* kf, KeyEdge* ke) {
 }
 
 Cell* uncutAtKeyVertex(KeyVertex* kv, bool smoothJoin) {
@@ -752,4 +786,5 @@ void setKeyEdgeSamplingQuality(KeyEdge* edge, geometry::CurveSamplingQuality qua
     return ops.setKeyEdgeSamplingQuality(edge, quality);
 }
 
-} // namespace vgc::vacomplex::ops
+} // namespace ops
+} // namespace vgc::vacomplex

@@ -18,6 +18,7 @@
 #define VGC_VACOMPLEX_OPERATIONS_H
 
 #include <vgc/core/animtime.h>
+#include <vgc/core/enum.h>
 #include <vgc/core/id.h>
 #include <vgc/core/span.h>
 #include <vgc/vacomplex/api.h>
@@ -26,11 +27,11 @@
 
 namespace vgc::vacomplex {
 
-class VGC_VACOMPLEX_API VertexCutEdgeResult {
+class VGC_VACOMPLEX_API CutEdgeResult {
 public:
-    constexpr VertexCutEdgeResult() noexcept = default;
+    constexpr CutEdgeResult() noexcept = default;
 
-    VertexCutEdgeResult(KeyEdge* edge1, KeyVertex* vertex, KeyEdge* edge2) noexcept
+    CutEdgeResult(KeyEdge* edge1, KeyVertex* vertex, KeyEdge* edge2) noexcept
         : vertex_(vertex)
         , edge1_(edge1)
         , edge2_(edge2) {
@@ -65,6 +66,23 @@ private:
     KeyEdge* edge1_ = nullptr;
     KeyEdge* edge2_ = nullptr;
 };
+
+enum class OneCycleCutPolicy {
+    Disk,
+    Mobius, // non-planar non-orientable.
+    Torus,  // non-planar orientable (e.g.: once-punctured torus).
+};
+
+VGC_VACOMPLEX_API
+VGC_DECLARE_ENUM(OneCycleCutPolicy)
+
+enum class TwoCycleCutPolicy {
+    ReverseNone,
+    ReverseOne
+};
+
+VGC_VACOMPLEX_API
+VGC_DECLARE_ENUM(TwoCycleCutPolicy)
 
 namespace ops {
 
@@ -167,7 +185,29 @@ core::Array<KeyVertex*> unglueKeyVertices(
     core::Array<std::pair<core::Id, core::Array<KeyEdge*>>>& ungluedKeyEdges);
 
 VGC_VACOMPLEX_API
-VertexCutEdgeResult vertexCutEdge(KeyEdge* ke, const geometry::CurveParameter& parameter);
+CutEdgeResult cutEdge(KeyEdge* ke, const geometry::CurveParameter& parameter);
+
+VGC_VACOMPLEX_API
+KeyVertex* cutFaceWithVertex(KeyFace* kf);
+
+VGC_VACOMPLEX_API
+void cutFace(
+    KeyFace* kf,
+    KeyEdge* ke,
+    KeyFaceVertexUsageIndex startIndex,
+    KeyFaceVertexUsageIndex endIndex,
+    OneCycleCutPolicy oneCycleCutPolicy,
+    TwoCycleCutPolicy twoCycleCutPolicy);
+
+VGC_VACOMPLEX_API
+void cutFace(
+    KeyFace* kf,
+    KeyEdge* ke,
+    KeyFaceVertexUsageIndex startIndex,
+    KeyFaceVertexUsageIndex endIndex);
+
+VGC_VACOMPLEX_API
+void cutFace(KeyFace* kf, KeyEdge* ke);
 
 /// Performs an atomic simplification at the given `KeyVertex`, if possible.
 ///
