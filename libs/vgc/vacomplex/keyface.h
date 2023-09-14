@@ -53,6 +53,70 @@ bool computeKeyFaceFillTriangles(
 
 } // namespace detail
 
+/// \class vgc::geometry::KeyFaceVertexUsageIndex
+/// \brief Index of a vertex usage in a key face.
+///
+class VGC_GEOMETRY_API KeyFaceVertexUsageIndex {
+public:
+    constexpr KeyFaceVertexUsageIndex() noexcept
+        : cycleIndex_(-1)
+        , componentIndex_(-1) {
+    }
+
+    VGC_WARNING_PUSH
+    VGC_WARNING_MSVC_DISABLE(26495) // member variable uninitialized
+    KeyFaceVertexUsageIndex(core::NoInit) noexcept {
+    }
+    VGC_WARNING_POP
+
+    KeyFaceVertexUsageIndex(Int cycleIndex, Int componentIndex) noexcept
+        : cycleIndex_(cycleIndex)
+        , componentIndex_(componentIndex) {
+    }
+
+    constexpr Int cycleIndex() const {
+        return cycleIndex_;
+    }
+
+    void setCycleIndex(Int cycleIndex) {
+        cycleIndex_ = cycleIndex;
+    }
+
+    constexpr Int componentIndex() const {
+        return componentIndex_;
+    }
+
+    void setComponentIndex(Int componentIndex) {
+        componentIndex_ = componentIndex;
+    }
+
+    friend bool
+    operator==(const KeyFaceVertexUsageIndex& lhs, const KeyFaceVertexUsageIndex& rhs) {
+        return lhs.cycleIndex_ == rhs.cycleIndex_
+               && lhs.componentIndex_ == rhs.componentIndex_;
+    }
+
+    friend bool
+    operator!=(const KeyFaceVertexUsageIndex& lhs, const KeyFaceVertexUsageIndex& rhs) {
+        return !(lhs == rhs);
+    }
+
+    friend bool
+    operator<(const KeyFaceVertexUsageIndex& lhs, const KeyFaceVertexUsageIndex& rhs) {
+        if (lhs.cycleIndex_ != rhs.cycleIndex_) {
+            return lhs.cycleIndex_ < rhs.cycleIndex_;
+        }
+        return lhs.componentIndex_ < rhs.componentIndex_;
+    }
+
+private:
+    Int cycleIndex_;
+    Int componentIndex_;
+};
+
+/// \class vgc::vacomplex::KeyFace
+/// \brief A Key-Face Cell.
+///
 class VGC_VACOMPLEX_API KeyFace final : public SpatioTemporalCell<FaceCell, KeyCell> {
 private:
     friend detail::Operations;
