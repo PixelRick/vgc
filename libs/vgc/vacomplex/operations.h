@@ -67,7 +67,48 @@ private:
     KeyEdge* edge2_ = nullptr;
 };
 
+class VGC_VACOMPLEX_API CutFaceResult {
+public:
+    constexpr CutFaceResult() noexcept = default;
+
+    CutFaceResult(KeyFace* face1, KeyEdge* edge, KeyFace* face2) noexcept
+        : edge_(edge)
+        , face1_(face1)
+        , face2_(face2) {
+    }
+
+    KeyEdge* edge() const {
+        return edge_;
+    }
+
+    void setEdge(KeyEdge* edge) {
+        edge_ = edge;
+    }
+
+    KeyFace* face1() const {
+        return face1_;
+    }
+
+    void setFace1(KeyFace* face1) {
+        face1_ = face1;
+    }
+
+    KeyFace* face2() const {
+        return face2_;
+    }
+
+    void setFace2(KeyFace* face2) {
+        face2_ = face2;
+    }
+
+private:
+    KeyEdge* edge_ = nullptr;
+    KeyFace* face1_ = nullptr;
+    KeyFace* face2_ = nullptr;
+};
+
 enum class OneCycleCutPolicy {
+    Auto,
     Disk,
     Mobius, // non-planar non-orientable.
     Torus,  // non-planar orientable (e.g.: once-punctured torus).
@@ -77,6 +118,7 @@ VGC_VACOMPLEX_API
 VGC_DECLARE_ENUM(OneCycleCutPolicy)
 
 enum class TwoCycleCutPolicy {
+    Auto,
     ReverseNone,
     ReverseOne
 };
@@ -184,30 +226,51 @@ core::Array<KeyVertex*> unglueKeyVertices(
     KeyVertex* kv,
     core::Array<std::pair<core::Id, core::Array<KeyEdge*>>>& ungluedKeyEdges);
 
+// TODO: Functions to reinterpret visually similar cycles (with given winding rule).
+//       [AA] (winding = 2/-2) looks like [A, A*] (winding = 0) with ODD winding rule.
+//       [BACA] looks like [BA, C*A*] with ODD winding rule.
+//       In other winding rules, the result may or may not be similar so it has
+//       to be checked for the given geometric data (can be done using a planar graph).
+
 VGC_VACOMPLEX_API
 CutEdgeResult cutEdge(KeyEdge* ke, const geometry::CurveParameter& parameter);
 
 VGC_VACOMPLEX_API
-KeyVertex* cutFaceWithVertex(KeyFace* kf);
+void cutGlueFaceWithVertex(KeyFace* kf, KeyVertex* kv);
 
 VGC_VACOMPLEX_API
-void cutFace(
+KeyVertex* cutFaceWithVertex(KeyFace* kf, const geometry::Vec2d& position);
+
+VGC_VACOMPLEX_API
+CutFaceResult cutGlueFace(
+    KeyFace* kf,
+    KeyEdge* ke,
+    OneCycleCutPolicy oneCycleCutPolicy = OneCycleCutPolicy::Auto,
+    TwoCycleCutPolicy twoCycleCutPolicy = TwoCycleCutPolicy::Auto);
+
+VGC_VACOMPLEX_API
+CutFaceResult cutGlueFace(
     KeyFace* kf,
     KeyEdge* ke,
     KeyFaceVertexUsageIndex startIndex,
     KeyFaceVertexUsageIndex endIndex,
-    OneCycleCutPolicy oneCycleCutPolicy,
-    TwoCycleCutPolicy twoCycleCutPolicy);
+    OneCycleCutPolicy oneCycleCutPolicy = OneCycleCutPolicy::Auto,
+    TwoCycleCutPolicy twoCycleCutPolicy = TwoCycleCutPolicy::Auto);
 
 VGC_VACOMPLEX_API
-void cutFace(
+CutFaceResult cutFaceWithClosedEdge(
     KeyFace* kf,
-    KeyEdge* ke,
-    KeyFaceVertexUsageIndex startIndex,
-    KeyFaceVertexUsageIndex endIndex);
+    KeyEdgeData&& data,
+    OneCycleCutPolicy oneCycleCutPolicy = OneCycleCutPolicy::Auto);
 
 VGC_VACOMPLEX_API
-void cutFace(KeyFace* kf, KeyEdge* ke);
+CutFaceResult cutFaceWithOpenEdge(
+    KeyFace* kf,
+    KeyEdgeData&& data,
+    KeyFaceVertexUsageIndex startIndex,
+    KeyFaceVertexUsageIndex endIndex,
+    OneCycleCutPolicy oneCycleCutPolicy = OneCycleCutPolicy::Auto,
+    TwoCycleCutPolicy twoCycleCutPolicy = TwoCycleCutPolicy::Auto);
 
 /// Performs an atomic simplification at the given `KeyVertex`, if possible.
 ///

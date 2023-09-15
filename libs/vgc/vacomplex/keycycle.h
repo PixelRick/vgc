@@ -22,6 +22,7 @@
 #include <vgc/core/span.h>
 #include <vgc/vacomplex/api.h>
 #include <vgc/vacomplex/keyhalfedge.h>
+#include <vgc/geometry/windingrule.h>
 
 namespace vgc::vacomplex {
 
@@ -52,8 +53,6 @@ public:
     const core::Array<KeyHalfedge>& halfedges() const {
         return halfedges_;
     }
-
-    void debugPrint(core::StringWriter& out) const;
 
     void reverse();
 
@@ -95,6 +94,21 @@ public:
     const core::Array<KeyHalfedge>& halfedges() const {
         return halfedges_;
     }
+
+    void reverse();
+
+    KeyCycle reversed() const;
+
+    core::Array<geometry::Vec2d> sampleUniformly(Int numSamples) const;
+
+    Int computeWindingNumberAt(const geometry::Vec2d& point) const;
+
+    bool interiorContains(const geometry::Vec2d& position, geometry::WindingRule windingRule) const {
+        Int windingNumber = computeWindingNumberAt(position);
+        return geometry::isWindingNumberSatisfyingRule(windingNumber, windingRule);
+    }
+
+    double interiorContainedRatio(const KeyCycle& other, geometry::WindingRule windingRule, Int numSamples);
 
     bool isValid() const {
         if (steinerVertex_) {

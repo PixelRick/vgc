@@ -93,14 +93,14 @@ public:
     KeyEdge* createKeyOpenEdge(
         KeyVertex* startVertex,
         KeyVertex* endVertex,
-        KeyEdgeData&& geometry,
+        KeyEdgeData&& data,
         Group* parentGroup,
         Node* nextSibling = nullptr);
 
     // Assumes `nextSibling` is either `nullptr` or a child of `parentGroup`.
     //
     KeyEdge* createKeyClosedEdge(
-        KeyEdgeData&& geometry,
+        KeyEdgeData&& data,
         Group* parentGroup,
         Node* nextSibling = nullptr,
         core::AnimTime t = {});
@@ -113,6 +113,14 @@ public:
         Group* parentGroup,
         Node* nextSibling = nullptr,
         core::AnimTime t = {});
+
+    // Assumes `kf` is not null.
+    // Assumes `cycle` is valid and matches kf's complex and time.
+    //
+    void addCycleToFace(
+        KeyFace* kf,
+        KeyCycle cycle
+    );
 
     void hardDelete(Node* node, bool deleteIsolatedVertices = false);
 
@@ -148,6 +156,38 @@ public:
         core::Array<std::pair<core::Id, core::Array<KeyEdge*>>>& ungluedKeyEdges);
 
     CutEdgeResult cutEdge(KeyEdge* ke, const geometry::CurveParameter& parameter);
+
+    void cutGlueFaceWithVertex(KeyFace* kf, KeyVertex* kv);
+
+    KeyVertex* cutFaceWithVertex(KeyFace* kf, const geometry::Vec2d& position);
+
+    CutFaceResult cutGlueFace(
+        KeyFace* kf,
+        KeyEdge* ke,
+        OneCycleCutPolicy oneCycleCutPolicy = OneCycleCutPolicy::Auto,
+        TwoCycleCutPolicy twoCycleCutPolicy = TwoCycleCutPolicy::Auto);
+
+    CutFaceResult cutGlueFace(
+        KeyFace* kf,
+        KeyEdge* ke,
+        KeyFaceVertexUsageIndex startIndex,
+        KeyFaceVertexUsageIndex endIndex,
+        OneCycleCutPolicy oneCycleCutPolicy = OneCycleCutPolicy::Auto,
+        TwoCycleCutPolicy twoCycleCutPolicy = TwoCycleCutPolicy::Auto);
+
+
+    CutFaceResult cutFaceWithClosedEdge(
+        KeyFace* kf,
+        KeyEdgeData&& geometry,
+        OneCycleCutPolicy oneCycleCutPolicy = OneCycleCutPolicy::Auto);
+
+    CutFaceResult cutFaceWithOpenEdge(
+        KeyFace* kf,
+        KeyEdgeData&& geometry,
+        KeyFaceVertexUsageIndex startIndex,
+        KeyFaceVertexUsageIndex endIndex,
+        OneCycleCutPolicy oneCycleCutPolicy = OneCycleCutPolicy::Auto,
+        TwoCycleCutPolicy twoCycleCutPolicy = TwoCycleCutPolicy::Auto);
 
     UncutAtKeyVertexResult uncutAtKeyVertex(KeyVertex* kv, bool smoothJoin);
 

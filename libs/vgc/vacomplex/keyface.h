@@ -23,6 +23,7 @@
 #include <vgc/geometry/stroke.h>
 #include <vgc/vacomplex/api.h>
 #include <vgc/vacomplex/cell.h>
+#include <vgc/vacomplex/keyvertex.h>
 #include <vgc/vacomplex/keycycle.h>
 #include <vgc/vacomplex/keyfacedata.h>
 
@@ -132,6 +133,10 @@ public:
     const core::Array<KeyCycle>& cycles() const {
         return cycles_;
     }
+
+    KeyVertex* vertex(const KeyFaceVertexUsageIndex& usageIndex) const;
+
+    KeyVertex* vertexIfValid(const KeyFaceVertexUsageIndex& usageIndex) const;
 
     geometry::Rect2d boundingBox() const override;
 
