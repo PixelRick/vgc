@@ -44,6 +44,12 @@ VGC_UI_DEFINE_MOUSE_CLICK_COMMAND( //
     Shortcut(ctrl, MouseButton::Right));
 
 VGC_UI_DEFINE_TRIGGER_COMMAND( //
+    cutGlueFace,
+    "tools.topology.cutGlueFace",
+    "Cut-Glue Face",
+    Shortcut(alt, Key::K));
+
+VGC_UI_DEFINE_TRIGGER_COMMAND( //
     simplify,
     "tools.topology.simplify",
     "Simplify",

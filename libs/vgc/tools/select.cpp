@@ -26,6 +26,7 @@
 #include <vgc/ui/column.h>
 #include <vgc/vacomplex/detail/operationsimpl.h>
 #include <vgc/workspace/colors.h>
+#include <vgc/workspace/face.h>
 
 namespace vgc::tools {
 
@@ -114,6 +115,20 @@ public:
                     break;
                 }
             }
+            auto kfItem = dynamic_cast<workspace::VacKeyFace*>(item);
+            if (kfItem) {
+                if (vacomplex::KeyFace* kf = kfItem->vacKeyFaceNode()) {
+                    // do the cut
+                    auto result =
+                        vacomplex::ops::cutFaceWithVertex(kf, cursorPositionInWorkspace);
+                    // select resulting vertex
+                    workspace::Element* vertexItem = workspace->findVacElement(result);
+                    if (vertexItem) {
+                        canvas->setSelection(std::array{vertexItem->id()});
+                    }
+                    break;
+                }
+            }
         }
 
         // Close operation
@@ -156,6 +171,9 @@ Select::Select(CreateKey key)
 
     CutEdgeAction* cutEdgeAction = createAction<CutEdgeAction>();
     cutEdgeAction->tool_ = this;
+
+    ui::Action* cutGlueFaceAction = createTriggerAction(commands::cutGlueFace());
+    cutGlueFaceAction->triggered().connect(onCutGlueFaceSlot_());
 
     ui::Action* simplifyAction = createTriggerAction(commands::simplify());
     simplifyAction->triggered().connect(onSimplifySlot_());
@@ -1097,6 +1115,40 @@ void Select::onUnglue_() {
 
     core::Array<core::Id> ungluedIds = workspace->unglue(selection);
     canvas->setSelection(std::move(ungluedIds));
+
+    // Close history group
+    if (undoGroup) {
+        undoGroup->close();
+    }
+}
+
+void Select::onCutGlueFace_() {
+    canvas::Canvas* canvas = this->canvas();
+    if (!canvas) {
+        return;
+    }
+
+    workspace::Workspace* workspace = canvas->workspace();
+    if (!workspace) {
+        return;
+    }
+
+    core::Array<core::Id> selection = canvas->selection();
+    if (selection.isEmpty()) {
+        return;
+    }
+
+    // Open history group
+    core::UndoGroup* undoGroup = nullptr;
+    core::History* history = workspace->history();
+    if (history) {
+        undoGroup = history->createUndoGroup(commands::cutGlueFace());
+    }
+
+    bool success = workspace->cutGlueFace(selection);
+    if (success) {
+        canvas->clearSelection();
+    }
 
     // Close history group
     if (undoGroup) {

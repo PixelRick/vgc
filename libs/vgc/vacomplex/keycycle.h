@@ -58,16 +58,23 @@ public:
 
     void append(const KeyHalfedge& khe) {
         halfedges_.append(khe);
+        singleVertex_ = nullptr;
     }
 
     void extend(const KeyPath& other) {
         halfedges_.extend(other.halfedges_);
+        if (halfedges_.length()) {
+            singleVertex_ = nullptr;
+        }
     }
 
     void extendReversed(const KeyPath& other) {
         halfedges_.reserve(halfedges_.length() + other.halfedges_.length());
         for (auto it = other.halfedges_.rbegin(); it != other.halfedges_.rend(); ++it) {
             halfedges_.append(it->opposite());
+        }
+        if (halfedges_.length()) {
+            singleVertex_ = nullptr;
         }
     }
 

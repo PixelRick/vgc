@@ -298,8 +298,7 @@ private:
         core::ConstSpan<KeyHalfedge> khes,
         core::ConstSpan<double> uOffsets);
 
-    static KeyPath subPath_(const KeyCycle& cycle, Int first, Int last);
-    static KeyPath concatPath_(const KeyPath& p1, const KeyPath& p2);
+    static KeyPath subPath_(const KeyCycle& cycle, Int first, Int last, bool loopIfEmptyRange = false);
 
     struct UncutAtKeyVertexInfo_ {
         KeyFace* kf = nullptr;

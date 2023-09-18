@@ -562,6 +562,77 @@ core::Array<core::Id> Workspace::unglue(core::ConstSpan<core::Id> elementIds) {
     return result;
 }
 
+bool Workspace::cutGlueFace(core::ConstSpan<core::Id> elementIds) {
+
+    vacomplex::KeyFace* targetKf = nullptr;
+    vacomplex::KeyEdge* targetKe = nullptr;
+
+    for (core::Id id : elementIds) {
+        workspace::Element* element = find(id);
+        if (!element) {
+            continue;
+        }
+        vacomplex::Node* node = element->vacNode();
+        if (!node || !node->isCell()) {
+            continue;
+        }
+        vacomplex::Cell* cell = node->toCellUnchecked();
+        switch (cell->cellType()) {
+        case vacomplex::CellType::KeyFace: {
+            vacomplex::KeyFace* kf = cell->toKeyFaceUnchecked();
+            if (targetKf) {
+                return false;
+            }
+            targetKf = kf;
+            break;
+        }
+        case vacomplex::CellType::KeyEdge: {
+            vacomplex::KeyEdge* ke = cell->toKeyEdgeUnchecked();
+            if (targetKe) {
+                return false;
+            }
+            targetKe = ke;
+            break;
+        }
+        default:
+            return false;
+        }
+    }
+
+    if (!targetKf || !targetKe) {
+        return false;
+    }
+
+    if (!targetKe->isClosed()) {
+        if (!targetKf->boundary().contains(targetKe->startVertex())) {
+            return false;
+        }
+        if (!targetKf->boundary().contains(targetKe->endVertex())) {
+            return false;
+        }
+    }
+
+    // Open history group
+    static core::StringId commandId = core::StringId("workspace.cutGlueFace");
+    core::UndoGroup* undoGroup = nullptr;
+    core::History* history = this->history();
+    if (history) {
+        undoGroup = history->createUndoGroup(commandId);
+    }
+
+    auto result = vacomplex::ops::cutGlueFace(targetKf, targetKe);
+    bool success = result.edge() != nullptr;
+
+    sync();
+
+    // Close history group
+    if (undoGroup) {
+        undoGroup->close();
+    }
+
+    return success;
+}
+
 core::Array<core::Id>
 Workspace::simplify(core::ConstSpan<core::Id> elementIds, bool smoothJoins) {
     core::Array<core::Id> result;
