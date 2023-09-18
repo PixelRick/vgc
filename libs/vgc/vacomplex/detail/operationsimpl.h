@@ -163,13 +163,13 @@ public:
 
     CutFaceResult cutGlueFace(
         KeyFace* kf,
-        KeyEdge* ke,
+        const KeyEdge* ke,
         OneCycleCutPolicy oneCycleCutPolicy = OneCycleCutPolicy::Auto,
         TwoCycleCutPolicy twoCycleCutPolicy = TwoCycleCutPolicy::Auto);
 
     CutFaceResult cutGlueFace(
         KeyFace* kf,
-        KeyEdge* ke,
+        const KeyHalfedge& khe,
         KeyFaceVertexUsageIndex startIndex,
         KeyFaceVertexUsageIndex endIndex,
         OneCycleCutPolicy oneCycleCutPolicy = OneCycleCutPolicy::Auto,
@@ -186,6 +186,14 @@ public:
         KeyEdgeData&& geometry,
         KeyFaceVertexUsageIndex startIndex,
         KeyFaceVertexUsageIndex endIndex,
+        OneCycleCutPolicy oneCycleCutPolicy = OneCycleCutPolicy::Auto,
+        TwoCycleCutPolicy twoCycleCutPolicy = TwoCycleCutPolicy::Auto);
+
+    CutFaceResult cutFaceWithOpenEdge(
+        KeyFace* kf,
+        KeyEdgeData&& geometry,
+        KeyVertex* startVertex,
+        KeyVertex* endVertex,
         OneCycleCutPolicy oneCycleCutPolicy = OneCycleCutPolicy::Auto,
         TwoCycleCutPolicy twoCycleCutPolicy = TwoCycleCutPolicy::Auto);
 
@@ -290,8 +298,8 @@ private:
         core::ConstSpan<KeyHalfedge> khes,
         core::ConstSpan<double> uOffsets);
 
-    static KeyPath subPath(const KeyCycle& cycle, Int first, Int last);
-    static KeyPath concatPath(const KeyPath& p1, const KeyPath& p2);
+    static KeyPath subPath_(const KeyCycle& cycle, Int first, Int last);
+    static KeyPath concatPath_(const KeyPath& p1, const KeyPath& p2);
 
     struct UncutAtKeyVertexInfo_ {
         KeyFace* kf = nullptr;

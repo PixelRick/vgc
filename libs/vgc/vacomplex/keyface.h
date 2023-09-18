@@ -57,7 +57,7 @@ bool computeKeyFaceFillTriangles(
 /// \class vgc::geometry::KeyFaceVertexUsageIndex
 /// \brief Index of a vertex usage in a key face.
 ///
-class VGC_GEOMETRY_API KeyFaceVertexUsageIndex {
+class VGC_VACOMPLEX_API KeyFaceVertexUsageIndex {
 public:
     constexpr KeyFaceVertexUsageIndex() noexcept
         : cycleIndex_(-1)

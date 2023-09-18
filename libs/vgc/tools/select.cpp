@@ -104,7 +104,7 @@ public:
                     geometry::CurveParameter param =
                         stroke->resolveSampledLocation(closestLoc);
                     // do the cut
-                    auto result = vacomplex::ops::cutEdgeAt(ke, param);
+                    auto result = vacomplex::ops::cutEdge(ke, param);
                     // select resulting vertex
                     workspace::Element* vertexItem =
                         workspace->findVacElement(result.vertex());

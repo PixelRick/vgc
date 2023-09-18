@@ -162,7 +162,7 @@ Int KeyCycle::computeWindingNumberAt(const geometry::Vec2d& position) const {
 }
 
 double KeyCycle::interiorContainedRatio(const KeyCycle& other, geometry::WindingRule windingRule, Int numSamples) {
-    core::Array<geometry::Vec2d> samples = sampleUniformly(numSamples);
+    core::Array<geometry::Vec2d> samples = other.sampleUniformly(numSamples);
     Int count = 0;
     for (const auto& pos : samples) {
         if (interiorContains(pos, windingRule)) {

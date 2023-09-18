@@ -244,14 +244,14 @@ KeyVertex* cutFaceWithVertex(KeyFace* kf, const geometry::Vec2d& position);
 VGC_VACOMPLEX_API
 CutFaceResult cutGlueFace(
     KeyFace* kf,
-    KeyEdge* ke,
+    const KeyEdge* ke,
     OneCycleCutPolicy oneCycleCutPolicy = OneCycleCutPolicy::Auto,
     TwoCycleCutPolicy twoCycleCutPolicy = TwoCycleCutPolicy::Auto);
 
 VGC_VACOMPLEX_API
 CutFaceResult cutGlueFace(
     KeyFace* kf,
-    KeyEdge* ke,
+    const KeyHalfedge& khe,
     KeyFaceVertexUsageIndex startIndex,
     KeyFaceVertexUsageIndex endIndex,
     OneCycleCutPolicy oneCycleCutPolicy = OneCycleCutPolicy::Auto,
@@ -271,6 +271,16 @@ CutFaceResult cutFaceWithOpenEdge(
     KeyFaceVertexUsageIndex endIndex,
     OneCycleCutPolicy oneCycleCutPolicy = OneCycleCutPolicy::Auto,
     TwoCycleCutPolicy twoCycleCutPolicy = TwoCycleCutPolicy::Auto);
+
+VGC_VACOMPLEX_API
+CutFaceResult cutFaceWithOpenEdge(
+    KeyFace* kf,
+    KeyEdgeData&& data,
+    KeyVertex* startVertex,
+    KeyVertex* endVertex,
+    OneCycleCutPolicy oneCycleCutPolicy = OneCycleCutPolicy::Auto,
+    TwoCycleCutPolicy twoCycleCutPolicy = TwoCycleCutPolicy::Auto);
+
 
 /// Performs an atomic simplification at the given `KeyVertex`, if possible.
 ///

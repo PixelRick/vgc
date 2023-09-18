@@ -474,24 +474,48 @@ void checkCutGlueFaceArguments(const KeyFace* kf, const KeyEdge* ke) {
     }
 }
 
+void checkCutGlueFaceArguments(const KeyFace* kf, const KeyHalfedge& khe) {
+    if (!kf) {
+        throw LogicError("cutGlueFace: kf is nullptr.");
+    }
+    KeyEdge* ke = khe.edge();
+    if (!ke) {
+        throw LogicError("cutGlueFace: khe.edge() is nullptr.");
+    }
+    if (kf->complex() != ke->complex()) {
+        throw LogicError("cutGlueFace: kf and khe are from different complexes.");
+    }
+    if (kf->time() != ke->time()) {
+        throw LogicError("cutGlueFace: kf and khe are from different times.");
+    }
+    if (!ke->isClosed()) {
+        if (!kf->boundary().contains(khe.startVertex())) {
+            throw LogicError("cutGlueFace: khe's start vertex is not in kf's boundary.");
+        }
+        if (!kf->boundary().contains(khe.endVertex())) {
+            throw LogicError("cutGlueFace: khe's start vertex is not in kf's boundary.");
+        }
+    }
+}
+
 void checkCutGlueFaceArguments(
     const KeyFace* kf,
-    const KeyEdge* ke,
+    const KeyHalfedge& khe,
     KeyFaceVertexUsageIndex startIndex,
     KeyFaceVertexUsageIndex endIndex) {
 
-    checkCutGlueFaceArguments(kf, ke);
-    if (ke->isClosed()) {
-        throw LogicError("cutGlueFace: ke is closed, overload taking usages as argument "
+    checkCutGlueFaceArguments(kf, khe);
+    if (khe.isClosed()) {
+        throw LogicError("cutGlueFace: khe is closed, overload taking usages as argument "
                          "is not allowed.");
     }
     KeyVertex* startVertex = kf->vertexIfValid(startIndex);
-    if (startVertex != ke->startVertex()) {
-        throw LogicError("cutGlueFace: startIndex does not refer to ke's start vertex.");
+    if (startVertex != khe.startVertex()) {
+        throw LogicError("cutGlueFace: startIndex does not refer to khe's start vertex.");
     }
     KeyVertex* endVertex = kf->vertexIfValid(endIndex);
-    if (endVertex != ke->endVertex()) {
-        throw LogicError("cutGlueFace: endIndex does not refer to ke's end vertex.");
+    if (endVertex != khe.endVertex()) {
+        throw LogicError("cutGlueFace: endIndex does not refer to khe's end vertex.");
     }
 }
 
@@ -499,27 +523,27 @@ void checkCutGlueFaceArguments(
 
 CutFaceResult cutGlueFace(
     KeyFace* kf,
-    KeyEdge* ke,
+    const KeyEdge* ke,
     OneCycleCutPolicy oneCycleCutPolicy,
     TwoCycleCutPolicy twoCycleCutPolicy) {
 
     checkCutGlueFaceArguments(kf, ke);
     detail::Operations ops(kf->complex());
-    ops.cutGlueFace(kf, ke, oneCycleCutPolicy, twoCycleCutPolicy);
+    return ops.cutGlueFace(kf, ke, oneCycleCutPolicy, twoCycleCutPolicy);
 }
 
 CutFaceResult cutGlueFace(
     KeyFace* kf,
-    KeyEdge* ke,
+    const KeyHalfedge& khe,
     KeyFaceVertexUsageIndex startIndex,
     KeyFaceVertexUsageIndex endIndex,
     OneCycleCutPolicy oneCycleCutPolicy,
     TwoCycleCutPolicy twoCycleCutPolicy) {
 
-    checkCutGlueFaceArguments(kf, ke, startIndex, endIndex);
+    checkCutGlueFaceArguments(kf, khe, startIndex, endIndex);
     detail::Operations ops(kf->complex());
     return ops.cutGlueFace(
-        kf, ke, startIndex, endIndex, oneCycleCutPolicy, twoCycleCutPolicy);
+        kf, khe, startIndex, endIndex, oneCycleCutPolicy, twoCycleCutPolicy);
 }
 
 namespace {
@@ -533,7 +557,6 @@ void checkCutFaceWithOpenEdgeArguments(
     if (!kf) {
         throw LogicError("cutFaceWithOpenEdge: kf is nullptr.");
     }
-
     if (data.isClosed()) {
         throw LogicError("cutFaceWithOpenEdge: geometry is closed, overload taking "
                          "usages as argument is not allowed.");
@@ -545,6 +568,27 @@ void checkCutFaceWithOpenEdgeArguments(
     if (!kf->vertexIfValid(endIndex)) {
         throw LogicError(
             "cutFaceWithOpenEdge: endIndex does not refer to a vertex in kf.");
+    }
+}
+
+void checkCutFaceWithOpenEdgeArguments(
+    KeyFace* kf,
+    const KeyEdgeData& data,
+    KeyVertex* startVertex,
+    KeyVertex* endVertex) {
+
+    if (!kf) {
+        throw LogicError("cutFaceWithOpenEdge: kf is nullptr.");
+    }
+    if (data.isClosed()) {
+        throw LogicError("cutFaceWithOpenEdge: geometry is closed, overload taking "
+                         "end vertices as argument is not allowed.");
+    }
+    if (!kf->boundary().contains(startVertex)) {
+        throw LogicError("cutFaceWithOpenEdge: startVertex is not in kf boundary.");
+    }
+    if (!kf->boundary().contains(endVertex)) {
+        throw LogicError("cutFaceWithOpenEdge: endVertex is not in kf boundary.");
     }
 }
 
@@ -574,6 +618,25 @@ CutFaceResult cutFaceWithOpenEdge(
     detail::Operations ops(kf->complex());
     return ops.cutFaceWithOpenEdge(
         kf, std::move(data), startIndex, endIndex, oneCycleCutPolicy, twoCycleCutPolicy);
+}
+
+CutFaceResult cutFaceWithOpenEdge(
+    KeyFace* kf,
+    KeyEdgeData&& data,
+    KeyVertex* startVertex,
+    KeyVertex* endVertex,
+    OneCycleCutPolicy oneCycleCutPolicy,
+    TwoCycleCutPolicy twoCycleCutPolicy) {
+
+    checkCutFaceWithOpenEdgeArguments(kf, data, startVertex, endVertex);
+    detail::Operations ops(kf->complex());
+    return ops.cutFaceWithOpenEdge(
+        kf,
+        std::move(data),
+        startVertex,
+        endVertex,
+        oneCycleCutPolicy,
+        twoCycleCutPolicy);
 }
 
 Cell* uncutAtKeyVertex(KeyVertex* kv, bool smoothJoin) {

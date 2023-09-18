@@ -20,9 +20,9 @@
 #include <initializer_list>
 
 #include <vgc/core/span.h>
+#include <vgc/geometry/windingrule.h>
 #include <vgc/vacomplex/api.h>
 #include <vgc/vacomplex/keyhalfedge.h>
-#include <vgc/geometry/windingrule.h>
 
 namespace vgc::vacomplex {
 
@@ -34,7 +34,7 @@ public:
 
     explicit KeyPath(core::Span<const KeyHalfedge> halfedges) noexcept;
 
-    explicit KeyPath(std::initializer_list<KeyHalfedge> halfedges) noexcept
+    explicit KeyPath(std::initializer_list<KeyHalfedge> halfedges)
         : halfedges_(halfedges) {
     }
 
@@ -56,6 +56,21 @@ public:
 
     void reverse();
 
+    void append(const KeyHalfedge& khe) {
+        halfedges_.append(khe);
+    }
+
+    void extend(const KeyPath& other) {
+        halfedges_.extend(other.halfedges_);
+    }
+
+    void extendReversed(const KeyPath& other) {
+        halfedges_.reserve(halfedges_.length() + other.halfedges_.length());
+        for (auto it = other.halfedges_.rbegin(); it != other.halfedges_.rend(); ++it) {
+            halfedges_.append(it->opposite());
+        }
+    }
+
 private:
     friend detail::Operations;
     friend KeyCycle;
@@ -75,7 +90,7 @@ private:
 public:
     explicit KeyCycle(core::Span<const KeyHalfedge> halfedges) noexcept;
 
-    explicit KeyCycle(std::initializer_list<KeyHalfedge> halfedges) noexcept
+    explicit KeyCycle(std::initializer_list<KeyHalfedge> halfedges)
         : halfedges_(halfedges) {
     }
 
@@ -103,12 +118,17 @@ public:
 
     Int computeWindingNumberAt(const geometry::Vec2d& point) const;
 
-    bool interiorContains(const geometry::Vec2d& position, geometry::WindingRule windingRule) const {
+    bool interiorContains(
+        const geometry::Vec2d& position,
+        geometry::WindingRule windingRule) const {
         Int windingNumber = computeWindingNumberAt(position);
         return geometry::isWindingNumberSatisfyingRule(windingNumber, windingRule);
     }
 
-    double interiorContainedRatio(const KeyCycle& other, geometry::WindingRule windingRule, Int numSamples);
+    double interiorContainedRatio(
+        const KeyCycle& other,
+        geometry::WindingRule windingRule,
+        Int numSamples);
 
     bool isValid() const {
         if (steinerVertex_) {
