@@ -1031,22 +1031,22 @@ private:
 
 // WIP
 
-class VGC_GEOMETRY_API SampledCurveClosestLocationResult {
+class VGC_GEOMETRY_API SampledCurveLocatedPosition {
 public:
-    constexpr SampledCurveClosestLocationResult(detail::InternalKey) noexcept
+    constexpr SampledCurveLocatedPosition(detail::InternalKey) noexcept
         : location_()
         , position_() {
     }
 
     VGC_WARNING_PUSH
     VGC_WARNING_MSVC_DISABLE(26495) // member variable uninitialized
-    SampledCurveClosestLocationResult(detail::InternalKey, core::NoInit) noexcept
+    SampledCurveLocatedPosition(detail::InternalKey, core::NoInit) noexcept
         : location_(core::noInit)
         , position_(core::noInit) {
     }
     VGC_WARNING_POP
 
-    SampledCurveClosestLocationResult(
+    SampledCurveLocatedPosition(
         detail::InternalKey,
         const SampledCurveLocation& location,
         const Vec2d& position) noexcept
@@ -1077,7 +1077,7 @@ private:
 };
 
 VGC_GEOMETRY_API
-SampledCurveClosestLocationResult
+SampledCurveLocatedPosition
 closestCenterlineLocation(const StrokeSample2dArray& samples, const Vec2d& position);
 
 } // namespace vgc::geometry

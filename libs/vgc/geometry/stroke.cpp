@@ -680,10 +680,10 @@ bool AbstractStroke2d::fixEvalLocation_(Int& segmentIndex, double& u) const {
     }
 }
 
-SampledCurveClosestLocationResult
+SampledCurveLocatedPosition
 closestCenterlineLocation(const StrokeSample2dArray& samples, const Vec2d& position) {
 
-    SampledCurveClosestLocationResult result(detail::internalKey);
+    SampledCurveLocatedPosition result(detail::internalKey);
 
     if (samples.isEmpty()) {
         return result;

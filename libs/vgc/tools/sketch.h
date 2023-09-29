@@ -462,6 +462,38 @@ protected:
     core::ConstSpan<SketchPoint> cleanInputPoints_() const;
     Int numStableCleanInputPoints_() const;
 
+    // Auto-Cut
+    Int numAutoCutProcessedSegments_ = 0;
+    //core::Id faceCutId_ = 0;
+    //core::Array<core::Id> faceCutBoundaryIds_;
+    // Auto-cut
+    // TODO
+    // Int numAutoCutProcessedPoints_ = 0;
+    // void cutSnappedPoints_(Int n, geometry::Vec2dArray& positions, core::DoubleArray& widths);
+
+    struct IntersectionRecord {
+        double s;
+        double t;
+        // -1 is self-intersection.
+        Int edgeInfoIndex = -1;
+    };
+
+    void computeSelfIntersections_(
+        core::Array<IntersectionRecord>& outAppend,
+        core::ConstSpan<SketchPoint> cuttingEdge) const;
+
+    void computeIntersections_(
+        core::Array<IntersectionRecord>& outAppend,
+        core::ConstSpan<SketchPoint> cuttingEdge,
+        Int edgeInfoIndex) const;
+
+    bool processPendingEdgeForAutoCut_();
+    void doCut_(
+        vacomplex::KeyEdge* currentKe,
+        geometry::SampledCurveLocatedPosition currentKeLoc,
+        vacomplex::KeyEdge* intersectedKe,
+        geometry::SampledCurveLocatedPosition intersectedKeLoc);
+
     // Snapping
     //
     // Note: keep in mind that isSnappingEnabled() may change between

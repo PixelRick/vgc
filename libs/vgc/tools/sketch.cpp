@@ -25,6 +25,7 @@
 #include <vgc/core/profile.h>
 #include <vgc/core/stringid.h>
 #include <vgc/geometry/curve.h>
+#include <vgc/geometry/intersect.h>
 #include <vgc/graphics/strings.h>
 #include <vgc/tools/logcategories.h>
 #include <vgc/ui/boolsettingedit.h>
@@ -1259,6 +1260,33 @@ Sketch::EdgeInfo* Sketch::searchEdgeInfo_(core::Id itemId) {
     return nullptr;
 }
 
+void Sketch::computeSelfIntersections_(
+    core::Array<IntersectionRecord>& outAppend,
+    core::ConstSpan<SketchPoint> cuttingEdge) const {
+
+    //geometry::s
+}
+
+void Sketch::computeIntersections_(
+    core::Array<IntersectionRecord>& outAppend,
+    core::ConstSpan<SketchPoint> cuttingEdge,
+    Int edgeInfoIndex) const {
+}
+
+bool Sketch::processPendingEdgeForAutoCut_() {
+    // for all edges, compute intersections with new stable part of polyline.
+    // sort the intersections by S (on poly)
+    // find first that is visible or cut-snappable with visible vertex.
+    // process cut as specified on notion.
+}
+
+void Sketch::doCut_(
+    vacomplex::KeyEdge* currentKe,
+    geometry::SampledCurveLocatedPosition currentKeLoc,
+    vacomplex::KeyEdge* intersectedKe,
+    geometry::SampledCurveLocatedPosition intersectedKeLoc) {
+}
+
 void Sketch::startCurve_(ui::MouseEvent* event) {
 
     // Clear the points now. We don't to it on finishCurve_() for
@@ -1558,6 +1586,11 @@ void Sketch::resetData_() {
     // pending clean input
     cleanInputStartIndex_ = 0;
     cleanInputStartPointOverride_ = std::nullopt;
+
+    // auto-cut
+    numAutoCutProcessedSegments_ = 0;
+    //faceCutId_ = 0;
+    //faceCutBoundaryIds_.clear();
 
     // snapping
     snapStartPosition_ = std::nullopt;

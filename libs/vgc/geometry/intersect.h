@@ -17,6 +17,9 @@
 #ifndef VGC_GEOMETRY_INTERSECT_H
 #define VGC_GEOMETRY_INTERSECT_H
 
+#include <optional>
+#include <utility>
+
 #include <vgc/geometry/api.h>
 #include <vgc/geometry/vec2d.h>
 
@@ -79,6 +82,44 @@ inline bool fastSemiOpenSegmentIntersects(
     }
 
     return false;
+}
+
+/// If the segments `(a1, a2)` and `(b1, b2)` intersect (excluding `a2` and `b2`),
+/// returns a pair `(ta, tb)` where `ta` (resp. `tb`) is the linear parametric
+/// position of the intersection on the segment `(a1, a2)` (resp. `(b1, b2)`).
+/// Otherwise returns std::nullopt.
+///
+inline std::optional<std::pair<double, double>> semiOpenSegmentIntersection(
+    const geometry::Vec2d& a1,
+    const geometry::Vec2d& a2,
+    const geometry::Vec2d& b1,
+    const geometry::Vec2d& b2) {
+
+    geometry::Vec2d da = (a2 - a1);
+    geometry::Vec2d db = (b2 - b1);
+
+    // Solve 2x2 system using Cramer's rule.
+    geometry::Vec2d a1b1 = b1 - a1;
+    double xa = a1b1.det(da);
+    double xb = a1b1.det(db);
+    double delta = da.det(db);
+    if (std::abs(delta) > core::epsilon) {
+        // non-parallel
+        double inv_delta = 1 / delta;
+        double ta = xb * inv_delta;
+        double tb = xa * inv_delta;
+        if (ta >= 0. && ta < 1. && tb >= 0. && tb < 1.) {
+            return std::pair(ta, tb);
+        }
+    }
+    else if (std::abs(xa) < core::epsilon || std::abs(xb) < core::epsilon) {
+        // colinear
+        // tb1 = a1b1 · da / (da · da)
+        // tb2 = t0 + db · da / (da · da)
+        // TODO
+    }
+
+    return std::nullopt;
 }
 
 } // namespace vgc::geometry
